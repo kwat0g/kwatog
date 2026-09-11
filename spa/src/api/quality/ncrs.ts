@@ -25,7 +25,7 @@ export interface BulkCloseResponse {
 export interface NcrListParams extends ListParams {
  source?: NcrSource;
  severity?: NcrSeverity;
- status?: NcrStatus;
+  status?: NcrStatus | '';
  disposition?: NcrDisposition;
  product_id?: string;
  inspection_id?: string;

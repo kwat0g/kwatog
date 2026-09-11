@@ -37,15 +37,11 @@ class PurchasingDashboardService
             return [
                 'kpis' => $this->gate->kpis($user, [
                     ['purchasing.view', fn () => $this->kpi('PRs Pending Action', (string) $this->safeCount('purchase_requests', fn ($q) => $q->where('status', 'pending')), 'count')],
-                    ['purchasing.view', fn () => $this->kpi('Open POs', (string) $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', [
-                        PurchaseOrderStatus::Draft->value,
-                        PurchaseOrderStatus::Approved->value,
-                        PurchaseOrderStatus::Sent->value,
-                    ])), 'count')],
+                    ['purchasing.view', fn () => $this->kpi('Open POs', (string) $this->safeCount('purchase_orders', fn ($q) => $q->whereIn('status', PurchaseOrderStatus::open())), 'count')],
                     // Overdue against po.expected_delivery_date — a purchasing
                     // reading, not a supply-chain one.
                     ['purchasing.view', fn () => $this->kpi('Overdue Deliveries', (string) $this->safeCount('purchase_orders', fn ($q) => $q
-                        ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])
+                        ->whereIn('status', PurchaseOrderStatus::open())
                         ->where('expected_delivery_date', '<', today())), 'count')],
                     ['purchasing.suppliers.performance.view', fn () => $this->kpi('Suppliers Due Review', (string) $this->suppliersDueReview(), 'count')],
                 ]),
@@ -117,6 +113,9 @@ class PurchasingDashboardService
             PurchaseOrderStatus::Draft,
             PurchaseOrderStatus::Approved,
             PurchaseOrderStatus::Sent,
+            PurchaseOrderStatus::Acknowledged,
+            PurchaseOrderStatus::SupplierProposed,
+            PurchaseOrderStatus::SupplierDeclined,
             PurchaseOrderStatus::PartiallyReceived,
             PurchaseOrderStatus::Received,
             PurchaseOrderStatus::Closed,
@@ -197,11 +196,7 @@ class PurchasingDashboardService
         $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
         return DB::table('purchase_orders as po')
             ->leftJoin('vendors as v', 'v.id', '=', 'po.vendor_id')
-            ->whereIn('po.status', [
-                PurchaseOrderStatus::Approved->value,
-                PurchaseOrderStatus::Sent->value,
-                PurchaseOrderStatus::PartiallyReceived->value,
-            ])
+            ->whereIn('po.status', PurchaseOrderStatus::receivable())
             ->whereNotNull('po.expected_delivery_date')
             ->whereBetween('po.expected_delivery_date', [today(), today()->addDays($deliveryDays)])
             ->select('po.id', 'po.po_number', 'v.name as vendor_name', 'po.expected_delivery_date', 'po.status',

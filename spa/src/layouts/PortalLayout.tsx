@@ -25,6 +25,7 @@ import {
   LuX,
   LuPackageCheck,
   LuFileText,
+  LuPlus,
   type IconType,
 } from '@/lib/icons';
 
@@ -85,7 +86,10 @@ const CUSTOMER_NAV: PortalNavSection[] = [
   },
   {
     label: 'Orders',
-    items: [{ to: '/portal/customer/orders', label: 'Orders', icon: OrderIcon }],
+    items: [
+      { to: '/portal/customer/orders', label: 'Orders', icon: OrderIcon },
+      { to: '/portal/customer/orders/new', label: 'Place Order', icon: LuPlus },
+    ],
   },
   {
     label: 'Billing',

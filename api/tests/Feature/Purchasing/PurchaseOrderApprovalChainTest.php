@@ -4,23 +4,31 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Models\WorkflowDefinition;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * PS-01 — the seeded purchase_order chain is purchasing_officer →
- * finance_officer → system_admin, but finance_officer held no purchasing
- * permission and the row scope never matched chain participants, so every
- * submitted PO stalled at step 2: invisible on the approval queue and
- * unactionable through the approve route. Mirrors the M036 fix tests for the
- * purchase_request chain.
+ * PS-01 first pinned the purchase_order chain's row scope; the 2026-09-11
+ * redesign moved the chain from purchasing_officer → finance_officer →
+ * vice_president to finance_officer → vice_president.
+ *
+ * The old step 1 named the buyer's own role. purchasing_officer is the only
+ * role holding purchasing.po.create, so a buyer who raised a PO was also the
+ * only role its first step accepted — ApprovalService's maker ≠ checker guard
+ * then refused them and the PO stalled forever (a sole buyer had no second
+ * holder to approve). Finance and the VP create no POs, so the chain is now
+ * money-only and can never strand the submitter.
  */
 class PurchaseOrderApprovalChainTest extends TestCase
 {
@@ -31,6 +39,7 @@ class PurchaseOrderApprovalChainTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
+        $this->seed(WorkflowSeeder::class);
     }
 
     private function user(string $roleSlug): User
@@ -40,55 +49,77 @@ class PurchaseOrderApprovalChainTest extends TestCase
         ]);
     }
 
-    /**
-     * A PO waiting on step 2: purchasing (step 1) already approved, the
-     * finance_officer step pending. Only two records are seeded so the
-     * finance approval is the final one and the PO must advance to Approved.
-     */
-    private function poPendingAtFinanceStep(): PurchaseOrder
+    private function draftPo(User $creator, string $total = '10000.00'): PurchaseOrder
     {
-        $creator = $this->user('employee');
-        $purchasing = $this->user('purchasing_officer');
-
         $po = PurchaseOrder::create([
             'po_number'    => 'PO-'.substr(uniqid(), -6),
-            'vendor_id'    => \App\Modules\Accounting\Models\Vendor::create([
+            'vendor_id'    => Vendor::create([
                 'name'               => 'Vendor-'.substr(uniqid(), -5),
                 'payment_terms_days' => 30,
             ])->id,
             'date'         => now()->toDateString(),
-            'total_amount' => '10000.00',
+            'total_amount' => $total,
             'created_by'   => $creator->id,
         ]);
-        $po->forceFill(['status' => PurchaseOrderStatus::PendingApproval->value])->save();
-
-        $attributes = [
-            'approvable_type' => $po->getMorphClass(),
-            'approvable_id'   => $po->id,
-            'is_current'      => true,
-            'approver_id'     => null,
-            'acted_at'        => null,
-            'created_at'      => now()->subHour(),
-        ];
-        DB::table('approval_records')->insert(array_merge($attributes, [
-            'step_order'  => 1,
-            'role_slug'   => 'purchasing_officer',
-            'action'      => 'approved',
-            'approver_id' => $purchasing->id,
-            'acted_at'    => now()->subHour(),
-        ]));
-        DB::table('approval_records')->insert(array_merge($attributes, [
-            'step_order' => 2,
-            'role_slug'  => 'finance_officer',
-            'action'     => 'pending',
-        ]));
+        $po->forceFill(['status' => PurchaseOrderStatus::Draft->value])->save();
 
         return $po;
     }
 
+    public function test_the_chain_no_longer_names_the_buyer_role(): void
+    {
+        $roles = collect(WorkflowDefinition::query()
+            ->where('workflow_type', 'purchase_order')
+            ->value('steps'))
+            ->pluck('role')
+            ->all();
+
+        $this->assertSame(['finance_officer', 'vice_president'], $roles);
+        $this->assertNotContains('purchasing_officer', $roles);
+    }
+
+    /**
+     * The regression: a purchasing officer submits a PO and the chain advances
+     * to Finance (previously it stalled at the buyer's own step).
+     */
+    public function test_purchasing_officer_can_submit_and_finance_approves(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $po = $this->draftPo($buyer);
+        $pending = app(PurchaseOrderService::class)->submit($po);
+
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $pending->status);
+        $this->assertSame('finance_officer', DB::table('approval_records')
+            ->where('approvable_type', $po->getMorphClass())
+            ->where('approvable_id', $po->id)
+            ->orderBy('step_order')
+            ->value('role_slug'));
+
+        $finance = $this->user('finance_officer');
+        $approved = app(PurchaseOrderService::class)->approve($pending->fresh(), $finance);
+
+        $this->assertSame(PurchaseOrderStatus::Approved, $approved->status);
+        $this->assertSame($finance->id, (int) $approved->approved_by);
+    }
+
+    public function test_high_value_po_requires_finance_then_vp(): void
+    {
+        $buyer = $this->user('purchasing_officer');
+        $pending = app(PurchaseOrderService::class)->submit($this->draftPo($buyer, '60000.00'));
+
+        $afterFinance = app(PurchaseOrderService::class)
+            ->approve($pending->fresh(), $this->user('finance_officer'));
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $afterFinance->status);
+
+        $approved = app(PurchaseOrderService::class)
+            ->approve($afterFinance->fresh(), $this->user('vice_president'));
+        $this->assertSame(PurchaseOrderStatus::Approved, $approved->status);
+    }
+
     public function test_finance_officer_sees_the_pending_po_in_the_list(): void
     {
-        $po = $this->poPendingAtFinanceStep();
+        $buyer = $this->user('purchasing_officer');
+        app(PurchaseOrderService::class)->submit($this->draftPo($buyer));
         $finance = $this->user('finance_officer');
 
         $response = $this->actingAs($finance, 'sanctum')
@@ -96,62 +127,41 @@ class PurchaseOrderApprovalChainTest extends TestCase
             ->assertOk();
 
         $numbers = array_map(static fn (array $row): string => (string) $row['po_number'], $response->json('data'));
-        $this->assertContains($po->po_number, $numbers);
-    }
-
-    public function test_finance_officer_can_approve_step_two(): void
-    {
-        $po = $this->poPendingAtFinanceStep();
-        $finance = $this->user('finance_officer');
-
-        $this->actingAs($finance, 'sanctum')
-            ->patchJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/approve', ['remarks' => 'ok'])
-            ->assertOk();
-
-        $step = DB::table('approval_records')
-            ->where('approvable_type', $po->getMorphClass())
-            ->where('approvable_id', $po->id)
-            ->where('step_order', 2)
-            ->first();
-        $this->assertSame('approved', $step->action);
-        $this->assertSame($finance->id, $step->approver_id);
-
-        $fresh = $po->fresh();
-        $this->assertSame(PurchaseOrderStatus::Approved, $fresh->status);
-        $this->assertSame($finance->id, (int) $fresh->approved_by);
+        $this->assertCount(1, $numbers);
     }
 
     public function test_role_without_the_approve_permission_is_rejected(): void
     {
-        $po = $this->poPendingAtFinanceStep();
+        $buyer = $this->user('purchasing_officer');
+        $pending = app(PurchaseOrderService::class)->submit($this->draftPo($buyer));
         $warehouse = $this->user('warehouse_staff');
 
         $this->actingAs($warehouse, 'sanctum')
-            ->patchJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/approve')
+            ->patchJson('/api/v1/purchasing/purchase-orders/'.$pending->hash_id.'/approve')
             ->assertForbidden();
 
         $this->assertSame('pending', DB::table('approval_records')
-            ->where('approvable_type', $po->getMorphClass())
-            ->where('approvable_id', $po->id)
-            ->where('step_order', 2)
+            ->where('approvable_type', $pending->getMorphClass())
+            ->where('approvable_id', $pending->id)
+            ->orderBy('step_order')
             ->value('action'));
     }
 
-    public function test_approve_permission_holder_from_another_step_is_rejected(): void
+    public function test_buyer_holding_po_approve_still_cannot_self_approve(): void
     {
-        $po = $this->poPendingAtFinanceStep();
-        // purchasing_officer holds purchasing.po.approve but its step (1) is
-        // already done; the pending step belongs to finance_officer alone.
-        $purchasing = $this->user('purchasing_officer');
+        $buyer = $this->user('purchasing_officer');
+        $pending = app(PurchaseOrderService::class)->submit($this->draftPo($buyer));
 
-        $this->actingAs($purchasing, 'sanctum')
-            ->patchJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/approve')
+        // purchasing_officer holds purchasing.po.approve but is not the pending
+        // step role; the self-approval guard refuses them either way.
+        $this->actingAs($buyer, 'sanctum')
+            ->patchJson('/api/v1/purchasing/purchase-orders/'.$pending->hash_id.'/approve')
             ->assertForbidden();
 
         $this->assertSame('pending', DB::table('approval_records')
-            ->where('approvable_type', $po->getMorphClass())
-            ->where('approvable_id', $po->id)
-            ->where('step_order', 2)
+            ->where('approvable_type', $pending->getMorphClass())
+            ->where('approvable_id', $pending->id)
+            ->orderBy('step_order')
             ->value('action'));
     }
 }

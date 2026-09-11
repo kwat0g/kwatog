@@ -36,10 +36,12 @@ use App\Modules\SupplyChain\Exceptions\DeliveryInvoiceHandoffException;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\SupplyChain\Models\DeliveryReschedule;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -202,6 +204,9 @@ class DeliveryService
             // ADV7 — Proof of Delivery files for the detail page.
             'proofs' => fn ($q) => $q->orderByDesc('created_at'),
             'proofs.uploader:id,name',
+            // Reschedule history for the detail page.
+            'reschedules' => fn ($q) => $q->orderByDesc('created_at'),
+            'reschedules.rescheduledBy:id,name',
         ]);
 
         return $d;
@@ -332,6 +337,65 @@ class DeliveryService
             ])->save();
 
             return $this->show($locked);
+        });
+    }
+
+    /**
+     * Move a scheduled delivery to a new date, recording who moved it and why.
+     *
+     * The delivery row is locked for the duration so a reschedule cannot race a
+     * status transition (which would otherwise let a loading/in_transit
+     * delivery be moved after dispatch). The original commitment is pinned on
+     * the first move only and never overwritten afterwards.
+     */
+    public function reschedule(Delivery $delivery, string $scheduledDate, string $reason, User $by): Delivery
+    {
+        return DB::transaction(function () use ($delivery, $scheduledDate, $reason, $by): Delivery {
+            $locked = Delivery::query()->lockForUpdate()->find($delivery->id);
+            if (! $locked) {
+                throw new BusinessRuleException('Delivery not found.');
+            }
+
+            $status = $locked->status instanceof DeliveryStatus
+                ? $locked->status
+                : DeliveryStatus::from((string) $locked->status);
+            if ($status !== DeliveryStatus::Scheduled) {
+                throw new BusinessRuleException('Only scheduled deliveries can be rescheduled.');
+            }
+
+            $currentDate = $locked->scheduled_date?->toDateString();
+            $newDate = Carbon::parse($scheduledDate)->toDateString();
+            if ($currentDate === $newDate) {
+                throw new BusinessRuleException('The new scheduled date must differ from the current scheduled date.');
+            }
+
+            $reason = trim($reason);
+            $note = sprintf('[Reschedule %s] %s', now()->toIso8601String(), $reason);
+
+            $locked->forceFill([
+                'scheduled_date' => $newDate,
+                // Pin the original commitment on the first move only.
+                'original_scheduled_date' => $locked->original_scheduled_date?->toDateString() ?? $currentDate,
+                'reschedule_count' => ((int) $locked->reschedule_count) + 1,
+                'notes' => trim(($locked->notes ? $locked->notes."\n" : '').$note),
+            ])->save();
+
+            DeliveryReschedule::create([
+                'delivery_id' => $locked->id,
+                'from_date' => $currentDate,
+                'to_date' => $newDate,
+                'reason' => $reason,
+                'rescheduled_by' => $by->id,
+            ]);
+
+            $delivery = $this->show($locked);
+
+            // Series C — Task C4. Stage real-time chain progress with the move;
+            // the status is unchanged but the chain event carries the new date.
+            app(ChainBroadcaster::class)
+                ->broadcastFor($delivery, $status->value, $by);
+
+            return $delivery;
         });
     }
 

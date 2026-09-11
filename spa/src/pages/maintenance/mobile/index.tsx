@@ -30,7 +30,7 @@ export default function MobileMaintenanceList() {
  queryKey: ['maintenance', 'mobile-mwos', tab, user?.employee?.id],
  queryFn: () =>
  workOrdersApi.list({
- status: 'open,assigned,in_progress' as unknown as MaintenanceWorkOrderStatus,
+  status: '' as unknown as MaintenanceWorkOrderStatus,
  ...(tab === 'my_assigned' && user?.employee?.id ? { assigned_to: user.employee.id } : {}),
  per_page: 50,
  }),

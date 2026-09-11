@@ -8,7 +8,6 @@ const PurchaseRequestsListPage = lazy(() => import('@/pages/purchasing/purchase-
 const CreatePurchaseRequestPage = lazy(() => import('@/pages/purchasing/purchase-requests/create'));
 const PurchaseRequestDetailPage = lazy(() => import('@/pages/purchasing/purchase-requests/detail'));
 const PurchaseOrdersListPage = lazy(() => import('@/pages/purchasing/purchase-orders'));
-const CreatePurchaseOrderPage = lazy(() => import('@/pages/purchasing/purchase-orders/create'));
 const PurchaseOrderDetailPage = lazy(() => import('@/pages/purchasing/purchase-orders/detail'));
 const ApprovedSuppliersPage = lazy(() => import('@/pages/purchasing/approved-suppliers'));
 const SupplierListingsReviewPage = lazy(() => import('@/pages/purchasing/supplier-listings'));
@@ -61,14 +60,8 @@ export const purchasingRoutes = (
           </PermissionGuard>
         }
       />
-      <Route
-        path="/purchasing/purchase-orders/create"
-        element={
-          <PermissionGuard permission="purchasing.po.create">
-            <CreatePurchaseOrderPage />
-          </PermissionGuard>
-        }
-      />
+      {/* PO creation is only ever a PR conversion (one PO per vendor), so there
+          is no standalone create page — open the PR and use Convert to PO. */}
       <Route
         path="/purchasing/purchase-orders/:id"
         element={

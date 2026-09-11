@@ -10,6 +10,7 @@ use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
@@ -356,8 +357,14 @@ class NcrService
                 }
             }
 
-            // Return to supplier → notify Purchasing officers.
+            // Return to supplier → open the shared supplier-return RMA so the
+            // receipt reversal, supplier credit note and optional replacement
+            // PO are handled by the ONE engine, then still notify Purchasing.
+            // Without GRN/PO lineage there is nothing to reverse or credit, so
+            // this falls back to the historical notify-only behaviour and logs
+            // why (see openSupplierReturnRmaForNcr()).
             if ($locked->disposition === NcrDisposition::ReturnToSupplier) {
+                $this->openSupplierReturnRmaForNcr($locked, $by);
                 $this->notifyPurchasing($locked);
             }
 
@@ -425,6 +432,122 @@ class NcrService
                 $exception,
             );
         }
+    }
+
+    /**
+     * Unify the NCR return-to-supplier disposition with the supplier-return
+     * engine. When the NCR's inspection carries GRN/PO lineage, open (or reuse)
+     * the same RMA the incoming-QC rejection path uses; when it does not, there
+     * is no receipt to reverse or credit against, so keep the notify-only
+     * behaviour and record the reason instead of opening an unusable RMA.
+     *
+     * The dedupe key is deliberately shared with `GrnService`'s rejection path
+     * (`grn-rejection:<id>`): if the queue already rejected the GRN and opened
+     * the RMA, this returns it rather than crediting the same goods twice.
+     */
+    private function openSupplierReturnRmaForNcr(NonConformanceReport $ncr, User $by): void
+    {
+        $inspection = $ncr->inspection_id ? Inspection::find($ncr->inspection_id) : null;
+        if (! $inspection) {
+            Log::info('NcrService: return_to_supplier NCR has no linked inspection; purchasing notified only.', [
+                'ncr_id' => $ncr->id,
+            ]);
+            return;
+        }
+
+        $grnItem = $this->resolveGrnItemForReturn($inspection);
+        $grn = $grnItem?->grn;
+        if (! $grnItem || ! $grn || ! $grn->vendor_id) {
+            Log::info('NcrService: return_to_supplier NCR has no GRN/PO lineage; purchasing notified only.', [
+                'ncr_id'        => $ncr->id,
+                'inspection_id' => $inspection->id,
+            ]);
+            return;
+        }
+
+        $quantity = $this->ncrReturnQuantity($ncr, $grnItem);
+        if (bccomp($quantity, '0', 3) <= 0) {
+            Log::info('NcrService: return_to_supplier NCR resolved to a zero return quantity; purchasing notified only.', [
+                'ncr_id' => $ncr->id,
+            ]);
+            return;
+        }
+
+        $poItem = $grnItem->purchaseOrderItem;
+
+        try {
+            app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)
+                ->openSupplierReturnForReversedGoods(
+                    vendorId: (int) $grn->vendor_id,
+                    purchaseOrderId: $grn->purchase_order_id ? (int) $grn->purchase_order_id : null,
+                    goodsReceiptNoteId: (int) $grn->id,
+                    lines: [[
+                        'grn_item_id'              => (int) $grnItem->id,
+                        'purchase_order_item_id'   => $grnItem->purchase_order_item_id
+                            ? (int) $grnItem->purchase_order_item_id
+                            : null,
+                        'item_id'                  => (int) $grnItem->item_id,
+                        'quantity'                 => $quantity,
+                        'unit_price'               => (string) ($poItem?->unit_price ?? $grnItem->unit_cost),
+                        'reason'                   => "NCR {$ncr->ncr_number}: {$ncr->defect_description}",
+                        'lot_number'               => $grnItem->material_lot_number,
+                        // A failed incoming inspection's GRN is rejected by
+                        // RejectGRNOnQcFail, which already reversed the PO
+                        // receipt; never reverse it a second time.
+                        'reversal_already_applied' => true,
+                    ]],
+                    by: $by,
+                    reason: "NCR {$ncr->ncr_number} closed with return_to_supplier.",
+                    dedupeKey: 'grn-rejection:'.$grn->id,
+                );
+        } catch (\Throwable $e) {
+            // The NCR is already persisted; a lineage/accounting configuration
+            // failure must be visible, but rolling back the close here would
+            // leave the NCR unfinishable. Surface it and keep the notification.
+            Log::error('NcrService: failed to open a supplier-return RMA for return_to_supplier NCR.', [
+                'ncr_id'    => $ncr->id,
+                'error'     => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+        }
+    }
+
+    /** The GRN line an inspection line belongs to, when one exists. */
+    private function resolveGrnItemForReturn(Inspection $inspection): ?GrnItem
+    {
+        if ($inspection->grn_item_id) {
+            return GrnItem::query()
+                ->with(['grn', 'purchaseOrderItem'])
+                ->find((int) $inspection->grn_item_id);
+        }
+
+        $entityType = $inspection->entity_type instanceof \BackedEnum
+            ? $inspection->entity_type->value
+            : (string) $inspection->entity_type;
+
+        if ($entityType === 'grn' && $inspection->entity_id && $inspection->item_id) {
+            return GrnItem::query()
+                ->with(['grn', 'purchaseOrderItem'])
+                ->where('goods_receipt_note_id', (int) $inspection->entity_id)
+                ->where('item_id', (int) $inspection->item_id)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        return null;
+    }
+
+    /** NCR scope, never more than the receipt actually carries. */
+    private function ncrReturnQuantity(NonConformanceReport $ncr, GrnItem $grnItem): string
+    {
+        $received = (string) $grnItem->quantity_received;
+        $affected = (string) ($ncr->affected_quantity ?? '0');
+
+        if (bccomp($affected, '0', 3) > 0 && bccomp($affected, $received, 3) < 0) {
+            return $affected;
+        }
+
+        return $received;
     }
 
     private function notifyPurchasing(NonConformanceReport $ncr): void

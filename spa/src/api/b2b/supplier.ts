@@ -14,6 +14,8 @@ import type {
  PortalItemCatalogEntry,
  PortalSupplierListing,
  PortalSupplierListingInput,
+ PortalBulkListingResult,
+ RespondToPurchaseOrderPayload,
 } from '@/types/b2b';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
@@ -95,6 +97,12 @@ export const supplierPortalApi = {
  acknowledgePo: async (id: string) => {
  const { data } = await portalClient.post<{ message: string }>(`/b2b/supplier/purchase-orders/${id}/acknowledge`);
  return data;
+ },
+
+ /** Accept, counter-propose or decline a PO. Returns the updated supplier PO. */
+ respondToPurchaseOrder: async (id: string, payload: RespondToPurchaseOrderPayload) => {
+ const { data } = await portalClient.post<{ data: PortalPoDetail }>(`/b2b/supplier/purchase-orders/${id}/respond`, payload);
+ return data.data;
  },
 
  // ── Shipments ──────────────────────────────────────
@@ -192,9 +200,9 @@ export const supplierPortalApi = {
  },
 
  // ── Item Catalog + Supplier Item Listings ─────────
- itemCatalog: async () => {
- const { data } = await portalClient.get<{ data: PortalItemCatalogEntry[] }>('/b2b/supplier/item-catalog');
- return data.data;
+ itemCatalog: async (params?: { search?: string; item_type?: string; page?: number; per_page?: number }) => {
+ const { data } = await portalClient.get<PaginatedResponse<PortalItemCatalogEntry>>('/b2b/supplier/item-catalog', { params });
+ return data;
  },
 
  listItemListings: async (params?: { page?: number; per_page?: number; status?: string }) => {
@@ -204,6 +212,11 @@ export const supplierPortalApi = {
 
  createItemListing: async (form: PortalSupplierListingInput) => {
  const { data } = await portalClient.post<{ data: PortalSupplierListing }>('/b2b/supplier/item-listings', form);
+ return data.data;
+ },
+
+ bulkCreateItemListings: async (items: PortalSupplierListingInput[]) => {
+ const { data } = await portalClient.post<{ data: PortalBulkListingResult }>('/b2b/supplier/item-listings/bulk', { items });
  return data.data;
  },
 

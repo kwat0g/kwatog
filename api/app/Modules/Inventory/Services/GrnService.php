@@ -28,6 +28,7 @@ use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
@@ -106,21 +107,13 @@ class GrnService
      */
     public function create(PurchaseOrder $po, array $items, array $meta, User $by): GoodsReceiptNote
     {
-        if (! in_array($po->status, [
-            PurchaseOrderStatus::Approved,
-            PurchaseOrderStatus::Sent,
-            PurchaseOrderStatus::PartiallyReceived,
-        ], true)) {
+        if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
             throw new BusinessRuleException("PO {$po->po_number} is not open for receiving (status={$po->status->value}).");
         }
 
         return DB::transaction(function () use ($po, $items, $meta, $by) {
             $po = PurchaseOrder::query()->whereKey($po->id)->lockForUpdate()->firstOrFail();
-            if (! in_array($po->status, [
-                PurchaseOrderStatus::Approved,
-                PurchaseOrderStatus::Sent,
-                PurchaseOrderStatus::PartiallyReceived,
-            ], true)) {
+            if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
                 throw new BusinessRuleException("PO {$po->po_number} is not open for receiving (status={$po->status->value}).");
             }
 
@@ -664,19 +657,22 @@ class GrnService
             $this->gl->post($fresh);
             $fresh = $fresh->fresh();
 
-            if ($allFull) {
-                app(OutboxService::class)->recordForChain(
-                    new GoodsReceiptNoteAccepted($fresh),
-                    $fresh,
-                    'p2p',
-                    'grn',
-                    GrnStatus::Accepted->value,
-                );
-            }
+            // A partial acceptance moves real stock and posts its GRNI, so it
+            // carries a payable exactly like a full acceptance. Publish the
+            // accepted event for BOTH terminal states; createDraftForGrn()
+            // keys off GrnStatus::billable() and stays idempotent (one bill
+            // per GRN) when a later continuation accepts the remainder.
+            app(OutboxService::class)->recordForChain(
+                new GoodsReceiptNoteAccepted($fresh),
+                $fresh,
+                'p2p',
+                'grn',
+                $fresh->status->value,
+            );
 
             app(ChainBroadcaster::class)->broadcastFor(
                 $fresh,
-                $allFull ? GrnStatus::Accepted->value : GrnStatus::PartialAccepted->value,
+                $fresh->status->value,
                 $by,
             );
 
@@ -704,12 +700,71 @@ class GrnService
             ]);
 
             $fresh = $lockedGrn->fresh();
+            $this->openSupplierReturnForRejectedGrn($fresh, $by, $reason);
             app(ChainBroadcaster::class)
                 ->broadcastFor($fresh, GrnStatus::Rejected->value, $by);
 
             return $fresh;
         });
         return $result;
+    }
+
+    /**
+     * A rejected incoming receipt still moves money: the supplier is owed a
+     * credit and the buyer often needs a replacement. Open the supplier-return
+     * RMA here — inside the same transaction as the rejection — so the receipt
+     * reversal and the return ledger commit or roll back together. The
+     * `source_key` makes this idempotent across a redelivered
+     * InspectionFailed listener or an operator retry.
+     *
+     * Deliberately NOT wrapped in try/catch: a rejection that reverses the PO
+     * quantity but silently opens no RMA is a stranded goods/money state, and
+     * swallowing the failure is exactly the "dead subsystem" shape the repo
+     * forbids. It must surface and roll the rejection back for a retry.
+     */
+    private function openSupplierReturnForRejectedGrn(GoodsReceiptNote $grn, User $by, string $reason): void
+    {
+        if (! $grn->vendor_id) {
+            throw new BusinessRuleException(
+                "Cannot open a supplier return for rejected GRN {$grn->grn_number}: it has no vendor."
+            );
+        }
+
+        $grn->loadMissing(['items.purchaseOrderItem']);
+        $lines = [];
+        foreach ($grn->items as $row) {
+            $quantity = (string) $row->quantity_received;
+            if (bccomp($quantity, '0', 3) <= 0) {
+                continue;
+            }
+            $poItem = $row->purchaseOrderItem;
+            $lines[] = [
+                'grn_item_id'            => (int) $row->id,
+                'purchase_order_item_id' => $row->purchase_order_item_id ? (int) $row->purchase_order_item_id : null,
+                'item_id'                => (int) $row->item_id,
+                'quantity'               => $quantity,
+                'unit_price'             => (string) ($poItem?->unit_price ?? $row->unit_cost),
+                'reason'                 => $reason,
+                'lot_number'             => $row->material_lot_number,
+                // GrnService::reversePoReceipt() already reduced the PO
+                // received quantity, so the RMA must not do it a second time.
+                'reversal_already_applied' => true,
+            ];
+        }
+
+        if ($lines === []) {
+            return;
+        }
+
+        app(ReturnRequestService::class)->openSupplierReturnForReversedGoods(
+            vendorId: (int) $grn->vendor_id,
+            purchaseOrderId: $grn->purchase_order_id ? (int) $grn->purchase_order_id : null,
+            goodsReceiptNoteId: (int) $grn->id,
+            lines: $lines,
+            by: $by,
+            reason: $reason,
+            dedupeKey: 'grn-rejection:'.$grn->id,
+        );
     }
 
     /**
@@ -1174,6 +1229,7 @@ class GrnService
         ]);
 
         $fresh = $grn->fresh();
+        $this->openSupplierReturnForRejectedGrn($fresh, $by, $reason);
         app(ChainBroadcaster::class)
             ->broadcastFor($fresh, GrnStatus::Rejected->value, $by);
 

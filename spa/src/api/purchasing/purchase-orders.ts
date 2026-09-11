@@ -1,6 +1,6 @@
 import { unwrappingClient as client } from '../client';
 import type { PaginatedResponse, ListParams } from '@/types';
-import type { PurchaseOrder, CreatePurchaseOrderData, ThreeWayMatchResult, ProcurementChainOverview } from '@/types/purchasing';
+import type { PurchaseOrder, CreatePurchaseOrderData, ThreeWayMatchResult, ProcurementChainOverview, PurchaseOrderResponse } from '@/types/purchasing';
 
 export const purchaseOrdersApi = {
  options: () => client.get<{
@@ -33,6 +33,17 @@ export const purchaseOrdersApi = {
  close: (id: string) =>
  client.patch<PurchaseOrder>(`/purchasing/purchase-orders/${id}/close`).then((r) => r.data),
  pdfUrl: (id: string) => `/api/v1/purchasing/purchase-orders/${id}/pdf`,
+
+ // ── Supplier responses ──────────────────────────────
+ /** All supplier responses on a PO, newest first. */
+ responses: (id: string) =>
+ client.get<PurchaseOrderResponse[]>(`/purchasing/purchase-orders/${id}/responses`).then((r) => r.data),
+ /** Accept a supplier's response (records the confirmed date/quantities/prices). */
+ acceptResponse: (responseId: string) =>
+ client.patch<PurchaseOrderResponse>(`/purchasing/purchase-order-responses/${responseId}/accept`).then((r) => r.data),
+ /** Reject a supplier's response with a reason. */
+ rejectResponse: (responseId: string, reason: string) =>
+ client.patch<PurchaseOrderResponse>(`/purchasing/purchase-order-responses/${responseId}/reject`, { reason }).then((r) => r.data),
 };
 
 /* ─── ADV5 — Procurement Chain overview ─── */

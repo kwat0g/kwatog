@@ -6,7 +6,6 @@ namespace App\Modules\Purchasing\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 
 class PurchaseOrderResource extends JsonResource
@@ -18,17 +17,19 @@ class PurchaseOrderResource extends JsonResource
             'po_number'              => $this->po_number,
             'date'                   => optional($this->date)->toDateString(),
             'expected_delivery_date' => optional($this->expected_delivery_date)->toDateString(),
+            'confirmed_delivery_date'=> optional($this->confirmed_delivery_date)->toDateString(),
             'subtotal'               => (string) $this->subtotal,
             'vat_amount'             => (string) $this->vat_amount,
             'total_amount'           => (string) $this->total_amount,
             'is_vatable'             => (bool) $this->is_vatable,
             'status'                 => (string) $this->status?->value,
             'status_label'           => $this->status?->label() ?? (string) $this->status,
-            'is_billable'            => in_array($this->status, [
-                PurchaseOrderStatus::Sent,
-                PurchaseOrderStatus::PartiallyReceived,
-                PurchaseOrderStatus::Received,
-            ], true),
+            // B1 — an accepted goods receipt is the real precondition for
+            // billing (BillService::assertBillProvenance refuses without one).
+            // Deriving this from status alone advertised an enabled Bill
+            // button on POs whose receipt was still pending QC.
+            'is_billable'            => (bool) ($this->has_accepted_receipt ?? false),
+            'latest_response'        => $this->latestResponseBlock(),
             'requires_vp_approval'   => (bool) $this->requires_vp_approval,
             'is_auto_generated'      => (bool) $this->is_auto_generated,
             'current_approval_step'  => (int) $this->current_approval_step,
@@ -128,6 +129,43 @@ class PurchaseOrderResource extends JsonResource
             'actions'                => $request->route('purchaseOrder') !== null && $request->user()
                 ? app(PurchaseOrderAccessPolicy::class)->actionsFor($request->user(), $this->resource)
                 : null,
+        ];
+    }
+
+    /**
+     * The supplier's most recent reply. Shared shape with the supplier-portal
+     * resource and a strict subset of PurchaseOrderResponseResource — keep the
+     * three in sync when changing the contract.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function latestResponseBlock(): ?array
+    {
+        if (! $this->relationLoaded('latestResponse') || ! $this->latestResponse) {
+            return null;
+        }
+
+        $response = $this->latestResponse;
+
+        return [
+            'id'                     => $response->hash_id,
+            'type'                   => $response->response_type?->value ?? (string) $response->response_type,
+            'status'                 => $response->status?->value ?? (string) $response->status,
+            'proposed_delivery_date' => optional($response->proposed_delivery_date)->toDateString(),
+            'notes'                  => $response->notes,
+            'responded_at'           => optional($response->responded_at)->toIso8601String(),
+            'resolved_at'            => optional($response->resolved_at)->toIso8601String(),
+            'resolution_notes'       => $response->resolution_notes,
+            'items'                  => $response->relationLoaded('items')
+                ? $response->items->map(static fn ($item): array => [
+                    'purchase_order_item_id' => $item->purchase_order_item_id !== null
+                        ? app('hashids')->encode((int) $item->purchase_order_item_id)
+                        : null,
+                    'proposed_quantity'      => $item->proposed_quantity !== null ? (string) $item->proposed_quantity : null,
+                    'proposed_unit_price'    => $item->proposed_unit_price !== null ? (string) $item->proposed_unit_price : null,
+                    'reason'                 => $item->reason,
+                ])->values()->all()
+                : [],
         ];
     }
 }

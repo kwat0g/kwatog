@@ -143,8 +143,8 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
  description:
  'POs are generated from approved Purchase Requests, consolidated by vendor, then auto-emailed to the supplier.',
  permission: 'purchasing.po.create',
- actionLabel: 'Create First PO',
- actionRoute: '/purchasing/purchase-orders/create',
+ actionLabel: 'View Approved PRs',
+ actionRoute: '/purchasing/purchase-requests?status=approved',
  },
  '/accounting/vendors': {
  icon: 'truck',

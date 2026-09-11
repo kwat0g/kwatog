@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Controllers\PurchaseOrderResponseController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
 use App\Modules\Purchasing\Controllers\SupplierListingController;
 use App\Modules\Purchasing\Controllers\SupplierPerformanceController;
@@ -36,6 +37,10 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve'])->middleware('permission:purchasing.pr.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/reject',  [PurchaseRequestController::class, 'reject'])->middleware('permission:purchasing.pr.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/cancel',  [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchasing.pr.create');
+    // Sourcing suggestions for the convert modal. Declared before the wildcard
+    // {purchaseRequest} show/update routes is not required (extra segment), but
+    // keep it grouped with convert so the PO-creation surface is in one place.
+    Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission:purchasing.po.create');
     Route::post('/purchase-requests/{purchaseRequest}/convert',  [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
 
     /*
@@ -57,6 +62,12 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     /* ─── Purchase Orders ─── */
     Route::get('/purchase-orders/options', [PurchaseOrderController::class, 'options'])->middleware('permission:purchasing.view');
     Route::get('/purchase-orders',       [PurchaseOrderController::class, 'index'])->middleware('permission:purchasing.view');
+    // Supplier-response negotiation. Literal `purchase-order-responses/…`
+    // segments are declared before any `{purchaseOrder}` wildcard so they can
+    // never be param-bound to a PO hash id.
+    Route::get('/purchase-orders/{purchaseOrder}/responses', [PurchaseOrderResponseController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::patch('/purchase-order-responses/{response}/accept', [PurchaseOrderResponseController::class, 'accept'])->middleware('permission:purchasing.po.approve');
+    Route::patch('/purchase-order-responses/{response}/reject', [PurchaseOrderResponseController::class, 'reject'])->middleware('permission:purchasing.po.approve');
     Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchasing.view');
     Route::post('/purchase-orders',      [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
@@ -73,6 +84,8 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Approved Suppliers ─── */
     Route::get('/approved-suppliers',       [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.view');
+    // Static segment declared before any {approvedSupplier} binding.
+    Route::get('/approved-suppliers/options', [ApprovedSupplierController::class, 'options'])->middleware('permission:purchasing.view');
     Route::post('/approved-suppliers',      [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
@@ -80,6 +93,9 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
     Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.view');
+    // Literal bulk segments BEFORE the {supplierItemListing} binding routes.
+    Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/{supplierItemListing}/approve', [SupplierListingController::class, 'approve'])->middleware('permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/{supplierItemListing}/reject',  [SupplierListingController::class, 'reject'])->middleware('permission:purchasing.supplier_listings.review');
 

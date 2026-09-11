@@ -32,7 +32,7 @@ class PurchaseOrder extends Model
 
     protected $fillable = [
         'po_number', 'vendor_id', 'purchase_request_id',
-        'date', 'expected_delivery_date',
+        'date', 'expected_delivery_date', 'confirmed_delivery_date',
         'subtotal', 'vat_amount', 'total_amount', 'is_vatable',
         'requires_vp_approval',
         'created_by', 'remarks', 'incoterm',
@@ -42,8 +42,9 @@ class PurchaseOrder extends Model
     ];
 
     protected $casts = [
-        'date'                   => 'date',
-        'expected_delivery_date' => 'date',
+        'date'                     => 'date',
+        'expected_delivery_date'   => 'date',
+        'confirmed_delivery_date'  => 'date',
         'budget_acknowledged_at' => 'datetime',
         'subtotal'               => 'decimal:2',
         'vat_amount'             => 'decimal:2',
@@ -83,6 +84,21 @@ class PurchaseOrder extends Model
         return $this->hasMany(Bill::class);
     }
 
+    public function responses(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderResponse::class);
+    }
+
+    /**
+     * The most recent supplier response. `latestOfMany()` keys on the primary
+     * key, so a re-submission (newer id) is the row consumers should read —
+     * superseded replies stay reachable through `responses()`.
+     */
+    public function latestResponse(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PurchaseOrderResponse::class)->latestOfMany();
+    }
+
     public function supplierDispatch(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(SupplierOrderDispatch::class);
@@ -110,11 +126,10 @@ class PurchaseOrder extends Model
 
     public function scopeOpen(Builder $q): Builder
     {
-        return $q->whereIn('status', [
-            PurchaseOrderStatus::Approved,
-            PurchaseOrderStatus::Sent,
-            PurchaseOrderStatus::PartiallyReceived,
-        ]);
+        // One definition of "open" for every consumer. Adding a status to the
+        // enum's open() set updates all of them together (dashboards, MRP
+        // in-transit, warehouse queue).
+        return $q->whereIn('status', PurchaseOrderStatus::open());
     }
 
     public function getQuantityReceivedPercentAttribute(): float

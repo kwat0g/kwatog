@@ -12,7 +12,7 @@ export interface WorkOrderListParams extends ListParams {
  maintainable_type?: string;
  type?: MaintenanceWorkOrderType;
  priority?: MaintenancePriority;
- status?: MaintenanceWorkOrderStatus;
+ status?: MaintenanceWorkOrderStatus | '';
  assigned_to?: string;
 }
 

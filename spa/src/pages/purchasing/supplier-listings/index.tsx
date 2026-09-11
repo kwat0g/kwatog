@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { supplierListingsApi } from '@/api/purchasing/supplier-listings';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
@@ -15,6 +15,7 @@ import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import type { SupplierItemListing, SupplierListingStatus } from '@/types/purchasing';
 
 const statusVariant: Record<SupplierListingStatus, 'warning' | 'success' | 'danger' | 'neutral'> = {
@@ -39,6 +40,7 @@ export default function SupplierListingsReviewPage() {
   const canReview = can('purchasing.supplier_listings.review');
   const [filters, setFilters] = useUrlFilters<ReviewFilters>({ search: '', status: '', page: 1, per_page: 25 });
   const [rejecting, setRejecting] = useState<SupplierItemListing | null>(null);
+  const [bulkRejectRows, setBulkRejectRows] = useState<SupplierItemListing[]>([]);
   const [reason, setReason] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -69,6 +71,83 @@ export default function SupplierListingsReviewPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to reject.'),
   });
+
+  const bulkApprove = useMutation({
+    mutationFn: async (rows: SupplierItemListing[]) => ({
+      results: await supplierListingsApi.bulkApprove(rows.map((r) => r.id)),
+      selected: rows.length,
+    }),
+    // A partial batch may still have committed rows, so refetch regardless.
+    onSettled: () => invalidate(),
+    onSuccess: ({ results, selected }) => {
+      const approved = results.filter((r) => r.status === 'approved').length;
+      const skipped = results.filter((r) => r.status !== 'approved');
+      if (skipped.length > 0) {
+        const firstReason = skipped.find((r) => r.message)?.message;
+        toast.error(
+          `Approved ${approved} of ${selected}. ${skipped.length} skipped${firstReason ? `: ${firstReason}` : '.'}`,
+          { duration: 6000 },
+        );
+        return;
+      }
+      toast.success(`${approved} listing${approved === 1 ? '' : 's'} approved.`);
+    },
+    onError: (e) => reportMutationError(e, 'Bulk approval failed. No listings were approved.'),
+  });
+
+  const bulkReject = useMutation({
+    mutationFn: async ({ rows, reason }: { rows: SupplierItemListing[]; reason: string }) => ({
+      results: await supplierListingsApi.bulkReject(rows.map((r) => r.id), reason),
+      selected: rows.length,
+    }),
+    onSettled: () => invalidate(),
+    onSuccess: ({ results, selected }) => {
+      setBulkRejectRows([]);
+      setReason('');
+      const rejected = results.filter((r) => r.status === 'rejected').length;
+      const skipped = results.filter((r) => r.status !== 'rejected');
+      if (skipped.length > 0) {
+        const firstReason = skipped.find((r) => r.message)?.message;
+        toast.error(
+          `Rejected ${rejected} of ${selected}. ${skipped.length} skipped${firstReason ? `: ${firstReason}` : '.'}`,
+          { duration: 6000 },
+        );
+        return;
+      }
+      toast.success(`${rejected} listing${rejected === 1 ? '' : 's'} rejected.`);
+    },
+    onError: (e) => reportMutationError(e, 'Bulk rejection failed.'),
+  });
+
+  const pendingSelected = (rows: SupplierItemListing[]) => rows.filter((r) => r.status === 'pending');
+
+  const bulkActions: BulkAction<SupplierItemListing>[] = [
+    {
+      label: 'Approve selected',
+      variant: 'primary',
+      onClick: (rows) => {
+        const pending = pendingSelected(rows);
+        if (pending.length === 0) {
+          toast.error('Select at least one pending listing to approve.');
+          return;
+        }
+        bulkApprove.mutate(pending);
+      },
+    },
+    {
+      label: 'Reject selected',
+      variant: 'danger',
+      onClick: (rows) => {
+        const pending = pendingSelected(rows);
+        if (pending.length === 0) {
+          toast.error('Select at least one pending listing to reject.');
+          return;
+        }
+        setBulkRejectRows(pending);
+        setReason('');
+      },
+    },
+  ];
 
   const columns: Column<SupplierItemListing>[] = [
     { key: 'item', header: 'Item', cell: (r) => (
@@ -113,6 +192,14 @@ export default function SupplierListingsReviewPage() {
     }] : []),
   ];
 
+  const rejectModalOpen = !!rejecting || bulkRejectRows.length > 0;
+
+  const closeRejectModal = () => {
+    setRejecting(null);
+    setBulkRejectRows([]);
+    setReason('');
+  };
+
   return (
     <div>
       <PageHeader
@@ -154,23 +241,38 @@ export default function SupplierListingsReviewPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            tableKey="supplier-listings"
             columns={columns}
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+            selectable={canReview}
+            bulkActions={canReview ? bulkActions : undefined}
           />
         </div>
       )}
 
-      <Modal isOpen={!!rejecting} onClose={() => setRejecting(null)} title="Reject listing" size="sm">
-        {rejecting && (
+      <Modal
+        isOpen={rejectModalOpen}
+        onClose={closeRejectModal}
+        title={bulkRejectRows.length > 0 ? `Reject ${bulkRejectRows.length} listing(s)` : 'Reject listing'}
+        size="sm"
+      >
+        {rejectModalOpen && (
           <>
             <div className="py-2 space-y-3">
-              <p className="text-sm text-secondary">
-                Rejecting the offer for <span className="font-mono font-medium text-primary">{rejecting.item?.code}</span> from{' '}
-                <span className="font-medium text-primary">{rejecting.vendor?.name}</span>. They will see your reason.
-              </p>
+              {bulkRejectRows.length > 0 ? (
+                <p className="text-sm text-secondary">
+                  Rejecting <span className="font-mono font-medium text-primary">{bulkRejectRows.length}</span> selected
+                  listing(s). Every supplier will see the same reason.
+                </p>
+              ) : rejecting && (
+                <p className="text-sm text-secondary">
+                  Rejecting the offer for <span className="font-mono font-medium text-primary">{rejecting.item?.code}</span> from{' '}
+                  <span className="font-medium text-primary">{rejecting.vendor?.name}</span>. They will see your reason.
+                </p>
+              )}
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -179,14 +281,20 @@ export default function SupplierListingsReviewPage() {
               />
             </div>
             <ModalFooter>
-              <Button variant="secondary" onClick={() => setRejecting(null)} disabled={reject.isPending}>Cancel</Button>
+              <Button variant="secondary" onClick={closeRejectModal} disabled={reject.isPending || bulkReject.isPending}>Cancel</Button>
               <Button
                 variant="danger"
-                onClick={() => reject.mutate({ listing: rejecting, reason })}
-                disabled={!reason.trim() || reject.isPending}
-                loading={reject.isPending}
+                onClick={() => {
+                  if (bulkRejectRows.length > 0) {
+                    bulkReject.mutate({ rows: bulkRejectRows, reason });
+                  } else if (rejecting) {
+                    reject.mutate({ listing: rejecting, reason });
+                  }
+                }}
+                disabled={!reason.trim() || reject.isPending || bulkReject.isPending}
+                loading={reject.isPending || bulkReject.isPending}
               >
-                {reject.isPending ? 'Rejecting...' : 'Reject listing'}
+                {bulkRejectRows.length > 0 ? 'Reject selected' : 'Reject listing'}
               </Button>
             </ModalFooter>
           </>

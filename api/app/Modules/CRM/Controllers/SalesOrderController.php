@@ -109,6 +109,11 @@ class SalesOrderController
         ]);
     }
 
+    public function requestCustomerConfirmation(SalesOrder $salesOrder): SalesOrderResource
+    {
+        return new SalesOrderResource($this->service->requestCustomerConfirmation($salesOrder));
+    }
+
     public function cancel(CancelSalesOrderRequest $request, SalesOrder $salesOrder): SalesOrderResource|JsonResponse
     {
         try {

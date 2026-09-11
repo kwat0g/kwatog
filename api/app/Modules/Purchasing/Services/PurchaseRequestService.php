@@ -20,7 +20,6 @@ use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
-use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
@@ -36,6 +35,7 @@ class PurchaseRequestService
         private readonly BudgetEnforcementService $budget,
         private readonly SettingsService $settings,
         private readonly PurchaseRequestAccessPolicy $access,
+        private readonly VendorSourcingService $sourcing,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -153,13 +153,26 @@ class PurchaseRequestService
                 // as AutoReplenishmentService) — ad-hoc lines stay free-form.
                 $item = $itemId ? Item::find($itemId) : null;
 
-                // ADV6 — Pre-fill the preferred supplier when creating an auto-generated PR.
+                // ADV6 — Pre-fill the best-known supplier when creating an
+                // auto-generated PR. The resolver widens this from
+                // "preferred approved supplier only" to preferred → any
+                // qualified supplier → listing → PO history, so an item with an
+                // approved-but-not-preferred supplier no longer arrives
+                // vendor-less and dead-ends the auto-converter.
                 $suggestedVendorId = null;
                 if ($isAuto && $itemId) {
-                    $preferred = ApprovedSupplier::where('item_id', $itemId)
-                        ->where('is_preferred', true)
-                        ->first();
-                    $suggestedVendorId = $preferred?->vendor_id;
+                    $suggestedVendorId = $this->sourcing->suggestVendorId($itemId);
+                }
+
+                $estimate = ($row['estimated_unit_price'] ?? null) !== null
+                    && trim((string) $row['estimated_unit_price']) !== ''
+                    ? $row['estimated_unit_price']
+                    : null;
+                if ($estimate === null && $itemId && $suggestedVendorId) {
+                    $estimate = $this->sourcing->priceFor($itemId, (int) $suggestedVendorId);
+                }
+                if ($estimate === null && $item) {
+                    $estimate = (string) $item->standard_cost;
                 }
 
                 PurchaseRequestItem::create([
@@ -174,10 +187,7 @@ class PurchaseRequestService
                     'unit'                 => trim((string) ($row['unit'] ?? '')) !== ''
                         ? (string) $row['unit']
                         : ($item?->unit_of_measure ?? null),
-                    'estimated_unit_price' => ($row['estimated_unit_price'] ?? null) !== null
-                        && trim((string) $row['estimated_unit_price']) !== ''
-                        ? $row['estimated_unit_price']
-                        : ($item ? (string) $item->standard_cost : null),
+                    'estimated_unit_price' => $estimate,
                     'purpose'              => $row['purpose'] ?? null,
                     // ADV6 — store suggested vendor ID on the item for UI hint
                     'suggested_vendor_id'  => $suggestedVendorId,
@@ -234,6 +244,17 @@ class PurchaseRequestService
                     : [],
             ]);
             if (isset($data['items'])) {
+                // Replacing every line used to discard suggested_vendor_id. A
+                // vendor assigned through the API (or prefilled on a prior
+                // submit) vanished on any edit, so the line came back
+                // vendor-less at conversion. Carry it forward by item.
+                $preservedVendors = $locked->items()
+                    ->whereNotNull('item_id')
+                    ->get(['item_id', 'suggested_vendor_id'])
+                    ->mapWithKeys(static fn ($row): array => [(int) $row->item_id => $row->suggested_vendor_id])
+                    ->filter()
+                    ->all();
+
                 $locked->items()->forceDelete();
                 foreach ($data['items'] as $row) {
                     $itemId = ! empty($row['item_id'])
@@ -257,6 +278,7 @@ class PurchaseRequestService
                             ? $row['estimated_unit_price']
                             : ($item ? (string) $item->standard_cost : null),
                         'purpose'              => $row['purpose'] ?? null,
+                        'suggested_vendor_id'  => $itemId !== null ? ($preservedVendors[$itemId] ?? null) : null,
                     ]);
                 }
             }
@@ -310,14 +332,16 @@ class PurchaseRequestService
                 $locked->forceFill(['department_id' => (int) $departmentId])->save();
             }
 
+            // ADV6 — Pre-fill suppliers/prices BEFORE the total is computed, so
+            // the approval amount and budget gate see the real figures rather
+            // than a zero estimate the prefill is about to replace.
+            $this->prefillSupplierOnItems($locked);
+
             $total = $locked->totalEstimatedAmount();
 
             if ($departmentId !== null) {
                 $this->budget->assess($locked, (int) $departmentId, $total);
             }
-
-            // ADV6 — Pre-fill preferred suppliers on items before submission.
-            $this->prefillSupplierOnItems($locked);
 
             // Priority is the public/automation-facing urgency contract. The
             // legacy flag remains supported for internal callers and is
@@ -339,20 +363,41 @@ class PurchaseRequestService
     }
 
     /**
-     * Pre-fill suggested_vendor_id on PR items that don't already have one
-     * by looking up the preferred approved supplier for each item.
+     * Pre-fill suggested_vendor_id and a missing estimated price on PR items.
+     *
+     * Delegates to VendorSourcingService so submit-time suggestions match what
+     * the conversion modal shows and what the auto-converter resolves. Before
+     * this, submit looked only for a *preferred* approved supplier and left the
+     * price to item.standard_cost, so an item with a real (non-preferred)
+     * supplier or a quoted listing was silently unsourceable.
      */
     private function prefillSupplierOnItems(PurchaseRequest $pr): void
     {
         $pr->loadMissing('items.item');
         foreach ($pr->items as $item) {
+            $changes = [];
+
             if ($item->item_id && ! $item->suggested_vendor_id) {
-                $preferred = ApprovedSupplier::where('item_id', $item->item_id)
-                    ->where('is_preferred', true)
-                    ->first();
-                if ($preferred) {
-                    $item->update(['suggested_vendor_id' => $preferred->vendor_id]);
+                $vendorId = $this->sourcing->suggestVendorId((int) $item->item_id);
+                if ($vendorId) {
+                    $changes['suggested_vendor_id'] = $vendorId;
                 }
+            }
+
+            if ($item->item_id
+                && ($item->estimated_unit_price === null || Money::lte((string) $item->estimated_unit_price, Money::zero()))) {
+                $vendorId = $changes['suggested_vendor_id'] ?? $item->suggested_vendor_id;
+                $price = $vendorId ? $this->sourcing->priceFor((int) $item->item_id, (int) $vendorId) : null;
+                if ($price === null && $item->item) {
+                    $price = (string) $item->item->standard_cost;
+                }
+                if ($price !== null && Money::gt($price, Money::zero())) {
+                    $changes['estimated_unit_price'] = $price;
+                }
+            }
+
+            if ($changes !== []) {
+                $item->update($changes);
             }
         }
     }

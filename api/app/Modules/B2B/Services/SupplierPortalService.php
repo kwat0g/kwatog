@@ -28,7 +28,9 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Models\PurchaseOrderResponse;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
+use App\Modules\Purchasing\Services\SupplierResponseService;
 use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -46,10 +48,16 @@ use Illuminate\Support\Facades\Storage;
  */
 class SupplierPortalService
 {
-    /** Supplier-visible history starts at approval and excludes internal drafts. */
+    /**
+     * Supplier-visible POs start at `sent` — the transmission boundary. An
+     * approved-but-unsent PO is internal; exposing it let the supplier
+     * "acknowledge" (and thereby mark sent) a PO OGAMI had not sent.
+     */
     private const SUPPLIER_VISIBLE_PO_STATUSES = [
-        PurchaseOrderStatus::Approved,
         PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
+        PurchaseOrderStatus::SupplierDeclined,
         PurchaseOrderStatus::PartiallyReceived,
         PurchaseOrderStatus::Received,
         PurchaseOrderStatus::Closed,
@@ -58,22 +66,38 @@ class SupplierPortalService
     /** Supplier actions are only available after the internal lifecycle gate. */
     private const SUPPLIER_SHIPMENT_STATUSES = [
         PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
         PurchaseOrderStatus::PartiallyReceived,
     ];
 
     private const SUPPLIER_DOCUMENT_STATUSES = [
         PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
         PurchaseOrderStatus::PartiallyReceived,
     ];
 
     private const SUPPLIER_INVOICE_STATUSES = [
         PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
         PurchaseOrderStatus::PartiallyReceived,
         PurchaseOrderStatus::Received,
     ];
 
     private const SUPPLIER_SCHEDULE_STATUSES = [
         PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
+        PurchaseOrderStatus::PartiallyReceived,
+    ];
+
+    /** Po numbers the supplier still expects to deliver (not yet received). */
+    private const SUPPLIER_PENDING_DELIVERY_STATUSES = [
+        PurchaseOrderStatus::Sent,
+        PurchaseOrderStatus::Acknowledged,
+        PurchaseOrderStatus::SupplierProposed,
         PurchaseOrderStatus::PartiallyReceived,
     ];
 
@@ -87,6 +111,7 @@ class SupplierPortalService
     public function __construct(
         private readonly BillService $bills,
         private readonly PurchaseOrderService $purchaseOrders,
+        private readonly SupplierResponseService $supplierResponses,
         private readonly SystemUserResolver $systemUser,
         private readonly SettingsService $settings,
         private readonly TaxPolicyService $taxPolicy,
@@ -97,11 +122,14 @@ class SupplierPortalService
     public function dashboard(int $vendorId): array
     {
         $visiblePoStatuses = $this->supplierVisiblePoStatusValues();
+        // Count the supplier-visible live commitment in one place rather than
+        // re-listing statuses here (the old Approved/Sent pair omitted
+        // partially-received and contradicted PurchaseOrder::scopeOpen).
         $openPoCount = PurchaseOrder::where('vendor_id', $vendorId)
-            ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])->count();
+            ->whereIn('status', $this->statusValues(self::SUPPLIER_PENDING_DELIVERY_STATUSES))->count();
 
         $pendingDeliveryCount = PurchaseOrder::where('vendor_id', $vendorId)
-            ->where('status', PurchaseOrderStatus::Sent->value)->count();
+            ->whereIn('status', $this->statusValues(self::SUPPLIER_PENDING_DELIVERY_STATUSES))->count();
 
         $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
             ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count();
@@ -114,7 +142,8 @@ class SupplierPortalService
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->whereIn('status', $visiblePoStatuses)
-            ->with(['items.item:id,code,name,unit_of_measure'])
+            ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
+            ->withExists(['goodsReceiptNotes as has_accepted_receipt' => fn ($q) => $q->whereIn('status', GrnStatus::billableValues())])
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentInvoices = Bill::where('vendor_id', $vendorId)
@@ -137,8 +166,9 @@ class SupplierPortalService
     public function purchaseOrders(int $vendorId, array $filters): LengthAwarePaginator
     {
         $query = PurchaseOrder::where('vendor_id', $vendorId)
-            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure'])
+            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
             ->withCount('goodsReceiptNotes')
+            ->withExists(['goodsReceiptNotes as has_accepted_receipt' => fn ($q) => $q->whereIn('status', GrnStatus::billableValues())])
             ->whereIn('status', $this->supplierVisiblePoStatusValues());
 
         if (! empty($filters['status'])) {
@@ -173,6 +203,7 @@ class SupplierPortalService
         $purchaseOrder->load([
             'vendor:id,name,contact_person,email,phone,address',
             'items.item:id,code,name,unit_of_measure',
+            'latestResponse.items',
             // HasMany eager loads are matched to their parent by the foreign
             // key, so `purchase_order_id` MUST be in the select list. These two
             // were written as `'bills:id,bill_number,…'` without it, and
@@ -213,28 +244,42 @@ class SupplierPortalService
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
 
-        $result = $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
-            return DB::transaction(function () use ($purchaseOrder, $data): PurchaseOrder {
-                // Route-bound models can be stale when purchasing cancels or
-                // sends the PO concurrently. Re-read and lock before allowing
-                // the portal to cross the sent boundary; the canonical service
-                // owns the durable event, dispatch proof, and GRN trigger.
-                $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($purchaseOrder->id);
-                if ($row->status !== PurchaseOrderStatus::Approved) {
-                    throw new BusinessRuleException('Only approved purchase orders can be acknowledged.');
-                }
-
-                $row->expected_delivery_date = $data['expected_delivery_date'] ?? $row->expected_delivery_date;
-                $row->remarks = $data['notes'] ?? $row->remarks;
-                $row->save();
-
-                return $this->purchaseOrders->markAsSent($row, 'supplier_portal_acknowledgement');
-            });
-        });
+        $result = $this->systemUser->impersonate(fn (): PurchaseOrder => $this->purchaseOrders->acknowledgeBySupplier(
+            $purchaseOrder,
+            $data['expected_delivery_date'] ?? null,
+            $data['notes'] ?? null,
+        ));
 
         $this->recordPortalAudit('supplier_po.ack', $result, $portalUserId, $vendorId);
 
         return $result;
+    }
+
+    /**
+     * Supplier replies to a PO: accept, propose a counter-offer, or decline.
+     *
+     * Delegates to SupplierResponseService (single lifecycle owner); the
+     * system-user impersonation keeps HasAuditLog's auth context on a real
+     * `users` row while the portal guard is active.
+     */
+    public function respondToPo(
+        int $vendorId,
+        int $portalUserId,
+        PurchaseOrder $purchaseOrder,
+        array $data,
+    ): PurchaseOrderResponse {
+        abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
+
+        $result = $this->systemUser->impersonate(fn (): PurchaseOrderResponse => $this->supplierResponses->respond(
+            $purchaseOrder,
+            $vendorId,
+            $portalUserId,
+            $data,
+        ));
+
+        $this->recordPortalAudit('supplier_po.respond', $result, $portalUserId, $vendorId);
+
+        return $result->load('items');
     }
 
     public function updateShipment(int $vendorId, int $portalUserId, PurchaseOrder $purchaseOrder, array $data): PurchaseOrder
@@ -290,7 +335,10 @@ class SupplierPortalService
                 ]);
 
                 if (array_key_exists('estimated_arrival', $data)) {
-                    $row->expected_delivery_date = $data['estimated_arrival'];
+                    // The supplier's ETA updates the AGREED date only. OGAMI's
+                    // required date (expected_delivery_date) is the scorecard's
+                    // reference and must not be movable by the supplier.
+                    $row->confirmed_delivery_date = $data['estimated_arrival'];
                     $row->save();
                 }
 
@@ -463,30 +511,44 @@ class SupplierPortalService
                 }
 
                 $defaultAccountHashId = $this->defaultExpenseAccountHashId();
-                $items = $lockedPurchaseOrder->items->map(fn ($poItem) => [
-                    'expense_account_id' => $defaultAccountHashId,
-                    'item_id' => $poItem->item?->hash_id,
-                    'description' => $poItem->description,
-                    'quantity' => (string) $poItem->quantity,
-                    'unit' => $poItem->unit,
-                    'unit_price' => (string) $poItem->unit_price,
-                ])->toArray();
+
+                $acceptedGrn = GoodsReceiptNote::query()
+                    ->where('purchase_order_id', $lockedPurchaseOrder->id)
+                    ->where('vendor_id', $vendorId)
+                    // Partial acceptance is billable for the accepted quantity
+                    // (GrnStatus::billable() = accepted + partial_accepted).
+                    ->whereIn('status', GrnStatus::billableValues())
+                    ->latest('id')
+                    ->with(['items.item', 'items.purchaseOrderItem'])
+                    ->first();
+                if (! $acceptedGrn) {
+                    throw new BusinessRuleException('Supplier invoices for stock items require an accepted goods receipt.');
+                }
+
+                // D2 — the payable follows ACCEPTED goods, not the order. The
+                // old code billed the ordered quantity × unit_price, so a
+                // partial or price-adjusted receipt produced a draft AP bill
+                // for goods that never arrived at the agreed cost. Quantities
+                // and unit cost now come from the accepted GRN's line items.
+                $poItemsByLine = $lockedPurchaseOrder->items->keyBy('id');
+                $items = $acceptedGrn->items->map(static function ($grnLine) use ($defaultAccountHashId, $poItemsByLine): array {
+                    $poItem = $poItemsByLine->get($grnLine->purchase_order_item_id);
+
+                    return [
+                        'expense_account_id' => $defaultAccountHashId,
+                        'item_id'            => $grnLine->item?->hash_id,
+                        'description'        => $poItem?->description ?? $grnLine->item?->name ?? 'Received goods',
+                        'quantity'           => (string) $grnLine->quantity_accepted,
+                        'unit'               => $poItem?->unit,
+                        'unit_price'         => (string) $grnLine->unit_cost,
+                    ];
+                })->toArray();
 
                 if (empty($items)) {
                     // A supplier hitting this saw a generic 500 "Server Error"
                     // page with no clue what to fix. It is a state violation,
                     // not a server fault.
-                    throw new BusinessRuleException('This purchase order has no items to bill.');
-                }
-
-                $acceptedGrn = GoodsReceiptNote::query()
-                    ->where('purchase_order_id', $lockedPurchaseOrder->id)
-                    ->where('vendor_id', $vendorId)
-                    ->where('status', GrnStatus::Accepted)
-                    ->latest('id')
-                    ->first();
-                if (! $acceptedGrn) {
-                    throw new BusinessRuleException('Supplier invoices for stock items require an accepted goods receipt.');
+                    throw new BusinessRuleException('This purchase order has no accepted goods to bill.');
                 }
 
                 $systemUser = app(SystemUserResolver::class);
@@ -759,7 +821,16 @@ class SupplierPortalService
     /** @return array<int, string> */
     private function supplierVisiblePoStatusValues(): array
     {
-        return array_map(static fn (PurchaseOrderStatus $status): string => $status->value, self::SUPPLIER_VISIBLE_PO_STATUSES);
+        return $this->statusValues(self::SUPPLIER_VISIBLE_PO_STATUSES);
+    }
+
+    /**
+     * @param  array<int, PurchaseOrderStatus>  $statuses
+     * @return array<int, string>
+     */
+    private function statusValues(array $statuses): array
+    {
+        return array_map(static fn (PurchaseOrderStatus $status): string => $status->value, $statuses);
     }
 
     /** @return array<int, string> */

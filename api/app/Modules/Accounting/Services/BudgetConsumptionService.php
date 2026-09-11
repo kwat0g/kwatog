@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Services;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -26,11 +27,6 @@ final class BudgetConsumptionService
 {
     /** @var array<int, string> */
     private const LIVE_STATUSES = ['approved', 'active'];
-
-    /** @var array<int, string> */
-    private const COMMITTED_PO_STATUSES = [
-        'approved', 'sent', 'partially_received', 'received',
-    ];
 
     /** @var array<int, string> */
     private const MONTHS = [
@@ -295,6 +291,19 @@ final class BudgetConsumptionService
             ->all();
     }
 
+    /**
+     * PO statuses that still represent committed spend: the enum's open set
+     * (approved/sent/acknowledged/supplier_proposed/supplier_declined/
+     * partially_received) plus fully received orders that remain unbilled
+     * (the query nets billed amounts out).
+     *
+     * @return list<PurchaseOrderStatus>
+     */
+    private function committedPoStatuses(): array
+    {
+        return [...PurchaseOrderStatus::open(), PurchaseOrderStatus::Received];
+    }
+
     /** @return array<string, string> */
     private function committedTotals(array $fiscalYearIds): array
     {
@@ -312,7 +321,7 @@ final class BudgetConsumptionService
             })
             ->leftJoinSub($billedTotals, 'billed', 'billed.purchase_order_id', '=', 'po.id')
             ->whereIn('fy.id', $fiscalYearIds)
-            ->whereIn('po.status', self::COMMITTED_PO_STATUSES)
+            ->whereIn('po.status', $this->committedPoStatuses())
             ->whereNull('po.deleted_at')
             ->whereNull('pr.deleted_at')
             ->selectRaw("fy.id AS fiscal_year_id, pr.department_id, COALESCE(SUM(CASE WHEN po.total_amount - COALESCE(billed.billed_total, 0) > 0 THEN po.total_amount - COALESCE(billed.billed_total, 0) ELSE 0 END), 0) AS committed")

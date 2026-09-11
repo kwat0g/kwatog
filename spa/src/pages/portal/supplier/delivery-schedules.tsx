@@ -79,7 +79,10 @@ export default function SupplierDeliverySchedulesPage() {
     },
   });
 
-  const selectablePos: PortalPoSummary[] = (purchaseOrders.data?.data ?? []).filter((po) => po.capabilities?.can_update_shipment === true);
+  // Use the schedule-specific capability, not can_update_shipment. They happen
+ // to share a status set today; reusing the wrong flag silently breaks if the
+ // two ever diverge.
+ const selectablePos: PortalPoSummary[] = (purchaseOrders.data?.data ?? []).filter((po) => po.capabilities?.can_schedule_delivery === true);
 
   const selectPo = (id: string) => {
     initializedPo.current = null;

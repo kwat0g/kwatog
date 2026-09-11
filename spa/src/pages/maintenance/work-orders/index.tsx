@@ -22,7 +22,7 @@ import { formatPeso } from '@/lib/formatNumber';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: WorkOrderListParams = {
-  page: 1, per_page: 25, status: 'open',
+  page: 1, per_page: 25, status: '',
 };
 
 export default function MaintenanceWorkOrdersListPage() {

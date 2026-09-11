@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuSend, LuThumbsUp, LuThumbsDown, LuX, LuShoppingCart, LuFileText, LuTriangleAlert, LuZap, LuSparkles } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
+import { ConvertPrToPoModal } from '@/components/purchasing/ConvertPrToPoModal';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -36,10 +37,10 @@ const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info
 
 export default function PurchaseRequestDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
- const nav = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
 
+ const [convertOpen, setConvertOpen] = useState(false);
  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
  const [rejectOpen, setRejectOpen] = useState(false);
  const [postBillId, setPostBillId] = useState<string | null>(null);
@@ -118,7 +119,7 @@ export default function PurchaseRequestDetailPage() {
  </>
  )}
  {data.status === 'approved' && data.actions?.can_convert && (
- <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
+ <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => setConvertOpen(true)}>Convert to PO</Button>
  )}
  {data.actions?.can_print && <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>}
@@ -137,6 +138,16 @@ export default function PurchaseRequestDetailPage() {
   <div className="text-muted">{data.po_conversion_note ?? 'Automatic conversion could not complete. Review the request and convert it manually.'}</div>
   </div>
   <Chip variant="warning">Manual action</Chip>
+  </div>
+  )}
+  {data.status === 'approved' && data.po_conversion_status === 'partial' && (
+  <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+  <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
+  <div className="flex-1">
+  <div className="font-medium">Partially converted</div>
+  <div className="text-muted">{data.po_conversion_note ?? 'Some lines were converted to purchase orders; the rest still need a supplier.'}</div>
+  </div>
+  {data.actions?.can_convert && <Button size="sm" variant="secondary" onClick={() => setConvertOpen(true)}>Finish conversion</Button>}
   </div>
   )}
   {data.status === 'approved' && data.po_conversion_status === 'pending' && (
@@ -355,6 +366,8 @@ export default function PurchaseRequestDetailPage() {
   variant="primary"
   pending={postBill.isPending}
   />
+
+  <ConvertPrToPoModal purchaseRequest={convertOpen ? data : null} onClose={() => setConvertOpen(false)} />
   </div>
   );
  }

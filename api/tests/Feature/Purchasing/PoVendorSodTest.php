@@ -89,8 +89,9 @@ class PoVendorSodTest extends TestCase
         $submitted = $svc->submit($po);
         $this->assertSame(PurchaseOrderStatus::PendingApproval, $submitted->status);
 
-        // A different purchasing_officer approves step 1 — guard does not interfere.
-        $approver = $this->makeUser('purchasing_officer');
+        // A different finance_officer (the chain's step 1 role) approves —
+        // guard does not interfere.
+        $approver = $this->makeUser('finance_officer');
         $result = $svc->approve($submitted->fresh(), $approver);
         $this->assertContains(
             $result->status,
@@ -110,7 +111,9 @@ class PoVendorSodTest extends TestCase
         }
 
         $svc = app(PurchaseOrderService::class);
-        // The vendor creator also happens to be a purchasing_officer (step-1 approver).
+        // The vendor creator also happens to be a purchasing_officer. The
+        // vendor-SoD guard fires before any step-role check, so the refusal is
+        // the segregation message regardless of the chain shape.
         $vendorCreator = $this->makeUser('purchasing_officer');
         $poMaker = $this->makeUser('purchasing_officer');
 

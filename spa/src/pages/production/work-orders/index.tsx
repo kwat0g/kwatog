@@ -43,7 +43,7 @@ import type { WorkOrder } from '@/types/production';
 const DEFAULT_FILTERS: WorkOrderListParams = {
   page: 1,
   per_page: 25,
-  status: 'in_progress',
+  status: '',
 };
 
 /** Local midnight — "late" means the calendar day the plant is working. */

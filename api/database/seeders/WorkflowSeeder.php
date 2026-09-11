@@ -69,13 +69,20 @@ class WorkflowSeeder extends Seeder
                     ['order' => 2, 'role' => 'vice_president',   'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
+            // 2026-09-11 — PO chain money-only, mirroring the PR redesign. The
+            // buyer (purchasing_officer) is the PO's creator and the only role
+            // holding purchasing.po.create, so a "Purchasing" step named their
+            // own role and the self-approval guard stranded every manually
+            // raised PO — the buyer could never approve what they submitted,
+            // and a sole buyer had no second holder to fall back on. The buyer
+            // still owns creation and sees every PO (po.approve drives the row
+            // scope); the spend checkers are Finance and the VP.
             [
                 'workflow_type' => 'purchase_order',
                 'name'          => 'Purchase Order Approval',
                 'steps' => [
-                    ['order' => 1, 'role' => 'purchasing_officer', 'label' => 'Purchasing'],
-                    ['order' => 2, 'role' => 'finance_officer',    'label' => 'Finance'],
-                    ['order' => 3, 'role' => 'vice_president',     'label' => 'VP', 'threshold' => '50000.00'],
+                    ['order' => 1, 'role' => 'finance_officer',    'label' => 'Finance'],
+                    ['order' => 2, 'role' => 'vice_president',     'label' => 'VP', 'threshold' => '50000.00'],
                 ],
             ],
             [

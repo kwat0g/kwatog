@@ -134,7 +134,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $this->assertSame('0.01', (string) $po->items()->firstOrFail()->unit_price);
     }
 
-    public function test_pr_with_a_line_missing_suggested_vendor_is_skipped_whole(): void
+    public function test_pr_with_an_unsourceable_line_converts_the_rest_partially(): void
     {
         $vendorA = $this->vendor();
         $itemA = Item::factory()->create();
@@ -154,11 +154,13 @@ class ConsolidatePurchaseOrdersTest extends TestCase
 
         event(new PurchaseRequestApproved($pr));
 
-        $this->assertSame(0, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
+        // Partial conversion: the sourceable line becomes a PO now; the other
+        // line stays on the PR for the manual modal instead of blocking it.
+        $this->assertSame(1, PurchaseOrder::where('purchase_request_id', $pr->id)->count());
         $fresh = $pr->fresh();
         $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
-        $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
-        $this->assertStringContainsString('preferred supplier', (string) $fresh->po_conversion_note);
+        $this->assertSame(PurchaseRequestConversionStatus::Partial, $fresh->po_conversion_status);
+        $this->assertStringContainsString($itemB->code, (string) $fresh->po_conversion_note);
     }
 
     public function test_pr_with_a_line_missing_unit_price_is_skipped_whole(): void
@@ -177,7 +179,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $fresh = $pr->fresh();
         $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
         $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
-        $this->assertStringContainsString('unit price', (string) $fresh->po_conversion_note);
+        $this->assertStringContainsString('sourced automatically', (string) $fresh->po_conversion_note);
     }
 
     public function test_pr_with_a_zero_unit_price_is_skipped_whole(): void
@@ -196,7 +198,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $fresh = $pr->fresh();
         $this->assertSame(PurchaseRequestStatus::Approved, $fresh->status);
         $this->assertSame(PurchaseRequestConversionStatus::ManualRequired, $fresh->po_conversion_status);
-        $this->assertStringContainsString('unit price', (string) $fresh->po_conversion_note);
+        $this->assertStringContainsString('sourced automatically', (string) $fresh->po_conversion_note);
     }
 
     public function test_dispatching_the_event_twice_never_double_creates(): void

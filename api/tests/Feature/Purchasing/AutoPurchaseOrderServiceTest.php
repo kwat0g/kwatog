@@ -88,11 +88,12 @@ class AutoPurchaseOrderServiceTest extends TestCase
         ]);
         self::assertDatabaseMissing('purchase_orders', ['status' => 'pending_vp']);
 
+        // Money-only PO chain: Finance (step 1) pending, VP (step 2, ₱50k
+        // threshold) skipped because this auto-PO is ₱148.08.
         $records = app(ApprovalService::class)->currentChain($po->fresh());
-        self::assertCount(3, $records);
+        self::assertCount(2, $records);
         self::assertSame('pending', $records->firstWhere('step_order', 1)?->action);
-        self::assertSame('pending', $records->firstWhere('step_order', 2)?->action);
-        self::assertSame('skipped', $records->firstWhere('step_order', 3)?->action);
+        self::assertSame('skipped', $records->firstWhere('step_order', 2)?->action);
 
         self::assertNull($service->createForCriticalShortage($item->fresh()));
         self::assertSame(1, PurchaseOrder::query()->where('is_auto_generated', true)->count());

@@ -61,6 +61,7 @@ class AutoPurchaseOrderService
             // item so concurrent replenishment workers cannot create two auto-POs
             // from a supplier change in the same shortage window.
             $preferred = ApprovedSupplier::query()
+                ->qualified()
                 ->where('item_id', $item->id)
                 ->where('is_preferred', true)
                 ->lockForUpdate()

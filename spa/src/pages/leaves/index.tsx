@@ -25,7 +25,7 @@ import { YearEndLeaveModal } from './year-end';
 import type { LeaveRequest } from '@/types/leave';
 
 const DEFAULT_FILTERS: LeaveListParams = {
- page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: 'pending',
+ page: 1, per_page: 100, sort: 'created_at', direction: 'desc', status: '',
 };
 
 export default function LeavesPage() {

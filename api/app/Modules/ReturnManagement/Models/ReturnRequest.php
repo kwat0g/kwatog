@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -34,15 +35,18 @@ class ReturnRequest extends Model
 
     protected $fillable = [
         'rma_number',
+        'source_key',
         'type',
         'status',
         'finance_only',
         'finance_only_reason',
         'finance_only_approved_by',
+        'reversal_already_applied',
         'disposition_status',
         'sales_order_id',
         'invoice_id',
         'purchase_order_id',
+        'goods_receipt_note_id',
         'bill_id',
         'customer_id',
         'vendor_id',
@@ -79,6 +83,7 @@ class ReturnRequest extends Model
         'type'         => ReturnRequestType::class,
         'status'       => ReturnRequestStatus::class,
         'finance_only' => 'boolean',
+        'reversal_already_applied' => 'boolean',
         'inspection_handoff_status' => ReturnInspectionHandoffStatus::class,
         'return_date'  => 'date',
         'refund_amount' => 'decimal:2',
@@ -121,6 +126,11 @@ class ReturnRequest extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function goodsReceiptNote(): BelongsTo
+    {
+        return $this->belongsTo(GoodsReceiptNote::class);
     }
 
     public function replacementPurchaseOrder(): BelongsTo

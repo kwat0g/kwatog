@@ -450,13 +450,20 @@ class ComprehensiveDemoSeeder extends Seeder
         $vendors = DB::table('vendors')->get();
         $items = Item::limit(6)->get();
         $count = 0;
+        // At most one preferred vendor per item: migration 2026_09_11_000002
+        // added a partial unique index enforcing it, so the old random flag
+        // would now abort the seed with a duplicate-key error.
+        $preferredSeen = [];
         foreach ($vendors as $v) {
             foreach ($items as $item) {
+                $isPreferred = ! isset($preferredSeen[$item->id]);
+                $preferredSeen[$item->id] = true;
+
                 DB::table('approved_suppliers')->insert([
                     'vendor_id'      => $v->id,
                     'item_id'        => $item->id,
                     'lead_time_days' => rand(5, 20),
-                    'is_preferred'   => rand(0, 1) ? true : false,
+                    'is_preferred'   => $isPreferred,
                 ]);
                 $count++;
             }

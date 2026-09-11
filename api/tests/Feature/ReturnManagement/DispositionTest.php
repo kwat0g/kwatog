@@ -17,16 +17,21 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
@@ -156,6 +161,42 @@ class DispositionTest extends TestCase
         return $rma->load('items');
     }
 
+    /**
+     * Turn the RMA's line into a real stockable return: an inventory item, a
+     * sale line for provenance, and a quarantine receipt of the returned
+     * quantity. Since the credit contract now runs for every customer return,
+     * a line with neither an item nor provenance is (correctly) refused at
+     * dispose; a scenario that reaches dispose must be item-backed and carry
+     * invoice/delivery/SO provenance.
+     */
+    private function makeLineStockable(ReturnRequest $rma, User $by): void
+    {
+        $line = $rma->items->firstOrFail();
+        $item = Item::factory()->create();
+        $source = SalesOrderItem::factory()->create();
+
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $movement = app(StockMovementService::class)->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $item->id,
+            toLocationId: $quarantine->id,
+            quantity: (string) $line->returned_quantity,
+            unitCost: '0.00',
+            referenceType: 'return_request',
+            referenceId: $rma->id,
+            createdBy: $by->id,
+        ));
+
+        $line->update([
+            'item_id'                    => $item->id,
+            'source_sales_order_item_id' => $source->id,
+            'quarantine_location_id'     => $quarantine->id,
+            'quarantine_movement_id'     => $movement->id,
+            'quarantine_status'          => 'held',
+        ]);
+    }
+
     public function test_dispose_sets_item_dispositions(): void
     {
         $by = $this->makeUser();
@@ -188,6 +229,7 @@ class DispositionTest extends TestCase
         $customer = $this->makeCustomer();
         $product = $this->makeProduct();
         $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        $this->makeLineStockable($rma, $by);
 
         $svc = app(ReturnRequestService::class);
 
@@ -272,7 +314,10 @@ class DispositionTest extends TestCase
 
     public function test_dispose_requires_a_passed_return_inspection_before_side_effects(): void
     {
-        foreach (['draft', 'in_progress', 'failed', 'cancelled', null] as $status) {
+        // `failed` is deliberately absent: a genuinely defective unit that FAILED
+        // QC must still be disposable as scrap/rework (see the dedicated tests
+        // below). Only an unfinished verdict still dead-ends the RMA.
+        foreach (['draft', 'in_progress', 'cancelled', null] as $status) {
             $by = $this->makeUser();
             $customer = $this->makeCustomer();
             $product = $this->makeProduct();
@@ -310,6 +355,62 @@ class DispositionTest extends TestCase
         }
     }
 
+    public function test_dispose_allows_scrap_when_inspection_failed(): void
+    {
+        $by = $this->makeUser();
+        $customer = $this->makeCustomer();
+        $product = $this->makeProduct();
+        $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        $this->makeLineStockable($rma, $by);
+
+        Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->where('product_id', $product->id)
+            ->update(['status' => InspectionStatus::Failed->value]);
+
+        $result = app(ReturnRequestService::class)->dispose($rma, [[
+            'item_id'     => $rma->items->first()->hash_id,
+            'disposition' => 'scrap',
+        ]], $by);
+
+        // A failed verdict must not dead-end the return: scrap is allowed and
+        // the quality failure is still recorded on the NCR.
+        $this->assertSame('disposed', $result->disposition_status);
+        $this->assertSame('scrap', $result->items->first()->disposition);
+        $this->assertNotNull($result->items->first()->ncr_id);
+    }
+
+    public function test_dispose_still_requires_passed_for_restock_after_failed_inspection(): void
+    {
+        $by = $this->makeUser();
+        $customer = $this->makeCustomer();
+        $product = $this->makeProduct();
+        $rma = $this->makeInspectedRma($by, $customer, product: $product);
+
+        Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->where('product_id', $product->id)
+            ->update(['status' => InspectionStatus::Failed->value]);
+
+        // Returning failed goods to sellable stock stays blocked: only a
+        // positive verdict may restock.
+        $blocked = false;
+        try {
+            app(ReturnRequestService::class)->dispose($rma, [[
+                'item_id'     => $rma->items->first()->hash_id,
+                'disposition' => 'restock',
+            ]], $by);
+        } catch (RuntimeException $e) {
+            $blocked = true;
+            $this->assertStringContainsString('passed', strtolower($e->getMessage()));
+        }
+
+        $this->assertTrue($blocked, 'A failed inspection must block restock.');
+        $this->assertNull($rma->fresh()->disposition_status);
+    }
+
     public function test_dispose_creates_ncr_for_rework_items(): void
     {
         $by = $this->makeUser();
@@ -318,6 +419,7 @@ class DispositionTest extends TestCase
         $rma = $this->makeInspectedRma($by, $customer, product: $product);
         // Rework lines also go back into stock on disposal → location required.
         $location = WarehouseLocation::factory()->create();
+        $this->makeLineStockable($rma, $by);
 
         $svc = app(ReturnRequestService::class);
 
@@ -558,6 +660,7 @@ class DispositionTest extends TestCase
             'rma_number'        => 'RMA-REPLAY-'.substr(uniqid(), -5),
             'type'              => ReturnRequestType::CustomerReturn->value,
             'status'            => ReturnRequestStatus::Approved->value,
+            'customer_id'       => $this->makeCustomer()->id,
             'reason_code'       => 'defective',
             'return_date'       => now()->toDateString(),
             'created_by'        => $by->id,
@@ -565,6 +668,9 @@ class DispositionTest extends TestCase
         ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $item->id,
+            // The credit contract runs for every customer return, so a
+            // stockable line must carry sale provenance.
+            'source_sales_order_item_id' => SalesOrderItem::factory()->create()->id,
             'quantity'           => '2.000',
             'returned_quantity'  => '2.000',
             'unit_price'         => '10.00',

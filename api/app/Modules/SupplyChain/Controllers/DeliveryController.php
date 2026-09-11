@@ -10,6 +10,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
 use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
 use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
+use App\Modules\SupplyChain\Requests\RescheduleDeliveryRequest;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
@@ -89,6 +90,18 @@ class DeliveryController
         return new DeliveryResource($this->service->assign(
             $delivery,
             $request->validated(),
+            $request->user(),
+        ));
+    }
+
+    public function reschedule(RescheduleDeliveryRequest $request, Delivery $delivery): DeliveryResource
+    {
+        $data = $request->validated();
+
+        return new DeliveryResource($this->service->reschedule(
+            $delivery,
+            (string) $data['scheduled_date'],
+            (string) $data['reason'],
             $request->user(),
         ));
     }

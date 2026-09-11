@@ -30,7 +30,7 @@ const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | '
   cancelled: 'neutral' };
 
 const DEFAULT_FILTERS: InspectionListParams = {
-  page: 1, per_page: 25, status: 'in_progress',
+  page: 1, per_page: 25, status: '',
 };
 
 export default function InspectionsListPage() {

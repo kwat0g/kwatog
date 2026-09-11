@@ -3,7 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { Clearance, ClearanceStatus, InitiateSeparationData, SeparationReason } from '@/types/separations';
 
 export interface SeparationListParams extends ListParams {
- status?: ClearanceStatus;
+ status?: ClearanceStatus | '';
  separation_reason?: SeparationReason;
  employee_id?: string;
 }

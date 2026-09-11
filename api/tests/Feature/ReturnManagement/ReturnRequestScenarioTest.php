@@ -391,6 +391,9 @@ class ReturnRequestScenarioTest extends TestCase
         $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
+        // The credit contract now runs for every customer return, so a
+        // stockable line must carry invoice/delivery/SO provenance.
+        $rma->items->first()->update(['source_sales_order_item_id' => SalesOrderItem::factory()->create()->id]);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
@@ -425,6 +428,9 @@ class ReturnRequestScenarioTest extends TestCase
         $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $destination = WarehouseLocation::factory()->create();
         $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
+        // The credit contract now runs for every customer return, so a
+        // stockable line must carry invoice/delivery/SO provenance.
+        $rma->items->first()->update(['source_sales_order_item_id' => SalesOrderItem::factory()->create()->id]);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [

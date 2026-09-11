@@ -96,7 +96,7 @@ class WarehouseDashboardService
         $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
         return DB::table('purchase_orders as po')
             ->leftJoin('vendors as v', 'v.id', '=', 'po.vendor_id')
-            ->whereIn('po.status', [PurchaseOrderStatus::Sent->value, PurchaseOrderStatus::PartiallyReceived->value])
+            ->whereIn('po.status', PurchaseOrderStatus::receivable())
             ->whereNotNull('po.expected_delivery_date')
             ->where('po.expected_delivery_date', '<=', today()->addDays($deliveryDays))
             ->select('po.id', 'po.po_number', 'v.name as vendor_name', 'po.expected_delivery_date',

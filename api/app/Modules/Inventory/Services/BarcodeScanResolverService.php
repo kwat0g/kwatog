@@ -145,7 +145,7 @@ class BarcodeScanResolverService
         $status = $this->statusValue($po->status);
         $actions = [];
 
-        if (in_array($status, ['approved', 'sent', 'partially_received'], true)) {
+        if (in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
             $actions[] = [
                 'action' => 'open_grn',
                 'label' => "Receive against {$po->po_number}",

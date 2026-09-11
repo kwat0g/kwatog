@@ -1,10 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuFileText } from '@/lib/icons';
+import { LuCheck, LuFileText, LuX } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
@@ -32,13 +35,41 @@ async function openProof(deliveryId: string, proofId: string, fileName: string) 
 export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
 
+  const queryClient = useQueryClient();
   const { data: delivery, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'delivery', id],
     queryFn: () => customerPortalApi.getDelivery(id!),
     enabled: !!id,
   });
 
-  return (
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverPosition, setReceiverPosition] = useState('');
+  const [deliveryRemarks, setDeliveryRemarks] = useState('');
+
+  const confirmMut = useMutation({
+    mutationFn: () =>
+      customerPortalApi.confirmDelivery(id!, {
+        receiver_name: receiverName.trim() || undefined,
+        receiver_position: receiverPosition.trim() || undefined,
+        delivery_remarks: deliveryRemarks.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      toast.success(res.message ?? 'Delivery confirmed.');
+      setShowConfirm(false);
+      setReceiverName('');
+      setReceiverPosition('');
+      setDeliveryRemarks('');
+      queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'delivery', id] });
+      queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'deliveries'] });
+    },
+    onError: (e: Error & { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? 'Failed to confirm delivery.'),
+  });
+
+  const canConfirm = delivery?.status === 'delivered';
+
+ return (
     <div>
       <PageHeader
         title={
@@ -59,6 +90,18 @@ export default function CustomerDeliveryDetailPage() {
             : delivery?.scheduled_date
               ? `Scheduled ${formatDate(delivery.scheduled_date)}`
               : undefined
+        }
+        actions={
+          canConfirm ? (
+            <Button
+              variant={showConfirm ? 'secondary' : 'primary'}
+              size="sm"
+              icon={showConfirm ? <LuX size={14} /> : <LuCheck size={14} />}
+              onClick={() => setShowConfirm(!showConfirm)}
+            >
+              {showConfirm ? 'Cancel' : 'Confirm Receipt'}
+            </Button>
+          ) : undefined
         }
         backTo="/portal/customer/deliveries"
         backLabel="Deliveries"
@@ -81,6 +124,55 @@ export default function CustomerDeliveryDetailPage() {
 
         {!isLoading && !isError && delivery && (
           <>
+            {showConfirm && (
+              <Panel title="Confirm receipt">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (receiverName.trim()) confirmMut.mutate();
+                  }}
+                  className="flex flex-col gap-3"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="Received by"
+                      required
+                      value={receiverName}
+                      onChange={(e) => setReceiverName(e.target.value)}
+                      maxLength={200}
+                    />
+                    <Input
+                      label="Position"
+                      value={receiverPosition}
+                      onChange={(e) => setReceiverPosition(e.target.value)}
+                      maxLength={200}
+                    />
+                  </div>
+                  <Textarea
+                    label="Remarks"
+                    value={deliveryRemarks}
+                    onChange={(e) => setDeliveryRemarks(e.target.value)}
+                    rows={3}
+                    placeholder="Optional notes about the delivery…"
+                  />
+                  <div className="flex justify-end gap-2 pt-2 border-t border-default">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowConfirm(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      disabled={!receiverName.trim()}
+                      loading={confirmMut.isPending}
+                    >
+                      Confirm receipt
+                    </Button>
+                  </div>
+                </form>
+              </Panel>
+            )}
+
             <KpiGrid count={4}>
               <StatCard label="Order" value={delivery.sales_order?.so_number ?? '—'} />
               <StatCard

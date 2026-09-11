@@ -27,7 +27,7 @@ interface GrnListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: GrnListParams = {
-  page: 1, per_page: 25, status: 'pending_qc',
+  page: 1, per_page: 25, status: '',
 };
 
 export default function GrnListPage() {

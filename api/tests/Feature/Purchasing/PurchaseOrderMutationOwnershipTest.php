@@ -68,6 +68,14 @@ class PurchaseOrderMutationOwnershipTest extends TestCase
         ]);
     }
 
+    /** Step 1 of the money-only PO chain. */
+    private function finance(): User
+    {
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
+        ]);
+    }
+
     private function poFor(User $creator, PurchaseOrderStatus $status = PurchaseOrderStatus::Draft): PurchaseOrder
     {
         return PurchaseOrder::factory()->create([
@@ -239,7 +247,7 @@ class PurchaseOrderMutationOwnershipTest extends TestCase
     public function test_approval_flow_is_unaffected_for_non_creators(): void
     {
         $buyer = $this->buyer();
-        $officer = $this->officer();
+        $finance = $this->finance();
         $po = $this->poFor($buyer);
 
         $this->actingAs($buyer, 'sanctum')
@@ -247,13 +255,13 @@ class PurchaseOrderMutationOwnershipTest extends TestCase
             ->assertOk();
         $this->assertSame(PurchaseOrderStatus::PendingApproval, $po->fresh()->status);
 
-        $this->actingAs($officer, 'sanctum')
+        $this->actingAs($finance, 'sanctum')
             ->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve", ['remarks' => 'step one'])
             ->assertOk();
 
         $this->assertDatabaseHas('approval_records', [
             'approvable_id' => $po->id,
-            'approver_id'   => $officer->id,
+            'approver_id'   => $finance->id,
             'action'        => 'approved',
         ]);
     }

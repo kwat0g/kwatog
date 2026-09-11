@@ -39,7 +39,7 @@ const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neu
 const DEFAULT_FILTERS: NcrListParams = {
   page: 1,
   per_page: 25,
-  status: 'open',
+  status: '',
 };
 
 export default function NcrsListPage() {

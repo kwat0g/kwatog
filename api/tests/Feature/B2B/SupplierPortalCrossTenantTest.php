@@ -512,7 +512,8 @@ class SupplierPortalCrossTenantTest extends TestCase
         // a HasAuditLog model) both succeeds and writes its audit rows.
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'approved');
+        // The portal only offers acknowledgement once OGAMI has sent the PO.
+        $po = $this->makePo($vendor, 'sent');
         $this->makePoItem($po);
 
         $this->actAs($user);

@@ -7,6 +7,7 @@ use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
 use App\Modules\CRM\Controllers\SalesOrderController;
+use App\Modules\CRM\Controllers\SalesOrderResponseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,11 +48,20 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::get('/customers/{customer}/price-agreements', [PriceAgreementController::class, 'forCustomer'])
         ->middleware('permission:crm.price_agreements.view');
 
+    /* ─── Sales-order responses (customer negotiation) ─── */
+    // Declared before the `/sales-orders/{salesOrder}` wildcard group so the
+    // literal `sales-order-responses` segment can never be param-bound.
+    Route::patch('/sales-order-responses/{response}/accept', [SalesOrderResponseController::class, 'accept'])
+        ->middleware('permission:crm.sales_orders.confirm');
+    Route::patch('/sales-order-responses/{response}/reject', [SalesOrderResponseController::class, 'reject'])
+        ->middleware('permission:crm.sales_orders.confirm');
+
     /* ─── Sales orders (Task 48) ─── */
     Route::get('/sales-orders/options',            [SalesOrderController::class, 'options'])->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders',                    [SalesOrderController::class, 'index']) ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'show'])  ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}/chain', [SalesOrderController::class, 'chain']) ->middleware('permission:crm.sales_orders.view');
+    Route::get('/sales-orders/{salesOrder}/responses', [SalesOrderResponseController::class, 'index'])->middleware('permission:crm.sales_orders.view');
     Route::post('/sales-orders',                   [SalesOrderController::class, 'store']) ->middleware('permission:crm.sales_orders.create');
     Route::put('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'update'])->middleware('permission:crm.sales_orders.update');
     Route::delete('/sales-orders/{salesOrder}',    [SalesOrderController::class, 'destroy'])->middleware('permission:crm.sales_orders.delete');
@@ -59,6 +69,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->withTrashed()
         ->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
+    Route::post('/sales-orders/{salesOrder}/request-customer-confirmation', [SalesOrderController::class, 'requestCustomerConfirmation'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
 
     /* ─── Customer complaints + 8D (Task 68) ─── */

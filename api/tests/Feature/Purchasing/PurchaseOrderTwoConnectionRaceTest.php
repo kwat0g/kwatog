@@ -134,7 +134,7 @@ class PurchaseOrderTwoConnectionRaceTest extends TestCase
         [$po] = $this->makeDraftPo();
         $pending = app(PurchaseOrderService::class)->submit($po);
         $approver = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'purchasing_officer')->value('id'),
+            'role_id' => Role::query()->where('slug', 'finance_officer')->value('id'),
         ]);
         $result = tempnam(sys_get_temp_dir(), 'purchase-order-approve-race-');
 

@@ -1,6 +1,6 @@
 import { client } from '@/api/client';
 import type { ApiSuccess, ListParams, PaginatedResponse } from '@/types';
-import type { CustomerPortalUser, SupplierPortalUser } from '@/types/b2b';
+import type { CustomerPortalUser, InternalDeliverySchedule, SupplierPortalUser } from '@/types/b2b';
 
 export interface PortalAccessListParams extends ListParams {
  status?: 'active' | 'inactive' | 'locked' | 'pending';
@@ -47,4 +47,18 @@ export const portalAccessApi = {
 
  reactivateCustomer: (id: string) =>
   client.patch<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${id}/reactivate`).then((r) => r.data.data),
+
+ // ── Delivery schedule review (customer + supplier submissions) ──
+
+ listDeliverySchedules: (params?: { status?: string; source?: string; month?: string; search?: string; page?: number; per_page?: number }) =>
+  client.get<PaginatedResponse<InternalDeliverySchedule>>('/b2b/portal-access/delivery-schedules', { params }).then((r) => r.data),
+
+ getDeliverySchedule: (id: string) =>
+  client.get<{ data: InternalDeliverySchedule }>(`/b2b/portal-access/delivery-schedules/${id}`).then((r) => r.data.data),
+
+ acknowledgeDeliverySchedule: (id: string) =>
+  client.post<{ data: InternalDeliverySchedule; message: string }>(`/b2b/portal-access/delivery-schedules/${id}/acknowledge`).then((r) => r.data),
+
+ rejectDeliverySchedule: (id: string, reason: string) =>
+  client.post<{ data: InternalDeliverySchedule; message: string }>(`/b2b/portal-access/delivery-schedules/${id}/reject`, { reason }).then((r) => r.data),
 };

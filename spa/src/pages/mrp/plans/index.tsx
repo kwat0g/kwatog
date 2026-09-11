@@ -22,7 +22,7 @@ const variant: Record<MrpPlanStatus, 'success' | 'neutral' | 'danger'> = {
  active: 'success', superseded: 'neutral', cancelled: 'danger' };
 
 const DEFAULT_FILTERS: MrpPlanListParams = {
- page: 1, per_page: 25, status: 'active',
+ page: 1, per_page: 25, status: '',
 };
 
 export default function MrpPlansListPage() {

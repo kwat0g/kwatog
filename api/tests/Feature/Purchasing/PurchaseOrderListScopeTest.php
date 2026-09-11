@@ -275,4 +275,93 @@ class PurchaseOrderListScopeTest extends TestCase
             ->get('/api/v1/purchasing/purchase-orders/'.$po->hash_id.'/pdf')
             ->assertOk();
     }
+
+    /**
+     * PU-13 — the show endpoint must expose the server-computed action map.
+     * PurchaseOrderResource calls actionsFor() on every detail response; when
+     * the method went missing the endpoint 500'd outright, so this pins the
+     * contract that the resource and the policy agree.
+     */
+    public function test_show_exposes_server_computed_actions_map(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+        $owner = $this->userWithRole('purchasing_officer');
+        $draft = $this->poIn(null, $owner->id);
+
+        $actions = $this->actingAs($owner, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$draft->hash_id)
+            ->assertOk()
+            ->json('data.actions');
+
+        $this->assertIsArray($actions);
+        $this->assertTrue($actions['can_view']);
+        $this->assertTrue($actions['can_update']);
+        $this->assertTrue($actions['can_delete']);
+        $this->assertTrue($actions['can_submit']);
+        $this->assertFalse($actions['can_approve']);
+        $this->assertFalse($actions['can_reject']);
+        $this->assertFalse($actions['can_send']);
+        $this->assertFalse($actions['can_close']);
+    }
+
+    public function test_actions_hide_approve_from_the_submitter_but_show_it_to_a_peer_approver(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+        $submitter = $this->userWithRole('finance_officer');
+        $approver = $this->userWithRole('finance_officer');
+
+        $po = PurchaseOrder::factory()->create([
+            'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::PendingApproval->value,
+            'created_by' => $submitter->id,
+        ]);
+        \App\Common\Models\ApprovalRecord::create([
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->id,
+            'step_order' => 2,
+            'role_slug' => 'finance_officer',
+            'action' => 'pending',
+            'is_current' => true,
+        ]);
+
+        $selfActions = $this->actingAs($submitter, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk()
+            ->json('data.actions');
+        $this->assertFalse($selfActions['can_approve']);
+        $this->assertFalse($selfActions['can_reject']);
+
+        $peerActions = $this->actingAs($approver, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$po->hash_id)
+            ->assertOk()
+            ->json('data.actions');
+        $this->assertTrue($peerActions['can_approve']);
+        $this->assertTrue($peerActions['can_reject']);
+    }
+
+    /**
+     * An approver tier (finance_officer holds purchasing.po.approve) can SEE a
+     * draft via the global row scope, but must not be offered draft actions:
+     * submit/update/delete are gated by purchasing.po.create on the route. The
+     * action map used to call them "owner" and advertise a Submit button that
+     * the route then refused with a 403.
+     */
+    public function test_approver_without_create_permission_is_not_offered_draft_actions(): void
+    {
+        $this->seed(WorkflowSeeder::class);
+        $finance = $this->userWithRole('finance_officer');
+        $buyer = $this->userWithRole('purchasing_officer');
+        $draft = $this->poIn(null, $buyer->id);
+
+        $actions = $this->actingAs($finance, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-orders/'.$draft->hash_id)
+            ->assertOk()
+            ->json('data.actions');
+
+        $this->assertTrue($actions['can_view']);
+        $this->assertFalse($actions['can_submit']);
+        $this->assertFalse($actions['can_update']);
+        $this->assertFalse($actions['can_delete']);
+        $this->assertFalse($actions['can_send']);
+        $this->assertFalse($actions['can_close']);
+    }
 }

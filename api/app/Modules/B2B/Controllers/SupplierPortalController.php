@@ -10,6 +10,7 @@ use App\Modules\Accounting\Resources\SupplierBillResource;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Enums\SupplierShippingDocumentType;
 use App\Modules\B2B\Requests\Supplier\AcknowledgePoRequest;
+use App\Modules\B2B\Requests\Supplier\RespondToPurchaseOrderRequest;
 use App\Modules\B2B\Requests\Supplier\ShipmentUpdateRequest;
 use App\Modules\B2B\Requests\Supplier\StoreDeliveryScheduleRequest;
 use App\Modules\B2B\Requests\Supplier\SubmitInvoiceRequest;
@@ -22,6 +23,7 @@ use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\B2B\Services\SupplierPortalPdfService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\B2B\Resources\SupplierPurchaseOrderResource;
+use App\Modules\Purchasing\Resources\PurchaseOrderResponseResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -259,6 +261,25 @@ class SupplierPortalController extends Controller
         return response()->json([
             'data'    => new DeliveryScheduleResource($schedule),
             'message' => 'Delivery schedule submitted successfully.',
+        ], 201);
+    }
+
+    /**
+     * POST /api/v1/b2b/supplier/purchase-orders/{id}/respond
+     */
+    public function respondToPo(PurchaseOrder $purchaseOrder, RespondToPurchaseOrderRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $response = $this->service->respondToPo(
+            $user->vendor_id,
+            $user->id,
+            $purchaseOrder,
+            $request->validated(),
+        );
+
+        return response()->json([
+            'data'    => new PurchaseOrderResponseResource($response),
+            'message' => 'Supplier response recorded.',
         ], 201);
     }
 

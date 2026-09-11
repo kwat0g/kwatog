@@ -4,6 +4,7 @@ import type {
  CustomerDashboardData,
  PortalSoSummary,
  PortalSoDetail,
+ PortalCatalogItem,
  PortalInvoiceSummary,
  PortalInvoiceDetail,
  PortalDeliverySummary,
@@ -82,8 +83,22 @@ export const customerPortalApi = {
  },
 
  // ── Sales Orders ───────────────────────────────────
+ listCatalog: async (params?: { as_of?: string; search?: string }) => {
+ const { data } = await portalClient.get<{ data: PortalCatalogItem[] }>('/b2b/customer/catalog', { params });
+ return data.data;
+ },
+
  listOrders: async (params?: { status?: string; search?: string; page?: number; per_page?: number }) => {
  const { data } = await portalClient.get<PaginatedResponse<PortalSoSummary>>('/b2b/customer/orders', { params });
+ return data;
+ },
+
+ createOrder: async (form: {
+ date?: string;
+ notes?: string;
+ items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
+ }) => {
+ const { data } = await portalClient.post<{ data: PortalSoDetail; message: string }>('/b2b/customer/orders', form);
  return data;
  },
 
@@ -122,8 +137,13 @@ export const customerPortalApi = {
  },
 
  getDelivery: async (id: string) => {
- const { data } = await portalClient.get<{ data: PortalDeliveryDetail }>(`/b2b/customer/deliveries/${id}`);
- return data.data;
+  const { data } = await portalClient.get<{ data: PortalDeliveryDetail }>(`/b2b/customer/deliveries/${id}`);
+  return data.data;
+ },
+
+ confirmDelivery: async (id: string, form: { receiver_name?: string; receiver_position?: string; delivery_remarks?: string }) => {
+  const { data } = await portalClient.post<{ data: PortalDeliveryDetail; message: string }>(`/b2b/customer/deliveries/${id}/confirm`, form);
+  return data;
  },
 
  viewDeliveryProof: async (deliveryId: string, proofId: string) => {

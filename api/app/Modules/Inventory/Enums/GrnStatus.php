@@ -27,4 +27,30 @@ enum GrnStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    /**
+     * Statuses whose accepted quantity may be billed.
+     *
+     * A partially-accepted receipt already moved real stock and posted its
+     * GRNI journal, so it carries a payable exactly like a fully-accepted one.
+     * This is the single predicate for every "is this GRN billable?" check —
+     * never re-list the statuses at a call site.
+     *
+     * @return array<int, self>
+     */
+    public static function billable(): array
+    {
+        return [self::Accepted, self::PartialAccepted];
+    }
+
+    /** @return array<int, string> */
+    public static function billableValues(): array
+    {
+        return array_map(fn (self $c) => $c->value, self::billable());
+    }
+
+    public function isBillable(): bool
+    {
+        return in_array($this, self::billable(), true);
+    }
 }

@@ -22,6 +22,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -299,8 +300,8 @@ class BillService
             if (! $lockedGrn) {
                 return null;
             }
-            if ($lockedGrn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
-                return null; // only fully-accepted receipts stage a bill
+            if (! $lockedGrn->status->isBillable()) {
+                return null; // only receipts with accepted quantity stage a bill
             }
             if (Bill::query()->where('goods_receipt_note_id', $lockedGrn->id)->exists()) {
                 return null; // idempotent — one draft per GRN
@@ -874,7 +875,7 @@ class BillService
             throw new BusinessRuleException('The selected purchase order no longer exists.');
         }
         $grn = GoodsReceiptNote::query()->lockForUpdate()->find($id);
-        if (! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) {
+        if (! $grn || ! $grn->status->isBillable()) {
             throw new BusinessRuleException('Stock/item bills require an accepted GRN.');
         }
         if ((int) $grn->purchase_order_id !== (int) $poId) {
@@ -901,7 +902,7 @@ class BillService
         $grn = $bill->goods_receipt_note_id
             ? GoodsReceiptNote::query()->lockForUpdate()->find($bill->goods_receipt_note_id)
             : null;
-        if (! $bill->purchase_order_id || ! $grn || $grn->status !== \App\Modules\Inventory\Enums\GrnStatus::Accepted) throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
+        if (! $bill->purchase_order_id || ! $grn || ! $grn->status->isBillable()) throw new BusinessRuleException('Stock/item bills require PO and accepted GRN provenance.');
         if ((int) $grn->purchase_order_id !== (int) $bill->purchase_order_id) throw new BusinessRuleException('The accepted GRN does not belong to the bill purchase order.');
         if (! $po || (int) $po->vendor_id !== (int) $bill->vendor_id || (int) $po->vendor_id !== (int) $grn->vendor_id) {
             throw new BusinessRuleException('The bill vendor must match the purchase order and accepted GRN vendor.');

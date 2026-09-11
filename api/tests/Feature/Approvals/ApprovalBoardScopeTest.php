@@ -217,12 +217,8 @@ class ApprovalBoardScopeTest extends TestCase
         $creator = $this->user('warehouse_staff');
 
         $po = PurchaseOrder::factory()->create(['created_by' => $creator->id]);
-        $this->pendingStep(PurchaseOrder::class, $po->id, 'purchasing_officer', [
-            'action' => 'approved',
-            'acted_at' => now()->subHour(),
-            'approver_id' => $creator->id,
-        ]);
-        $this->pendingStep(PurchaseOrder::class, $po->id, 'finance_officer', ['step_order' => 2]);
+        // Finance is step 1 of the redesigned money-only PO chain.
+        $this->pendingStep(PurchaseOrder::class, $po->id, 'finance_officer');
 
         $board = $this->board($finance);
 

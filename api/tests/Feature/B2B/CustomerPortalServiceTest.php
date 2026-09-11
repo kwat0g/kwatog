@@ -610,7 +610,7 @@ class CustomerPortalServiceTest extends TestCase
 
         $schedule = DeliverySchedule::where('customer_id', $customer->id)->first();
         $this->assertNotNull($schedule);
-        $this->assertSame('submitted', $schedule->status);
+        $this->assertSame('submitted', $schedule->status->value);
     }
 
     public function test_store_delivery_schedule_is_idempotent_for_same_month(): void

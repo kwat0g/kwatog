@@ -51,6 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       type,
       fieldSize = 'md',
       validState = 'idle',
+      readOnly,
       ...rest
     },
     ref,
@@ -88,8 +89,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'flex items-stretch rounded-md border overflow-hidden transition-colors duration-fast',
             shellSize[fieldSize],
-            'hover:border-strong focus-within:ring-[3px] focus-within:ring-accent/20 focus-within:border-accent focus-within:bg-canvas',
-            isPicker ? 'bg-elevated hover:bg-canvas cursor-pointer' : 'bg-canvas',
+            readOnly
+              // A read-only field is source-derived (copied from a selected
+              // record), not an input the user is meant to try. Without this it
+              // kept the editable affordances — hover border, focus ring,
+              // canvas background — so people clicked it expecting to type.
+              ? 'bg-elevated cursor-not-allowed'
+              : cn(
+                  'hover:border-strong focus-within:ring-[3px] focus-within:ring-accent/20 focus-within:border-accent focus-within:bg-canvas',
+                  isPicker ? 'bg-elevated hover:bg-canvas cursor-pointer' : 'bg-canvas',
+                ),
             error ? 'border-danger' : 'border-default',
           )}
         >
@@ -102,10 +111,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             type={type}
+            readOnly={readOnly}
             aria-invalid={!!error}
+            aria-disabled={readOnly || undefined}
             aria-describedby={error ? `${inputId}-error` : helper ? `${inputId}-helper` : undefined}
             className={cn(
               'flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none',
+              readOnly && 'text-muted cursor-not-allowed',
               textSize[fieldSize],
               className,
             )}

@@ -57,7 +57,11 @@ class StorePurchaseOrderRequest extends FormRequest
             // order below the column ceiling to keep quantity x unit_price inside it.
             'items.*.quantity'       => ['required', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],
-            'items.*.unit_price'     => ['required', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+            // Unit price must be > 0: every automatic path (auto-PO, conversion,
+            // consolidation) refuses a zero price, so the manual form refusing it
+            // too keeps the two consistent and stops a free line from becoming a
+            // zero-value PO/GRN/bill downstream.
+            'items.*.unit_price'     => ['required', 'decimal:0,2', 'min:0.01', 'max:9999999.99'],
         ];
     }
 

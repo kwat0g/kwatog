@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\SupplierListingStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
@@ -148,6 +149,7 @@ class SupplierListingService
                 'vendor_id' => $listing->vendor_id,
             ]);
             $row->fill([
+                'qualification_status' => ApprovedSupplier::QUALIFICATION_APPROVED,
                 'last_price' => $this->pricePerBaseUnit($listing),
                 'last_price_at' => now(),
                 'lead_time_days' => $listing->lead_time_days,
@@ -180,6 +182,142 @@ class SupplierListingService
 
             return $listing->load(['item:id,code,name,unit_of_measure', 'vendor:id,name']);
         });
+    }
+
+    /**
+     * Paginated, searchable read-only catalog for the supplier portal. Defaults
+     * to items suppliers can actually quote on (raw materials + packaging);
+     * pass an explicit `item_type` filter (comma list) for anything else. Capped
+     * at 100 rows per page, matching the rest of the list surfaces.
+     */
+    public function catalogPaginated(array $filters): LengthAwarePaginator
+    {
+        $q = Item::query()->where('is_active', true);
+
+        $requestedTypes = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) ($filters['item_type'] ?? '')),
+        ), fn (string $type): bool => in_array($type, ItemType::values(), true)));
+
+        if ($requestedTypes !== []) {
+            $q->whereIn('item_type', $requestedTypes);
+        } else {
+            $q->whereIn('item_type', [
+                ItemType::RawMaterial->value,
+                ItemType::Packaging->value,
+            ]);
+        }
+
+        if (! empty($filters['search'])) {
+            $search = (string) $filters['search'];
+            $q->where(function ($w) use ($search) {
+                $w->where('code', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        return $q->orderBy('code')
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+    }
+
+    /**
+     * Bulk submit for the supplier portal. Each row is processed through the
+     * single-row path so the one-pending-per-(vendor,item) rule is applied and
+     * the notification fires exactly as before. A rejected row is reported, not
+     * thrown: one duplicate must not discard the rest of the batch.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array{created: array<int, SupplierItemListing>, failed: array<int, array{index: int, item_id: ?string, message: string}>}
+     */
+    public function submitMany(int $vendorId, array $rows): array
+    {
+        $created = [];
+        $failed = [];
+
+        foreach ($rows as $index => $row) {
+            try {
+                $created[] = $this->submit($vendorId, $row);
+            } catch (\Throwable $e) {
+                if (! $e instanceof BusinessRuleException) {
+                    Log::warning('supplier_listing bulk submit row failed: '.$e->getMessage());
+                }
+                $itemHash = isset($row['item_id'])
+                    ? Item::query()->find($row['item_id'])?->hash_id
+                    : null;
+                $failed[] = [
+                    'index' => (int) $index,
+                    'item_id' => $itemHash,
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return ['created' => $created, 'failed' => $failed];
+    }
+
+    /**
+     * ADV6-style bulk review: approve each pending listing individually and
+     * return a per-row outcome, mirroring PurchaseRequestService::bulkApprove.
+     * A row that is no longer pending is reported as `skipped`, never fatal.
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array{id: string, status: string, message: ?string}>
+     */
+    public function bulkApprove(array $ids, User $reviewer): array
+    {
+        $results = [];
+
+        foreach ($ids as $id) {
+            try {
+                $listing = SupplierItemListing::query()->findOrFail($id);
+                $approved = $this->approve($listing, $reviewer);
+                $results[] = [
+                    'id' => $approved->hash_id,
+                    'status' => 'approved',
+                    'message' => null,
+                ];
+            } catch (\Throwable $e) {
+                $results[] = [
+                    'id' => SupplierItemListing::find($id)?->hash_id ?? (string) $id,
+                    'status' => 'skipped',
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Bulk reject with one shared reason. Rows that are not pending are
+     * reported as `skipped` so the caller can see the full batch outcome.
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array{id: string, status: string, message: ?string}>
+     */
+    public function bulkReject(array $ids, User $reviewer, string $reason): array
+    {
+        $results = [];
+
+        foreach ($ids as $id) {
+            try {
+                $listing = SupplierItemListing::query()->findOrFail($id);
+                $rejected = $this->reject($listing, $reviewer, $reason);
+                $results[] = [
+                    'id' => $rejected->hash_id,
+                    'status' => 'rejected',
+                    'message' => null,
+                ];
+            } catch (\Throwable $e) {
+                $results[] = [
+                    'id' => SupplierItemListing::find($id)?->hash_id ?? (string) $id,
+                    'status' => 'skipped',
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $results;
     }
 
     private function pricePerBaseUnit(SupplierItemListing $listing): string

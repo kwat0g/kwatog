@@ -102,7 +102,7 @@ export default function CustomerOrderDetailPage() {
                           <Td>{item.name}</Td>
                           <Td align="right" mono>{item.quantity}</Td>
                           <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                          <Td align="right" mono>{formatPeso(item.total_price)}</Td>
+                          <Td align="right" mono>{formatPeso(item.total)}</Td>
                         </tr>
                       ))}
                     </tbody>

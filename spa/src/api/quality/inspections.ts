@@ -14,7 +14,7 @@ import type {
 
 export interface InspectionListParams extends ListParams {
   stage?: InspectionStage;
-  status?: InspectionStatus;
+  status?: InspectionStatus | '';
   product_id?: string;
   entity_type?: InspectionEntityType;
   entity_id?: string;

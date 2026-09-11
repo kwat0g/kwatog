@@ -324,6 +324,8 @@ class SupplierDispatchService
 
         if (in_array($purchaseOrder->status, [
             PurchaseOrderStatus::Sent,
+            PurchaseOrderStatus::Acknowledged,
+            PurchaseOrderStatus::SupplierProposed,
             PurchaseOrderStatus::PartiallyReceived,
             PurchaseOrderStatus::Received,
             PurchaseOrderStatus::Closed,

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
-use App\Common\Models\ChainStepRun;
 use App\Common\Models\AuditLog;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Bill;
@@ -75,11 +74,11 @@ class SupplierPortalServiceTest extends TestCase
     /**
      * A purchase order in a lifecycle state the supplier portal may see.
      *
-     * PurchaseOrderFactory defaults to `draft`, but a PO only becomes
-     * `portal_available` once it is approved (docs/PROCESS-FLOWS.md), so
-     * SupplierPortalService hides draft/pending_approval/rejected/cancelled
-     * rows. Every supplier-visibility fixture must therefore state the
-     * lifecycle state it means instead of relying on the factory default.
+     * PurchaseOrderFactory defaults to `draft`, and the portal opens at the
+     * transmission boundary: `sent` is the first supplier-visible state, so an
+     * `approved` PO is still internal. Every supplier-visibility fixture must
+     * state the lifecycle state it means instead of relying on the factory
+     * default.
      */
     private function makePo(Vendor $vendor, string $status = 'sent'): PurchaseOrder
     {
@@ -101,6 +100,36 @@ class SupplierPortalServiceTest extends TestCase
             'total' => Money::mul($quantity, '10.00'),
             'quantity_received' => '0.00',
         ]);
+    }
+
+    /**
+     * An accepted GRN for a PO line — the precondition the portal now requires
+     * before a supplier may submit an invoice against stock.
+     */
+    private function makeAcceptedGrn(
+        PurchaseOrder $po,
+        Vendor $vendor,
+        PurchaseOrderItem $poItem,
+        string $quantity = '2.00',
+    ): GoodsReceiptNote {
+        $grn = GoodsReceiptNote::factory()->create([
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $vendor->id,
+            'status' => 'accepted',
+            'accepted_by' => User::factory()->create()->id,
+            'accepted_at' => now(),
+        ]);
+        GrnItem::create([
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $poItem->item_id,
+            'location_id' => WarehouseLocation::factory()->create()->id,
+            'quantity_received' => $quantity,
+            'quantity_accepted' => $quantity,
+            'unit_cost' => '100.00',
+        ]);
+
+        return $grn;
     }
 
     /**
@@ -168,26 +197,28 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
 
+        // Own vendor, approved but unsent: still internal, must NOT count.
         PurchaseOrder::factory()->create([
             'vendor_id' => $vendor->id,
         ])->forceFill(['status' => 'approved'])->save();
 
+        // Own vendor, sent: the transmission boundary, must count.
         PurchaseOrder::factory()->create([
             'vendor_id' => $vendor->id,
         ])->forceFill(['status' => 'sent'])->save();
 
-        // Other vendor's PO — must NOT count.
+        // Other vendor's sent PO — must NOT count.
         $otherVendor = Vendor::factory()->create();
         PurchaseOrder::factory()->create([
             'vendor_id' => $otherVendor->id,
-        ])->forceFill(['status' => 'approved'])->save();
+        ])->forceFill(['status' => 'sent'])->save();
 
         $this->actAs($user);
 
         $response = $this->getJson('/api/v1/b2b/supplier/dashboard');
 
         $response->assertOk();
-        $this->assertSame(2, $response->json('data.open_po_count'));
+        $this->assertSame(1, $response->json('data.open_po_count'));
     }
 
     /* ─── Purchase Orders ────────────────────────────────────────── */
@@ -197,11 +228,12 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
 
-        $this->makePo($vendor, 'approved');
+        // Own vendor, approved but unsent: still internal, not supplier-visible.
+        $approved = $this->makePo($vendor, 'approved');
         $this->makePo($vendor, 'sent');
         $this->makePo($vendor, 'partially_received');
 
-        // Own vendor, but pre-approval: an internal draft is not the supplier's
+        // Own vendor, but pre-approved: an internal draft is not the supplier's
         // business and must not be enumerable through the portal API.
         $draft = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
 
@@ -214,11 +246,17 @@ class SupplierPortalServiceTest extends TestCase
         $response = $this->getJson('/api/v1/b2b/supplier/purchase-orders');
 
         $response->assertOk();
-        $this->assertCount(3, $response->json('data'));
+        $this->assertCount(2, $response->json('data'));
+        $ids = array_column($response->json('data'), 'id');
         $this->assertNotContains(
             $draft->hash_id,
-            array_column($response->json('data'), 'id'),
-            'A pre-approval purchase order must never reach the supplier portal list.',
+            $ids,
+            'A draft purchase order must never reach the supplier portal list.',
+        );
+        $this->assertNotContains(
+            $approved->hash_id,
+            $ids,
+            'An approved-but-unsent purchase order must never reach the supplier portal list.',
         );
     }
 
@@ -288,8 +326,7 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
 
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
-        $po->forceFill(['status' => 'approved'])->save();
+        $po = $this->makePo($vendor, 'sent');
 
         $this->actAs($user);
 
@@ -298,13 +335,59 @@ class SupplierPortalServiceTest extends TestCase
         ]);
 
         $response->assertOk();
-        $this->assertSame('sent', $po->fresh()->status->value);
-        $this->assertTrue(ChainStepRun::query()
-            ->where('chain', 'p2p')
-            ->where('entity_type', 'purchase_order')
-            ->where('entity_id', $po->id)
-            ->where('step', 'sent')
-            ->exists(), 'Supplier acknowledgement must publish the PO sent chain step.');
+        // `sent` means OGAMI transmitted the PO; the supplier's acceptance is a
+        // distinct transition into `acknowledged`.
+        $this->assertSame('acknowledged', $po->fresh()->status->value);
+        $this->assertSame('2026-08-01', $po->fresh()->confirmed_delivery_date->toDateString());
+    }
+
+    public function test_acknowledge_requires_sent_and_preserves_internal_remarks(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+
+        $this->actAs($user);
+
+        // (a) An approved-but-unsent PO is not the supplier's to acknowledge.
+        $unsent = $this->makePo($vendor, 'approved');
+        $unsent->forceFill([
+            'remarks' => 'Internal purchasing note.',
+            'expected_delivery_date' => '2026-07-20',
+        ])->save();
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$unsent->hash_id}/acknowledge", [
+            'expected_delivery_date' => '2026-08-01',
+            'notes' => 'We can make this.',
+        ])->assertStatus(422);
+
+        $unsent->refresh();
+        $this->assertSame('approved', $unsent->status->value);
+        $this->assertNull($unsent->confirmed_delivery_date);
+        $this->assertSame('Internal purchasing note.', $unsent->remarks);
+
+        // (b) A sent PO becomes acknowledged and records the date the supplier
+        //     confirmed — not OGAMI's required `expected_delivery_date`.
+        $sent = $this->makePo($vendor, 'sent');
+        $sent->forceFill([
+            'remarks' => 'Internal purchasing note.',
+            'expected_delivery_date' => '2026-07-20',
+            'confirmed_delivery_date' => null,
+        ])->save();
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$sent->hash_id}/acknowledge", [
+            'expected_delivery_date' => '2026-08-01',
+            'notes' => 'Confirmed, will ship on time.',
+        ])->assertOk();
+
+        $sent->refresh();
+        $this->assertSame('acknowledged', $sent->status->value);
+        $this->assertSame('2026-08-01', $sent->confirmed_delivery_date->toDateString());
+        $this->assertSame('2026-07-20', $sent->expected_delivery_date->toDateString());
+
+        // (c) The supplier note is appended, never replacing internal remarks.
+        $this->assertStringContainsString('Internal purchasing note.', $sent->remarks);
+        $this->assertStringContainsString('Supplier: Confirmed, will ship on time.', $sent->remarks);
+        $this->assertNotSame('Confirmed, will ship on time.', $sent->remarks);
     }
 
     public function test_acknowledge_po_forbidden_for_other_vendor(): void
@@ -313,8 +396,7 @@ class SupplierPortalServiceTest extends TestCase
         $vendorB = Vendor::factory()->create();
         $userA = $this->makePortalUser($vendorA);
 
-        $poB = PurchaseOrder::factory()->create(['vendor_id' => $vendorB->id]);
-        $poB->forceFill(['status' => 'approved'])->save();
+        $poB = $this->makePo($vendorB, 'sent');
 
         $this->actAs($userA);
 
@@ -325,7 +407,7 @@ class SupplierPortalServiceTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_acknowledge_po_rejects_non_approved_state_without_sent_handoff(): void
+    public function test_acknowledge_po_rejects_a_cancelled_po_without_state_change(): void
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
@@ -340,12 +422,7 @@ class SupplierPortalServiceTest extends TestCase
         ])->assertStatus(422);
 
         $this->assertSame('cancelled', $po->fresh()->status->value);
-        $this->assertFalse(ChainStepRun::query()
-            ->where('chain', 'p2p')
-            ->where('entity_type', 'purchase_order')
-            ->where('entity_id', $po->id)
-            ->where('step', 'sent')
-            ->exists(), 'A rejected acknowledgement must not publish the PO sent chain step.');
+        $this->assertNull($po->fresh()->confirmed_delivery_date);
     }
 
     public function test_submit_invoice_stages_unposted_draft_and_retries_idempotently(): void
@@ -405,6 +482,41 @@ class SupplierPortalServiceTest extends TestCase
             ->where('vendor_id', $vendor->id)
             ->where('bill_number', 'SUP-INV-001')
             ->count());
+    }
+
+    public function test_submit_invoice_requires_an_accepted_goods_receipt(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $poItem = $this->makePoItem($po, '2.00');
+
+        // A receipt that is still pending QC does not satisfy the precondition.
+        GoodsReceiptNote::factory()->create([
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $vendor->id,
+            'status' => 'pending_qc',
+        ]);
+
+        $this->actAs($user);
+        $payload = [
+            'bill_number' => 'SUP-INV-GRN-GATE',
+            'date' => '2026-08-10',
+            'is_vatable' => false,
+        ];
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'bill_creation_failed');
+
+        $this->assertSame(0, Bill::query()->where('vendor_id', $vendor->id)->count());
+
+        // Once the receipt is accepted, the same submission is allowed.
+        $this->makeAcceptedGrn($po, $vendor, $poItem, '2.00');
+
+        $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
+            ->assertStatus(201)
+            ->assertJsonPath('data.status', 'draft');
     }
 
     public function test_submit_invoice_event_failure_preserves_committed_attachment(): void
@@ -551,18 +663,12 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $item = Item::factory()->create();
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
-        PurchaseOrderItem::create([
-            'purchase_order_id' => $po->id,
-            'item_id' => $item->id,
-            'description' => 'Resin Type A',
-            'quantity' => '1.00',
-            'unit' => 'kg',
-            'unit_price' => '100.00',
-            'total' => '100.00',
-            'quantity_received' => '0.00',
-        ]);
+
+        // A fully valid PO for invoicing, so the conflict is the only reason the
+        // submission can fail (status and accepted-GRN gates both satisfied).
+        $po = $this->makePo($vendor, 'sent');
+        $poItem = $this->makePoItem($po, '1.00');
+        $this->makeAcceptedGrn($po, $vendor, $poItem, '1.00');
 
         $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
         $existing = $this->createBill($vendor->id);
@@ -577,7 +683,7 @@ class SupplierPortalServiceTest extends TestCase
             'bill_number' => 'SUP-INV-CONFLICT',
             'date' => '2026-08-10',
             'is_vatable' => false,
-        ])->assertStatus(422);
+        ])->assertStatus(422)->assertJsonPath('code', 'bill_creation_failed');
 
         $this->assertSame($otherPo->id, $existing->fresh()->purchase_order_id);
         $this->assertSame(1, Bill::query()
@@ -593,6 +699,7 @@ class SupplierPortalServiceTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
         $po = $this->makePo($vendor, 'sent');
+        $requiredDate = $po->expected_delivery_date->toDateString();
 
         $this->actAs($user);
 
@@ -605,7 +712,12 @@ class SupplierPortalServiceTest extends TestCase
         ]);
 
         $response->assertOk();
-        $this->assertSame('2026-07-15', $po->fresh()->expected_delivery_date->toDateString());
+
+        // The supplier's ETA lands on `confirmed_delivery_date`. OGAMI's required
+        // date (`expected_delivery_date`) is the scorecard reference and must not
+        // be movable by the supplier.
+        $this->assertSame('2026-07-15', $po->fresh()->confirmed_delivery_date->toDateString());
+        $this->assertSame($requiredDate, $po->fresh()->expected_delivery_date->toDateString());
 
         // Shipment state is a structured row, not free text appended to the PO
         // remarks: receiving and logistics have to be able to query the current
@@ -781,11 +893,15 @@ class SupplierPortalServiceTest extends TestCase
             $this->assertArrayNotHasKey($internal, $row, "Supplier PO contract must not expose `{$internal}`.");
         }
 
-        // And the fields it does expose are the opaque/portal-safe ones.
+        // And the fields it does expose are the opaque/portal-safe ones. A sent
+        // PO may be acknowledged and shipment-updated, but invoicing stays off
+        // until an accepted GRN exists — matching the service guard exactly.
         $this->assertSame($po->hash_id, $row['id']);
         $this->assertArrayHasKey('capabilities', $row);
         $this->assertTrue($row['capabilities']['can_update_shipment']);
-        $this->assertFalse($row['capabilities']['can_acknowledge']);
+        $this->assertTrue($row['capabilities']['can_acknowledge']);
+        $this->assertTrue($row['capabilities']['can_schedule_delivery']);
+        $this->assertFalse($row['capabilities']['can_submit_invoice']);
     }
 
     public function test_supplier_finance_totals_are_exact_decimal_strings(): void
@@ -1073,8 +1189,9 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->actAs($user);
 
-        // Approved is portal-visible but not yet dispatched; scheduling deliveries
-        // against it would commit the supplier before the order is transmitted.
+        // Only a sent PO may be scheduled against. An approved-but-unsent PO is
+        // still internal; scheduling deliveries against it would commit the
+        // supplier before the order is transmitted.
         $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
             'purchase_order_id' => $po->hash_id,
             'month' => '2026-08',

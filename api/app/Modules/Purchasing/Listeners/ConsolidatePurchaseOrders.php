@@ -9,12 +9,12 @@ use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
-use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
+use App\Modules\Purchasing\Services\VendorSourcingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
@@ -44,6 +44,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         private readonly SystemActorService $actors,
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
+        private readonly VendorSourcingService $sourcing,
     ) {}
 
     public function handle(PurchaseRequestApproved $event): void
@@ -93,30 +94,21 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         }
         $pr->loadMissing(['items', 'requester']);
 
-        // Every line must name a vendor and carry a price. A partial conversion
-        // would strand the remaining lines — skip the whole PR instead.
+        // Resolve what we can. A line that cannot be sourced no longer blocks
+        // the rest: the resolved lines become POs now and the remainder stays on
+        // the PR (conversion_status = partial) for the manual modal. Only when
+        // nothing at all is resolvable does the whole PR hand off.
+        $resolution = $this->sourcing->resolveLines($pr->items);
         $vendorMap = [];
-        foreach ($pr->items as $line) {
-            if (! $line->suggested_vendor_id) {
-                Log::info('ConsolidatePurchaseOrders: line has no suggested vendor, skipping whole PR', [
-                    'pr_id' => $pr->id,
-                    'pr_item_id' => $line->id,
-                ]);
-                $this->recordManualConversionOutcome($pr, 'Some line items have no preferred supplier — assign one and convert manually.');
-                return;
-            }
-            if ($line->estimated_unit_price === null || Money::lte((string) $line->estimated_unit_price, Money::zero())) {
-                Log::info('ConsolidatePurchaseOrders: line has no unit price, skipping whole PR', [
-                    'pr_id' => $pr->id,
-                    'pr_item_id' => $line->id,
-                ]);
-                $this->recordManualConversionOutcome($pr, 'Some line items have no unit price — set the price and convert manually.');
-                return;
-            }
-            $vendorMap[$line->id] = (int) $line->suggested_vendor_id;
+        foreach ($resolution['assignments'] as $lineId => $assignment) {
+            $vendorMap[$lineId] = $assignment['vendor_id'];
         }
         if ($vendorMap === []) {
-            app(ChainListenerRunService::class)->recordOutcome('skipped', 'purchase_request_has_no_lines');
+            Log::info('ConsolidatePurchaseOrders: no line resolvable, manual conversion required', ['pr_id' => $pr->id]);
+            $this->recordManualConversionOutcome(
+                $pr,
+                'No line item could be sourced automatically — assign vendors/prices and convert manually.',
+            );
             return;
         }
 
@@ -138,7 +130,25 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 'pr_id' => $pr->id,
                 'pr_number' => $pr->pr_number,
                 'po_count' => count($pos),
+                'unresolved_lines' => count($resolution['unresolved']),
             ]);
+
+            // Some lines could not be sourced. The POs we did create are real,
+            // so do not overwrite the `partial` conversion status the service
+            // just persisted — only attach the reason and alert purchasing.
+            if ($resolution['unresolved'] !== []) {
+                $note = $this->unresolvedNote($pr, $resolution['unresolved']);
+                $pr->fresh()?->forceFill(['po_conversion_note' => $note])->save();
+                $this->notifySkipped($pr, $note);
+                app(ChainListenerRunService::class)->recordOutcome(
+                    'manual_required',
+                    'purchase_request_partial_conversion',
+                    $note,
+                );
+
+                return;
+            }
+
             app(ChainListenerRunService::class)->recordOutcome(
                 count($pos) > 0 ? 'completed' : 'skipped',
                 count($pos) > 0 ? 'purchase_orders_created' : 'purchase_orders_already_present_or_not_created',
@@ -162,6 +172,29 @@ class ConsolidatePurchaseOrders implements ShouldQueue
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Human-readable list of the PR lines that still need sourcing. Names the
+     * item code (falling back to description), never a raw id.
+     *
+     * @param  list<int>  $unresolvedLineIds
+     */
+    private function unresolvedNote(PurchaseRequest $pr, array $unresolvedLineIds): string
+    {
+        $pr->loadMissing('items.item');
+        $labels = $pr->items
+            ->whereIn('id', $unresolvedLineIds)
+            ->map(static fn ($line): string => (string) ($line->item?->code ?? $line->description ?? 'unnamed'))
+            ->values()
+            ->all();
+
+        $count = count($labels);
+        $shown = implode(', ', array_slice($labels, 0, 5));
+        $suffix = $count > 0 ? ": {$shown}".($count > 5 ? '…' : '') : '';
+
+        return "Auto-converted the sourceable lines; {$count} line(s) still need a vendor or price{$suffix}. "
+            .'Finish them in Convert to PO.';
     }
 
     /**

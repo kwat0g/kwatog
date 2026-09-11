@@ -39,6 +39,15 @@ class SalesOrderResource extends JsonResource
             'delivery_terms'     => $this->delivery_terms,
             'incoterm'           => $this->incoterm?->value,
             'notes'              => $this->notes,
+            'submission_source'  => (string) ($this->submission_source?->value ?? $this->submission_source ?? 'internal'),
+            // The portal only treats a draft as negotiable once sales has
+            // released it to the customer (requestCustomerConfirmation()).
+            'customer_confirmation_requested_at' => optional($this->customer_confirmation_requested_at)->toIso8601String(),
+            'latest_response'    => $this->latestResponseBlock(),
+            'capabilities'       => [
+                'can_respond' => $this->isOpenToCustomerResponse(),
+                'can_confirm' => $this->isOpenToCustomerResponse(),
+            ],
             'is_editable'        => (bool) $this->is_editable,
             'is_cancellable'     => (bool) $this->is_cancellable,
             'item_count'         => (int) ($this->items_count ?? $this->items?->count() ?? 0),
@@ -119,5 +128,51 @@ class SalesOrderResource extends JsonResource
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
             'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The customer's most recent reply. Shared shape with the internal
+     * SalesOrderResponseResource (minus the resolver/sales_order fields).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function latestResponseBlock(): ?array
+    {
+        if (! $this->relationLoaded('latestResponse') || ! $this->latestResponse) {
+            return null;
+        }
+
+        $response = $this->latestResponse;
+
+        return [
+            'id'                     => $response->hash_id,
+            'type'                   => $response->response_type?->value ?? (string) $response->response_type,
+            'status'                 => $response->status?->value ?? (string) $response->status,
+            'proposed_delivery_date' => optional($response->proposed_delivery_date)->toDateString(),
+            'notes'                  => $response->notes,
+            'responded_at'           => optional($response->responded_at)->toIso8601String(),
+            'resolved_at'            => optional($response->resolved_at)->toIso8601String(),
+            'resolution_notes'       => $response->resolution_notes,
+            'items'                  => $response->relationLoaded('items')
+                ? $response->items->map(static fn ($item): array => [
+                    'sales_order_item_id' => $item->sales_order_item_id !== null
+                        ? app('hashids')->encode((int) $item->sales_order_item_id)
+                        : null,
+                    'proposed_quantity'   => $item->proposed_quantity !== null ? (string) $item->proposed_quantity : null,
+                    'proposed_unit_price' => $item->proposed_unit_price !== null ? (string) $item->proposed_unit_price : null,
+                    'reason'              => $item->reason,
+                ])->values()->all()
+                : [],
+        ];
+    }
+
+    private function isOpenToCustomerResponse(): bool
+    {
+        $status = $this->status instanceof SalesOrderStatus
+            ? $this->status
+            : SalesOrderStatus::tryFrom((string) $this->status);
+
+        return $status === SalesOrderStatus::Draft
+            && $this->customer_confirmation_requested_at !== null;
     }
 }

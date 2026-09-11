@@ -46,7 +46,7 @@ class UpdatePurchaseOrderRequest extends FormRequest
             // as create did.
             'items.*.quantity'       => ['required_with:items', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],
-            'items.*.unit_price'     => ['required_with:items', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+            'items.*.unit_price'     => ['required_with:items', 'decimal:0,2', 'min:0.01', 'max:9999999.99'],
         ];
     }
 }

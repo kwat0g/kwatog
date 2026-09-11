@@ -67,11 +67,7 @@ class InventoryDashboardService
 
                 $openPo = PurchaseOrder::query()
                     ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))
-                    ->whereIn('status', [
-                        PurchaseOrderStatus::Approved,
-                        PurchaseOrderStatus::Sent,
-                        PurchaseOrderStatus::PartiallyReceived,
-                    ])
+                    ->whereIn('status', PurchaseOrderStatus::open())
                     ->orderByDesc('id')->first(['id', 'po_number', 'status']);
 
                 $lowStockAlerts[] = [

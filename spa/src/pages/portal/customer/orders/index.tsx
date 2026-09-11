@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { LuPlus } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -80,6 +81,16 @@ export default function CustomerOrdersPage() {
           ) : (
             <>Sales orders placed with <CompanyName /></>
           )
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<LuPlus size={14} />}
+            onClick={() => navigate('/portal/customer/orders/new')}
+          >
+            Place Order
+          </Button>
         }
       />
 

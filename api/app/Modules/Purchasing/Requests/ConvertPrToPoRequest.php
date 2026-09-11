@@ -35,9 +35,16 @@ class ConvertPrToPoRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Optional required delivery date shared by every PO this
+            // conversion builds. When absent the POs get a null required date.
+            'expected_delivery_date' => ['nullable', 'date'],
             // map: { pr_item_id => vendor_id }
             'vendor_map'   => ['required', 'array', 'min:1'],
-            'vendor_map.*' => ['required', 'integer'],
+            // `exists` turns a crafted/unknown vendor id into a 422 instead of
+            // letting it reach PurchaseOrder::create and blow up on the FK as a
+            // 500. A partial mapping is intentional (unlisted lines are left
+            // unconverted), so there is no min on the value count.
+            'vendor_map.*' => ['required', 'integer', 'exists:vendors,id'],
         ];
     }
 }

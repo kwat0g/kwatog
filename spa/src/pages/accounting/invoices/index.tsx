@@ -19,7 +19,7 @@ import type { Invoice } from '@/types/accounting';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const DEFAULT_FILTERS: InvoiceListParams = {
- page: 1, per_page: 25, status: 'unpaid',
+ page: 1, per_page: 25, status: '',
 };
 
 export default function InvoicesPage() {

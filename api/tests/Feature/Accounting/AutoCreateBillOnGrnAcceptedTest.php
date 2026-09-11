@@ -152,7 +152,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         );
     }
 
-    public function test_partial_accept_does_not_stage_a_bill(): void
+    public function test_partial_accept_stages_a_draft_bill_for_the_accepted_quantity(): void
     {
         $grn = $this->makePendingGrn();
         \App\Modules\Quality\Models\Inspection::query()
@@ -160,19 +160,41 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
             ->where('entity_id', $grn->id)
             ->update(['status' => 'passed']);
 
+        $line = $grn->items()->first();
         $partial = $this->grnSvc->partialAccept($grn->fresh(), [
-            $grn->items()->first()->id => '40.000',
+            $line->id => '40.000',
         ], $this->user);
         $this->assertSame(GrnStatus::PartialAccepted, $partial->status);
 
-        // Dispatch the accepted event on the partially-accepted GRN — the
-        // service's status guard (Accepted only) must skip bill creation.
+        // Replay the accepted event so the listener runs deterministically
+        // regardless of the outbox after-commit timing in tests.
         event(new GoodsReceiptNoteAccepted($partial));
 
+        // Partially-accepted goods already moved stock and posted GRNI, so
+        // they carry a payable: the draft bill covers the accepted 40 units,
+        // never the 80 received.
+        $bill = Bill::where('goods_receipt_note_id', $partial->id)->first();
+        $this->assertNotNull($bill, 'a partially-accepted GRN must stage a bill for its accepted qty');
+        $this->assertSame(BillStatus::Draft, $bill->status);
+        $this->assertSame(1, $bill->items()->count());
+        $this->assertSame('40.00', (string) $bill->items()->first()->quantity);
+        $this->assertSame('12.50', (string) $bill->items()->first()->unit_price);
+        $this->assertSame('500.00', (string) $bill->subtotal);
+        $this->assertSame('60.00', (string) $bill->vat_amount);
+        $this->assertSame('560.00', (string) $bill->total_amount);
+
+        // Accepting the remainder lands the GRN on Accepted. The existing
+        // one-bill-per-GRN guard must keep it from stacking a duplicate.
+        $full = $this->grnSvc->partialAccept($partial->fresh(), [
+            $line->id => '80.000',
+        ], $this->user);
+        $this->assertSame(GrnStatus::Accepted, $full->status);
+        event(new GoodsReceiptNoteAccepted($full));
+
         $this->assertSame(
-            0,
-            Bill::where('goods_receipt_note_id', $partial->id)->count(),
-            'a partially-accepted GRN must not stage a bill',
+            1,
+            Bill::where('goods_receipt_note_id', $full->id)->count(),
+            'completing acceptance of a partially billed GRN must not stack a second bill',
         );
     }
 

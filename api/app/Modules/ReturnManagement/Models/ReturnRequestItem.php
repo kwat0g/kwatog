@@ -27,6 +27,7 @@ class ReturnRequestItem extends Model
         'unit_price',
         'original_unit_price',
         'total',
+        'reversal_already_applied',
         'reason',
         'condition',
         'disposition',
@@ -55,6 +56,7 @@ class ReturnRequestItem extends Model
         'total'                  => 'decimal:2',
         'stock_movement_quantity' => 'decimal:3',
         'receipt_recorded'       => 'boolean',
+        'reversal_already_applied' => 'boolean',
     ];
 
     public function returnRequest(): BelongsTo

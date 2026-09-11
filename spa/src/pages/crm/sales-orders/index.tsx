@@ -26,7 +26,7 @@ const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | '
  cancelled: 'danger' };
 
 const DEFAULT_FILTERS: SalesOrderListParams = {
- page: 1, per_page: 25, status: 'confirmed',
+ page: 1, per_page: 25, status: '',
 };
 
 export default function SalesOrdersListPage() {

@@ -87,30 +87,43 @@ final class PurchaseOrderAccessPolicy
      */
     public function canManageDraft(User $user, PurchaseOrder $po): bool
     {
-        return $po->status === PurchaseOrderStatus::Draft
+        // Draft management is the buyer's action: every write route
+        // (create/update/delete/submit/close) is gated by
+        // `purchasing.po.create`. `isOwner()` alone also returns true for the
+        // `purchasing.po.approve` tier (it is the module's global row tier), so
+        // without this check the action map advertised Update/Delete/Submit to
+        // Finance and the VP — buttons the route then refused with a 403.
+        return $user->hasPermission('purchasing.po.create')
+            && $po->status === PurchaseOrderStatus::Draft
             && $this->isOwner($user, $po);
     }
 
     public function canCancel(User $user, PurchaseOrder $po): bool
     {
-        return in_array($po->status, [
-            PurchaseOrderStatus::Draft,
-            PurchaseOrderStatus::PendingApproval,
-            PurchaseOrderStatus::Approved,
-            PurchaseOrderStatus::Sent,
-            PurchaseOrderStatus::PartiallyReceived,
-        ], true) && $this->isOwner($user, $po);
+        return $user->hasPermission('purchasing.po.create')
+            && in_array($po->status, [
+                PurchaseOrderStatus::Draft,
+                PurchaseOrderStatus::PendingApproval,
+                PurchaseOrderStatus::Approved,
+                PurchaseOrderStatus::Sent,
+                PurchaseOrderStatus::Acknowledged,
+                PurchaseOrderStatus::SupplierProposed,
+                PurchaseOrderStatus::SupplierDeclined,
+                PurchaseOrderStatus::PartiallyReceived,
+            ], true) && $this->isOwner($user, $po);
     }
 
     public function canSend(User $user, PurchaseOrder $po): bool
     {
-        return $po->status === PurchaseOrderStatus::Approved
+        return $user->hasPermission('purchasing.po.send')
+            && $po->status === PurchaseOrderStatus::Approved
             && $this->isOwner($user, $po);
     }
 
     public function canClose(User $user, PurchaseOrder $po): bool
     {
-        return $po->status === PurchaseOrderStatus::Received
+        return $user->hasPermission('purchasing.po.create')
+            && $po->status === PurchaseOrderStatus::Received
             && $this->isOwner($user, $po);
     }
 
@@ -152,8 +165,8 @@ final class PurchaseOrderAccessPolicy
     /**
      * Approval roles held directly or through an active delegation.
      *
-     * Every purchase_order step is a plant-wide office (purchasing_officer →
-     * finance_officer → system_admin), so unlike PurchaseRequestAccessPolicy
+     * Every purchase_order step is a plant-wide office (finance_officer →
+     * vice_president), so unlike PurchaseRequestAccessPolicy
      * there is no departmental step role to subtract.
      *
      * @return list<string>
@@ -176,5 +189,51 @@ final class PurchaseOrderAccessPolicy
         return $this->visibleTo(PurchaseOrder::query(), $user)
             ->whereKey($po->id)
             ->exists();
+    }
+
+    /**
+     * PU-13 — action decisions for detail/action responses, mirroring
+     * PurchaseRequestAccessPolicy::actionsFor. The SPA renders buttons from
+     * this map instead of guessing from status + permission, so a hidden
+     * button and a refused request can never disagree. Approve/reject mirror
+     * ApprovalService's own guards (step-role match via approvalRoleSlugs,
+     * self-approval via created_by); the service re-checks under lock — this
+     * is UX truth, not the security boundary.
+     *
+     * @return array<string, bool>
+     */
+    public function actionsFor(User $user, PurchaseOrder $po): array
+    {
+        $canView = $this->canView($user, $po);
+        $canManageDraft = $this->canManageDraft($user, $po);
+
+        $isPendingApproval = $po->status === PurchaseOrderStatus::PendingApproval;
+        $selfSubmitted = (int) $po->created_by === (int) $user->id;
+        $stepRoles = $this->approvalRoleSlugs($user);
+        // The approve/reject routes are gated by `purchasing.po.approve`.
+        // Matching the step role alone would advertise the button to a
+        // delegate who holds the role but not the route permission.
+        $holdsCurrentStep = $user->hasPermission('purchasing.po.approve')
+            && $isPendingApproval
+            && ! $selfSubmitted
+            && $stepRoles !== []
+            && $po->approvalRecords()
+                ->where('action', 'pending')
+                ->whereIn('role_slug', $stepRoles)
+                ->exists();
+
+        return [
+            'can_view'               => $canView,
+            'can_update'             => $canManageDraft,
+            'can_delete'             => $canManageDraft,
+            'can_submit'             => $canManageDraft,
+            'can_approve'            => $holdsCurrentStep,
+            'can_reject'             => $holdsCurrentStep,
+            'can_send'               => $this->canSend($user, $po),
+            'can_cancel'             => $this->canCancel($user, $po),
+            'can_close'              => $this->canClose($user, $po),
+            'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $po),
+            'can_print'              => $canView,
+        ];
     }
 }

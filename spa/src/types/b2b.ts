@@ -1,5 +1,7 @@
 /** Portal user types for ADV10 — B2B Portals */
 
+import type { PurchaseOrderResponse, PurchaseOrderResponseType } from '@/types/purchasing';
+
 export interface SupplierPortalUser {
  id: string;
  name: string;
@@ -42,6 +44,8 @@ export interface PortalPoSummary {
  status: string;
  status_label?: string;
  expected_delivery_date: string | null;
+ /** Date this supplier confirmed, vs OGAMI's required date. */
+ confirmed_delivery_date: string | null;
  sent_to_supplier_at: string | null;
  incoterm: string | null;
  capabilities?: PortalPoCapabilities;
@@ -49,9 +53,25 @@ export interface PortalPoSummary {
 
 export interface PortalPoCapabilities {
  can_acknowledge: boolean;
+ /** Supplier may accept / propose / decline the PO. */
+ can_respond: boolean;
  can_update_shipment: boolean;
  can_upload_document: boolean;
  can_submit_invoice: boolean;
+ can_schedule_delivery: boolean;
+}
+
+/** Body for POST /b2b/supplier/purchase-orders/{po}/respond. */
+export interface RespondToPurchaseOrderPayload {
+ type: PurchaseOrderResponseType;
+ proposed_delivery_date?: string;
+ notes?: string;
+ items?: Array<{
+  purchase_order_item_id: string;
+  proposed_quantity?: string;
+  proposed_unit_price?: string;
+  reason?: string;
+ }>;
 }
 
 export interface PortalPoItem {
@@ -66,6 +86,8 @@ export interface PortalPoItem {
 
 export interface PortalPoDetail extends PortalPoSummary {
  capabilities: PortalPoCapabilities;
+ /** Most recent response this supplier submitted. */
+ latest_response: PurchaseOrderResponse | null;
  shipment?: {
   id: string;
   shipped_date: string | null;
@@ -118,9 +140,19 @@ export interface PortalSoItem {
  id: string;
  part_number: string;
  name: string;
- quantity: number;
+ quantity: string;
  unit_price: string;
- total_price: string;
+ total: string;
+ delivery_date: string | null;
+}
+
+export interface PortalCatalogItem {
+ id: string;
+ part_number: string;
+ name: string;
+ unit_of_measure: string;
+ unit_price: string;
+ pricing_method: string;
 }
 
 export interface PortalSoDetail extends PortalSoSummary {
@@ -138,6 +170,7 @@ export interface PortalSoDetail extends PortalSoSummary {
  notes?: string;
  payment_terms_days?: number;
  delivery_terms?: string;
+ submission_source?: string;
 }
 
 // ── Shared portal types ──────────────────────────────
@@ -223,6 +256,7 @@ export interface PortalDeliveryDetail extends PortalDeliverySummary {
  notes: string | null;
  }>;
  receiver_name?: string | null;
+ confirmed_at?: string | null;
  driver?: { id: string; name: string } | null;
 }
 
@@ -349,6 +383,7 @@ export interface PortalItemCatalogEntry {
  id: string;
  code: string;
  name: string;
+ item_type?: string;
  unit_of_measure: string;
 }
 
@@ -381,15 +416,56 @@ export interface PortalSupplierListingInput {
  valid_until?: string | null;
 }
 
+export interface PortalBulkListingFailure {
+ index: number;
+ item_id: string | null;
+ message: string;
+}
+
+export interface PortalBulkListingResult {
+ created: PortalSupplierListing[];
+ failed: PortalBulkListingFailure[];
+ created_count: number;
+ failed_count: number;
+}
+
 export interface DeliverySchedule {
  id: string;
  month: string;
  status: string;
  status_label?: string;
+ source?: 'customer' | 'supplier';
+ customer?: { id: string; name: string } | null;
+ vendor?: { id: string; name: string } | null;
  lines: DeliveryScheduleLine[];
  purchase_order?: { id: string; po_number: string } | null;
+ reject_reason?: string | null;
+ reviewed_at?: string | null;
  created_at: string;
  updated_at: string;
+}
+
+// ── Internal B2B delivery schedule review ────────────
+
+export interface InternalDeliverySchedule {
+ id: string;
+ month: string;
+ status: string;
+ status_label: string;
+ source: 'customer' | 'supplier';
+ customer?: { id: string; name: string } | null;
+ vendor?: { id: string; name: string } | null;
+ purchase_order?: { id: string; po_number: string } | null;
+ lines: Array<{
+  purchase_order_item_id: string | null;
+  product_name: string;
+  quantity: string;
+  notes: string | null;
+ }>;
+ reject_reason: string | null;
+ reviewed_at: string | null;
+ reviewed_by?: { id: string; name: string } | null;
+ created_at: string;
 }
 
 // ── Vendor Statement of Account (Supplier Portal) ─────

@@ -23,7 +23,7 @@ import { reportMutationError } from '@/lib/formErrors';
 import type { OvertimeRequest } from '@/types/attendance';
 
 const DEFAULT_FILTERS: OvertimeListParams = {
- page: 1, per_page: 100, sort: 'date', direction: 'desc', status: 'pending',
+ page: 1, per_page: 100, sort: 'date', direction: 'desc', status: '',
 };
 
 export default function OvertimeListPage() {

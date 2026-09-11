@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Database\Eloquent\Builder;
@@ -181,9 +182,34 @@ final class PurchaseRequestAccessPolicy
             'can_approve'            => $this->canApprove($user, $pr),
             'can_reject'             => $this->canReject($user, $pr),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $pr),
-            'can_convert'            => $this->canConvert($user, $pr),
+            // canConvert() is the permission gate the convert endpoint uses and
+            // is deliberately replay-tolerant: re-posting an already-converted
+            // PR returns its existing POs. The *button* must be stricter — once
+            // any live PO exists (including rows created before the manual
+            // create path marked its source PR converted) the affordance clears
+            // so the operator cannot fire a second conversion.
+            'can_convert'            => $this->canConvert($user, $pr)
+                && $pr->status === PurchaseRequestStatus::Approved
+                && ! $this->hasLivePurchaseOrders($pr),
             'can_print'              => $this->canView($user, $pr),
         ];
+    }
+
+    /**
+     * Does this PR already have a PO that still counts as its conversion? A
+     * cancelled or soft-deleted PO is a failed attempt — the reopen logic moves
+     * the PR back to `approved`, so those do not count.
+     */
+    private function hasLivePurchaseOrders(PurchaseRequest $pr): bool
+    {
+        $orders = $pr->relationLoaded('purchaseOrders')
+            ? $pr->purchaseOrders
+            : $pr->purchaseOrders()->get();
+
+        return $orders->contains(
+            static fn ($po): bool => $po->status !== PurchaseOrderStatus::Cancelled
+                && $po->deleted_at === null,
+        );
     }
 
     /**

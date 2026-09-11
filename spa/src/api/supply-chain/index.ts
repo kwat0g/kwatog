@@ -68,7 +68,7 @@ export const shipmentsApi = {
 };
 
 export interface DeliveryListParams extends ListParams {
- status?: DeliveryStatus;
+ status?: DeliveryStatus | '';
  sales_order_id?: string;
 }
 

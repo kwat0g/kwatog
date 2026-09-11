@@ -634,3 +634,34 @@ MissingValue key, a serializer artifact) and to pin the allowlist: internal
 fields absent at the top level and inside each payment, statement fields
 present. Internal AP controls (`exception_evidence`,
 `three_way_override_reason`, `expense_account`) remain hidden.
+
+---
+
+## 2026-09-11 — acknowledgment semantics + capability gates
+
+Source: `audit/domains/procurement/purchase-orders/lifecycle-audit-2026-09-11.md`.
+
+- `SupplierPortalService.php:50-88,162-191,237-263,300-320`: Before, a supplier
+  saw `approved` POs and "acknowledging" one called `markAsSent`, recording the
+  supplier's acceptance as OGAMI's transmission; the supplier could also accept
+  a PO that had never been sent, its ETA overwrote `expected_delivery_date`
+  (the scorecard's target), and its note replaced internal PO remarks. After,
+  the supplier-visible set starts at `sent`; `acknowledgePo()` delegates to
+  `PurchaseOrderService::acknowledgeBySupplier()` (`Sent → Acknowledged`),
+  writes `confirmed_delivery_date`, and appends the note; `updateShipment()`
+  writes `confirmed_delivery_date`, leaving `expected_delivery_date` untouched;
+  the portal dashboard counts reuse one pending-delivery status set.
+- `SupplierPurchaseOrderResource.php:33-52`: Before, `can_submit_invoice` was
+  true for `sent|partially_received|received` even though `submitInvoice()`
+  requires an accepted GRN — the supplier saw an enabled button and got a 422.
+  After, the capability requires an accepted receipt and a new
+  `can_schedule_delivery` flag is exposed; `can_acknowledge` requires `sent`.
+- `api/tests/Feature/B2B/SupplierPortalServiceTest.php`,
+  `SupplierPortalCrossTenantTest.php`: updated for the `sent`/`acknowledged`
+  model; added tests pinning the unsent-PO refusal, the `acknowledged` result
+  with `confirmed_delivery_date`, remark preservation, and the accepted-GRN
+  invoice gate.
+
+Verification: B2B `--filter=SupplierPortal` `89 passed (433 assertions)`;
+integrated Purchasing+B2B `372 passed`.
+

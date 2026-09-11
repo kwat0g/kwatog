@@ -122,6 +122,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/assignment',        [DeliveryController::class, 'assign'])
         ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/reschedule',       [DeliveryController::class, 'reschedule'])
+        ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/status',           [DeliveryController::class, 'updateStatus'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::post('/deliveries/{delivery}/receipt',           [DeliveryController::class, 'uploadReceipt'])

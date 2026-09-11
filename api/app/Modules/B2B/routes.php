@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
+use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
@@ -42,6 +43,7 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
         Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
         Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo']);
+        Route::post('purchase-orders/{purchaseOrder}/respond', [SupplierPortalController::class, 'respondToPo']);
         Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment']);
         Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments']);
         Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
@@ -59,6 +61,7 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
         Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
         Route::post('item-listings', [SupplierListingPortalController::class, 'store']);
+        Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk']);
         Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update']);
         // PPAP submissions (read-only, scoped to this supplier).
         Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
@@ -99,6 +102,14 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
         Route::delete('suppliers/{supplierPortalUser}/tokens', [PortalAccessController::class, 'revokeSupplierTokens'])
             ->middleware('permission:b2b.portal_access.manage')
             ->withTrashed();
+        Route::get('delivery-schedules', [InternalDeliveryScheduleController::class, 'index'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::get('delivery-schedules/{deliverySchedule}', [InternalDeliveryScheduleController::class, 'show'])
+            ->middleware('permission:b2b.portal_access.view');
+        Route::post('delivery-schedules/{deliverySchedule}/acknowledge', [InternalDeliveryScheduleController::class, 'acknowledge'])
+            ->middleware('permission:b2b.portal_access.manage');
+        Route::post('delivery-schedules/{deliverySchedule}/reject', [InternalDeliveryScheduleController::class, 'reject'])
+            ->middleware('permission:b2b.portal_access.manage');
     });
 
 /* ─── Customer Portal ─────────────────────────────────────────── */
@@ -121,15 +132,20 @@ Route::prefix('b2b/customer')->group(function () {
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
         Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
+        Route::get('catalog', [CustomerPortalController::class, 'catalog']);
         Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
+        Route::post('orders', [CustomerPortalController::class, 'storeOrder']);
         Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
         Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
+        // Sales-order negotiation — customer accepts / proposes changes / declines.
+        Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder']);
         Route::get('invoices', [CustomerPortalController::class, 'invoices']);
         Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
         Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
         Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
         Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
         Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
+        Route::post('deliveries/{delivery}/confirm', [CustomerPortalController::class, 'confirmDelivery']);
         Route::get('complaints', [CustomerPortalController::class, 'complaints']);
         Route::get('complaints/options', [CustomerPortalController::class, 'complaintOptions']);
         Route::post('complaints', [CustomerPortalController::class, 'createComplaint']);
@@ -137,6 +153,15 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);
         Route::get('delivery-schedules', [CustomerPortalController::class, 'deliverySchedules']);
         Route::post('delivery-schedules', [CustomerPortalController::class, 'storeDeliverySchedule']);
+
+        // Customer self-service returns (RMA). Both portals features must be on
+        // for the endpoints to exist, matching the internal module gate.
+        Route::middleware('feature:return_management')->group(function (): void {
+            Route::get('return-requests/source-options', [CustomerPortalController::class, 'returnSourceOptions']);
+            Route::get('return-requests', [CustomerPortalController::class, 'returnRequests']);
+            Route::get('return-requests/{returnRequest}', [CustomerPortalController::class, 'returnRequestShow']);
+            Route::post('return-requests', [CustomerPortalController::class, 'storeReturnRequest']);
+        });
         });
     });
 });

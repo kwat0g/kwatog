@@ -25,7 +25,8 @@ class Delivery extends Model
 
     protected $fillable = [
         'delivery_number', 'sales_order_id', 'vehicle_id', 'driver_id',
-        'status', 'scheduled_date', 'departed_at', 'delivered_at',
+        'status', 'scheduled_date', 'original_scheduled_date', 'reschedule_count',
+        'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
         'invoice_handoff_status', 'invoice_handoff_message', 'invoice_handoff_at',
@@ -36,6 +37,8 @@ class Delivery extends Model
     protected $casts = [
         'status'         => DeliveryStatus::class,
         'scheduled_date' => 'date',
+        'original_scheduled_date' => 'date',
+        'reschedule_count' => 'integer',
         'departed_at'    => 'datetime',
         'delivered_at'   => 'datetime',
         'confirmed_at'   => 'datetime',
@@ -89,6 +92,12 @@ class Delivery extends Model
     public function proofs(): HasMany
     {
         return $this->hasMany(DeliveryProof::class);
+    }
+
+    /** Append-only history of date moves for this delivery. */
+    public function reschedules(): HasMany
+    {
+        return $this->hasMany(DeliveryReschedule::class);
     }
 
     public function scopeStatus(Builder $q, DeliveryStatus|string $s): Builder

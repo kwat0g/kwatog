@@ -22,6 +22,11 @@ class ApprovedSupplierController
         return ApprovedSupplierResource::collection($this->service->list($request->query()));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => $this->service->options()]);
+    }
+
     public function store(StoreApprovedSupplierRequest $request): JsonResponse
     {
         $row = $this->service->create($request->validated());

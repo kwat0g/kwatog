@@ -151,6 +151,23 @@ class SalesOrderService
         }
     }
 
+    /**
+     * Re-run the confirmation credit gate against an order whose lines and
+     * totals are about to change (a customer counter-offer accepted by sales).
+     *
+     * `checkCreditLimit` reads `$so->total_amount` and open AR/SO exposure, so
+     * the caller MUST have applied the proposed values first and hold the SO
+     * row lock. Locks the customer row in the same order as `confirm()` so two
+     * concurrent confirmations/acceptances cannot both pass against the same
+     * open exposure.
+     */
+    public function assertCreditWithinLimit(SalesOrder $so): void
+    {
+        $customer = Customer::withTrashed()->lockForUpdate()->findOrFail($so->customer_id);
+        $so->setRelation('customer', $customer);
+        $this->checkCreditLimit($so);
+    }
+
     private function assertActiveCustomer(int $customerId): void
     {
         if (! Customer::query()->active()->whereKey($customerId)->exists()) {
@@ -273,7 +290,7 @@ class SalesOrderService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = SalesOrder::query()
-            ->with(['customer:id,name', 'creator:id,name,role_id'])
+            ->with(['customer:id,name', 'creator:id,name,role_id', 'latestResponse.items'])
             ->withCount('items');
 
         TrashedFilter::apply($q, $filters);
@@ -324,6 +341,7 @@ class SalesOrderService
         return $so->load([
             'customer',
             'creator:id,name,role_id',
+            'latestResponse.items',
             'items.product:id,part_number,name,unit_of_measure',
             'mrpPlan:id,mrp_plan_no,version,status,shortages_found,auto_pr_count,draft_wo_count,sales_order_id',
             'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,mrp_plan_id,planned_start',
@@ -400,6 +418,7 @@ class SalesOrderService
                 'delivery_terms'     => $data['delivery_terms'] ?? null,
                 'notes'              => $data['notes'] ?? null,
                 'incoterm'           => $data['incoterm'] ?? null,
+                'submission_source'  => $data['submission_source'] ?? 'internal',
                 'created_by'         => $userId,
             ]);
 
@@ -557,6 +576,28 @@ class SalesOrderService
             );
 
             return $this->show($fresh);
+        });
+    }
+
+    /**
+     * Send a draft sales order to the customer for review, which is what makes
+     * it negotiable through the portal. Confirmation still happens separately;
+     * this only records that the sales team released the draft to the customer.
+     */
+    public function requestCustomerConfirmation(SalesOrder $so): SalesOrder
+    {
+        return DB::transaction(function () use ($so) {
+            $lockedSo = SalesOrder::query()->lockForUpdate()->findOrFail($so->id);
+            if ($lockedSo->status !== SalesOrderStatus::Draft) {
+                throw new BusinessRuleException('Only draft sales orders can be sent to the customer for confirmation.');
+            }
+            if ($lockedSo->items()->count() === 0) {
+                throw new BusinessRuleException('Cannot request customer confirmation for a sales order with no items.');
+            }
+
+            $lockedSo->update(['customer_confirmation_requested_at' => now()]);
+
+            return $this->show($lockedSo->fresh());
         });
     }
 

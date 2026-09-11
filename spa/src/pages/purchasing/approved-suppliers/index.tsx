@@ -14,6 +14,7 @@ import { itemsApi } from '@/api/inventory/items';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -23,13 +24,25 @@ import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { FilterBar } from '@/components/ui/FilterBar';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
+import type { ListParams } from '@/types';
 import type { ApprovedSupplier } from '@/types/purchasing';
+
+interface ApprovedSupplierListParams extends ListParams {
+  item_id?: string;
+  vendor_id?: string;
+  is_preferred?: string;
+  qualification_status?: string;
+}
+
+const DEFAULT_FILTERS: ApprovedSupplierListParams = {
+  search: '', page: 1, per_page: 50,
+};
 
 const schema = z.object({
  item_id: z.string().min(1, 'Item is required.'),
@@ -44,7 +57,7 @@ export default function ApprovedSuppliersPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('purchasing.po.create');
- const [filters, setFilters] = useUrlFilters({ search: '', page: 1, per_page: 50 });
+ const [filters, setFilters] = useUrlFilters<ApprovedSupplierListParams>(DEFAULT_FILTERS);
  const [open, setOpen] = useState(false);
  const [confirmDelete, setConfirmDelete] = useState<ApprovedSupplier | null>(null);
  const [confirmRestore, setConfirmRestore] = useState<ApprovedSupplier | null>(null);
@@ -55,6 +68,23 @@ export default function ApprovedSuppliersPage() {
  queryFn: () => approvedSuppliersApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
  placeholderData: (prev) => prev,
  });
+
+ const { data: filterOptions } = useQuery({
+ queryKey: ['purchasing', 'approved-suppliers', 'options'],
+ queryFn: approvedSuppliersApi.options,
+ staleTime: 5 * 60 * 1000,
+ });
+
+ const filterConfig: FilterConfig[] = [
+ { key: 'vendor_id', label: 'Vendor', type: 'select',
+ options: (filterOptions?.vendors ?? []).map((v) => ({ value: v.value, label: v.label })) },
+ { key: 'item_id', label: 'Item', type: 'select',
+ options: (filterOptions?.items ?? []).map((i) => ({ value: i.value, label: i.label })) },
+ { key: 'is_preferred', label: 'Preferred', type: 'select',
+ options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] },
+ { key: 'qualification_status', label: 'Qualification', type: 'select',
+ options: (filterOptions?.qualification_statuses ?? []).map((s) => ({ value: s.value, label: s.label })) },
+ ];
 
  const togglePreferred = useMutation({
  mutationFn: (s: ApprovedSupplier) => approvedSuppliersApi.update(s.id, { is_preferred: !s.is_preferred }),
@@ -89,7 +119,12 @@ export default function ApprovedSuppliersPage() {
  const columns: Column<ApprovedSupplier>[] = [
  { key: 'item', header: 'Item', cell: (r) => <span className="font-mono">{r.item.code}</span> },
  { key: 'name', header: 'Name', cell: (r) => r.item.name },
-  { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor.name },
+  { key: 'vendor', header: 'Vendor', cell: (r) => (
+  <span className="flex items-center gap-1.5">
+  {r.vendor.name}
+  {r.qualification_status === 'provisional' && <Chip variant="warning">provisional</Chip>}
+  </span>
+  ) },
   { key: 'supplier_code', header: 'Their part no.', cell: (r) => (
   r.supplier_item_code
   ? <span className="font-mono" title={r.supplier_item_name ?? undefined}>{r.supplier_item_code}</span>
@@ -161,7 +196,13 @@ export default function ApprovedSuppliersPage() {
  ) : null}
  />
  <div className="px-5 py-4 flex justify-between items-center gap-3">
- <FilterBar onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))} searchPlaceholder="Search supplier..." />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }))}
+ searchPlaceholder="Search item, vendor, part no…"
+ />
  <ArchiveFilter value={scope} onChange={setScope} />
  </div>
  {isLoading && !data && <SkeletonTable columns={canManage ? 8 : 7} rows={6} />}

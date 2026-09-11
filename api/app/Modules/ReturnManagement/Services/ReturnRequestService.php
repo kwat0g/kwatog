@@ -6,14 +6,23 @@ namespace App\Modules\ReturnManagement\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -42,9 +51,12 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
+use App\Common\Services\SystemUserResolver;
+use App\Common\Support\HashId;
 use App\Common\Support\Money;
 use App\Common\Models\ApprovalRecord;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -111,6 +123,576 @@ class ReturnRequestService
     }
 
     /**
+     * Customer-scoped returnable source lines for the B2B portal.
+     *
+     * Unlike the internal `source-options` fetch this resolves a server-side
+     * `item_id` for every product line — finished goods are matched
+     * `items.code == products.part_number` AND `item_type = finished_good`,
+     * the same mapping `WorkOrderOutputService` uses to receive production
+     * output. The customer never picks an inventory item, and a product line
+     * with no matching finished-goods item is surfaced with `item_id = null`
+     * so the SPA can disable it instead of failing later at submit.
+     *
+     * @return array{customer: array{invoices: mixed, salesOrders: mixed, deliveries: mixed}}
+     */
+    public function sourceOptionsForCustomer(int $customerId, array $filters = []): array
+    {
+        $invoiceModels = Invoice::query()
+            ->where('customer_id', $customerId)
+            ->whereNotIn('status', ['draft', 'cancelled'])
+            ->with('items')
+            ->latest('date')
+            ->limit(100)
+            ->get();
+
+        $salesOrderModels = SalesOrder::query()
+            ->where('customer_id', $customerId)
+            ->where('status', '<>', 'cancelled')
+            ->with('items')
+            ->latest('date')
+            ->limit(100)
+            ->get();
+
+        $deliveryModels = Delivery::query()
+            ->whereHas('salesOrder', fn ($query) => $query->where('customer_id', $customerId))
+            ->whereNotIn('status', ['cancelled'])
+            ->with(['salesOrder:id,so_number', 'items.salesOrderItem'])
+            ->latest('delivered_at')
+            ->limit(100)
+            ->get();
+
+        $productIds = collect()
+            ->merge($invoiceModels->flatMap(fn (Invoice $invoice) => $invoice->items->pluck('product_id')))
+            ->merge($salesOrderModels->flatMap(fn (SalesOrder $order) => $order->items->pluck('product_id')))
+            ->merge($deliveryModels->flatMap(
+                fn (Delivery $delivery) => $delivery->items->map(fn ($line) => $line->salesOrderItem?->product_id),
+            ))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $itemMap = $this->finishedGoodItemIdMap($productIds);
+
+        $invoiceReserved = $this->activeAllocationsBySource(
+            'invoice_item',
+            $this->lineIdsFrom($invoiceModels->flatMap(fn (Invoice $invoice) => $invoice->items)),
+        );
+        $salesOrderReserved = $this->activeAllocationsBySource(
+            'sales_order_item',
+            $this->lineIdsFrom($salesOrderModels->flatMap(fn (SalesOrder $order) => $order->items)),
+        );
+        $deliveryReserved = $this->activeAllocationsBySource(
+            'delivery_item',
+            $this->lineIdsFrom($deliveryModels->flatMap(fn (Delivery $delivery) => $delivery->items)),
+        );
+
+        $invoices = $invoiceModels
+            ->map(fn (Invoice $invoice): array => [
+                'id' => $invoice->hash_id,
+                'label' => $invoice->invoice_number,
+                'sales_order_id' => $invoice->sales_order_id ? HashId::encode((int) $invoice->sales_order_id) : null,
+                'lines' => $invoice->items->map(fn ($line): array => [
+                    'id' => $line->hash_id,
+                    'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
+                    'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
+                    'quantity' => (string) $line->quantity,
+                    'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $invoiceReserved[(int) $line->id] ?? '0'),
+                    'unit_price' => (string) $line->unit_price,
+                    'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
+                ])->values(),
+            ])->values();
+
+        $salesOrders = $salesOrderModels
+            ->map(fn (SalesOrder $order): array => [
+                'id' => $order->hash_id,
+                'label' => $order->so_number,
+                'lines' => $order->items->map(fn ($line): array => [
+                    'id' => $line->hash_id,
+                    'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
+                    'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
+                    'quantity' => (string) $line->quantity_delivered,
+                    'remaining_quantity' => $this->remainingOnLine((string) $line->quantity_delivered, $salesOrderReserved[(int) $line->id] ?? '0'),
+                    'unit_price' => (string) $line->unit_price,
+                    'label' => 'SO line '.$line->id,
+                ])->values(),
+            ])->values();
+
+        $deliveries = $deliveryModels
+            ->map(fn (Delivery $delivery): array => [
+                'id' => $delivery->hash_id,
+                'label' => $delivery->delivery_number,
+                'sales_order_id' => $delivery->sales_order_id ? HashId::encode((int) $delivery->sales_order_id) : null,
+                'lines' => $delivery->items->map(function ($line) use ($itemMap, $deliveryReserved): array {
+                    $productId = $line->salesOrderItem?->product_id;
+
+                    return [
+                        'id' => $line->hash_id,
+                        'product_id' => $productId ? HashId::encode((int) $productId) : null,
+                        'item_id' => $productId && isset($itemMap[(int) $productId]) ? HashId::encode($itemMap[(int) $productId]) : null,
+                        'quantity' => (string) $line->quantity,
+                        'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $deliveryReserved[(int) $line->id] ?? '0'),
+                        'unit_price' => (string) $line->unit_price,
+                        'label' => 'Delivery line '.$line->id,
+                    ];
+                })->values(),
+            ])->values();
+
+        return [
+            'customer' => [
+                'invoices' => $invoices,
+                'salesOrders' => $salesOrders,
+                'deliveries' => $deliveries,
+            ],
+        ];
+    }
+
+    /**
+     * Create a draft customer-return RMA from the B2B portal.
+     *
+     * The portal never selects an inventory item or a unit price: this method
+     * resolves the source line's product, finished-goods item and price
+     * server-side, pins `type = customer_return`, `customer_id` and
+     * `finance_only = false`, and delegates to `create()` so the same source
+     * validation and reservation path as the internal form runs. The RMA stays
+     * draft — the portal cannot approve its own return.
+     *
+     * @param  array{items: array<int, array{quantity?: string, reason?: string|null, condition?: string|null, source_invoice_item_id?: int|string|null, source_sales_order_item_id?: int|string|null, source_delivery_item_id?: int|string|null}>, reason_code?: string|null, reason_description?: string|null, customer_notes?: string|null, return_date?: string|null}  $data
+     */
+    public function createCustomerReturnFromPortal(int $customerId, array $data, ?User $by = null): ReturnRequest
+    {
+        $by ??= app(SystemUserResolver::class)->user();
+
+        $resolved = [];
+        foreach ((array) ($data['items'] ?? []) as $index => $item) {
+            $resolved[] = $this->resolvePortalReturnLine($customerId, (int) $index, $item);
+        }
+
+        if ($resolved === []) {
+            throw new BusinessRuleException('A return needs at least one line item.');
+        }
+
+        $salesOrderIds = collect($resolved)->pluck('sales_order_id')->filter()->unique()->values();
+        $invoiceIds = collect($resolved)->pluck('invoice_id')->filter()->unique()->values();
+        if ($salesOrderIds->count() > 1) {
+            throw new BusinessRuleException('Return lines must all come from the same sales order.');
+        }
+        if ($invoiceIds->count() > 1) {
+            throw new BusinessRuleException('Return lines must all come from the same invoice.');
+        }
+
+        $rma = $this->create([
+            'type'                => ReturnRequestType::CustomerReturn->value,
+            'customer_id'         => $customerId,
+            'finance_only'        => false,
+            'sales_order_id'      => $salesOrderIds->first(),
+            'invoice_id'          => $invoiceIds->first(),
+            'reason_code'         => $data['reason_code'] ?? null,
+            'reason_description'  => $data['reason_description'] ?? null,
+            'customer_notes'      => $data['customer_notes'] ?? null,
+            'return_date'         => $data['return_date'] ?? now(),
+            'items'               => array_map(static fn (array $line): array => [
+                'product_id'                  => $line['product_id'],
+                'item_id'                     => $line['item_id'],
+                'quantity'                    => $line['quantity'],
+                'reason'                      => $line['reason'],
+                'condition'                   => $line['condition'],
+                'source_invoice_item_id'      => $line['source_invoice_item_id'],
+                'source_sales_order_item_id'  => $line['source_sales_order_item_id'],
+                'source_delivery_item_id'     => $line['source_delivery_item_id'],
+            ], $resolved),
+        ], $by);
+
+        $this->notifyCustomerReturnCreated($rma);
+
+        return $rma;
+    }
+
+    /**
+     * Resolve one portal return line's provenance, product, item and price.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function resolvePortalReturnLine(int $customerId, int $index, array $item): array
+    {
+        $quantity = (string) ($item['quantity'] ?? '0');
+        if (bccomp($quantity, '0', 3) <= 0) {
+            throw new BusinessRuleException("items.{$index}.quantity must be greater than zero.");
+        }
+
+        $sources = array_filter([
+            'invoice_item' => $item['source_invoice_item_id'] ?? null,
+            'sales_order_item' => $item['source_sales_order_item_id'] ?? null,
+            'delivery_item' => $item['source_delivery_item_id'] ?? null,
+        ], static fn ($value): bool => $value !== null && $value !== '');
+        if (count($sources) !== 1) {
+            throw new BusinessRuleException("items.{$index} must reference exactly one invoice, sales-order, or delivery line.");
+        }
+
+        $kind = (string) array_key_first($sources);
+        $id = (int) $sources[$kind];
+
+        $line = [
+            'product_id'                 => null,
+            'item_id'                    => null,
+            'quantity'                   => $quantity,
+            'reason'                     => $item['reason'] ?? null,
+            'condition'                  => $item['condition'] ?? null,
+            'source_invoice_item_id'     => null,
+            'source_sales_order_item_id' => null,
+            'source_delivery_item_id'    => null,
+            'sales_order_id'             => null,
+            'invoice_id'                 => null,
+        ];
+
+        if ($kind === 'invoice_item') {
+            $invoiceItem = InvoiceItem::query()->with('invoice')->findOrFail($id);
+            $invoice = $invoiceItem->invoice;
+            if (! $invoice || (int) $invoice->customer_id !== $customerId) {
+                throw new BusinessRuleException("items.{$index} does not belong to this customer.");
+            }
+            $line['source_invoice_item_id'] = (int) $invoiceItem->id;
+            $line['invoice_id'] = (int) $invoice->id;
+            $line['sales_order_id'] = $invoice->sales_order_id ? (int) $invoice->sales_order_id : null;
+            $line['product_id'] = $invoiceItem->product_id ? (int) $invoiceItem->product_id : null;
+        } elseif ($kind === 'sales_order_item') {
+            $salesOrderItem = SalesOrderItem::query()->with('salesOrder')->findOrFail($id);
+            $order = $salesOrderItem->salesOrder;
+            if (! $order || (int) $order->customer_id !== $customerId) {
+                throw new BusinessRuleException("items.{$index} does not belong to this customer.");
+            }
+            $line['source_sales_order_item_id'] = (int) $salesOrderItem->id;
+            $line['sales_order_id'] = (int) $order->id;
+            $line['product_id'] = $salesOrderItem->product_id ? (int) $salesOrderItem->product_id : null;
+        } else {
+            $deliveryItem = DeliveryItem::query()->with('salesOrderItem.salesOrder')->findOrFail($id);
+            $salesOrderItem = $deliveryItem->salesOrderItem;
+            $order = $salesOrderItem?->salesOrder;
+            if (! $order || (int) $order->customer_id !== $customerId) {
+                throw new BusinessRuleException("items.{$index} does not belong to this customer.");
+            }
+            $line['source_delivery_item_id'] = (int) $deliveryItem->id;
+            $line['sales_order_id'] = (int) $order->id;
+            $line['product_id'] = $salesOrderItem?->product_id ? (int) $salesOrderItem->product_id : null;
+        }
+
+        if ($line['product_id'] === null) {
+            throw new BusinessRuleException("items.{$index} has no product provenance for Quality inspection.");
+        }
+
+        $line['item_id'] = $this->finishedGoodItemId((int) $line['product_id']);
+        if ($line['item_id'] === null) {
+            throw new BusinessRuleException("items.{$index} has no finished-goods inventory item and cannot be returned.");
+        }
+
+        return $line;
+    }
+
+    /**
+     * Map product IDs to the finished-goods inventory item with the matching
+     * `items.code == products.part_number`. One product query + one item query,
+     * never per line.
+     *
+     * @param  array<int, mixed>  $productIds
+     * @return array<int, int>
+     */
+    private function finishedGoodItemIdMap(array $productIds): array
+    {
+        $productIds = array_values(array_filter(array_unique(array_map('intval', $productIds))));
+        if ($productIds === []) {
+            return [];
+        }
+
+        $partNumbers = Product::query()->whereIn('id', $productIds)->pluck('part_number', 'id');
+        $codes = $partNumbers
+            ->filter(static fn ($code): bool => is_string($code) && trim($code) !== '')
+            ->values()
+            ->all();
+        if ($codes === []) {
+            return [];
+        }
+
+        $itemByCode = Item::query()
+            ->whereIn('code', $codes)
+            ->where('item_type', ItemType::FinishedGood->value)
+            ->pluck('id', 'code');
+
+        $map = [];
+        foreach ($partNumbers as $productId => $code) {
+            if (is_string($code) && isset($itemByCode[$code])) {
+                $map[(int) $productId] = (int) $itemByCode[$code];
+            }
+        }
+
+        return $map;
+    }
+
+    private function finishedGoodItemId(int $productId): ?int
+    {
+        $map = $this->finishedGoodItemIdMap([$productId]);
+
+        return $map[$productId] ?? null;
+    }
+
+    /** @param iterable<object> $lines */
+    private function lineIdsFrom(iterable $lines): array
+    {
+        $ids = [];
+        foreach ($lines as $line) {
+            $ids[] = (int) $line->id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function remainingOnLine(string $documentQuantity, string $reserved): string
+    {
+        $left = bcsub(bcadd($documentQuantity, '0', 3), $reserved, 3);
+
+        return bccomp($left, '0', 3) > 0 ? $left : '0.000';
+    }
+
+    private function notifyCustomerReturnCreated(ReturnRequest $rma): void
+    {
+        try {
+            $audience = User::query()
+                ->where('is_active', true)
+                ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'return_management.manage'))
+                ->get();
+            if ($audience->isEmpty()) {
+                return;
+            }
+
+            $this->notifications->send($audience, 'customer.rma_created', [
+                'title'       => "RMA {$rma->rma_number} submitted by a customer",
+                'message'     => 'A customer return was submitted through the customer portal and is awaiting review.',
+                'link_to'     => '/return-management/'.$rma->hash_id,
+                'entity_type' => 'return_request',
+                'entity_id'   => $rma->hash_id,
+                'rma_number'  => $rma->rma_number,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ReturnRequestService::notifyCustomerReturnCreated failed', [
+                'rma_id' => $rma->id,
+                'error'  => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Open (or return) the single supplier-return RMA for goods whose receipt
+     * has already been dealt with physically by the caller.
+     *
+     * This is the ONE entry point for the three system paths that previously
+     * produced no supplier credit at all: an incoming-QC rejected GRN, an NCR
+     * closed with `return_to_supplier`, and an MRB released with
+     * `return_to_supplier`. The RMA is intentionally draft — finance still
+     * walks it through approval — but its lines carry the full PO/GRN lineage
+     * so `processSupplierDisposition()` can raise the supplier credit note
+     * exactly once when it is disposed.
+     *
+     * Idempotency is anchored on `source_key` (a unique, caller-supplied key):
+     * a redelivered event, a listener retry or an operator double-click returns
+     * the existing non-cancelled RMA instead of opening a second one. Because
+     * the caller has already removed the goods from the ledger — a rejected
+     * receipt never entered stock, an MRB release shipped it out — every line
+     * is stamped with its `stock_movement_quantity` so the RMA can never move
+     * the same goods a second time.
+     *
+     * @param array<int, array{
+     *     grn_item_id?: int|null,
+     *     purchase_order_item_id?: int|null,
+     *     item_id: int,
+     *     quantity: string,
+     *     unit_price: string,
+     *     reason?: string|null,
+     *     lot_number?: string|null,
+     *     reversal_already_applied?: bool|null
+     * }> $lines
+     */
+    public function openSupplierReturnForReversedGoods(
+        int $vendorId,
+        ?int $purchaseOrderId,
+        ?int $goodsReceiptNoteId,
+        array $lines,
+        ?User $by,
+        string $reason,
+        string $dedupeKey,
+    ): ReturnRequest {
+        $dedupeKey = trim($dedupeKey);
+        if ($dedupeKey === '') {
+            throw new BusinessRuleException('A supplier-return RMA requires a deduplication key.');
+        }
+        if ($lines === []) {
+            throw new BusinessRuleException('A supplier-return RMA requires at least one line.');
+        }
+
+        if ($purchaseOrderId === null && $goodsReceiptNoteId !== null) {
+            $purchaseOrderId = GoodsReceiptNote::query()
+                ->whereKey($goodsReceiptNoteId)
+                ->value('purchase_order_id');
+            $purchaseOrderId = $purchaseOrderId !== null ? (int) $purchaseOrderId : null;
+        }
+
+        // A caller that reversed the receipt (rejected incoming GRN) must not
+        // have it reversed again. An MRB release did NOT touch the receipt, so
+        // it passes false and the receipt is reconciled once here.
+        $items = [];
+        $allReversed = true;
+        foreach ($lines as $line) {
+            $reversed = array_key_exists('reversal_already_applied', $line)
+                ? (bool) $line['reversal_already_applied']
+                : true;
+            $allReversed = $allReversed && $reversed;
+            $items[] = [
+                'item_id'                    => (int) $line['item_id'],
+                'quantity'                   => (string) $line['quantity'],
+                'unit_price'                 => (string) $line['unit_price'],
+                'reason'                     => $line['reason'] ?? $reason,
+                'lot_number'                 => $line['lot_number'] ?? null,
+                'source_grn_item_id'         => $line['grn_item_id'] ?? null,
+                'source_po_item_id'          => $line['purchase_order_item_id'] ?? null,
+                'reversal_already_applied'   => $reversed,
+            ];
+        }
+
+        try {
+            $rma = DB::transaction(function () use (
+                $vendorId,
+                $purchaseOrderId,
+                $goodsReceiptNoteId,
+                $items,
+                $by,
+                $reason,
+                $dedupeKey,
+                $allReversed,
+            ): ReturnRequest {
+                $existing = ReturnRequest::query()
+                    ->where('source_key', $dedupeKey)
+                    ->where('status', '<>', ReturnRequestStatus::Cancelled->value)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    return $existing->load('items');
+                }
+
+                $billId = $this->openBillForReturn($goodsReceiptNoteId, $purchaseOrderId);
+
+                $rma = ReturnRequest::create([
+                    'rma_number'             => $this->nextRmaNumber(),
+                    'source_key'             => $dedupeKey,
+                    'type'                   => ReturnRequestType::SupplierReturn,
+                    'status'                 => ReturnRequestStatus::Draft,
+                    'finance_only'           => false,
+                    'vendor_id'              => $vendorId,
+                    'purchase_order_id'      => $purchaseOrderId,
+                    'goods_receipt_note_id'  => $goodsReceiptNoteId,
+                    'bill_id'                => $billId,
+                    'reversal_already_applied' => $allReversed,
+                    'reason_code'            => 'quality_issue',
+                    'reason_description'     => $reason,
+                    'internal_notes'         => $reason,
+                    'return_date'            => now(),
+                    'created_by'             => $by?->id,
+                ]);
+
+                // Reuse the authoritative line contract (source validation +
+                // reservation) then stamp the "physical goods already handled"
+                // markers the create path cannot carry.
+                $this->persistItems($rma, $items, true);
+                $rma->load('items');
+
+                foreach ($rma->items->values() as $index => $item) {
+                    $this->stampReversedLine($item, $items[$index]);
+                }
+
+                return $rma->fresh()->load('items');
+            });
+        } catch (QueryException $e) {
+            if (! $this->isDuplicateSourceKey($e)) {
+                throw $e;
+            }
+            // A concurrent writer (or a voided prior RMA) owns this key; return
+            // whatever row holds it rather than throwing or double-opening.
+            $existing = ReturnRequest::query()
+                ->where('source_key', $dedupeKey)
+                ->first();
+            if (! $existing) {
+                throw $e;
+            }
+            $rma = $existing->load('items');
+        }
+
+        return $rma;
+    }
+
+    /**
+     * Mark a factory line's goods as already moved/never-stocked and record the
+     * receipt-reversal state read by `processSupplierDisposition()`.
+     *
+     * `stock_movement_quantity` is deliberately used rather than a new column:
+     * `moveLine()` already treats a positive value as "this line has moved,
+     * never move it again", which is exactly the idempotency the three
+     * system-open paths need. A rejected receipt's goods never entered stock,
+     * so stamping the quantity is what stops disposal from issuing a
+     * ReturnToVendor movement the ledger cannot back.
+     *
+     * @param array<string, mixed> $source
+     */
+    private function stampReversedLine(ReturnRequestItem $line, array $source): void
+    {
+        $line->update([
+            'reversal_already_applied' => (bool) ($source['reversal_already_applied'] ?? true),
+            'stock_movement_quantity'  => $line->quantity,
+            'receipt_recorded'         => true,
+            'returned_quantity'        => (string) $line->returned_quantity === '0.000'
+                ? $line->quantity
+                : $line->returned_quantity,
+        ]);
+    }
+
+    /**
+     * The first open bill for the receipt/PO, if any, so a later supplier
+     * credit has a document to apply against. A rejected receipt has none.
+     */
+    private function openBillForReturn(?int $goodsReceiptNoteId, ?int $purchaseOrderId): ?int
+    {
+        $openStatuses = [BillStatus::Unpaid->value, BillStatus::Partial->value];
+
+        if ($goodsReceiptNoteId !== null) {
+            $billId = Bill::query()
+                ->where('goods_receipt_note_id', $goodsReceiptNoteId)
+                ->whereIn('status', $openStatuses)
+                ->orderByDesc('id')
+                ->value('id');
+            if ($billId) {
+                return (int) $billId;
+            }
+        }
+
+        if ($purchaseOrderId !== null) {
+            $billId = Bill::query()
+                ->where('purchase_order_id', $purchaseOrderId)
+                ->whereIn('status', $openStatuses)
+                ->orderByDesc('id')
+                ->value('id');
+            if ($billId) {
+                return (int) $billId;
+            }
+        }
+
+        return null;
+    }
+
+    private function isDuplicateSourceKey(QueryException $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'return_requests_source_key_unique')
+            || str_contains($message, 'return_requests.source_key');
+    }
+
+    /**
      * Correct an owned draft without opening a second RMA. Source allocations
      * are released before the line contract is replaced, and the same create
      * preparation path is reused so finance/source semantics cannot drift.
@@ -169,7 +751,11 @@ class ReturnRequestService
             unset($line['source']);
 
             $saved = ReturnRequestItem::create($line);
-            if ($source !== null && ! $rma->finance_only) {
+            // An already-reversed line (rejected receipt) has nothing left to
+            // reserve against — its GRN accepted quantity is no longer backing
+            // live stock. Storing the lineage is enough; reserving would fail
+            // on a zero accepted quantity and would later re-reserve on submit.
+            if ($source !== null && ! $rma->finance_only && ! ($item['reversal_already_applied'] ?? false)) {
                 $this->reserveSource($saved, $source['kind'], $source['id'], $line['quantity'], $source['unit_price']);
             }
         }
@@ -548,7 +1134,7 @@ class ReturnRequestService
                 'total' => Money::mul((string) $line->quantity, $unitPrice),
             ]);
 
-            if ($source !== null) {
+            if ($source !== null && ! $line->reversal_already_applied) {
                 if ($line->sourceAllocations()->whereNull('released_at')->exists()) {
                     // RMA-005 — an allocation made at draft time is not evidence
                     // that the source can still back it.
@@ -958,7 +1544,7 @@ class ReturnRequestService
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
-            $this->ensureReturnInspectionsPassed($rma);
+            $this->ensureReturnInspectionsReady($rma, $dispositions);
             $this->assertDispositionMatrix($rma, $dispositions);
 
             // Fail fast: movement lines (restock/rework for customer,
@@ -966,14 +1552,26 @@ class ReturnRequestService
             // the credit-note / replacement-PO work runs — never spend the
             // effort and roll it all back over a missing location. Evaluated
             // against the REQUESTED dispositions (stored ones are still null).
+            // A system-opened RMA carries lines whose goods the caller already
+            // dealt with (a rejected receipt never entered stock; an MRB
+            // release already shipped them). Those lines are stamped with
+            // stock_movement_quantity and must not demand a warehouse location
+            // for a movement that will never happen.
             $requestsMovement = collect($dispositions)->contains(
-                fn (array $row) => $rma->type === ReturnRequestType::SupplierReturn
-                    ? ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value
-                    : in_array(
-                        $row['disposition'] ?? null,
-                        [DispositionType::Restock->value, DispositionType::Rework->value],
-                        true,
-                    )
+                function (array $row) use ($rma): bool {
+                    $line = $rma->items->firstWhere('hash_id', $row['item_id'] ?? null);
+                    if ($line && bccomp((string) $line->stock_movement_quantity, '0', 3) > 0) {
+                        return false;
+                    }
+
+                    return $rma->type === ReturnRequestType::SupplierReturn
+                        ? ($row['disposition'] ?? null) === DispositionType::ReturnToSupplier->value
+                        : in_array(
+                            $row['disposition'] ?? null,
+                            [DispositionType::Restock->value, DispositionType::Rework->value],
+                            true,
+                        );
+                }
             );
             if ($requestsMovement && ! $locationId) {
                 throw new BusinessRuleException(
@@ -1013,12 +1611,16 @@ class ReturnRequestService
             }
 
             $rma->load('items');
-            if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
+            if ($rma->type === ReturnRequestType::CustomerReturn) {
                 // 2026-08-08 — draft customer credit note, one line per returned
                 // item (only what was actually sent back and kept — lines routed
                 // onward to the supplier or scrapped are excluded). The credit
                 // stays DRAFT until finance finalizes it (GL untouched), mirroring
                 // the auto-bill / auto-invoice review-then-post pattern.
+                // BUG 1: the old `&& $rma->invoice_id` gate silently dropped the
+                // whole credit for stockable returns whose only provenance is a
+                // sales-order or delivery line. createCreditNote() owns the
+                // provenance/finance-only guards, so let it decide per line.
                 $creditNote = $this->createCreditNote($rma, $by);
                 if ($creditNote) {
                     $rma->update(['credit_note_id' => $creditNote->id]);
@@ -1173,6 +1775,21 @@ class ReturnRequestService
             throw new BusinessRuleException('Supplier returns require a vendor and source purchase order.');
         }
 
+        // A system-opened RMA may have been created before the payable existed
+        // (or while it was still a draft). Attach the first open bill for the
+        // linked receipt/PO now so the supplier credit can be applied instead
+        // of floating unapplied.
+        if (! $rma->bill_id) {
+            $billId = $this->openBillForReturn(
+                $rma->goods_receipt_note_id ? (int) $rma->goods_receipt_note_id : null,
+                (int) $rma->purchase_order_id,
+            );
+            if ($billId) {
+                $rma->forceFill(['bill_id' => $billId])->save();
+                $rma->load('bill');
+            }
+        }
+
         $creditLines = [];
         $replacementLines = [];
         foreach ($returnedItems->sortBy('source_grn_item_id') as $item) {
@@ -1190,32 +1807,62 @@ class ReturnRequestService
                 || (int) $grnItem->grn->vendor_id !== (int) $rma->vendor_id) {
                 throw new BusinessRuleException('Supplier-return source documents do not match the RMA.');
             }
-            if (bccomp($quantity, '0', 3) <= 0
-                || bccomp($quantity, (string) $grnItem->quantity_received, 3) > 0
-                || bccomp($quantity, (string) $grnItem->quantity_accepted, 3) > 0
-                || bccomp($quantity, (string) $poItem->quantity_received, 3) > 0) {
-                throw new BusinessRuleException('Supplier-return quantity exceeds the accepted receipt quantity.');
+            if (bccomp($quantity, '0', 3) <= 0) {
+                throw new BusinessRuleException('Supplier-return quantity must be greater than zero.');
             }
 
-            $grnItem->update([
-                'quantity_received' => bcsub((string) $grnItem->quantity_received, $quantity, 3),
-                'quantity_accepted' => bcsub((string) $grnItem->quantity_accepted, $quantity, 3),
-            ]);
-            $poItem->update([
-                'quantity_received' => bcsub((string) $poItem->quantity_received, $quantity, 3),
-                'quantity_accepted' => bcsub((string) $poItem->quantity_accepted, $quantity, 3),
-            ]);
-            // The source GRN/PO quantities are now reduced authoritatively;
-            // keeping the old reservation active would subtract the shipped
-            // quantity a second time from future availability.
+            // A line whose receipt was already reversed (an incoming-QC
+            // rejection ran GrnService::reversePoReceipt()) must NOT be reduced
+            // again: the PO received quantity already sits below this line's
+            // receipt, and the GRN running totals were left untouched. The
+            // quantity bounds are skipped with the reduction for the same
+            // reason — they describe a receipt that no longer exists. The
+            // supplier credit below still runs, so the caller gets paid the
+            // refund exactly once.
+            if (! (bool) $item->reversal_already_applied) {
+                if (bccomp($quantity, (string) $grnItem->quantity_received, 3) > 0
+                    || bccomp($quantity, (string) $grnItem->quantity_accepted, 3) > 0
+                    || bccomp($quantity, (string) $poItem->quantity_received, 3) > 0) {
+                    throw new BusinessRuleException('Supplier-return quantity exceeds the accepted receipt quantity.');
+                }
+
+                $grnItem->update([
+                    'quantity_received' => bcsub((string) $grnItem->quantity_received, $quantity, 3),
+                    'quantity_accepted' => bcsub((string) $grnItem->quantity_accepted, $quantity, 3),
+                ]);
+                $poItem->update([
+                    'quantity_received' => bcsub((string) $poItem->quantity_received, $quantity, 3),
+                    'quantity_accepted' => bcsub((string) $poItem->quantity_accepted, $quantity, 3),
+                ]);
+            }
+            // The source GRN/PO quantities are now reduced authoritatively (or
+            // were already reduced by the caller); keeping the old reservation
+            // active would subtract the shipped quantity a second time from
+            // future availability.
             $this->releaseSourceAllocation($item);
 
+            // Prefer the credited bill line's own expense account — it is what
+            // the payable debited. A system-opened line has no bill-item link
+            // even when the bill exists, so match one by item; only then fall
+            // back to the dedicated purchase-return expense account. (A supplier
+            // credit note is posted against an EXPENSE account; the old fallback
+            // named the raw materials ASSET account, which the credit-note
+            // service rejects.) A bill-less supplier return has no bill item at
+            // all, so this fallback is the only account that will resolve.
             $billItem = $item->source_bill_item_id
                 ? BillItem::query()->where('bill_id', $rma->bill_id)->find($item->source_bill_item_id)
                 : null;
+            if (! $billItem && $rma->bill_id) {
+                $billItem = BillItem::query()
+                    ->where('bill_id', $rma->bill_id)
+                    ->where('item_id', $item->item_id)
+                    ->orderByDesc('id')
+                    ->first();
+            }
+            $settings = app(\App\Common\Services\SettingsService::class);
             $accountId = $billItem?->expense_account_id
-                ?? Account::query()->where('code', app(\App\Common\Services\SettingsService::class)
-                    ->requiredString('accounting.accounts.inventory_raw_material_code'))->value('id');
+                ?? Account::query()->where('code', $settings->requiredString('accounting.accounts.purchase_return_expense_code'))->value('id')
+                ?? Account::query()->where('code', $settings->requiredString('accounting.default_expense_account_code'))->value('id');
             if (! $accountId) {
                 throw new BusinessRuleException('No accounting account is available for the supplier credit.');
             }
@@ -1285,8 +1932,11 @@ class ReturnRequestService
         // reverse) at the boundary. bccomp at 3 dp is the column's precision.
         $ordered  = (string) $po->items()->sum('quantity');
         $accepted = (string) $po->items()->sum('quantity_accepted');
+        $zeroStatus = $po->sent_to_supplier_at
+            ? PurchaseOrderStatus::Sent
+            : PurchaseOrderStatus::Approved;
         $status = bccomp($accepted, '0', 3) <= 0
-            ? PurchaseOrderStatus::Approved
+            ? $zeroStatus
             : (bccomp($accepted, $ordered, 3) < 0
                 ? PurchaseOrderStatus::PartiallyReceived
                 : PurchaseOrderStatus::Received);
@@ -1322,12 +1972,24 @@ class ReturnRequestService
 
         $lines = [];
         foreach ($rma->items as $item) {
+            // A line with no creditable provenance is only an error when the
+            // RMA is invoice-backed (there is a receivable to reverse). An
+            // uninvoiced product-only line has no AR document at all, so it is
+            // skipped rather than blocking a stock disposition that has nothing
+            // to do with credit. Sales-order / delivery provenance is a valid
+            // credit source even without an invoice.
             if (! $rma->finance_only && ! $item->item_id && $item->product_id) {
+                if (! $rma->invoice_id) {
+                    continue;
+                }
                 throw new BusinessRuleException('Product-only returns require explicit finance-only classification before credit.');
             }
             if (! $rma->finance_only && $item->item_id
                 && ! $item->source_invoice_item_id && ! $item->source_sales_order_item_id
                 && ! $item->source_delivery_item_id) {
+                if (! $rma->invoice_id) {
+                    continue;
+                }
                 throw new BusinessRuleException('A stockable return credit requires invoice, delivery, or sales-order line provenance.');
             }
             if ($item->disposition === null
@@ -1397,7 +2059,11 @@ class ReturnRequestService
      */
     private function moveAtDispose(ReturnRequest $rma, ?int $locationId, User $by): void
     {
-        $movable = $rma->items->filter(fn (ReturnRequestItem $line) => $this->shouldMove($line, $rma));
+        // A line already stamped with stock_movement_quantity was handled by the
+        // caller (system-opened RMA) and needs no movement, so it must not force
+        // the operator to name a warehouse location for goods that are gone.
+        $movable = $rma->items->filter(fn (ReturnRequestItem $line) => $this->shouldMove($line, $rma)
+            && bccomp((string) $line->stock_movement_quantity, '0', 3) <= 0);
         if ($movable->isEmpty()) {
             return;
         }
@@ -1889,15 +2555,24 @@ class ReturnRequestService
     }
 
     /**
-     * Require Quality's authoritative return-stage verdict for every product
-     * represented by the RMA before any disposition side effect runs.
+     * Require Quality's authoritative return-stage verdict to be COMPLETE for
+     * every product represented by the RMA before any disposition side effect
+     * runs.
+     *
+     * Passing/failing is disposition-dependent: returning goods to sellable
+     * stock (`restock`) needs a `passed` verdict, but a genuinely defective
+     * unit that FAILED QC must still be disposable as `scrap` or `rework` —
+     * otherwise the failure itself dead-ends the RMA. For those dispositions
+     * either terminal verdict is acceptable.
      *
      * Item-only lines have no product inspection specification and retain the
      * existing item-only lifecycle. Cancelled inspection rows are not active
      * evidence; if no replacement active row exists, the product is treated as
      * missing and remains blocked.
+     *
+     * @param array<int, array<string, mixed>> $dispositions
      */
-    private function ensureReturnInspectionsPassed(ReturnRequest $rma): void
+    private function ensureReturnInspectionsReady(ReturnRequest $rma, array $dispositions): void
     {
         $requiredProductIds = $rma->items
             ->pluck('product_id')
@@ -1908,6 +2583,19 @@ class ReturnRequestService
 
         if ($requiredProductIds->isEmpty()) {
             return;
+        }
+
+        // Which products are headed back to sellable stock and therefore need a
+        // POSITIVE verdict, versus merely a completed one.
+        $restockProductIds = [];
+        foreach ($dispositions as $row) {
+            $line = $rma->items->firstWhere('hash_id', $row['item_id'] ?? null);
+            if (! $line || ! $line->product_id) {
+                continue;
+            }
+            if (($row['disposition'] ?? null) === DispositionType::Restock->value) {
+                $restockProductIds[(int) $line->product_id] = true;
+            }
         }
 
         $stage = $rma->type === ReturnRequestType::SupplierReturn
@@ -1922,23 +2610,46 @@ class ReturnRequestService
             ->where('status', '<>', InspectionStatus::Cancelled->value)
             ->get(['product_id', 'status']);
 
-        $unresolvedProductIds = $requiredProductIds->filter(function (int $productId) use ($activeInspections): bool {
+        $missingProductIds = [];
+        $unresolvedProductIds = [];
+
+        foreach ($requiredProductIds as $productId) {
             $productInspections = $activeInspections->where('product_id', $productId);
 
-            return $productInspections->isEmpty()
-                || $productInspections->contains(function (Inspection $inspection): bool {
-                    $status = $inspection->status instanceof InspectionStatus
-                        ? $inspection->status->value
-                        : (string) $inspection->status;
+            if ($productInspections->isEmpty()) {
+                $missingProductIds[] = $productId;
+                continue;
+            }
 
-                    return $status !== InspectionStatus::Passed->value;
-                });
-        });
+            $acceptedStatuses = isset($restockProductIds[$productId])
+                ? [InspectionStatus::Passed->value]
+                : [InspectionStatus::Passed->value, InspectionStatus::Failed->value];
 
-        if ($unresolvedProductIds->isNotEmpty()) {
+            $complete = $productInspections->every(function (Inspection $inspection) use ($acceptedStatuses): bool {
+                $status = $inspection->status instanceof InspectionStatus
+                    ? $inspection->status->value
+                    : (string) $inspection->status;
+
+                return in_array($status, $acceptedStatuses, true);
+            });
+
+            if (! $complete) {
+                $unresolvedProductIds[] = $productId;
+            }
+        }
+
+        if ($missingProductIds !== []) {
             throw new BusinessRuleException(
-                'Every product-linked return inspection must be passed before disposition. '
-                .'Unresolved product IDs: '.implode(', ', $unresolvedProductIds->all()).'.'
+                'Every product-linked return inspection must be completed (passed or failed) before disposition; '
+                .'no active inspection exists for product IDs: '.implode(', ', $missingProductIds).'.'
+            );
+        }
+
+        if ($unresolvedProductIds !== []) {
+            throw new BusinessRuleException(
+                'Every product-linked return inspection must be completed (passed or failed) before disposition. '
+                .'A restock line requires a passed inspection. Unresolved product IDs: '
+                .implode(', ', $unresolvedProductIds).'.'
             );
         }
     }

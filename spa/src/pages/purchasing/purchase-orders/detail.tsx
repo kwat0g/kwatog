@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -23,15 +24,33 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
-import type { PurchaseOrderStatus, SupplierDispatchStatus } from '@/types/purchasing';
+import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType, PurchaseOrderStatus, SupplierDispatchStatus } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  draft: 'neutral', pending_approval: 'info', approved: 'success', sent: 'info',
+ acknowledged: 'info', supplier_proposed: 'warning', supplier_declined: 'danger',
  partially_received: 'warning', received: 'success', closed: 'neutral', cancelled: 'danger',
 };
 const dispatchVariant: Record<SupplierDispatchStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
  pending: 'info', portal_available: 'info', manual_required: 'warning', confirmed: 'success', failed: 'danger', cancelled: 'neutral',
+};
+
+const responseTypeLabel: Record<PurchaseOrderResponseType, string> = {
+ accept: 'Accepted',
+ propose: 'Changes proposed',
+ decline: 'Declined',
+};
+const responseTypeVariant: Record<PurchaseOrderResponseType, 'success' | 'warning' | 'danger'> = {
+ accept: 'success',
+ propose: 'warning',
+ decline: 'danger',
+};
+const responseStatusVariant: Record<PurchaseOrderResponseStatus, 'neutral' | 'warning' | 'success' | 'danger'> = {
+ pending: 'warning',
+ accepted: 'success',
+ rejected: 'danger',
+ superseded: 'neutral',
 };
 
 export default function PurchaseOrderDetailPage() {
@@ -73,6 +92,8 @@ export default function PurchaseOrderDetailPage() {
  const [rejectOpen, setRejectOpen] = useState(false);
  const [cancelOpen, setCancelOpen] = useState(false);
  const [postBillId, setPostBillId] = useState<string | null>(null);
+ const [responseRejectOpen, setResponseRejectOpen] = useState(false);
+ const [expectedDelivery, setExpectedDelivery] = useState('');
 
  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] });
  const errMsg = (e: unknown, fallback: string) =>
@@ -111,10 +132,45 @@ export default function PurchaseOrderDetailPage() {
  onError: (e) => toast.error(errMsg(e, 'Failed to post bill.')),
  });
 
+ // Required delivery date is editable only while the PO is a draft.
+ useEffect(() => {
+  setExpectedDelivery(data?.expected_delivery_date ?? '');
+ }, [data?.expected_delivery_date]);
+
+ const updateDelivery = useMutation({
+  mutationFn: (date: string) => purchaseOrdersApi.update(id, { expected_delivery_date: date || undefined }),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+   toast.success('Required delivery date updated.');
+  },
+  onError: (e) => toast.error(errMsg(e, 'Failed to update delivery date.')),
+ });
+
+ const acceptResponse = useMutation({
+  mutationFn: (responseId: string) => purchaseOrdersApi.acceptResponse(responseId),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+   toast.success('Supplier response accepted.');
+  },
+  onError: (e) => toast.error(errMsg(e, 'Failed to accept supplier response.')),
+ });
+
+ const rejectResponse = useMutation({
+  mutationFn: (reason: string) => purchaseOrdersApi.rejectResponse(data!.latest_response!.id, reason),
+  onSuccess: () => {
+   qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+   toast.success('Supplier response rejected.');
+   setResponseRejectOpen(false);
+  },
+  onError: (e) => toast.error(errMsg(e, 'Failed to reject supplier response.')),
+ });
+
  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
  if (isError || !data) return (
  <EmptyState icon="alert-circle" title="Failed to load PO" action={<Button onClick={() => refetch()}>Retry</Button>} />
  );
+
+ const latestResponse = data.latest_response;
 
  return (
  <div>
@@ -211,6 +267,38 @@ export default function PurchaseOrderDetailPage() {
  {data.remarks && <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt><dd>{data.remarks}</dd></div>}
  </dl>
  </Panel>
+ <Panel title="Delivery">
+ <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Required (OGAMI)</dt>
+ <dd className="font-mono">{data.expected_delivery_date ? formatDate(data.expected_delivery_date) : '—'}</dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Confirmed (supplier)</dt>
+ <dd className="font-mono">{data.confirmed_delivery_date ? formatDate(data.confirmed_delivery_date) : '—'}</dd>
+ </div>
+ </dl>
+ {data.status === 'draft' && actions.can_update && (
+ <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
+ <Input
+ label="Required delivery date"
+ type="date"
+ value={expectedDelivery}
+ onChange={(e) => setExpectedDelivery(e.target.value)}
+ containerClassName="w-44"
+ />
+ <Button
+ size="sm"
+ variant="secondary"
+ onClick={() => updateDelivery.mutate(expectedDelivery)}
+ loading={updateDelivery.isPending}
+ disabled={updateDelivery.isPending || expectedDelivery === (data.expected_delivery_date ?? '')}
+ >
+ Save
+ </Button>
+ </div>
+ )}
+ </Panel>
  {data.supplier_dispatch && (
  <Panel title="Supplier dispatch">
  <div className="space-y-2 text-sm">
@@ -270,6 +358,78 @@ export default function PurchaseOrderDetailPage() {
  </Panel>
  </div>
  <div className="space-y-4">
+ {latestResponse && (
+ <Panel
+ title="Supplier response"
+ meta={<Chip variant={responseTypeVariant[latestResponse.type]}>{responseTypeLabel[latestResponse.type]}</Chip>}
+ >
+ <div className="space-y-3 text-sm">
+ <div className="flex items-center justify-between gap-3">
+ <Chip variant={responseStatusVariant[latestResponse.status]}>{latestResponse.status.replace(/_/g, ' ')}</Chip>
+ <span className="text-2xs text-muted">
+ {latestResponse.responded_at ? formatDate(latestResponse.responded_at) : '—'}
+ </span>
+ </div>
+ <div>
+ <div className="text-2xs uppercase tracking-wider text-muted">Proposed delivery</div>
+ <div className="font-mono">{latestResponse.proposed_delivery_date ? formatDate(latestResponse.proposed_delivery_date) : '—'}</div>
+ </div>
+ {latestResponse.notes && (
+ <div>
+ <div className="text-2xs uppercase tracking-wider text-muted">Notes</div>
+ <p className="text-secondary">{latestResponse.notes}</p>
+ </div>
+ )}
+ {latestResponse.items.length > 0 && (
+ <div className="overflow-x-auto">
+ <table className={`${tableCls} min-w-[420px]`}>
+ <thead><tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th align="right">Proposed qty</Th>
+ <Th align="right">Proposed price</Th>
+ <Th>Reason</Th>
+ </tr></thead>
+ <tbody>
+ {latestResponse.items.map((line) => {
+ const current = (data.items ?? []).find((l) => l.id === line.purchase_order_item_id);
+ return (
+ <tr key={`${line.purchase_order_item_id}-${line.proposed_quantity ?? ''}-${line.proposed_unit_price ?? ''}`} className={trCls}>
+ <Td mono>{current?.item.code ?? '—'}</Td>
+ <Td align="right" mono>
+ {line.proposed_quantity ?? '—'}
+ {line.proposed_quantity && current && (
+ <span className="text-2xs text-muted"> (was {Number(current.quantity).toFixed(2)})</span>
+ )}
+ </Td>
+ <Td align="right" mono>
+ {line.proposed_unit_price ? Number(line.proposed_unit_price).toFixed(2) : '—'}
+ {line.proposed_unit_price && current && (
+ <span className="text-2xs text-muted"> (was {Number(current.unit_price).toFixed(2)})</span>
+ )}
+ </Td>
+ <Td className="text-secondary">{line.reason ?? '—'}</Td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ )}
+ {latestResponse.resolution_notes && (
+ <div>
+ <div className="text-2xs uppercase tracking-wider text-muted">Resolution</div>
+ <p className="text-secondary">{latestResponse.resolution_notes}</p>
+ </div>
+ )}
+ {latestResponse.status === 'pending' && can('purchasing.po.approve') && (
+ <div className="flex justify-end gap-2 border-t border-subtle pt-3">
+ <Button size="xs" variant="secondary" icon={<LuThumbsDown size={14} />} onClick={() => setResponseRejectOpen(true)} disabled={acceptResponse.isPending}>Reject</Button>
+ <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => acceptResponse.mutate(latestResponse.id)} loading={acceptResponse.isPending}>Accept</Button>
+ </div>
+ )}
+ </div>
+ </Panel>
+ )}
  <Panel title="Approval chain">
  <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
  </Panel>
@@ -500,6 +660,20 @@ export default function PurchaseOrderDetailPage() {
   confirmLabel="Post bill"
   variant="primary"
   pending={postBill.isPending}
+  />
+
+  <ReasonDialog
+  isOpen={responseRejectOpen}
+  onClose={() => setResponseRejectOpen(false)}
+  onConfirm={(reason) => rejectResponse.mutate(reason)}
+  title="Reject the supplier's response?"
+  description="The supplier will see your reason and the PO stays open for a further response."
+  reasonLabel="Reason for rejection"
+  reasonPlaceholder="e.g. Quoted price exceeds the agreed contract price"
+  minLength={10}
+  confirmLabel="Reject response"
+  variant="danger"
+  pending={rejectResponse.isPending}
   />
   </div>
   );

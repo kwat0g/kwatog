@@ -311,3 +311,81 @@ Re-run after restore: `Tests: 4 passed (27 assertions)`.
 
 Final status: `🔁 Needs Re-audit` — four contained defects fixed and verified;
 the remaining plan is gated on decisions this session is not entitled to make.
+
+---
+
+## 2026-09-11 — PO ↔ supplier lifecycle: supplier response states (Step 1 of 2)
+
+Source: `audit/domains/procurement/purchase-orders/lifecycle-audit-2026-09-11.md`.
+Decision: foundations first — add the corrected status machine and update every
+consumer, then build the supplier response flow (Step 2).
+
+### F01 — `sent` no longer doubles as the supplier's acknowledgment
+
+Before: the supplier's portal "Acknowledge" called `PurchaseOrderService::markAsSent`,
+so a supplier accepting the PO was recorded as OGAMI transmitting it, and the
+supplier could acknowledge an `approved` PO that had never been sent. The
+supplier's ETA also overwrote `expected_delivery_date` (OGAMI's required date),
+letting the supplier move the on-time scorecard target.
+
+After: `PurchaseOrderStatus` gains `acknowledged`, `supplier_proposed`,
+`supplier_declined` (`Enums/PurchaseOrderStatus.php`), with `open()` /
+`receivable()` helper sets. New migration
+`2026_09_11_000003_add_supplier_response_statuses_and_confirmed_date.php`
+extends the status CHECK constraint and adds `confirmed_delivery_date`.
+`PurchaseOrderService::acknowledgeBySupplier()` moves `Sent → Acknowledged`,
+writes `confirmed_delivery_date`, appends the supplier note instead of
+replacing internal remarks, and never writes `expected_delivery_date`.
+`SupplierPortalService::acknowledgePo()` requires `sent`;
+`updateShipment()` writes `confirmed_delivery_date`. Supplier visibility now
+starts at `sent` (an approved-unsent PO is no longer exposed).
+
+Verification: Purchasing + B2B `372 passed`, Inventory `197 passed`.
+New/updated B2B tests pin: unsent PO cannot be acknowledged; `sent` ack yields
+`acknowledged` + `confirmed_delivery_date`; internal remarks preserved.
+
+### F02 — `can_submit_invoice` advertised a button the service refuses
+
+Before: the capability was true for `sent|partially_received|received`, but
+`submitInvoice()` requires an accepted GRN, so the supplier saw an enabled
+button and got a 422.
+
+After: `SupplierPurchaseOrderResource` computes `can_submit_invoice` from an
+accepted receipt (`has_accepted_receipt` via `withExists`, or the loaded GRN
+collection) and adds `can_schedule_delivery`. `can_acknowledge` now requires
+`sent`.
+
+Verification: `test_submit_invoice_requires_an_accepted_goods_receipt`; B2B
+suite green.
+
+### F03 — every hardcoded PO-status consumer updated for the new states
+
+Before: ~30 sites re-listed PO statuses; adding the supplier-response states
+would have silently dropped POs from MRP in-transit, budget commitments,
+warehouse/dashboard queues, the procurement chain, and the chain step map.
+
+After: switched to `PurchaseOrderStatus::open()` / `receivable()` where the
+semantic matches, and extended explicit lists elsewhere:
+- `PurchaseOrder::scopeOpen`, `PurchaseOrderService` overdue (now
+  `COALESCE(confirmed_delivery_date, expected_delivery_date)`),
+  `PurchaseOrderAccessPolicy::canCancel`, `PurchaseOrderResource::is_billable`,
+  `SupplierDispatchService::recoverOne`.
+- `GrnService` create guards; `ReturnRequestService` recalc now restores `Sent`
+  when `sent_to_supplier_at` is set (mirrors `reversePoReceipt`).
+- `MrpEngineService` in-transit; `BudgetConsumptionService` committed spend;
+  `BarcodeScanResolverService`.
+- `DashboardWidgetDataService`, `PurchasingDashboardService`,
+  `WarehouseDashboardService`, `CoreWidgetAnalytics`,
+  `InventoryDashboardService`, `ProcurementChainController`, `ChainDefinitions`
+  (the last also unblocks the `acknowledged` chain broadcast).
+
+Verification: focused dashboard/chain `179 + 20 passed`; MRP/budget/return/barcode
+`76 + 63 passed`; integrated Purchasing+B2B `372 passed`, Inventory `197 passed`.
+
+### Still open (Step 2 / later)
+
+A3 cancel-vs-GRN dead end, C1 partially-accepted receipts unbillable, B1
+`is_billable` vs `BillService`, D2 supplier invoice uses ordered qty, A1/A2
+status semantics (`received`, `rejected`), and the supplier response flow
+(propose/decline + purchasing review) with the required-date UI and
+notifications. All catalogued in `lifecycle-audit-2026-09-11.md`.

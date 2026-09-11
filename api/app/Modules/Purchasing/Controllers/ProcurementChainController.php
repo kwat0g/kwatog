@@ -41,7 +41,13 @@ class ProcurementChainController extends Controller
 
         $poCounts = Cache::remember('procurement_chain_po', 60, fn () => [
             'draft_po'              => PurchaseOrder::where('status', PurchaseOrderStatus::Draft->value)->count(),
-            'sent_po'               => PurchaseOrder::whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])->count(),
+            'sent_po'               => PurchaseOrder::whereIn('status', [
+                PurchaseOrderStatus::Approved->value,
+                PurchaseOrderStatus::Sent->value,
+                PurchaseOrderStatus::Acknowledged->value,
+                PurchaseOrderStatus::SupplierProposed->value,
+                PurchaseOrderStatus::SupplierDeclined->value,
+            ])->count(),
             'partially_received_po' => PurchaseOrder::where('status', PurchaseOrderStatus::PartiallyReceived->value)->count(),
             'received_po'           => PurchaseOrder::where('status', PurchaseOrderStatus::Received->value)->count(),
         ]);

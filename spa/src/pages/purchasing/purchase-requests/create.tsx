@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -82,7 +82,10 @@ export default function CreatePurchaseRequestPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
-      department_id: '',
+      // A department head raises for their own department, so it is locked and
+      // pre-selected. The auth store can hydrate after first paint, so an
+      // effect below re-applies it once the user (and their department) load.
+      department_id: isDepartmentLocked && ownDepartmentId ? ownDepartmentId : '',
       reason: '',
       items: [
         {
@@ -106,6 +109,13 @@ export default function CreatePurchaseRequestPage() {
     formState: { errors, isSubmitting },
   } = form;
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  // The auth user can hydrate after first paint; re-apply the locked department
+  // once their employee record is available so the field never sits blank.
+  useEffect(() => {
+    if (isDepartmentLocked && ownDepartmentId) {
+      setValue('department_id', ownDepartmentId);
+    }
+  }, [isDepartmentLocked, ownDepartmentId, setValue]);
   const watched = watch('items');
   const total = watched.reduce(
     (sum, l) => sum + Number(l.quantity || 0) * Number(l.estimated_unit_price || 0),
@@ -190,7 +200,7 @@ export default function CreatePurchaseRequestPage() {
       <FormDraftBanner safety={safety} />
       <form
         onSubmit={handleSubmit((d) => onValid(d, true), onFormInvalid<V>())}
-        className="max-w-5xl mx-auto px-5 py-4 space-y-4"
+        className="max-w-6xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Header">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -263,6 +273,10 @@ export default function CreatePurchaseRequestPage() {
           {errors.items?.root && (
             <div className="text-xs text-danger-fg mb-2">{errors.items.root.message}</div>
           )}
+          <p className="text-xs text-muted mb-2">
+            Pick a catalog item to inherit its description, unit, and standard cost (those fields
+            lock). Leave Item blank for an ad-hoc line and enter them yourself.
+          </p>
           <div className="overflow-x-auto">
             <table className={tableCls}>
               <thead>
@@ -281,14 +295,15 @@ export default function CreatePurchaseRequestPage() {
                   <tr key={f.id} className={cn(trCls, 'align-top')}>
                     <Td>
                       <Select
-                        fieldSize="sm"
-                        containerClassName="w-32"
+                        fieldSize="md"
+                        containerClassName="w-96"
                         className="font-mono"
                         aria-label="Item"
+                        title={watched[i]?.item_id ? itemById.get(watched[i].item_id)?.name : undefined}
                         value={watched[i]?.item_id ?? ''}
                         onChange={(e) => onLineItemChange(i, e.target.value)}
                       >
-                        <option value="">— ad hoc —</option>
+                        <option value="">— Select item —</option>
                         {items.data?.data?.map((it) => (
                           <option key={it.id} value={it.id}>
                             {it.code} — {it.name}
@@ -298,7 +313,7 @@ export default function CreatePurchaseRequestPage() {
                     </Td>
                     <Td>
                       <Input
-                        fieldSize="sm"
+                        fieldSize="md"
                         aria-label="Description"
                         {...register(`items.${i}.description` as const)}
                         readOnly={!!watched[i]?.item_id}
@@ -312,8 +327,8 @@ export default function CreatePurchaseRequestPage() {
                     </Td>
                     <Td align="right" mono>
                       <Input
-                        fieldSize="sm"
-                        containerClassName="w-20 inline-flex"
+                        fieldSize="md"
+                        containerClassName="w-24 inline-flex"
                         className="text-right font-mono tabular-nums"
                         aria-label="Quantity"
                         {...numberInputProps()}
@@ -323,8 +338,8 @@ export default function CreatePurchaseRequestPage() {
                     </Td>
                     <Td>
                       <Input
-                        fieldSize="sm"
-                        containerClassName="w-16"
+                        fieldSize="md"
+                        containerClassName="w-20"
                         aria-label="Unit"
                         value={watched[i]?.unit ?? ''}
                         onChange={(e) => setValue(`items.${i}.unit`, e.target.value)}
@@ -338,8 +353,8 @@ export default function CreatePurchaseRequestPage() {
                     </Td>
                     <Td align="right" mono>
                       <Input
-                        fieldSize="sm"
-                        containerClassName="w-24 inline-flex"
+                        fieldSize="md"
+                        containerClassName="w-28 inline-flex"
                         className="text-right font-mono tabular-nums"
                         aria-label="Estimated unit price"
                         {...numberInputProps()}

@@ -112,7 +112,7 @@ class PurchaseOrderReopenPrTest extends TestCase
         $svc->submit($po->fresh());
 
         $approver = User::factory()->create([
-            'role_id' => \App\Modules\Auth\Models\Role::where('slug', 'purchasing_officer')->value('id'),
+            'role_id' => \App\Modules\Auth\Models\Role::where('slug', 'finance_officer')->value('id'),
         ]);
         $svc->reject($po->fresh(), $approver, 'Missing PPAP.');
 
@@ -146,6 +146,20 @@ class PurchaseOrderReopenPrTest extends TestCase
             'created_by'          => $pr->requester?->id ?? User::factory()->create()->id,
         ]);
         $sibling->forceFill(['status' => PurchaseOrderStatus::Approved->value])->save();
+        // The sibling must actually cover the PR line: conversion status is now
+        // reconciled from line coverage, not merely "a live PO exists", so a PO
+        // with no linked PR line no longer keeps the PR converted.
+        $line = $pr->items()->firstOrFail();
+        PurchaseOrderItem::create([
+            'purchase_order_id'        => $sibling->id,
+            'purchase_request_item_id' => $line->id,
+            'item_id'                  => $line->item_id,
+            'description'              => 'Sibling line',
+            'quantity'                 => '10.00',
+            'unit'                     => 'pcs',
+            'unit_price'               => '100.00',
+            'total'                    => '1000.00',
+        ]);
 
         app(PurchaseOrderService::class)->cancel($po, 'One of two.');
 

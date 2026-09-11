@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const surfaces = [
- { path: './purchasing/purchase-orders/detail.tsx', wrappers: 1 },
+  // The PO detail page now carries two tables: the order lines and the
+  // supplier-response proposed lines (added with the negotiation feature).
+  { path: './purchasing/purchase-orders/detail.tsx', wrappers: 2 },
  { path: './inventory/grn/detail.tsx', wrappers: 1 },
  { path: './accounting/bills/detail.tsx', wrappers: 2 },
  { path: './accounting/invoices/detail.tsx', wrappers: 1 },

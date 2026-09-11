@@ -99,8 +99,11 @@ class PurchaseOrderCancelTest extends TestCase
             'received_by'       => $user->id,
         ]);
 
+        // A3 — only a NON-draft GRN blocks cancellation. The factory default
+        // status is `pending_qc`, so the guard must still fire here; a `draft`
+        // GRN (auto-staged on send) must not.
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Cannot cancel a PO with GRNs.');
+        $this->expectExceptionMessage('Cannot cancel a PO with received goods.');
 
         $this->svc->cancel($po, 'no');
     }

@@ -24,7 +24,7 @@ const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'neutral'> = {
 };
 
 const DEFAULT_FILTERS: StockAdjustmentListParams = {
- page: 1, per_page: 50, status: 'pending',
+ page: 1, per_page: 50, status: '',
 };
 
 export default function StockAdjustmentsPage() {

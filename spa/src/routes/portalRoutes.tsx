@@ -26,6 +26,7 @@ const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout')
 const CustomerPortalLoginPage = lazy(() => import('@/pages/portal/customer/login'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
 const CustomerOrdersPage = lazy(() => import('@/pages/portal/customer/orders'));
+const CustomerPlaceOrderPage = lazy(() => import('@/pages/portal/customer/orders/new'));
 const CustomerOrderDetailPage = lazy(() => import('@/pages/portal/customer/orders/detail'));
 const CustomerInvoicesPage = lazy(() => import('@/pages/portal/customer/invoices'));
 const CustomerInvoiceDetailPage = lazy(() => import('@/pages/portal/customer/invoices/detail'));
@@ -62,6 +63,7 @@ export const portalRoutes = (
  <Route element={<CustomerPortalLayout />}>
  <Route path="/portal/customer" element={<CustomerPortalDashboardPage />} />
  <Route path="/portal/customer/orders" element={<CustomerOrdersPage />} />
+ <Route path="/portal/customer/orders/new" element={<CustomerPlaceOrderPage />} />
  <Route path="/portal/customer/orders/:id" element={<CustomerOrderDetailPage />} />
  <Route path="/portal/customer/invoices" element={<CustomerInvoicesPage />} />
  <Route path="/portal/customer/invoices/:id" element={<CustomerInvoiceDetailPage />} />

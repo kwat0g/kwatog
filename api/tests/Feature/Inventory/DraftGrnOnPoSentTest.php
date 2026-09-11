@@ -95,10 +95,10 @@ class DraftGrnOnPoSentTest extends TestCase
 
         $svc = app(PurchaseOrderService::class);
         $svc->submit($po->fresh());
-        // Walk the PO approval chain (purchasing_officer → finance_officer → VP)
-        // so the PO becomes approved, then mark it sent.
+        // Walk the redesigned money-only PO chain (finance_officer → VP) so the
+        // PO becomes approved, then mark it sent.
         $po = $po->fresh();
-        foreach (['purchasing_officer', 'finance_officer', 'system_admin'] as $role) {
+        foreach (['finance_officer', 'vice_president'] as $role) {
             if ($po->status !== PurchaseOrderStatus::PendingApproval) {
                 break;
             }

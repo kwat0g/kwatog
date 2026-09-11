@@ -13,6 +13,7 @@ export type PurchaseRequestConversionStatus =
   | 'not_started'
   | 'pending'
   | 'manual_required'
+  | 'partial'
   | 'converted';
 export type PurchaseRequestPriority = 'normal' | 'urgent' | 'critical';
 export type PurchaseOrderStatus =
@@ -20,6 +21,9 @@ export type PurchaseOrderStatus =
   | 'pending_approval'
   | 'approved'
   | 'sent'
+  | 'acknowledged'
+  | 'supplier_proposed'
+  | 'supplier_declined'
   | 'partially_received'
   | 'received'
   | 'closed'
@@ -31,6 +35,37 @@ export type SupplierDispatchStatus =
   | 'confirmed'
   | 'failed'
   | 'cancelled';
+
+/** How a supplier answered a purchase order: accept as-is, counter-propose, or decline. */
+export type PurchaseOrderResponseType = 'accept' | 'propose' | 'decline';
+export type PurchaseOrderResponseStatus = 'pending' | 'accepted' | 'rejected' | 'superseded';
+
+/** One line on a supplier counter-proposal. Decimals stay strings. */
+export interface PurchaseOrderResponseItem {
+  purchase_order_item_id: string;
+  proposed_quantity: string | null;
+  proposed_unit_price: string | null;
+  reason: string | null;
+}
+
+export interface PurchaseOrderResponse {
+  id: string;
+  type: PurchaseOrderResponseType;
+  status: PurchaseOrderResponseStatus;
+  proposed_delivery_date: string | null;
+  notes: string | null;
+  responded_at: string | null;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+  items: PurchaseOrderResponseItem[];
+}
+
+/** Payload for the PR → PO conversion endpoint. */
+export interface ConvertPurchaseRequestData {
+  vendor_map: Record<string, string>;
+  /** OGAMI's required delivery date; the supplier may later propose a different confirmed date. */
+  expected_delivery_date?: string;
+}
 
 export interface ApprovalRecord {
   step_order: number;
@@ -135,6 +170,35 @@ export interface PurchaseRequestTemplate {
   created_at: string | null;
 }
 
+/** A ranked vendor suggestion for one PR line (VendorSourcingService). */
+export interface SourcingCandidate {
+  /** Vendor HashID. */
+  id: string;
+  name: string | null;
+  /** preferred | approved | listed | history */
+  tier: string;
+  /** True only for a qualified ASL supplier; the rest are suggestions. */
+  qualified: boolean;
+  unit_price: string | null;
+  lead_time_days: number | null;
+  order_uom: string | null;
+  base_qty_per_order_unit: string | null;
+}
+
+export interface SourcingLine {
+  /** PurchaseRequestItem HashID. */
+  id: string;
+  item: { id: string; code: string; name: string; unit_of_measure?: string } | null;
+  description: string;
+  quantity: string;
+  unit: string | null;
+  estimated_unit_price: string | null;
+  estimated_total: string;
+  suggested_vendor_id: string | null;
+  suggested_unit_price: string | null;
+  candidates: SourcingCandidate[];
+}
+
 export interface CreatePurchaseRequestData {
   department_id?: string;
   date?: string;
@@ -171,7 +235,12 @@ export interface PurchaseOrder {
   id: string;
   po_number: string;
   date: string;
+  /** OGAMI's required delivery date. */
   expected_delivery_date: string | null;
+  /** Date the supplier confirmed; may differ from the required date. */
+  confirmed_delivery_date: string | null;
+  /** Most recent supplier response (accept / propose / decline), newest first. */
+  latest_response: PurchaseOrderResponse | null;
   subtotal: string;
   vat_amount: string;
   total_amount: string;
@@ -266,6 +335,9 @@ export interface ApprovedSupplier {
   item: { id: string; code: string; name: string };
   vendor: { id: string; name: string };
   is_preferred: boolean;
+  /** approved = qualified ASL link; provisional = observed from a PO, needs review. */
+  qualification_status?: 'approved' | 'provisional';
+  is_provisional?: boolean;
   lead_time_days: number;
   last_price: string | null;
   last_price_at: string | null;

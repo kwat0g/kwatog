@@ -1,9 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { LuPencil, LuPlus, LuX } from '@/lib/icons';
+import { LuLayers, LuPencil, LuPlus, LuX } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { PortalSupplierListing, PortalSupplierListingInput, PortalListingStatus } from '@/types/b2b';
+import type {
+  PortalBulkListingFailure,
+  PortalItemCatalogEntry,
+  PortalSupplierListing,
+  PortalSupplierListingInput,
+  PortalListingStatus,
+} from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -11,7 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, StackedCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -31,11 +37,27 @@ type ListingForm = {
   valid_until: string;
 };
 
+type BulkTerms = {
+  price: string;
+  order_uom: string;
+  base_qty_per_order_unit: string;
+  lead_time_days: string;
+  valid_until: string;
+};
+
 const emptyForm: ListingForm = {
   id: null,
   item_id: '',
   supplier_item_code: '',
   supplier_item_name: '',
+  price: '',
+  order_uom: '',
+  base_qty_per_order_unit: '',
+  lead_time_days: '',
+  valid_until: '',
+};
+
+const emptyTerms: BulkTerms = {
   price: '',
   order_uom: '',
   base_qty_per_order_unit: '',
@@ -54,7 +76,14 @@ export default function SupplierItemListingsPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useUrlFilters<ListingFilters>({ page: 1, per_page: 25 });
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [form, setForm] = useState<ListingForm>(emptyForm);
+
+  // Bulk submit state — shared commercial terms applied to every selected row.
+  const [terms, setTerms] = useState<BulkTerms>(emptyTerms);
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [bulkPage, setBulkPage] = useState(1);
+  const [bulkFailures, setBulkFailures] = useState<PortalBulkListingFailure[]>([]);
 
   const listings = useQuery({
     queryKey: ['portal', 'supplier', 'item-listings', filters],
@@ -62,12 +91,18 @@ export default function SupplierItemListingsPage() {
     placeholderData: (previous) => previous,
   });
   const catalog = useQuery({
-    queryKey: ['portal', 'supplier', 'item-catalog'],
-    queryFn: () => supplierPortalApi.itemCatalog(),
+    queryKey: ['portal', 'supplier', 'item-catalog', 'picker'],
+    queryFn: () => supplierPortalApi.itemCatalog({ per_page: 100 }),
     enabled: showForm,
   });
+  const bulkCatalog = useQuery({
+    queryKey: ['portal', 'supplier', 'item-catalog', 'bulk', { search: bulkSearch, page: bulkPage }],
+    queryFn: () => supplierPortalApi.itemCatalog({ search: bulkSearch || undefined, page: bulkPage, per_page: 25 }),
+    enabled: showBulk,
+    placeholderData: (previous) => previous,
+  });
 
-  const selected = catalog.data?.find((item) => item.id === form.item_id);
+  const selected = catalog.data?.data.find((item) => item.id === form.item_id);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'item-listings'] });
 
@@ -85,9 +120,40 @@ export default function SupplierItemListingsPage() {
     },
   });
 
+  const bulkSubmit = useMutation({
+    mutationFn: (items: PortalSupplierListingInput[]) => supplierPortalApi.bulkCreateItemListings(items),
+    onSuccess: (result) => {
+      setBulkFailures(result.failed);
+      invalidate();
+      if (result.failed_count === 0) {
+        toast.success(`${result.created_count} listing${result.created_count === 1 ? '' : 's'} submitted for review.`);
+        setTerms(emptyTerms);
+        return;
+      }
+      if (result.created_count === 0) {
+        toast.error(`No listings submitted — ${result.failed_count} row(s) failed.`);
+        return;
+      }
+      toast.error(
+        `Submitted ${result.created_count} of ${result.created_count + result.failed_count}. ${result.failed_count} failed.`,
+        { duration: 6000 },
+      );
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(error.response?.data?.message ?? 'Bulk submission failed.');
+    },
+  });
+
   const startCreate = () => {
     setForm(emptyForm);
+    setShowBulk(false);
     setShowForm(true);
+  };
+
+  const toggleBulk = () => {
+    setShowForm(false);
+    setBulkFailures([]);
+    setShowBulk((current) => !current);
   };
 
   const startEdit = (listing: PortalSupplierListing) => {
@@ -102,6 +168,7 @@ export default function SupplierItemListingsPage() {
       lead_time_days: String(listing.lead_time_days),
       valid_until: listing.valid_until ?? '',
     });
+    setShowBulk(false);
     setShowForm(true);
     window.scrollTo({ top: 0 });
   };
@@ -139,6 +206,47 @@ export default function SupplierItemListingsPage() {
       valid_until: form.valid_until || null,
     });
   };
+
+  const submitBulk = (rows: PortalItemCatalogEntry[]) => {
+    if (rows.length === 0) {
+      toast.error('Select at least one item to submit.');
+      return;
+    }
+    const price = Number(terms.price);
+    if (!Number.isFinite(price) || price <= 0) {
+      toast.error('Enter a shared price greater than zero before submitting.');
+      return;
+    }
+    const lead = Number(terms.lead_time_days);
+    if (!Number.isInteger(lead) || lead < 0) {
+      toast.error('Shared lead time must be a whole number of days.');
+      return;
+    }
+    const conversion = terms.base_qty_per_order_unit.trim();
+    if (terms.order_uom.trim() && (!conversion || Number(conversion) <= 0)) {
+      toast.error('Enter how many base units are in one order unit.');
+      return;
+    }
+
+    const items: PortalSupplierListingInput[] = rows.map((row) => ({
+      item_id: row.id,
+      price: price.toFixed(2),
+      order_uom: terms.order_uom.trim() || null,
+      base_qty_per_order_unit: conversion || null,
+      lead_time_days: lead,
+      valid_until: terms.valid_until || null,
+    }));
+
+    bulkSubmit.mutate(items);
+  };
+
+  const bulkActions: BulkAction<PortalItemCatalogEntry>[] = [
+    {
+      label: bulkSubmit.isPending ? 'Submitting…' : 'Submit selected',
+      variant: 'primary',
+      onClick: (rows) => submitBulk(rows),
+    },
+  ];
 
   const listingData: PortalSupplierListing[] = listings.data?.data ?? [];
 
@@ -212,6 +320,20 @@ export default function SupplierItemListingsPage() {
     },
   ];
 
+  const catalogColumns: Column<PortalItemCatalogEntry>[] = [
+    {
+      key: 'code',
+      header: 'Code',
+      cell: (r) => <span className="font-mono">{r.code}</span>,
+    },
+    { key: 'name', header: 'Item', cell: (r) => r.name },
+    {
+      key: 'unit_of_measure',
+      header: 'Base Unit',
+      cell: (r) => <span className="font-mono">{r.unit_of_measure}</span>,
+    },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -224,14 +346,24 @@ export default function SupplierItemListingsPage() {
         backTo="/portal/supplier"
         backLabel="Portal"
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />}
-            onClick={() => (showForm ? setShowForm(false) : startCreate())}
-          >
-            {showForm ? 'Cancel' : 'New listing'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuLayers size={14} />}
+              onClick={toggleBulk}
+            >
+              {showBulk ? 'Cancel bulk' : 'Bulk submit'}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />}
+              onClick={() => (showForm ? setShowForm(false) : startCreate())}
+            >
+              {showForm ? 'Cancel' : 'New listing'}
+            </Button>
+          </div>
         }
       />
 
@@ -243,7 +375,7 @@ export default function SupplierItemListingsPage() {
                 <Select label="Ogami item" required value={form.item_id} disabled={!!form.id} onChange={(event) => setForm((current) => ({ ...current, item_id: event.target.value }))}>
                   <option value="">Select item…</option>
                   {catalog.isLoading && <option disabled>Loading items…</option>}
-                  {(catalog.data ?? []).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}
+                  {(catalog.data?.data ?? []).map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}
                 </Select>
                 {selected && (
                   <div className="text-sm text-muted self-end pb-2">
@@ -269,6 +401,63 @@ export default function SupplierItemListingsPage() {
                 <Button type="submit" variant="primary" size="sm" loading={submit.isPending}>{form.id ? 'Save changes' : 'Submit for review'}</Button>
               </div>
             </form>
+          </Panel>
+        )}
+
+        {showBulk && (
+          <Panel title="Bulk submit listings">
+            <div className="space-y-4">
+              <p className="text-sm text-secondary">
+                Select the items you supply, fill the shared terms once, then submit. Each selected item becomes its own
+                listing; a duplicate (an item you already have pending) is reported, not fatal.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Input label="Shared price (₱)" type="number" step="0.01" min="0.01" required placeholder="0.00" className="font-mono tabular-nums" value={terms.price} onChange={(event) => setTerms((current) => ({ ...current, price: event.target.value }))} />
+                <Input label="Order unit" placeholder="e.g. bag, box" helper="Optional — the unit you quote in" value={terms.order_uom} onChange={(event) => setTerms((current) => ({ ...current, order_uom: event.target.value }))} maxLength={20} />
+                <Input label="Units per order unit" type="number" step="0.0001" min="0.0001" placeholder="e.g. 25" helper="Required if an order unit is set" value={terms.base_qty_per_order_unit} onChange={(event) => setTerms((current) => ({ ...current, base_qty_per_order_unit: event.target.value }))} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Lead time (days)" type="number" min="0" max="365" required placeholder="e.g. 12" value={terms.lead_time_days} onChange={(event) => setTerms((current) => ({ ...current, lead_time_days: event.target.value }))} />
+                <Input label="Price valid until" type="date" helper="Optional" value={terms.valid_until} onChange={(event) => setTerms((current) => ({ ...current, valid_until: event.target.value }))} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-primary mb-1">Search catalog</label>
+                <Input
+                  placeholder="Filter by item code or name…"
+                  value={bulkSearch}
+                  onChange={(event) => { setBulkSearch(event.target.value); setBulkPage(1); }}
+                />
+              </div>
+
+              {bulkCatalog.isLoading && !bulkCatalog.data && <SkeletonTable columns={3} rows={5} />}
+              {bulkCatalog.isError && (
+                <EmptyState icon="alert-circle" title="Could not load the catalog" action={<Button variant="secondary" onClick={() => bulkCatalog.refetch()}>Retry</Button>} />
+              )}
+              {bulkCatalog.data && (
+                <DataTable
+                  tableKey="portal-supplier-bulk-catalog"
+                  columns={catalogColumns}
+                  data={bulkCatalog.data.data}
+                  meta={bulkCatalog.data.meta}
+                  onPageChange={setBulkPage}
+                  selectable
+                  bulkActions={bulkActions}
+                  emptyState={<EmptyState icon="package" title="No matching items" description="Try a different search term." />}
+                />
+              )}
+
+              {bulkFailures.length > 0 && (
+                <div className="rounded-md border border-danger/30 bg-danger-bg px-3 py-2 space-y-1">
+                  <div className="text-xs font-medium text-danger-fg">Some rows were not submitted:</div>
+                  <ul className="text-2xs text-danger-fg space-y-0.5 list-disc pl-4">
+                    {bulkFailures.map((failure, index) => (
+                      <li key={`${failure.index}-${index}`}>{failure.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </Panel>
         )}
 

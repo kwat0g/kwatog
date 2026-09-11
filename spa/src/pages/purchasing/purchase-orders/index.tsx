@@ -27,6 +27,9 @@ const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'suc
     pending_approval: 'info',
     approved: 'success',
     sent: 'info',
+    acknowledged: 'info',
+    supplier_proposed: 'warning',
+    supplier_declined: 'danger',
     partially_received: 'warning',
     received: 'success',
     closed: 'neutral',
@@ -45,7 +48,7 @@ interface PurchaseOrderListParams extends ListParams {
 const DEFAULT_FILTERS: PurchaseOrderListParams = {
   page: 1,
   per_page: 25,
-  status: 'pending_approval',
+  status: '',
 };
 
 export default function PurchaseOrdersListPage() {
@@ -201,7 +204,7 @@ export default function PurchaseOrdersListPage() {
               variant="primary"
               size="sm"
               icon={<LuPlus size={14} />}
-              onClick={() => navigate('/purchasing/purchase-orders/create')}
+              onClick={() => navigate('/purchasing/purchase-requests?status=approved')}
             >
               New PO
             </Button>

@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Enums\SalesOrderSubmissionSource;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,7 +32,8 @@ class SalesOrder extends Model
     protected $fillable = [
         'so_number', 'customer_id', 'sales_rep_id', 'date', 'subtotal', 'vat_amount',
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
-        'notes', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
+        'notes', 'submission_source', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
+        'customer_confirmation_requested_at',
         'in_production_at', 'partially_delivered_at', 'delivered_at',
         'invoiced_at', 'cancelled_at',
     ];
@@ -42,10 +44,12 @@ class SalesOrder extends Model
         'vat_amount'         => 'decimal:2',
         'total_amount'       => 'decimal:2',
         'status'             => SalesOrderStatus::class,
+        'submission_source'  => SalesOrderSubmissionSource::class,
         'payment_terms_days' => 'integer',
         'mrp_plan_id'        => 'integer',
         'incoterm'           => Incoterm::class,
         'confirmed_at'       => 'datetime',
+        'customer_confirmation_requested_at' => 'datetime',
         'in_production_at'   => 'datetime',
         'partially_delivered_at' => 'datetime',
         'delivered_at'       => 'datetime',
@@ -92,6 +96,33 @@ class SalesOrder extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class, 'sales_order_id');
+    }
+
+    /** Every customer negotiation reply, newest last. */
+    public function responses(): HasMany
+    {
+        return $this->hasMany(SalesOrderResponse::class);
+    }
+
+    /**
+     * The most recent customer response. `latestOfMany()` keys on the primary
+     * key, so a re-submission (newer id) is the row consumers should read —
+     * superseded replies stay reachable through `responses()`.
+     */
+    public function latestResponse(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SalesOrderResponse::class)->latestOfMany();
+    }
+
+    /**
+     * True while the customer has been asked to review a still-draft order and
+     * may reply. Capability hints on the resource read this, and the customer
+     * response service enforces it.
+     */
+    public function getIsOpenToCustomerResponseAttribute(): bool
+    {
+        return $this->status === SalesOrderStatus::Draft
+            && $this->customer_confirmation_requested_at !== null;
     }
 
     /** Scope used by list filters. */

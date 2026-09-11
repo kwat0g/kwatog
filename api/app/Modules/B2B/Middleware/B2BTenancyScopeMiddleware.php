@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Quality\Models\PpapSubmission;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +35,7 @@ class B2BTenancyScopeMiddleware
             Invoice::addGlobalScope('b2b_tenancy', $scope);
             CustomerComplaint::addGlobalScope('b2b_tenancy', $scope);
             DeliverySchedule::addGlobalScope('b2b_tenancy', $scope);
+            ReturnRequest::addGlobalScope('b2b_tenancy', $scope);
 
             Delivery::addGlobalScope('b2b_tenancy', function (Builder $builder) use ($customerId) {
                 $builder->whereHas('salesOrder', function ($q) use ($customerId) {

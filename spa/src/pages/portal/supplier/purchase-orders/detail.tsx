@@ -2,14 +2,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
-import { LuCircleCheck, LuTruck, LuFileDown, LuUpload, LuFileText, LuSend } from '@/lib/icons';
+import { LuCircleCheck, LuTruck, LuFileDown, LuUpload, LuFileText, LuSend, LuPencil, LuThumbsDown } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { PortalShippingDocument } from '@/types/b2b';
+import type { PortalShippingDocument, RespondToPurchaseOrderPayload } from '@/types/b2b';
+import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType } from '@/types/purchasing';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { FileInput } from '@/components/ui/FileInput';
 import { Input } from '@/components/ui/Input';
+import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,6 +23,25 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+
+const DECIMAL_RE = /^\d+(\.\d{1,2})?$/;
+
+const responseTypeLabel: Record<PurchaseOrderResponseType, string> = {
+ accept: 'Accepted',
+ propose: 'Changes proposed',
+ decline: 'Declined',
+};
+const responseTypeVariant: Record<PurchaseOrderResponseType, 'success' | 'warning' | 'danger'> = {
+ accept: 'success',
+ propose: 'warning',
+ decline: 'danger',
+};
+const responseStatusVariant: Record<PurchaseOrderResponseStatus, 'neutral' | 'warning' | 'success' | 'danger'> = {
+ pending: 'warning',
+ accepted: 'success',
+ rejected: 'danger',
+ superseded: 'neutral',
+};
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -67,6 +89,17 @@ export default function SupplierPurchaseOrderDetailPage() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [billRemarks, setBillRemarks] = useState('');
 
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [acceptDate, setAcceptDate] = useState('');
+  const [acceptNotes, setAcceptNotes] = useState('');
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [proposeOpen, setProposeOpen] = useState(false);
+  const [proposeDeliveryDate, setProposeDeliveryDate] = useState('');
+  const [proposeNotes, setProposeNotes] = useState('');
+  const [proposedLines, setProposedLines] = useState<Record<string, { quantity: string; unit_price: string; reason: string }>>({});
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
+  const [proposeError, setProposeError] = useState<string | null>(null);
+
   const { data: po, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'po', id],
     queryFn: () => supplierPortalApi.getPo(id!),
@@ -79,13 +112,24 @@ export default function SupplierPurchaseOrderDetailPage() {
     enabled: !!id,
   });
 
-  const acknowledgeMut = useMutation({
-    mutationFn: () => supplierPortalApi.acknowledgePo(id!),
-    onSuccess: () => {
-      toast.success('Purchase order acknowledged.');
+  const respondMut = useMutation({
+    mutationFn: (payload: RespondToPurchaseOrderPayload) => supplierPortalApi.respondToPurchaseOrder(id!, payload),
+    onSuccess: (_po, payload) => {
+      toast.success(
+        payload.type === 'accept'
+          ? 'Purchase order accepted.'
+          : payload.type === 'propose'
+          ? 'Counter-proposal sent to OGAMI.'
+          : 'Purchase order declined.',
+      );
+      setAcceptOpen(false);
+      setProposeOpen(false);
+      setDeclineOpen(false);
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
     },
-    onError: () => toast.error('Failed to acknowledge PO.'),
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(err?.response?.data?.message ?? 'Failed to send your response.');
+    },
   });
 
   const shipmentMut = useMutation({
@@ -158,10 +202,67 @@ export default function SupplierPurchaseOrderDetailPage() {
 
   // The API owns the lifecycle policy and publishes capabilities with the PO.
   // Keep the client as a renderer of that contract, not a second state machine.
-  const canAcknowledge = po?.capabilities.can_acknowledge ?? false;
+  const canRespond = po?.capabilities.can_respond ?? false;
   const canUpdateShipment = po?.capabilities.can_update_shipment ?? false;
   const canUploadDocument = po?.capabilities.can_upload_document ?? false;
   const canSubmitInvoice = po?.capabilities.can_submit_invoice ?? false;
+
+  const openAccept = () => {
+    setAcceptDate(po?.expected_delivery_date ?? '');
+    setAcceptNotes('');
+    setAcceptOpen(true);
+  };
+
+  const openPropose = () => {
+    const next: Record<string, { quantity: string; unit_price: string; reason: string }> = {};
+    for (const item of po?.items ?? []) {
+      next[item.id] = { quantity: item.quantity_ordered, unit_price: item.unit_price, reason: '' };
+    }
+    setProposedLines(next);
+    setProposeDeliveryDate(po?.expected_delivery_date ?? '');
+    setProposeNotes('');
+    setLineErrors({});
+    setProposeError(null);
+    setProposeOpen(true);
+  };
+
+  const submitPropose = () => {
+    const items: NonNullable<RespondToPurchaseOrderPayload['items']> = [];
+    const errors: Record<string, string> = {};
+    for (const item of po?.items ?? []) {
+      const draft = proposedLines[item.id];
+      if (!draft) continue;
+      const qtyChanged = draft.quantity !== item.quantity_ordered;
+      const priceChanged = draft.unit_price !== item.unit_price;
+      if (!qtyChanged && !priceChanged) continue;
+      if (qtyChanged && (!DECIMAL_RE.test(draft.quantity) || Number(draft.quantity) <= 0)) {
+        errors[`${item.id}:quantity`] = 'Enter a positive quantity (up to 2 decimals).';
+      }
+      if (priceChanged && (!DECIMAL_RE.test(draft.unit_price) || Number(draft.unit_price) <= 0)) {
+        errors[`${item.id}:unit_price`] = 'Enter a positive price (up to 2 decimals).';
+      }
+      if (!draft.reason.trim()) errors[`${item.id}:reason`] = 'Explain why this line changed.';
+      items.push({
+        purchase_order_item_id: item.id,
+        ...(qtyChanged ? { proposed_quantity: draft.quantity } : {}),
+        ...(priceChanged ? { proposed_unit_price: draft.unit_price } : {}),
+        reason: draft.reason.trim(),
+      });
+    }
+    setLineErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    if (items.length === 0) {
+      setProposeError('Change at least one line before sending a proposal.');
+      return;
+    }
+    setProposeError(null);
+    respondMut.mutate({
+      type: 'propose',
+      proposed_delivery_date: proposeDeliveryDate || undefined,
+      notes: proposeNotes.trim() || undefined,
+      items,
+    });
+  };
 
   const openShipmentForm = () => {
     setShippedDate(po?.shipment?.shipped_date ?? '');
@@ -195,10 +296,18 @@ export default function SupplierPurchaseOrderDetailPage() {
             <Button variant="ghost" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
               PDF
             </Button>
-            {canAcknowledge && (
-              <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => acknowledgeMut.mutate()} loading={acknowledgeMut.isPending}>
-                Acknowledge PO
-              </Button>
+            {canRespond && (
+              <>
+                <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={openAccept} disabled={respondMut.isPending} loading={respondMut.isPending && acceptOpen}>
+                  Accept
+                </Button>
+                <Button variant="secondary" size="sm" icon={<LuPencil size={14} />} onClick={openPropose} disabled={respondMut.isPending}>
+                  Propose changes
+                </Button>
+                <Button variant="secondary" size="sm" icon={<LuThumbsDown size={14} />} onClick={() => setDeclineOpen(true)} disabled={respondMut.isPending}>
+                  Decline
+                </Button>
+              </>
             )}
             {canUpdateShipment && (
               <Button variant="secondary" size="sm" icon={<LuTruck size={14} />} onClick={openShipmentForm}>
@@ -236,15 +345,98 @@ export default function SupplierPurchaseOrderDetailPage() {
 
         {!isLoading && !isError && po && (
           <>
-            <KpiGrid count={4}>
+            <KpiGrid count={5}>
               <StatCard label="Total Amount" value={formatPeso(po.total_amount)} />
               <StatCard
-                label="Expected Delivery"
+                label="Required Delivery"
                 value={po.expected_delivery_date ? formatDate(po.expected_delivery_date) : '—'}
+              />
+              <StatCard
+                label="Confirmed Delivery"
+                value={po.confirmed_delivery_date ? formatDate(po.confirmed_delivery_date) : '—'}
+                helper={po.confirmed_delivery_date ? undefined : 'Not yet confirmed'}
               />
               <StatCard label="Incoterm" value={po.incoterm ?? '—'} />
               <StatCard label="Receipts" value={po.goods_receipt_notes.length} helper="Goods receipts posted" />
             </KpiGrid>
+
+            {po.latest_response && (
+              <Panel
+                title="Your latest response"
+                meta={
+                  <Chip variant={responseTypeVariant[po.latest_response.type]}>
+                    {responseTypeLabel[po.latest_response.type]}
+                  </Chip>
+                }
+              >
+                <div className="space-y-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Status</div>
+                      <Chip variant={responseStatusVariant[po.latest_response.status]}>
+                        {po.latest_response.status.replace(/_/g, ' ')}
+                      </Chip>
+                    </div>
+                    <div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Proposed delivery</div>
+                      <div className="font-mono">
+                        {po.latest_response.proposed_delivery_date
+                          ? formatDate(po.latest_response.proposed_delivery_date)
+                          : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Responded</div>
+                      <div className="font-mono">
+                        {po.latest_response.responded_at ? formatDate(po.latest_response.responded_at) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  {po.latest_response.notes && (
+                    <div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Notes</div>
+                      <p className="text-secondary">{po.latest_response.notes}</p>
+                    </div>
+                  )}
+                  {po.latest_response.resolution_notes && (
+                    <div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">OGAMI response</div>
+                      <p className="text-secondary">{po.latest_response.resolution_notes}</p>
+                    </div>
+                  )}
+                  {po.latest_response.items.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className={tableCls}>
+                        <thead>
+                          <tr className={theadTrCls}>
+                            <Th>Item</Th>
+                            <Th align="right">Proposed qty</Th>
+                            <Th align="right">Proposed price</Th>
+                            <Th>Reason</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {po.latest_response.items.map((line) => {
+                            const item = po.items.find((i) => i.id === line.purchase_order_item_id);
+                            return (
+                              <tr key={`${line.purchase_order_item_id}-${line.proposed_quantity ?? ''}-${line.proposed_unit_price ?? ''}`} className={trCls}>
+                                <Td>
+                                  <span className="font-mono text-muted">{item?.part_number ?? '—'}</span>
+                                  {item ? ` · ${item.name}` : ''}
+                                </Td>
+                                <Td align="right" mono>{line.proposed_quantity ?? '—'}</Td>
+                                <Td align="right" mono>{line.proposed_unit_price ? formatPeso(line.proposed_unit_price) : '—'}</Td>
+                                <Td className="text-secondary">{line.reason ?? '—'}</Td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Panel title="Shipment">
@@ -534,6 +726,177 @@ export default function SupplierPurchaseOrderDetailPage() {
           </>
         )}
       </div>
+
+      <Modal
+        isOpen={acceptOpen}
+        onClose={() => (respondMut.isPending ? undefined : setAcceptOpen(false))}
+        title="Accept purchase order"
+        size="md"
+      >
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-secondary">
+            Accepting confirms the order as written. You may optionally confirm a delivery date and add notes.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Confirmed delivery date (optional)"
+              type="date"
+              value={acceptDate}
+              onChange={(e) => setAcceptDate(e.target.value)}
+            />
+          </div>
+          <Textarea
+            label="Notes (optional)"
+            value={acceptNotes}
+            onChange={(e) => setAcceptNotes(e.target.value)}
+            rows={3}
+            maxLength={500}
+          />
+        </div>
+        <ModalFooter>
+          <Button variant="secondary" size="sm" onClick={() => setAcceptOpen(false)} disabled={respondMut.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<LuCircleCheck size={14} />}
+            loading={respondMut.isPending}
+            disabled={respondMut.isPending}
+            onClick={() =>
+              respondMut.mutate({
+                type: 'accept',
+                proposed_delivery_date: acceptDate || undefined,
+                notes: acceptNotes.trim() || undefined,
+              })
+            }
+          >
+            Accept PO
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal
+        isOpen={proposeOpen}
+        onClose={() => (respondMut.isPending ? undefined : setProposeOpen(false))}
+        title="Propose changes"
+        size="xl"
+      >
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-secondary">
+            Edit the lines you want to change. Only changed lines are sent. A reason is required for each.
+          </p>
+          <div className="overflow-x-auto">
+            <table className={tableCls}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>Item</Th>
+                  <Th align="right">Ordered qty</Th>
+                  <Th align="right">Proposed qty</Th>
+                  <Th align="right">Unit price</Th>
+                  <Th align="right">Proposed price</Th>
+                  <Th>Reason for change</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {(po?.items ?? []).map((item) => {
+                  const draft = proposedLines[item.id] ?? { quantity: item.quantity_ordered, unit_price: item.unit_price, reason: '' };
+                  return (
+                    <tr key={item.id} className={trCls}>
+                      <Td>
+                        <span className="font-mono text-muted">{item.part_number}</span>
+                        <div className="text-2xs text-muted">{item.name}</div>
+                      </Td>
+                      <Td align="right" mono>{item.quantity_ordered}</Td>
+                      <Td align="right">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={draft.quantity}
+                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, quantity: e.target.value } }))}
+                          error={lineErrors[`${item.id}:quantity`]}
+                          fieldSize="sm"
+                          className="text-right font-mono w-24"
+                          aria-label={`Proposed quantity for ${item.part_number}`}
+                        />
+                      </Td>
+                      <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                      <Td align="right">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={draft.unit_price}
+                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, unit_price: e.target.value } }))}
+                          error={lineErrors[`${item.id}:unit_price`]}
+                          fieldSize="sm"
+                          className="text-right font-mono w-28"
+                          aria-label={`Proposed price for ${item.part_number}`}
+                        />
+                      </Td>
+                      <Td>
+                        <Input
+                          type="text"
+                          value={draft.reason}
+                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, reason: e.target.value } }))}
+                          error={lineErrors[`${item.id}:reason`]}
+                          fieldSize="sm"
+                          placeholder="e.g. Resin cost increase"
+                          aria-label={`Reason for ${item.part_number}`}
+                        />
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {proposeError && <p className="text-sm text-danger-fg">{proposeError}</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Proposed delivery date (optional)"
+              type="date"
+              value={proposeDeliveryDate}
+              onChange={(e) => setProposeDeliveryDate(e.target.value)}
+            />
+          </div>
+          <Textarea
+            label="Notes (optional)"
+            value={proposeNotes}
+            onChange={(e) => setProposeNotes(e.target.value)}
+            rows={3}
+            maxLength={500}
+          />
+        </div>
+        <ModalFooter>
+          <Button variant="secondary" size="sm" onClick={() => setProposeOpen(false)} disabled={respondMut.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<LuPencil size={14} />}
+            loading={respondMut.isPending}
+            disabled={respondMut.isPending}
+            onClick={submitPropose}
+          >
+            Send proposal
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <ReasonDialog
+        isOpen={declineOpen}
+        onClose={() => setDeclineOpen(false)}
+        onConfirm={(reason) => respondMut.mutate({ type: 'decline', notes: reason })}
+        title="Decline this purchase order?"
+        description="Tell OGAMI why you cannot fulfil this order. This is recorded on the PO and sent to the purchasing team."
+        reasonLabel="Reason for declining"
+        reasonPlaceholder="e.g. Material unavailable until next quarter"
+        minLength={10}
+        confirmLabel="Decline PO"
+        variant="danger"
+        pending={respondMut.isPending}
+      />
     </div>
   );
 }

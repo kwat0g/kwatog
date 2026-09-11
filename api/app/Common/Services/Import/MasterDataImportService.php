@@ -13,6 +13,7 @@ use App\Modules\Accounting\Imports\VendorImporter;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Imports\EmployeeImporter;
 use App\Modules\Inventory\Imports\ItemImporter;
+use App\Modules\Purchasing\Imports\ApprovedSupplierImporter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -39,6 +40,7 @@ class MasterDataImportService
         'customers' => CustomerImporter::class,
         'vendors'   => VendorImporter::class,
         'employees' => EmployeeImporter::class,
+        'approved_suppliers' => ApprovedSupplierImporter::class,
     ];
 
     /** @return array<int, string> */

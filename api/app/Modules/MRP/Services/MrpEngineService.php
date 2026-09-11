@@ -958,18 +958,14 @@ class MrpEngineService
 
     /**
      * Sum of (purchase_order_items.quantity - quantity_received) across all
-     * approved / sent / partially_received POs for this item.
+     * open POs for this item.
      */
     private function inTransit(int $itemId): float
     {
         $row = DB::table('purchase_order_items as poi')
             ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
             ->where('poi.item_id', $itemId)
-            ->whereIn('po.status', [
-                PurchaseOrderStatus::Approved->value,
-                PurchaseOrderStatus::Sent->value,
-                PurchaseOrderStatus::PartiallyReceived->value,
-            ])
+            ->whereIn('po.status', PurchaseOrderStatus::open())
             ->selectRaw('COALESCE(SUM(poi.quantity - poi.quantity_received), 0) as in_transit')
             ->first();
         return (float) ($row->in_transit ?? 0);
@@ -985,6 +981,7 @@ class MrpEngineService
     private function effectiveLeadTime(int $itemId, Item $item): int
     {
         $approved = ApprovedSupplier::where('item_id', $itemId)
+            ->qualified()
             ->orderByDesc('is_preferred')
             ->orderBy('lead_time_days')
             ->first();

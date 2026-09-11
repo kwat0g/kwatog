@@ -362,9 +362,10 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
   authority via the create gate (`department_head` + `purchasing_officer` only);
   the chain is money-only. Fully-approved PRs auto-convert to one draft PO per
   vendor (`ConsolidatePurchaseOrders`); each line needs a preferred supplier
-  AND a price or the PR falls to `manual_required`. PO chain: Purchasing →
-  Finance → VP (≥ ₱50,000 per PO). No workflow step names the creator's own
-  role, so the self-approval guard can never strand a submission. A requester
+  AND a price or the PR falls to `manual_required`. PO chain: Finance → VP
+  (≥ ₱50,000 per PO). The buyer (`purchasing_officer`) creates POs but is not a
+  chain step, so no workflow step names the creator's own
+  role and the self-approval guard can never strand a submission. A requester
   who IS a step role (e.g. finance raising a PR) is blocked by the
   self-approval guard, not skipped — use admin or another holder.
 - **Mold shot count:** Auto-increment. Alert at 80% of max

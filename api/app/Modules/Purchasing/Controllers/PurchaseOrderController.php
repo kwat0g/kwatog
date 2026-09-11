@@ -60,7 +60,10 @@ class PurchaseOrderController
     public function store(StorePurchaseOrderRequest $request): JsonResponse
     {
         try {
-            $po = $this->service->create($request->validated(), $request->user());
+            // The manual create page is a PR conversion too: completing it here
+            // moves the PR to `converted` so its "Convert to PO" affordance
+            // clears and it cannot be converted again.
+            $po = $this->service->create($request->validated(), $request->user(), false, true);
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Resources;
 
+use App\Modules\B2B\Enums\DeliveryScheduleStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -12,11 +13,16 @@ class DeliveryScheduleResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $statusValue = $this->status instanceof \BackedEnum
+            ? (string) $this->status->value
+            : (string) $this->status;
+
         return [
             'id'             => $this->hash_id,
             'month'          => $this->month,
-            'status'         => $this->status,
-            'status_label'   => Str::headline((string) $this->status),
+            'status'         => $statusValue,
+            'status_label'   => DeliveryScheduleStatus::tryFrom($statusValue)?->label() ?? Str::headline($statusValue),
+            'source'         => $this->customer_id ? 'customer' : 'supplier',
             'lines'          => collect($this->lines ?? [])->map(function (mixed $line): array {
                 $line = is_array($line) ? $line : [];
                 $item = null;
@@ -43,9 +49,23 @@ class DeliveryScheduleResource extends JsonResource
                     'notes' => $line['notes'] ?? null,
                 ];
             })->values()->all(),
+            'customer' => $this->whenLoaded('customer', fn () => $this->customer ? [
+                'id'   => $this->customer->hash_id,
+                'name' => $this->customer->name,
+            ] : null),
+            'vendor' => $this->whenLoaded('vendor', fn () => $this->vendor ? [
+                'id'   => $this->vendor->hash_id,
+                'name' => $this->vendor->name,
+            ] : null),
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id'        => $this->purchaseOrder->hash_id,
                 'po_number' => $this->purchaseOrder->po_number,
+            ] : null),
+            'reject_reason'  => $this->reject_reason,
+            'reviewed_at'    => optional($this->reviewed_at)->toIso8601String(),
+            'reviewed_by'    => $this->whenLoaded('reviewer', fn () => $this->reviewer ? [
+                'id'   => $this->reviewer->hash_id,
+                'name' => $this->reviewer->name,
             ] : null),
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),

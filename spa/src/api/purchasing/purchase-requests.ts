@@ -1,6 +1,6 @@
 import { unwrappingClient as client } from '../client';
 import type { PaginatedResponse, ListParams } from '@/types';
-import type { PurchaseRequest, CreatePurchaseRequestData, PurchaseOrder, PurchaseRequestTemplate } from '@/types/purchasing';
+import type { PurchaseRequest, CreatePurchaseRequestData, PurchaseOrder, PurchaseRequestTemplate, SourcingLine } from '@/types/purchasing';
 
 export const purchaseRequestsApi = {
  options: () => client.get<{ statuses: Array<{ value: string; label: string }>; priorities: Array<{ value: string; label: string }>; approval_sla_hours?: number; default_priority: string }>('/purchasing/purchase-requests/options').then((r) => r.data),
@@ -24,8 +24,18 @@ export const purchaseRequestsApi = {
  client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/reject`, { reason }).then((r) => r.data),
  cancel: (id: string) =>
  client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/cancel`).then((r) => r.data),
- convert: (id: string, vendor_map: Record<string, string>) =>
- client.post<PurchaseOrder[]>(`/purchasing/purchase-requests/${id}/convert`, { vendor_map }).then((r) => r.data),
+ convert: (id: string, vendor_map: Record<string, string>, expected_delivery_date?: string) =>
+ client
+ .post<PurchaseOrder[]>(`/purchasing/purchase-requests/${id}/convert`, {
+ vendor_map,
+ // Omitted when blank so the backend keeps its own default.
+ ...(expected_delivery_date ? { expected_delivery_date } : {}),
+ })
+ .then((r) => r.data),
+
+ /** Ranked supplier suggestions per PR line for the conversion modal. */
+ sourcing: (id: string) =>
+ client.get<{ lines: SourcingLine[] }>(`/purchasing/purchase-requests/${id}/sourcing`).then((r) => r.data),
 
  /** ADV6 — Bulk approve multiple PRs at once. Accepts hash ID strings. */
  bulkApprove: (ids: string[], remarks?: string) =>

@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Resources\PurchaseRequestResource;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\PurchaseRequestPdfService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
+use App\Modules\Purchasing\Services\VendorSourcingService;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -196,11 +197,31 @@ class PurchaseRequestController
         return response()->json(['data' => ['count' => $count]]);
     }
 
+    /**
+     * Sourcing view for the conversion modal: every PR line with its suggested
+     * vendor/price and the ranked candidate vendors, so the operator confirms
+     * rather than guesses. Read-only; conversion still goes through convert().
+     */
+    public function sourcing(Request $request, PurchaseRequest $purchaseRequest, VendorSourcingService $sourcing): JsonResponse
+    {
+        abort_unless($this->access->canConvert($request->user(), $purchaseRequest), 403, 'You do not have permission to source this purchase request.');
+
+        return response()->json(['data' => [
+            'lines' => $sourcing->sourcingLines($purchaseRequest),
+        ]]);
+    }
+
     public function convert(ConvertPrToPoRequest $request, PurchaseRequest $purchaseRequest): JsonResponse
     {
         abort_unless($this->access->canConvert($request->user(), $purchaseRequest), 403, 'You do not have permission to convert this purchase request.');
         try {
-            $pos = $this->poService->convertFromPr($purchaseRequest, $request->validated()['vendor_map'], $request->user());
+            $pos = $this->poService->convertFromPr(
+                $purchaseRequest,
+                $request->validated()['vendor_map'],
+                $request->user(),
+                false,
+                $request->validated()['expected_delivery_date'] ?? null,
+            );
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

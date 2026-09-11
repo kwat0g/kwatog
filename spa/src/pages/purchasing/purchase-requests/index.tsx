@@ -2,17 +2,14 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { LuPlus, LuShoppingCart, LuZap } from '@/lib/icons';
-import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { vendorsApi } from '@/api/accounting/vendors';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
+import { ConvertPrToPoModal } from '@/components/purchasing/ConvertPrToPoModal';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
-import { Modal, ModalFooter } from '@/components/ui/Modal';
-import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -40,11 +37,8 @@ interface PurchaseRequestListParams extends ListParams {
 }
 
 const DEFAULT_FILTERS: PurchaseRequestListParams = {
-  page: 1, per_page: 25, status: 'pending',
+  page: 1, per_page: 25, status: '',
 };
-
-const errMsg = (e: unknown, fallback: string) =>
- (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
 export default function PurchaseRequestsListPage() {
  const navigate = useNavigate();
@@ -52,7 +46,6 @@ export default function PurchaseRequestsListPage() {
  const { can } = usePermission();
   const [filters, setFilters] = useUrlFilters<PurchaseRequestListParams>(DEFAULT_FILTERS);
   const [convertTarget, setConvertTarget] = useState<PurchaseRequest | null>(null);
-  const [vendorMap, setVendorMap] = useState<Record<string, string>>({});
 
   // Dashboard drill-downs use the short flag (?is_auto_generated=1); the
   // FilterBar select options use 'true'/'false' — reconcile once at mount.
@@ -98,37 +91,9 @@ export default function PurchaseRequestsListPage() {
  },
  onError: (e) => reportMutationError(e, 'Bulk approval failed. No requests were approved.') });
 
- const convertDetail = useQuery({
- queryKey: ['purchasing', 'purchase-requests', convertTarget?.id, 'conversion'],
- queryFn: () => purchaseRequestsApi.show(convertTarget!.id),
- enabled: !!convertTarget });
- const vendors = useQuery({
- queryKey: ['accounting', 'vendors', 'pr-conversion'],
- queryFn: () => vendorsApi.list({ per_page: 200, is_active: 'true' }),
- enabled: !!convertTarget });
- const convertMut = useMutation({
- mutationFn: (assignments: Record<string, string>) => purchaseRequestsApi.convert(convertTarget!.id, assignments),
- onSuccess: (orders) => {
- qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
- setConvertTarget(null);
- setVendorMap({});
- toast.success(`${orders.length} purchase order${orders.length === 1 ? '' : 's'} created.`);
- navigate(orders.length === 1 ? `/purchasing/purchase-orders/${orders[0].id}` : '/purchasing/purchase-orders');
- },
- onError: (e) => toast.error(errMsg(e, 'Failed to convert PR.')) });
-
  const openConversion = (request: PurchaseRequest) => {
- setVendorMap({});
  setConvertTarget(request);
  };
-
- const conversionItems = convertDetail.data?.items ?? [];
- const effectiveVendorMap = Object.fromEntries(conversionItems.map((item) => [
- item.id,
- vendorMap[item.id] ?? item.suggested_vendor?.id ?? '',
- ]));
- const allVendorsAssigned = conversionItems.length > 0
- && conversionItems.every((item) => effectiveVendorMap[item.id]);
 
  const bulkActions: BulkAction<PurchaseRequest>[] = [
  {
@@ -161,6 +126,9 @@ export default function PurchaseRequestsListPage() {
  <Chip variant={statusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>
  {r.status === 'approved' && r.po_conversion_status === 'manual_required' && (
  <Chip variant="warning">manual PO</Chip>
+ )}
+ {r.status === 'approved' && r.po_conversion_status === 'partial' && (
+ <Chip variant="warning">partial PO</Chip>
  )}
  {r.has_overdue_approval && (
  <span title={`Approval pending beyond ${requestOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
@@ -229,43 +197,7 @@ export default function PurchaseRequestsListPage() {
  </div>
  )}
 
- <Modal
- isOpen={!!convertTarget}
- onClose={() => { setConvertTarget(null); setVendorMap({}); }}
- title={`Convert ${convertTarget?.pr_number ?? 'PR'} to PO`}
- size="lg"
- >
- <div className="py-4 space-y-3">
- {convertDetail.isLoading ? <SkeletonTable rows={3} columns={4} /> : conversionItems.map((item) => (
- <div key={item.id} className="grid grid-cols-[1fr_120px_220px] gap-3 items-end border-b border-subtle pb-3">
- <div>
- <div className="font-medium text-sm">{item.item?.code ?? 'Uncoded item'} · {item.description}</div>
- <div className="text-xs text-muted">{item.quantity} {item.unit ?? item.item?.unit_of_measure ?? '—'} · {formatPeso(item.estimated_unit_price)}</div>
- </div>
- <div className="text-xs text-muted">{formatPeso(item.estimated_total)}</div>
- <Select
- label="Supplier"
- value={vendorMap[item.id] ?? item.suggested_vendor?.id ?? ''}
- onChange={(event) => setVendorMap((current) => ({ ...current, [item.id]: event.target.value }))}
- >
- <option value="">Select supplier…</option>
- {vendors.data?.data?.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
- </Select>
- </div>
- ))}
- <ModalFooter>
- <Button variant="secondary" onClick={() => { setConvertTarget(null); setVendorMap({}); }}>Cancel</Button>
- <Button
- variant="primary"
- loading={convertMut.isPending}
- disabled={!allVendorsAssigned || convertMut.isPending}
- onClick={() => convertMut.mutate(effectiveVendorMap)}
- >
- Create PO
- </Button>
- </ModalFooter>
- </div>
- </Modal>
+ <ConvertPrToPoModal purchaseRequest={convertTarget} onClose={() => setConvertTarget(null)} />
  </div>
  );
 }

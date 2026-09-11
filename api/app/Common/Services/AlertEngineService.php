@@ -318,6 +318,7 @@ class AlertEngineService
                 $supplierItemIds = $lowStockItemIds === []
                     ? []
                     : ApprovedSupplier::query()
+                        ->qualified()
                         ->whereIn('item_id', $lowStockItemIds)
                         ->pluck('item_id')
                         ->map(static fn ($id): int => (int) $id)

@@ -9,9 +9,14 @@ use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\B2B\Resources\CustomerPortalInvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Requests\Customer\ConfirmPortalDeliveryRequest;
 use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
 use App\Modules\B2B\Requests\Customer\CustomerStoreDeliveryScheduleRequest;
+use App\Modules\B2B\Requests\Customer\RespondToSalesOrderRequest;
+use App\Modules\B2B\Requests\Customer\StoreCustomerReturnRequest;
+use App\Modules\B2B\Requests\Customer\StorePortalOrderRequest;
 use App\Modules\B2B\Resources\CustomerPortalComplaintResource;
+use App\Modules\B2B\Resources\CustomerReturnRequestResource;
 use App\Modules\B2B\Resources\CustomerDeliveryResource;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Services\CustomerPortalService;
@@ -20,6 +25,8 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Resources\SalesOrderResource;
+use App\Modules\CRM\Resources\SalesOrderResponseResource;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\DeliveryProof;
@@ -65,6 +72,40 @@ class CustomerPortalController extends Controller
     }
 
     /**
+     * GET /api/v1/b2b/customer/catalog
+     */
+    public function catalog(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $params = $request->validate([
+            'as_of'  => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+        ]);
+
+        $catalog = $this->service->catalog(
+            $user->customer_id,
+            $params['as_of'] ?? null,
+            $params['search'] ?? null,
+        );
+
+        return response()->json(['data' => $catalog]);
+    }
+
+    /**
+     * POST /api/v1/b2b/customer/orders
+     */
+    public function storeOrder(StorePortalOrderRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $so = $this->service->placeOrder($user->customer_id, $request->validated(), $user);
+
+        return response()->json([
+            'data'    => new SalesOrderResource($so),
+            'message' => 'Order submitted. It will be confirmed by our sales team.',
+        ], 201);
+    }
+
+    /**
      * GET /api/v1/b2b/customer/sales-orders
      */
     public function salesOrders(Request $request): AnonymousResourceCollection
@@ -102,6 +143,25 @@ class CustomerPortalController extends Controller
         $chain = $this->service->salesOrderChain($user->customer_id, $salesOrder);
 
         return response()->json(['data' => $chain]);
+    }
+
+    /**
+     * POST /api/v1/b2b/customer/orders/{salesOrder}/respond
+     */
+    public function respondToSalesOrder(SalesOrder $salesOrder, RespondToSalesOrderRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $response = $this->service->respondToSalesOrder(
+            $user->customer_id,
+            (int) $user->id,
+            $salesOrder,
+            $request->validated(),
+        );
+
+        return response()->json([
+            'data'    => new SalesOrderResponseResource($response),
+            'message' => 'Your response was submitted to our sales team.',
+        ], 201);
     }
 
     /**
@@ -170,6 +230,20 @@ class CustomerPortalController extends Controller
         $delivery = $this->service->deliveryDetail($user->customer_id, $delivery);
 
         return new CustomerDeliveryResource($delivery);
+    }
+
+    /**
+     * POST /api/v1/b2b/customer/deliveries/{id}/confirm
+     */
+    public function confirmDelivery(Delivery $delivery, ConfirmPortalDeliveryRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $confirmed = $this->service->confirmDelivery($user->customer_id, $delivery, $request->validated(), $user);
+
+        return response()->json([
+            'data'    => new CustomerDeliveryResource($confirmed),
+            'message' => 'Delivery confirmed. Thank you for confirming receipt.',
+        ]);
     }
 
     public function deliveryProof(Delivery $delivery, DeliveryProof $proof, Request $request): StreamedResponse
@@ -328,6 +402,63 @@ class CustomerPortalController extends Controller
         return response()->json([
             'data' => new DeliveryScheduleResource($schedule),
             'message' => 'Delivery schedule submitted successfully.',
+        ], 201);
+    }
+
+    /**
+     * GET /api/v1/b2b/customer/return-requests/source-options
+     */
+    public function returnSourceOptions(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $filters = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
+        ]);
+
+        return response()->json([
+            'data' => $this->service->returnSourceOptions($user->customer_id, $filters),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/b2b/customer/return-requests
+     */
+    public function returnRequests(Request $request): AnonymousResourceCollection
+    {
+        $user = $this->user($request);
+        $filters = $request->validate([
+            'page'     => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return CustomerReturnRequestResource::collection(
+            $this->service->returnRequests($user->customer_id, $filters),
+        );
+    }
+
+    /**
+     * GET /api/v1/b2b/customer/return-requests/{returnRequest}
+     */
+    public function returnRequestShow(ReturnRequest $returnRequest, Request $request): CustomerReturnRequestResource
+    {
+        $user = $this->user($request);
+
+        return new CustomerReturnRequestResource(
+            $this->service->returnRequestDetail($user->customer_id, $returnRequest),
+        );
+    }
+
+    /**
+     * POST /api/v1/b2b/customer/return-requests
+     */
+    public function storeReturnRequest(StoreCustomerReturnRequest $request): JsonResponse
+    {
+        $user = $this->user($request);
+        $rma = $this->service->createReturn($user->customer_id, $request->validated(), $user);
+
+        return response()->json([
+            'data'    => new CustomerReturnRequestResource($rma->load('items.product')),
+            'message' => 'Return request submitted. Our team will review it and get back to you.',
         ], 201);
     }
 }

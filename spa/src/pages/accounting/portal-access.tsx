@@ -25,7 +25,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs } from '@/components/ui/Tabs';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import type { CustomerPortalUser, SupplierPortalUser } from '@/types/b2b';
+import type { CustomerPortalUser, InternalDeliverySchedule, SupplierPortalUser } from '@/types/b2b';
 
 type PortalStatus = SupplierPortalUser['status'];
 
@@ -46,6 +46,23 @@ const statusFilter: FilterConfig[] = [
  ] },
 ];
 
+const scheduleStatusFilter: FilterConfig[] = [
+ { key: 'status', label: 'Status', type: 'select', options: [
+  { value: '', label: 'All' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'acknowledged', label: 'Acknowledged' },
+  { value: 'rejected', label: 'Rejected' },
+ ] },
+];
+
+const scheduleSourceFilter: FilterConfig[] = [
+ { key: 'source', label: 'Source', type: 'select', options: [
+  { value: '', label: 'All' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'supplier', label: 'Supplier' },
+ ] },
+];
+
 /**
  * Portal Access — one admin screen for BOTH self-service portals.
  *
@@ -57,14 +74,15 @@ const statusFilter: FilterConfig[] = [
  */
 export default function PortalAccessPage() {
  const [searchParams, setSearchParams] = useSearchParams();
- const [tab, setTab] = useState<'suppliers' | 'customers'>(() =>
-  searchParams.get('tab') === 'customers' ? 'customers' : 'suppliers',
- );
+ const [tab, setTab] = useState<'suppliers' | 'customers' | 'delivery-schedules'>(() => {
+  const requested = searchParams.get('tab');
+  return requested === 'customers' || requested === 'delivery-schedules' ? requested : 'suppliers';
+ });
 
  // Tabs share the URL query string with their list filters; clear it when
  // switching so the incoming tab mounts on clean defaults instead of the
  // previous tab's page/status.
- const switchTab = (next: 'suppliers' | 'customers') => {
+ const switchTab = (next: 'suppliers' | 'customers' | 'delivery-schedules') => {
   if (next === tab) return;
   setTab(next);
   setSearchParams({}, { replace: true });
@@ -84,10 +102,11 @@ export default function PortalAccessPage() {
      items={[
       { key: 'suppliers', label: 'Suppliers' },
       { key: 'customers', label: 'Customers' },
+      { key: 'delivery-schedules', label: 'Delivery Schedules' },
      ]}
     />
    </div>
-   {tab === 'suppliers' ? <SuppliersSection /> : <CustomersSection />}
+   {tab === 'suppliers' ? <SuppliersSection /> : tab === 'customers' ? <CustomersSection /> : <DeliverySchedulesSection />}
   </div>
  );
 }
@@ -371,6 +390,169 @@ function CustomersSection() {
      deactivateMutation.mutate(confirmAction.user.id);
     }}
    />
+  </>
+ );
+}
+
+/* ─── Delivery schedules tab ─────────────────────────────── */
+
+type ScheduleFilters = {
+ page: number;
+ per_page: number;
+ status?: string;
+ source?: string;
+ search?: string;
+};
+
+function DeliverySchedulesSection() {
+ const queryClient = useQueryClient();
+ const { can } = usePermission();
+ const canManage = can('b2b.portal_access.manage');
+ const [filters, setFilters] = useUrlFilters<ScheduleFilters>({ page: 1, per_page: 25 });
+ const [selected, setSelected] = useState<InternalDeliverySchedule | null>(null);
+ const [rejecting, setRejecting] = useState(false);
+ const [reason, setReason] = useState('');
+
+ const list = useQuery({
+  queryKey: ['b2b', 'portal-access', 'delivery-schedules', filters],
+  queryFn: () => portalAccessApi.listDeliverySchedules(filters),
+  placeholderData: (previous) => previous,
+ });
+
+ const closeModal = () => {
+  setSelected(null);
+  setRejecting(false);
+  setReason('');
+ };
+
+ const acknowledgeMutation = useMutation({
+  mutationFn: (id: string) => portalAccessApi.acknowledgeDeliverySchedule(id),
+  onSuccess: (res) => {
+   closeModal();
+   queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access', 'delivery-schedules'] });
+   toast.success(res.message ?? 'Delivery schedule acknowledged.');
+  },
+  onError: (e: Error & { response?: { data?: { message?: string } } }) =>
+   toast.error(e.response?.data?.message ?? 'Action failed.'),
+ });
+ const rejectMutation = useMutation({
+  mutationFn: (vars: { id: string; reason: string }) => portalAccessApi.rejectDeliverySchedule(vars.id, vars.reason),
+  onSuccess: (res) => {
+   closeModal();
+   queryClient.invalidateQueries({ queryKey: ['b2b', 'portal-access', 'delivery-schedules'] });
+   toast.success(res.message ?? 'Delivery schedule rejected.');
+  },
+  onError: (e: Error & { response?: { data?: { message?: string } } }) =>
+   toast.error(e.response?.data?.message ?? 'Action failed.'),
+ });
+
+ const columns: Column<InternalDeliverySchedule>[] = [
+  { key: 'month', header: 'Month', cell: (row) => <span className="font-mono">{row.month}</span> },
+  { key: 'source', header: 'Source', cell: (row) => <Chip variant={row.source === 'supplier' ? 'info' : 'neutral'}>{row.source}</Chip> },
+  { key: 'party', header: 'Party', cell: (row) => row.customer?.name ?? row.vendor?.name ?? '—' },
+  { key: 'status', header: 'Status', cell: (row) => <Chip variant={chipVariantForStatus(row.status)}>{row.status_label ?? row.status}</Chip> },
+  { key: 'submitted', header: 'Submitted', cell: (row) => new Date(row.created_at).toLocaleDateString() },
+  { key: 'reviewed', header: 'Reviewed', cell: (row) => (row.reviewed_at ? new Date(row.reviewed_at).toLocaleDateString() : '—') },
+ ];
+
+ return (
+  <>
+   <FilterBar
+    filters={[...scheduleStatusFilter, ...scheduleSourceFilter]}
+    values={filters}
+    onSearch={(search) => setFilters((current) => ({ ...current, search: search || undefined, page: 1 }))}
+    onFilter={(key, value) => setFilters((current) => ({ ...current, [key]: value || undefined, page: 1 }))}
+    searchPlaceholder="Search customer or supplier…"
+   />
+   {list.isLoading && !list.data && <SkeletonTable columns={6} rows={6} />}
+   {list.isError && <EmptyState icon="alert-circle" title="Failed to load delivery schedules" action={<Button variant="secondary" onClick={() => list.refetch()}>Retry</Button>} />}
+   {list.data && list.data.data.length === 0 && <ListEmptyState />}
+   {list.data && list.data.data.length > 0 && <div className="px-5 py-4"><DataTable
+    columns={columns}
+    data={list.data.data}
+    meta={list.data.meta}
+    onRowClick={(row) => setSelected(row)}
+    onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
+    onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
+    tableKey="b2b-delivery-schedules"
+   /></div>}
+
+   <Modal isOpen={!!selected} onClose={closeModal} size="lg" title="Delivery schedule">
+    {selected && (
+     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+       <span className="font-mono text-sm">{selected.month}</span>
+       <Chip variant={chipVariantForStatus(selected.status)}>{selected.status_label ?? selected.status}</Chip>
+       <Chip variant={selected.source === 'supplier' ? 'info' : 'neutral'}>{selected.source}</Chip>
+       <span className="text-sm text-muted">{selected.customer?.name ?? selected.vendor?.name ?? '—'}</span>
+      </div>
+
+      {selected.reject_reason && (
+       <p className="text-xs text-danger-fg">Rejected: {selected.reject_reason}</p>
+      )}
+
+      <div className="overflow-x-auto rounded-md border border-default">
+       <table className="w-full border-collapse text-xs">
+        <thead className="bg-[var(--bg-thead)]">
+         <tr className="border-b border-default">
+          <th className="px-2.5 h-row text-left text-2xs uppercase tracking-wider text-muted font-medium">Product</th>
+          <th className="px-2.5 h-row text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
+          <th className="px-2.5 h-row text-left text-2xs uppercase tracking-wider text-muted font-medium">Notes</th>
+         </tr>
+        </thead>
+        <tbody>
+         {selected.lines.map((line, index) => (
+          <tr key={index} className="border-b border-subtle">
+           <td className="px-2.5 h-row">{line.product_name}</td>
+           <td className="px-2.5 h-row text-right font-mono tabular-nums">{line.quantity}</td>
+           <td className="px-2.5 h-row text-muted">{line.notes ?? '—'}</td>
+          </tr>
+         ))}
+        </tbody>
+       </table>
+      </div>
+
+      {canManage && selected.status === 'submitted' && (
+       rejecting ? (
+        <div className="space-y-2 border-t border-default pt-3">
+         <Input
+          label="Rejection reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          maxLength={500}
+         />
+         <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => { setRejecting(false); setReason(''); }}>Cancel</Button>
+          <Button
+           type="button"
+           variant="danger"
+           size="sm"
+           disabled={!reason.trim()}
+           loading={rejectMutation.isPending}
+           onClick={() => rejectMutation.mutate({ id: selected.id, reason: reason.trim() })}
+          >
+           Confirm rejection
+          </Button>
+         </div>
+        </div>
+       ) : (
+        <div className="flex justify-end gap-2 border-t border-default pt-3">
+         <Button variant="danger" size="sm" icon={<LuBan size={12} />} onClick={() => setRejecting(true)}>Reject</Button>
+         <Button
+          variant="primary"
+          size="sm"
+          icon={<LuShieldCheck size={12} />}
+          loading={acknowledgeMutation.isPending}
+          onClick={() => acknowledgeMutation.mutate(selected.id)}
+         >
+          Acknowledge
+         </Button>
+        </div>
+       )
+      )}
+     </div>
+    )}
+   </Modal>
   </>
  );
 }

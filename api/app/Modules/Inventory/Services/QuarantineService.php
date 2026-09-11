@@ -12,6 +12,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
@@ -24,6 +25,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -401,8 +403,105 @@ class QuarantineService
             $locked->status = $newStatus;
             $locked->save();
 
+            // A return-to-supplier release has already moved the goods out of
+            // inventory, so hand the finance side (receipt reconciliation +
+            // supplier credit + optional replacement) to the ONE supplier-return
+            // engine. The RMA is stamped with the released quantity so it can
+            // never move the same goods again, and with
+            // reversal_already_applied=false because the MRB path did NOT
+            // reduce the PO/GRN received quantities — the RMA does that once.
+            if ($dispo === NcrDisposition::ReturnToSupplier) {
+                $this->openSupplierReturnForMrb($locked, $by);
+            }
+
             return $locked;
         });
+    }
+
+    /**
+     * Open or reuse the supplier-return RMA for an MRB return-to-supplier
+     * release. Requires the MRB's inspection to carry GRN/PO lineage; without
+     * it the goods cannot be tied to a receipt, so the release stands on its own
+     * (the historical behaviour) and the reason is logged rather than fabricating
+     * an unusable RMA.
+     */
+    private function openSupplierReturnForMrb(MaterialReviewRecord $mrb, User $by): void
+    {
+        $inspection = $mrb->inspection_id
+            ? Inspection::find((int) $mrb->inspection_id)
+            : ($mrb->ncr_id ? $mrb->ncr?->inspection : null);
+
+        $grnItem = $inspection ? $this->resolveGrnItemForReturn($inspection, (int) $mrb->item_id) : null;
+        $grn = $grnItem?->grn;
+
+        if (! $grnItem || ! $grn || ! $grn->vendor_id) {
+            Log::info('QuarantineService: MRB return_to_supplier has no GRN/PO lineage; released without an RMA.', [
+                'mrb_id'        => $mrb->id,
+                'item_id'       => $mrb->item_id,
+                'inspection_id' => $mrb->inspection_id,
+            ]);
+            return;
+        }
+
+        $quantity = bccomp((string) $mrb->quantity, '0', 3) > 0
+            ? (string) $mrb->quantity
+            : (string) $grnItem->quantity_received;
+
+        $poItem = $grnItem->purchaseOrderItem;
+
+        app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)
+            ->openSupplierReturnForReversedGoods(
+                vendorId: (int) $grn->vendor_id,
+                purchaseOrderId: $grn->purchase_order_id ? (int) $grn->purchase_order_id : null,
+                goodsReceiptNoteId: (int) $grn->id,
+                lines: [[
+                    'grn_item_id'              => (int) $grnItem->id,
+                    'purchase_order_item_id'   => $grnItem->purchase_order_item_id
+                        ? (int) $grnItem->purchase_order_item_id
+                        : null,
+                    'item_id'                  => (int) $grnItem->item_id,
+                    'quantity'                 => $quantity,
+                    'unit_price'               => (string) ($poItem?->unit_price ?? $grnItem->unit_cost),
+                    'reason'                   => "MRB {$mrb->mrb_number}: return to supplier",
+                    'lot_number'               => $grnItem->material_lot_number,
+                    // The MRB moved stock but never touched the PO received
+                    // quantity, so the RMA must reconcile the receipt exactly
+                    // once. Its lines carry the released quantity as an already
+                    // moved amount, so the RMA will not ship the goods again.
+                    'reversal_already_applied' => false,
+                ]],
+                by: $by,
+                reason: "MRB {$mrb->mrb_number} released to supplier.",
+                dedupeKey: 'mrb-return:'.$mrb->id,
+            );
+    }
+
+    /**
+     * The GRN line a quality record belongs to, when one exists. Mirrors the
+     * NCR resolver so both system paths agree on what "lineage" means.
+     */
+    private function resolveGrnItemForReturn(Inspection $inspection, int $itemId): ?GrnItem
+    {
+        if ($inspection->grn_item_id) {
+            return GrnItem::query()
+                ->with(['grn', 'purchaseOrderItem'])
+                ->find((int) $inspection->grn_item_id);
+        }
+
+        $entityType = $inspection->entity_type instanceof \BackedEnum
+            ? $inspection->entity_type->value
+            : (string) $inspection->entity_type;
+
+        if ($entityType === 'grn' && $inspection->entity_id) {
+            return GrnItem::query()
+                ->with(['grn', 'purchaseOrderItem'])
+                ->where('goods_receipt_note_id', (int) $inspection->entity_id)
+                ->where('item_id', $itemId)
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        return null;
     }
 
     /**
