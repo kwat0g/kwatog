@@ -321,6 +321,14 @@ class MrpEngineService
             // (pending, approved, …) and manual PRs are never touched.
             $autoPrCount = 0;
             if (! empty($shortages)) {
+                // MRP-03 — lock the eligible prior draft auto-PRs for the rest
+                // of this transaction. A concurrent purchasing submit selects
+                // the same rows; without the lock it can commit between this
+                // read and the draft/cancel/reuse writes below, after which the
+                // rerun deletes the line items of a PR that has already crossed
+                // the purchasing handoff. This block runs inside the
+                // DB::transaction() opened by runForSalesOrder(), so the lock
+                // is held until the MRP run commits.
                 $priorDraftAutoPrs = PurchaseRequest::query()
                     ->where('is_auto_generated', true)
                     ->where('status', PurchaseRequestStatus::Draft->value)
@@ -328,13 +336,28 @@ class MrpEngineService
                         ->where('sales_order_id', $so->id)
                         ->where('id', '!=', $plan->id))
                     ->orderByDesc('id')
+                    ->lockForUpdate()
                     ->get();
 
                 // Reuse the latest eligible draft auto-PR, refreshed to current
-                // requirements; cancel any older surplus drafts.
-                $pr = $priorDraftAutoPrs->shift();
-                foreach ($priorDraftAutoPrs as $surplus) {
-                    $surplus->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
+                // requirements; cancel any older surplus drafts. Defense in
+                // depth under the lock: a candidate that is no longer Draft at
+                // write time (a writer that bypassed the row lock, or an
+                // in-process submit) is skipped rather than clobbered, and a
+                // fresh consolidated PR is created when no candidate survives.
+                $pr = null;
+                foreach ($priorDraftAutoPrs as $candidate) {
+                    $candidate->refresh();
+                    if ($candidate->status !== PurchaseRequestStatus::Draft) {
+                        continue;
+                    }
+
+                    if ($pr === null) {
+                        $pr = $candidate;
+                        continue;
+                    }
+
+                    $candidate->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
                 }
 
                 if ($pr === null) {
