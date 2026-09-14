@@ -406,7 +406,13 @@ class ApprovalBoardService
         foreach (ApprovalTypeRegistry::all() as $class => $meta) {
             $ids = array_values(array_unique($idsByTable[$meta['table']] ?? []));
             if ($ids === []) continue;
-            $query = DB::table($meta['table'])->whereIn($meta['table'].'.id', $ids);
+            // Qualify the source projection before joins. An unqualified `*`
+            // lets a vendor/customer join overwrite or omit the source `id`
+            // on the stdClass, which becomes a warning and therefore an API
+            // 500 when PHP's debug error handler is active.
+            $query = DB::table($meta['table'])
+                ->select($meta['table'].'.*')
+                ->whereIn($meta['table'].'.id', $ids);
             // PS-07 — PO cards summarized the RAW vendor_id ("vendor #42"),
             // both a HashID-rule violation and a useless label. Carry the
             // vendor's name onto the source row so the summary reads a name.

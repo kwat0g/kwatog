@@ -705,32 +705,52 @@ class ReturnRequestService
             if ((int) $locked->created_by !== (int) $by->id && ! $by->hasPermission('admin.roles.manage')) {
                 throw new BusinessRuleException('Only the draft creator or a system administrator can edit this return request.');
             }
-            if (($data['type'] ?? null) === ReturnRequestType::SupplierReturn->value
-                && (bool) ($data['finance_only'] ?? false)) {
+            $effective = array_merge([
+                'type'                => $locked->type instanceof ReturnRequestType ? $locked->type->value : (string) $locked->type,
+                'finance_only'        => (bool) $locked->finance_only,
+                'finance_only_reason' => $locked->finance_only_reason,
+                'sales_order_id'      => $locked->sales_order_id,
+                'invoice_id'          => $locked->invoice_id,
+                'purchase_order_id'   => $locked->purchase_order_id,
+                'bill_id'             => $locked->bill_id,
+                'customer_id'         => $locked->customer_id,
+                'vendor_id'           => $locked->vendor_id,
+                'reason_code'         => $locked->reason_code,
+                'reason_description'  => $locked->reason_description,
+                'customer_notes'      => $locked->customer_notes,
+                'internal_notes'      => $locked->internal_notes,
+                'resolution'          => $locked->resolution,
+                'return_date'         => $locked->return_date,
+            ], $data);
+
+            if ($effective['type'] === ReturnRequestType::SupplierReturn->value
+                && (bool) $effective['finance_only']) {
                 throw new BusinessRuleException('Supplier returns must use purchase and receipt lineage; finance-only is a customer-credit policy.');
             }
 
-            $this->releaseSourceAllocations($locked);
             $locked->update([
-                'type'                => $data['type'],
-                'finance_only'        => (bool) ($data['finance_only'] ?? false),
-                'finance_only_reason' => $data['finance_only_reason'] ?? null,
-                'sales_order_id'      => $data['sales_order_id'] ?? null,
-                'invoice_id'          => $data['invoice_id'] ?? null,
-                'purchase_order_id'   => $data['purchase_order_id'] ?? null,
-                'bill_id'             => $data['bill_id'] ?? null,
-                'customer_id'         => $data['customer_id'] ?? null,
-                'vendor_id'           => $data['vendor_id'] ?? null,
-                'reason_code'         => $data['reason_code'] ?? null,
-                'reason_description'  => $data['reason_description'] ?? null,
-                'customer_notes'      => $data['customer_notes'] ?? null,
-                'internal_notes'      => $data['internal_notes'] ?? null,
-                'resolution'          => $data['resolution'] ?? null,
-                'return_date'         => $data['return_date'] ?? $locked->return_date,
+                'type'                => $effective['type'],
+                'finance_only'        => (bool) $effective['finance_only'],
+                'finance_only_reason' => $effective['finance_only_reason'],
+                'sales_order_id'      => $effective['sales_order_id'],
+                'invoice_id'          => $effective['invoice_id'],
+                'purchase_order_id'   => $effective['purchase_order_id'],
+                'bill_id'             => $effective['bill_id'],
+                'customer_id'         => $effective['customer_id'],
+                'vendor_id'           => $effective['vendor_id'],
+                'reason_code'         => $effective['reason_code'],
+                'reason_description'  => $effective['reason_description'],
+                'customer_notes'      => $effective['customer_notes'],
+                'internal_notes'      => $effective['internal_notes'],
+                'resolution'          => $effective['resolution'],
+                'return_date'         => $effective['return_date'],
             ]);
 
-            $locked->items()->delete();
-            $this->persistItems($locked, (array) ($data['items'] ?? []), true);
+            if (array_key_exists('items', $data)) {
+                $this->releaseSourceAllocations($locked);
+                $locked->items()->delete();
+                $this->persistItems($locked, (array) $data['items'], true);
+            }
 
             return $locked->fresh()->load('items');
         });

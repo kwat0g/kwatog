@@ -1,0 +1,929 @@
+{
+  "generated_at": "2026-09-14T04:31:56.366Z",
+  "ids": {
+    "payrollPeriod": "0ldwDmpVa9",
+    "budget": null,
+    "listing": "dGypLxpvAg",
+    "listingReject": "GqkbAVwxd1",
+    "customerSo": "40awq4bKG2",
+    "schedule": "dGypLxpvAg",
+    "scheduleReject": "GqkbAVwxd1",
+    "adjustment": "GqkbAVwxd1",
+    "count": "DzAwdKb5ld",
+    "ppap": "R8epjLbOaD"
+  },
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "hr authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Santos\",\"email\":\"hr@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"GqkbAVwxd1\",\"name\":\"HR Officer\",\"slug\":\"hr_officer\"},\"employee\":{\"id\":\"dGypLxpvAg\",\"employee_no\":\"DEMO-0001\",\"full_name\":\"Maria Santos\",\"department_id\":\"GqkbAVwxd1\"},\"permissions\":[\"hr.separation.cancel\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\",\"attendance.import\",\"attendance.edit\",\"attendance.shifts.manage\",\"attendance.holidays.manage\",\"attendance.ot.create\",\"attendance.ot.approve\",\"leave.view\",\"leave.create\",\"leave.approve_dept\",\"leave.approve_hr\",\"leave.types.manage\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.create\",\"payroll.periods.compute\",\"payroll.adjustments.vie"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "a10-hr-payroll UI",
+      "detail": "document=200 uiUrl=http://localhost/payroll/periods"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 payroll options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"statuses\":[{\"value\":\"draft\",\"label\":\"Draft\"},{\"value\":\"processing\",\"label\":\"Processing\"},{\"value\":\"computed\",\"label\":\"Computed\"},{\"value\":\"approved\",\"label\":\"Approved\"},{\"value\":\"finalized\",\"label\":\"Finalized\"},{\"value\":\"disbursed\",\"label\":\"Disbursed\"},{\"value\":\"voided\",\"label\":\"Voided\"}],\"period_types\":[{\"value\":\"false\",\"label\":\"Regular\"},{\"value\":\"true\",\"label\":\"13th Month\"}],\"half_types\":[{\"value\":\"true\",\"label\":\"1st half (government deductions apply)\"},{\"value\":\"false\",\"label\":\"2nd half\"}],\"employment_types\":[{\"value\":\"regular\",\"label\":\"Regular\"},{\"value\":\"probationary\",\"label\":\"Probationary\"},{\"value\":\"contractual\",\"label\":\"Contractual\"},{\"value\":\"project_based\",\"label\":\"Project-Based\"}],\"pay_types\":[{\"value\":\"monthly\",\"label\":\"Monthly\"},{\"value\":\"semi_monthly\",\"label\":\"Semi-monthly\"}],\"departments\":[{\"value\":\"WDQwPGbYPx\",\"label\":\"Admin & General Affairs (ADMIN)\"},{\"value\":\"dGypLxpvAg\",\"label\":\"Executive (EXEC)\"},{\"value\":\"R8epjLbOaD\",\"label\":\"Finance & Accounting (FIN)\"},{\"value\":\"GqkbAVwxd1\",\"label\":\"Human Resources (HR)\"},{\"value\":\"ajzw1lb3eW\",\"label\":\"Import/Export (IMPEX)\"},{\"value\":\"zW1p05N0BA\",\"label\":\"Information Technology (IT)\"},{\"value\":\"BnoNyGw56v\",\"label\":\"Maintenance & Engineering (MAINT)\"},{\"value\":\"6r9wnvwOBW\",\"label\":\"Mold Department (MOLD)\"},{\"value\":\"DzAwdKb5ld\",\"label\":\"Production (PROD)\"},{\"value\":\"0ldwDmpVa9\",\"label\":\"Production Planning (PP"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 HR payroll scope preview",
+      "detail": "HTTP 200; expected 200/422 ; body={\"data\":{\"is_company_wide\":false,\"employee_count\":10,\"already_paid_count\":0,\"already_paid_sample\":[],\"total_active\":201,\"estimated_gross\":\"200250.00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 disposable payroll period create",
+      "detail": "HTTP 201; expected 201/422 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"period_start\":\"2026-10-01\",\"period_end\":\"2026-10-15\",\"payroll_date\":\"2026-10-15\",\"is_first_half\":true,\"is_thirteenth_month\":false,\"status\":\"draft\",\"status_label\":\"Draft\",\"lifecycle_steps\":[{\"key\":\"draft\",\"label\":\"Draft\",\"state\":\"done\"},{\"key\":\"processing\",\"label\":\"Computed\",\"state\":\"pending\"},{\"key\":\"approved\",\"label\":\"Approved\",\"state\":\"pending\"},{\"key\":\"finalized\",\"label\":\"Finalized\",\"state\":\"pending\"},{\"key\":\"disbursed\",\"label\":\"Disbursed\",\"state\":\"pending\"}],\"is_locked\":false,\"label\":\"Oct 1–Oct 15, 2026 · 1st half · LIVE-B9 disposable payroll 1789359961276\",\"is_company_wide\":false,\"scope_label\":\"LIVE-B9 disposable payroll 1789359961276\",\"scope_employment_types\":[],\"scope_pay_types\":[],\"scope_departments\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Finance & Accounting\"}],\"disbursement_status\":\"pending\",\"disbursed_at\":null,\"is_auto_created\":false,\"auto_created_at\":null,\"employee_count\":0,\"bank_file_status\":\"not_started\",\"bank_file_status_label\":\"Not started\",\"bank_file_note\":null,\"bank_file_at\":null,\"processing_started_at\":null,\"is_compute_stale\":false,\"compute_progress\":null,\"voided_at\":null,\"void_reason\":null,\"approved_at\":null,\"finalized_at\":null,\"correction_requested_at\":null,\"correction_reason\":null,\"summary\":null,\"gl_entry_number\":null,\"gl_handoff_status\":\"not_started\",\"gl_handoff_status_label\":\"Not attempted\",\"gl_handoff_note\":null,\"gl_handoff_at\":null,\"cr"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 payroll draft detail",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"period_start\":\"2026-10-01\",\"period_end\":\"2026-10-15\",\"payroll_date\":\"2026-10-15\",\"is_first_half\":true,\"is_thirteenth_month\":false,\"status\":\"draft\",\"status_label\":\"Draft\",\"lifecycle_steps\":[{\"key\":\"draft\",\"label\":\"Draft\",\"state\":\"done\"},{\"key\":\"processing\",\"label\":\"Computed\",\"state\":\"pending\"},{\"key\":\"approved\",\"label\":\"Approved\",\"state\":\"pending\"},{\"key\":\"finalized\",\"label\":\"Finalized\",\"state\":\"pending\"},{\"key\":\"disbursed\",\"label\":\"Disbursed\",\"state\":\"pending\"}],\"is_locked\":false,\"label\":\"Oct 1–Oct 15, 2026 · 1st half · LIVE-B9 disposable payroll 1789359961276\",\"is_company_wide\":false,\"scope_label\":\"LIVE-B9 disposable payroll 1789359961276\",\"scope_employment_types\":[],\"scope_pay_types\":[],\"scope_departments\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Finance & Accounting\"}],\"disbursement_status\":\"pending\",\"disbursed_at\":null,\"disburser\":null,\"is_auto_created\":false,\"auto_created_at\":null,\"employee_count\":0,\"bank_file_status\":\"not_started\",\"bank_file_status_label\":\"Not started\",\"bank_file_note\":null,\"bank_file_at\":null,\"processing_started_at\":null,\"is_compute_stale\":false,\"compute_progress\":null,\"voided_at\":null,\"void_reason\":null,\"voider\":null,\"creator\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Santos\"},\"approved_at\":null,\"finalized_at\":null,\"correction_requested_at\":null,\"correction_reason\":null,\"computer\":null,\"approver\":null,\"finalizer\":null,\"correction_requester\":null,\""
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 HR compute claim",
+      "detail": "HTTP 202; expected 202 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"period_start\":\"2026-10-01\",\"period_end\":\"2026-10-15\",\"payroll_date\":\"2026-10-15\",\"is_first_half\":true,\"is_thirteenth_month\":false,\"status\":\"processing\",\"status_label\":\"Processing\",\"lifecycle_steps\":[{\"key\":\"draft\",\"label\":\"Draft\",\"state\":\"done\"},{\"key\":\"processing\",\"label\":\"Computed\",\"state\":\"active\"},{\"key\":\"approved\",\"label\":\"Approved\",\"state\":\"pending\"},{\"key\":\"finalized\",\"label\":\"Finalized\",\"state\":\"pending\"},{\"key\":\"disbursed\",\"label\":\"Disbursed\",\"state\":\"pending\"}],\"is_locked\":false,\"label\":\"Oct 1–Oct 15, 2026 · 1st half · LIVE-B9 disposable payroll 1789359961276\",\"is_company_wide\":false,\"scope_label\":\"LIVE-B9 disposable payroll 1789359961276\",\"scope_employment_types\":[],\"scope_pay_types\":[],\"scope_departments\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Finance & Accounting\"}],\"disbursement_status\":\"pending\",\"disbursed_at\":null,\"is_auto_created\":false,\"auto_created_at\":null,\"employee_count\":0,\"bank_file_status\":\"not_started\",\"bank_file_status_label\":\"Not started\",\"bank_file_note\":null,\"bank_file_at\":null,\"processing_started_at\":\"2026-09-14T12:26:01+08:00\",\"is_compute_stale\":false,\"compute_progress\":null,\"voided_at\":null,\"void_reason\":null,\"approved_at\":null,\"finalized_at\":null,\"correction_requested_at\":null,\"correction_reason\":null,\"summary\":null,\"gl_entry_number\":null,\"gl_handoff_status\":\"not_started\",\"gl_handoff_status_label\":\"Not attempted\",\"gl_handoff_not"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 compute completion",
+      "detail": "status=processing; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"period_start\":\"2026-10-01\",\"period_end\":\"2026-10-15\",\"payroll_date\":\"2026-10-15\",\"is_first_half\":true,\"is_thirteenth_month\":false,\"status\":\"processing\",\"status_label\":\"Processing\",\"lifecycle_steps\":[{\"key\":\"draft\",\"label\":\"Draft\",\"state\":\"done\"},{\"key\":\"processing\",\"label\":\"Computed\",\"state\":\"active\"},{\"key\":\"approved\",\"label\":\"Approved\",\"state\":\"pending\"},{\"key\":\"finalized\",\"label\":\"Finalized\",\"state\":\"pending\"},{\"key\":\"disbursed\",\"label\":\"Disbursed\",\"state\":\"pending\"}],\"is_locked\":false,\"label\":\"Oct 1–Oct 15, 2026 · 1st half · LIVE-B9 disposable payroll 1789359961276\",\"is_company_wide\":false,\"scope_label\":\"LIVE-B9 disposable payroll 1789359961276\",\"scope_employment_types\":[],\"scope_pay_types\":[],\"scope_departments\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Finance & Accounting\"}],\"disbursement_status\":\"pending\",\"disbursed_at\":null,\"disburser\":null,\"is_auto_created\":false,\"auto_created_at\":null,\"employee_count\":0,\"bank_file_status\":\"not_started\",\"bank_file_status_label\":\"Not started\",\"bank_file_note\":null,\"bank_file_at\":null,\"processing_started_at\":\"2026-09-14T12:26:01+08:00\",\"is_compute_stale\":false,\"compute_progress\":null,\"voided_at\":null,\"void_reason\":null,\"voider\":null,\"creator\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Santos\"},\"approved_at\":null,\"finalized_at\":null,\"correction_requested_at\":null,\"correction_reason\":null,\"computer\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Sa"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 anomaly review",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[],\"links\":{\"first\":\"http://localhost/api/v1/payroll-periods/0ldwDmpVa9/anomalies?page=1\",\"last\":\"http://localhost/api/v1/payroll-periods/0ldwDmpVa9/anomalies?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":null,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/payroll-periods/0ldwDmpVa9/anomalies?page=1\",\"label\":\"1\",\"page\":1,\"active\":true},{\"url\":null,\"label\":\"Next &raquo;\",\"page\":null,\"active\":false}],\"path\":\"http://localhost/api/v1/payroll-periods/0ldwDmpVa9/anomalies\",\"per_page\":50,\"to\":null,\"total\":0}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 HR cannot approve payroll checker action",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "hr",
+      "name": "A10 correction request or anomaly gate",
+      "detail": "HTTP 403; expected 200/422 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "finance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\",\"email\":\"finance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"GqkbAVwxd1\",\"employee_no\":\"DEMO-0002\",\"full_name\":\"Ana Reyes\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\",\"ac"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A10 payroll approval board",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"my_action\":[],\"awaiting_others\":[],\"approved\":[],\"rejected\":[],\"summary\":{\"my_action\":0,\"awaiting_others\":0,\"approved\":0,\"rejected\":0},\"meta\":{\"pending_limit\":100,\"history_limit\":100,\"pending_truncated\":false,\"history_truncated\":false}}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "finance",
+      "name": "A10 approval board payroll link",
+      "detail": "target=0ldwDmpVa9; rows=0"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A10 Finance approve payroll",
+      "detail": "HTTP 422; expected 200/422 ; body={\"message\":\"Only computed periods can be approved.\"}"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "finance",
+      "name": "A10 Finance checker/finalizer",
+      "detail": "Approval did not reach Finance lifecycle: {\"message\":\"Only computed periods can be approved.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A10 Finance notifications",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"207be2d2-131d-4cc0-8f0c-775c7ee1bc02\",\"type\":\"leave.submitted\",\"data\":{\"message\":\"Leave request LR-202604-0010 awaiting your approval.\"},\"read_at\":null,\"created_at\":\"2026-09-14 06:37:00\"},{\"id\":\"04615809-2ad9-4de3-97a9-b636bd0a84a1\",\"type\":\"pr.urgent\",\"data\":{\"message\":\"Urgent PR PR-202604-0008 due to low spare-part stock.\"},\"read_at\":\"2026-09-14 05:37:00\",\"created_at\":\"2026-09-14 05:37:00\"},{\"id\":\"e92d1b09-3b4e-4acb-86bb-539b4b5674a3\",\"type\":\"wo.completed\",\"data\":{\"message\":\"Work order WO-202604-0006 completed (10,000 good / 45 reject).\"},\"read_at\":\"2026-09-14 04:37:00\",\"created_at\":\"2026-09-14 04:37:00\"},{\"id\":\"2fcab2e0-a8c8-4099-9bb0-2e5139d49383\",\"type\":\"machine.breakdown\",\"data\":{\"message\":\"IMM-04 entered breakdown. WO paused.\"},\"read_at\":null,\"created_at\":\"2026-09-14 03:37:00\"},{\"id\":\"25ba8cf4-39e7-4e96-a125-a9d9b980449a\",\"type\":\"maintenance.assigned\",\"data\":{\"message\":\"You were assigned MWO-202604-0001.\"},\"read_at\":\"2026-09-14 02:37:00\",\"created_at\":\"2026-09-14 02:37:00\"},{\"id\":\"c47e06aa-768b-4851-b9b4-2efb9aa3db5b\",\"type\":\"ncr.opened\",\"data\":{\"message\":\"NCR-202604-0003 opened from outgoing inspection failure.\"},\"read_at\":\"2026-09-14 01:37:00\",\"created_at\":\"2026-09-14 01:37:00\"},{\"id\":\"3b643b25-339e-407f-9e00-0c249ecf82f0\",\"type\":\"mold.shot_limit\",\"data\":{\"message\":\"Mold MOLD-08 reached 82% of shot threshold.\"},\"read_at\":null,\"created_at\":\"2026-09-14 00:3"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "finance",
+      "name": "A10 notification recipient evidence",
+      "detail": "rows=8; target=0ldwDmpVa9; body={\"data\":[{\"id\":\"207be2d2-131d-4cc0-8f0c-775c7ee1bc02\",\"type\":\"leave.submitted\",\"data\":{\"message\":\"Leave request LR-202604-0010 awaiting your approval.\"},\"read_at\":null,\"created_at\":\"2026-09-14 06:37:00\"},{\"id\":\"04615809-2ad9-4de3-97a9-b636bd0a84a1\",\"type\":\"pr.urgent\",\"data\":{\"message\":\"Urgent PR PR-202604-0008 due to low spare-part stock.\"},\"read_at\":\"2026-09-14 05:37:00\",\"created_at\":\"2026-09-14 05:37:00\"},{\"id\":\"e92d1b09-3b4e-4acb-86bb-539b4b5674a3\",\"type\":\"wo.completed\",\"data\":{\"message\":\"Work order WO-202604-0006 completed (10,000 good / 45 reject).\"},\"read_at\":\"2026-09-14 04:37:00\",\"created_at\":\"2026-09-14 04:37:00\"},{\"id\":\"2fcab2e0-a8c8-4099-9bb0-2e5139d49383\",\"type\":\"machine.breakdown\",\"data\":{\"message\":\"IMM-04 entered breakdown. WO paused.\"},\"read_at\":null,\"created_at\":\"2026-09-14 03:37:00\"},{\"id\":\"25ba8cf4-39e7-4e96-a125-a9d9b980449a\",\"type\":\"maintenance.assigned\",\"data\":{\"message\":\"You were assigned MWO-202604-0001.\"},\"read_at\":\"2026-09-14 02:37:00\",\"created_at\":\"2026-09-14 02:37:00\"},{\"id\":\"c47e06aa-768b-4851-b9b4-2efb9aa3db5b\",\"type\":\"ncr.opened\",\"data\":{\"message\":\"NCR-202604-0003 opened from outgoing inspection failure.\"},\"read_at\":\"2026-09-14 01:37:00\",\"created_at\":\"2026-09-14 01:37:00\"},{\"id\":\"3b643b25-339e-407f-9e00-0c249ecf82f0\",\"type\":\"mold.shot_limit\",\"data\":{\"message\":\"Mold MOLD-08 reached 82% of shot threshold.\"},\"read_at\":null,\"created_at\":\"2026-09-14 00:3"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "finance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\",\"email\":\"finance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"GqkbAVwxd1\",\"employee_no\":\"DEMO-0002\",\"full_name\":\"Ana Reyes\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\",\"ac"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "a11-finance-budgeting UI",
+      "detail": "document=200 uiUrl=http://localhost/budgeting"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 budget options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"budget_types\":[{\"value\":\"operating\",\"label\":\"Operating\"},{\"value\":\"capital\",\"label\":\"Capital\"},{\"value\":\"project\",\"label\":\"Project\"},{\"value\":\"department\",\"label\":\"Department\"}],\"statuses\":[{\"value\":\"draft\",\"label\":\"Draft\"},{\"value\":\"submitted\",\"label\":\"Submitted\"},{\"value\":\"approved\",\"label\":\"Approved\"},{\"value\":\"active\",\"label\":\"Active\"},{\"value\":\"closed\",\"label\":\"Closed\"}],\"warning_ratio_pct\":80,\"critical_ratio_pct\":95,\"exhausted_ratio_pct\":100}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 fiscal years",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":[{\"id\":\"dGypLxpvAg\",\"year\":2026,\"start_date\":\"2026-01-01\",\"end_date\":\"2026-12-31\",\"status\":\"active\",\"status_label\":\"Active\",\"created_at\":\"2026-09-13T23:37:48.000000Z\",\"updated_at\":\"2026-09-13T23:37:48.000000Z\"}],\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 budget account options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"code\":\"1000\",\"name\":\"Assets\",\"type\":\"asset\",\"type_label\":\"Asset\",\"normal_balance\":\"debit\",\"normal_balance_label\":\"Debit\",\"parent_id\":null,\"parent_code\":null,\"is_active\":true,\"is_leaf\":null,\"description\":null,\"current_balance\":null,\"total_debit\":null,\"total_credit\":null,\"created_at\":\"2026-09-14T07:36:50+08:00\",\"updated_at\":\"2026-09-14T07:36:50+08:00\"},{\"id\":\"WDQwPGbYPx\",\"code\":\"1010\",\"name\":\"Cash in Bank\",\"type\":\"asset\",\"type_label\":\"Asset\",\"normal_balance\":\"debit\",\"normal_balance_label\":\"Debit\",\"parent_id\":\"dGypLxpvAg\",\"parent_code\":\"1000\",\"is_active\":true,\"is_leaf\":null,\"description\":null,\"current_balance\":null,\"total_debit\":null,\"total_credit\":null,\"created_at\":\"2026-09-14T07:36:50+08:00\",\"updated_at\":\"2026-09-14T07:36:50+08:00\"},{\"id\":\"zW1p05N0BA\",\"code\":\"1020\",\"name\":\"Cash in Bank\",\"type\":\"asset\",\"type_label\":\"Asset\",\"normal_balance\":\"debit\",\"normal_balance_label\":\"Debit\",\"parent_id\":\"dGypLxpvAg\",\"parent_code\":\"1000\",\"is_active\":true,\"is_leaf\":null,\"description\":null,\"current_balance\":null,\"total_debit\":null,\"total_credit\":null,\"created_at\":\"2026-09-14T07:36:50+08:00\",\"updated_at\":\"2026-09-14T07:36:50+08:00\"},{\"id\":\"E1mbe9bGrz\",\"code\":\"1030\",\"name\":\"Petty Cash\",\"type\":\"asset\",\"type_label\":\"Asset\",\"normal_balance\":\"debit\",\"normal_balance_label\":\"Debit\",\"parent_id\":\"dGypLxpvAg\",\"parent_code\":\"1000\",\"is_active\":true,\"is_leaf\":null,\"description\":nul"
+    },
+    {
+      "status": "FAIL",
+      "actor": "finance",
+      "name": "A11 disposable budget create",
+      "detail": "HTTP 422; expected 201 ; body={\"message\":\"Account 5000 is a parent account; choose a leaf account.\",\"errors\":{\"error\":[\"Account 5000 is a parent account; choose a leaf account.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 budget availability route validation",
+      "detail": "HTTP 422; expected 200/422 ; body={\"message\":\"The department id field is required. (and 1 more error)\",\"errors\":{\"department_id\":[\"The department id field is required.\"],\"amount\":[\"The amount field is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 budget actuals sync",
+      "detail": "HTTP 202; expected 202/422 ; body={\"success\":true,\"data\":{\"dispatched\":true,\"outbox_id\":\"0862b318-6949-4424-9735-0abc0f614283\",\"status\":\"pending\",\"run_id\":\"fc2bb943-6e28-4fee-94fd-1d7c741e25b0\",\"fiscal_year_id\":\"dGypLxpvAg\",\"run_status\":\"queued\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 budget versus actual",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":{\"rows\":[{\"budget_id\":\"dGypLxpvAg\",\"account_code\":\"5000\",\"account_name\":\"Cost of Goods Sold\",\"budget_type\":\"department\",\"department\":\"Production\",\"budgeted\":\"6166666.68\",\"actual\":\"-14.94\",\"variance\":\"6166681.62\",\"variance_pct\":100},{\"budget_id\":\"dGypLxpvAg\",\"account_code\":\"6000\",\"account_name\":\"Operating Expenses\",\"budget_type\":\"department\",\"department\":\"Production\",\"budgeted\":\"6166666.68\",\"actual\":\"0.00\",\"variance\":\"6166666.68\",\"variance_pct\":100},{\"budget_id\":\"dGypLxpvAg\",\"account_code\":\"5010\",\"account_name\":\"Direct Materials\",\"budget_type\":\"department\",\"department\":\"Production\",\"budgeted\":\"6166666.68\",\"actual\":\"6.15\",\"variance\":\"6166660.53\",\"variance_pct\":100},{\"budget_id\":\"GqkbAVwxd1\",\"account_code\":\"5000\",\"account_name\":\"Cost of Goods Sold\",\"budget_type\":\"department\",\"department\":\"Finance & Accounting\",\"budgeted\":\"1733333.28\",\"actual\":\"-4.20\",\"variance\":\"1733337.48\",\"variance_pct\":100},{\"budget_id\":\"GqkbAVwxd1\",\"account_code\":\"6000\",\"account_name\":\"Operating Expenses\",\"budget_type\":\"department\",\"department\":\"Finance & Accounting\",\"budgeted\":\"1733333.28\",\"actual\":\"0.00\",\"variance\":\"1733333.28\",\"variance_pct\":100},{\"budget_id\":\"GqkbAVwxd1\",\"account_code\":\"5010\",\"account_name\":\"Direct Materials\",\"budget_type\":\"department\",\"department\":\"Finance & Accounting\",\"budgeted\":\"1733333.28\",\"actual\":\"1.73\",\"variance\":\"1733331.55\",\"variance_pct\":100},{\"budget_id\":"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"must_change_password\":false}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "supplier-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"vendor_name\":\"Megaplast Industries Corp.\",\"must_change_password\":false}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "a12-supplier-listings UI",
+      "detail": "document=200 uiUrl=http://localhost/portal/supplier/item-listings"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "A12 supplier item catalog",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"PCS\"},{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"item_type\":\"packaging\",\"unit_of_measure\":\"pcs\"},{\"id\":\"WDQwPGbYPx\",\"code\":\"PKG-002\",\"name\":\"Shipping Box (50 pcs)\",\"item_type\":\"packaging\",\"unit_of_measure\":\"pcs\"},{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"GqkbAVwxd1\",\"code\":\"RM-002\",\"name\":\"Plastic Resin Type B (PP)\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"R8epjLbOaD\",\"code\":\"RM-003\",\"name\":\"Plastic Resin Type C (PA)\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"DzAwdKb5ld\",\"code\":\"RM-004\",\"name\":\"Plastic Resin Type D (POM)\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"35Mbaeb49K\",\"code\":\"RM-011\",\"name\":\"White Colorant\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"kABpVvpKRW\",\"code\":\"RM-012\",\"name\":\"Gray Colorant\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"kg\"},{\"id\":\"0ldwDmpVa9\",\"code\":\"RM-050\",\"name\":\"Small Metal Insert\",\"item_type\":\"raw_material\",\"unit_of_measure\":\"pcs\"},{\"id\":\"BnoNyGw56v\",\"code\":\"RM-051\",\"name\":\"Large Metal Insert\",\"item_type\":\"raw_material\",\"unit_of_mea"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "A12 supplier listing create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"supplier_item_code\":\"B9-1789360004858-approve\",\"supplier_item_name\":\"LIVE-B9 approve offer\",\"price\":\"12.50\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"pending\",\"rejection_reason\":null,\"submitted_at\":\"2026-09-14T12:26:44+08:00\",\"reviewed_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "A12 second supplier listing create",
+      "detail": "HTTP 201; expected 201/422 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"supplier_item_code\":\"B9-1789360004973-reject\",\"supplier_item_name\":\"LIVE-B9 reject offer\",\"price\":\"13.75\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"pending\",\"rejection_reason\":null,\"submitted_at\":\"2026-09-14T12:26:45+08:00\",\"reviewed_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "purchasing authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"35Mbaeb49K\",\"name\":\"Elena Cruz\",\"email\":\"purchasing@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Purchasing Officer\",\"slug\":\"purchasing_officer\"},\"employee\":{\"id\":\"MYAbJ3wBl7\",\"employee_no\":\"DEMO-0018\",\"full_name\":\"Elena Cruz\",\"department_id\":\"kABpVvpKRW\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.vendors.view\",\"accounting.bills.view\",\"inventory.view\",\"inventory.grn.create\",\"purchasing.view\",\"purchasing.pr.create\",\"purchasing.pr.approve\",\"purchasing.po.create\",\"purchasing.po.approve\",\"purchasing.po.send\",\"purchasing.suppliers.performance.view\",\"purchasing.suppliers.performance.recompute\",\"purchasing.supplier_listings.review\",\"purchasing.pr.manage\",\"purchasing.po.manage\",\"purchasing.suppliers.manage\",\"supply_chain.view\",\"supply_chain.shipments.manage\",\"supply_chain.deliveries.view\",\"dashboard.purchasing.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.manage\",\"return_management.receive\",\"return_management.inspect\",\"return_management.dispose\",\"return_management.complete\"],\"feature"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "a12-purchasing-review UI",
+      "detail": "document=200 uiUrl=http://localhost/purchasing/supplier-listings"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 purchasing listing review queue",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"supplier_item_code\":\"B9-1789360004973-reject\",\"supplier_item_name\":\"LIVE-B9 reject offer\",\"price\":\"13.75\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"pending\",\"rejection_reason\":null,\"submitted_at\":\"2026-09-14T12:26:45+08:00\",\"reviewed_at\":null,\"reviewer\":null},{\"id\":\"dGypLxpvAg\",\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"supplier_item_code\":\"B9-1789360004858-approve\",\"supplier_item_name\":\"LIVE-B9 approve offer\",\"price\":\"12.50\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"pending\",\"rejection_reason\":null,\"submitted_at\":\"2026-09-14T12:26:44+08:00\",\"reviewed_at\":null,\"reviewer\":null}],\"links\":{\"first\":\"http://localhost/api/v1/purchasing/supplier-listings?page=1\",\"last\":\"http://localhost/api/v1/purchasing/supplier-listings?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":1,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/purchasing/supplier-listings?"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 internal listing approve",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"supplier_item_code\":\"B9-1789360004858-approve\",\"supplier_item_name\":\"LIVE-B9 approve offer\",\"price\":\"12.50\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"approved\",\"rejection_reason\":null,\"submitted_at\":\"2026-09-14T12:26:44+08:00\",\"reviewed_at\":\"2026-09-14T12:27:00+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 approved listing replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only pending listings can be approved.\",\"errors\":{\"error\":[\"Only pending listings can be approved.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 listing bulk replay outcome",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"status\":\"skipped\",\"message\":\"Only pending listings can be approved.\"}]}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 approved supplier sourcing effect",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"is_preferred\":true,\"qualification_status\":\"approved\",\"is_provisional\":false,\"lead_time_days\":20,\"last_price\":\"5.00\",\"last_price_at\":\"2026-09-14T12:01:52+08:00\",\"supplier_item_code\":null,\"supplier_item_name\":null,\"order_uom\":null,\"base_qty_per_order_unit\":null,\"price_valid_until\":null,\"supplier_managed\":false,\"deleted_at\":null},{\"id\":\"GqkbAVwxd1\",\"item\":{\"id\":\"GqkbAVwxd1\",\"code\":\"RM-002\",\"name\":\"Plastic Resin Type B (PP)\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"is_preferred\":true,\"qualification_status\":\"approved\",\"is_provisional\":false,\"lead_time_days\":7,\"last_price\":null,\"last_price_at\":null,\"supplier_item_code\":null,\"supplier_item_name\":null,\"order_uom\":null,\"base_qty_per_order_unit\":null,\"price_valid_until\":null,\"supplier_managed\":false,\"deleted_at\":null},{\"id\":\"R8epjLbOaD\",\"item\":{\"id\":\"R8epjLbOaD\",\"code\":\"RM-003\",\"name\":\"Plastic Resin Type C (PA)\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"is_preferred\":true,\"qualification_status\":\"approved\",\"is_provisional\":false,\"lead_time_days\":16,\"last_price\":null,\"last_price_at\":null,\"supplier_item_code\":null,\"supplier_item_name\":null,\"order_uom\":null,\"base_qty_per_order_unit\":null,\"price_valid_until\":null,\"supplier"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "purchasing",
+      "name": "A12 approved listing sourcing evidence",
+      "detail": "listing=dGypLxpvAg; approved_matches=0"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 internal listing reject",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"supplier_item_code\":\"B9-1789360004973-reject\",\"supplier_item_name\":\"LIVE-B9 reject offer\",\"price\":\"13.75\",\"order_uom\":\"kg\",\"base_qty_per_order_unit\":\"1.0000\",\"lead_time_days\":14,\"valid_until\":\"2027-12-31\",\"status\":\"rejected\",\"rejection_reason\":\"LIVE-B9 disposable supplier review rejection\",\"submitted_at\":\"2026-09-14T12:26:45+08:00\",\"reviewed_at\":\"2026-09-14T12:27:01+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A12 rejected listing replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only pending listings can be rejected.\",\"errors\":{\"error\":[\"Only pending listings can be rejected.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "finance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\",\"email\":\"finance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"GqkbAVwxd1\",\"employee_no\":\"DEMO-0002\",\"full_name\":\"Ana Reyes\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\",\"ac"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A12 Finance cannot review supplier listing",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"must_change_password\":false}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "supplier-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"vendor_name\":\"Megaplast Industries Corp.\",\"must_change_password\":false}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "a13-supplier-po UI",
+      "detail": "document=200 uiUrl=http://localhost/portal/supplier/purchase-orders"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "A13 supplier-owned PO list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[],\"links\":{\"first\":\"http://localhost/api/v1/b2b/supplier/purchase-orders?page=1\",\"last\":\"http://localhost/api/v1/b2b/supplier/purchase-orders?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":null,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/b2b/supplier/purchase-orders?page=1\",\"label\":\"1\",\"page\":1,\"active\":true},{\"url\":null,\"label\":\"Next &raquo;\",\"page\":null,\"active\":false}],\"path\":\"http://localhost/api/v1/b2b/supplier/purchase-orders\",\"per_page\":100,\"to\":null,\"total\":0}}"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "supplier-portal",
+      "name": "A13 supplier PO response lifecycle",
+      "detail": "No explicitly disposable sent/approved PO was present; supplier rows=0. Seeded POs were not mutated."
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:27:42+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "customer-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:27:42+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "a14-customer-orders UI",
+      "detail": "document=200 uiUrl=http://localhost/portal/customer/orders"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A14 customer catalog",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"unit_of_measure\":\"pcs\",\"unit_price\":\"30.00\",\"pricing_method\":\"flat\"},{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\",\"unit_of_measure\":\"pcs\",\"unit_price\":\"35.00\",\"pricing_method\":\"flat\"},{\"id\":\"kABpVvpKRW\",\"part_number\":\"BU-001\",\"name\":\"Windshield Wiper Bushing\",\"unit_of_measure\":\"pcs\",\"unit_price\":\"26.00\",\"pricing_method\":\"flat\"},{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\",\"unit_price\":\"22.50\",\"pricing_method\":\"flat\"}]}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A14 disposable customer SO create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"40awq4bKG2\",\"so_number\":\"SO-202609-0015\",\"date\":\"2026-09-14\",\"subtotal\":\"30.00\",\"vat_amount\":\"3.60\",\"total_amount\":\"33.60\",\"status\":\"draft\",\"status_label\":\"Draft\",\"next_statuses\":[],\"payment_terms_days\":30,\"delivery_terms\":null,\"incoterm\":null,\"notes\":\"LIVE-B9 disposable customer response order\",\"submission_source\":\"customer_portal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":true,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"items\":[{\"id\":\"XKEbGkbgWk\",\"product\":{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"30.00\",\"total\":\"30.00\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-11-15\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T12:27:44+08:00\",\"updated_at\":\"2026-09-14T12:27:44+08:00\",\"deleted_at\":null},\"message\":\"Order submitted. It will be confirmed by our sales team.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "a14-crm-so UI",
+      "detail": "document=200 uiUrl=http://localhost/crm/sales-orders/40awq4bKG2"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A14 CRM SO confirm for customer response",
+      "detail": "HTTP 200; expected 200/422 ; body={\"data\":{\"id\":\"40awq4bKG2\",\"so_number\":\"SO-202609-0015\",\"date\":\"2026-09-14\",\"subtotal\":\"30.00\",\"vat_amount\":\"3.60\",\"total_amount\":\"33.60\",\"status\":\"confirmed\",\"status_label\":\"Confirmed\",\"next_statuses\":[{\"value\":\"in_production\",\"label\":\"In Production\"},{\"value\":\"partially_delivered\",\"label\":\"Partially Delivered\"},{\"value\":\"delivered\",\"label\":\"Delivered\"},{\"value\":\"invoiced\",\"label\":\"Invoiced\"}],\"payment_terms_days\":30,\"delivery_terms\":null,\"incoterm\":null,\"notes\":\"LIVE-B9 disposable customer response order\",\"submission_source\":\"customer_portal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":false,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"items\":[{\"id\":\"XKEbGkbgWk\",\"product\":{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"30.00\",\"total\":\"30.00\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-11-15\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T12:27:44+08:00\",\"updated_at\":\"2026-09-14T12:27:59+08:00\",\"deleted_at\":null},\"chain_result\":{\"so_number\":\"SO-202609-0015\",\"work_orders_created\":0,\"auto_scheduled"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A14 CRM request customer confirmation",
+      "detail": "HTTP 422; expected 200/422 ; body={\"message\":\"Only draft sales orders can be sent to the customer for confirmation.\",\"errors\":{\"error\":[\"Only draft sales orders can be sent to the customer for confirmation.\"]}}"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "crm",
+      "name": "A14 customer response negotiation",
+      "detail": "The disposable SO was not released by current CRM lifecycle: {\"message\":\"Only draft sales orders can be sent to the customer for confirmation.\",\"errors\":{\"error\":[\"Only draft sales orders can be sent to the customer for confirmation.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "purchasing authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"35Mbaeb49K\",\"name\":\"Elena Cruz\",\"email\":\"purchasing@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Purchasing Officer\",\"slug\":\"purchasing_officer\"},\"employee\":{\"id\":\"MYAbJ3wBl7\",\"employee_no\":\"DEMO-0018\",\"full_name\":\"Elena Cruz\",\"department_id\":\"kABpVvpKRW\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.vendors.view\",\"accounting.bills.view\",\"inventory.view\",\"inventory.grn.create\",\"purchasing.view\",\"purchasing.pr.create\",\"purchasing.pr.approve\",\"purchasing.po.create\",\"purchasing.po.approve\",\"purchasing.po.send\",\"purchasing.suppliers.performance.view\",\"purchasing.suppliers.performance.recompute\",\"purchasing.supplier_listings.review\",\"purchasing.pr.manage\",\"purchasing.po.manage\",\"purchasing.suppliers.manage\",\"supply_chain.view\",\"supply_chain.shipments.manage\",\"supply_chain.deliveries.view\",\"dashboard.purchasing.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.manage\",\"return_management.receive\",\"return_management.inspect\",\"return_management.dispose\",\"return_management.complete\"],\"feature"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:28:27+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "customer-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:28:27+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "a15-customer-schedules UI",
+      "detail": "document=200 uiUrl=http://localhost/portal/customer/delivery-schedules"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A15 customer schedule create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"month\":\"2026-11\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 schedule 1789360108767\",\"quantity\":\"2.000\",\"notes\":\"acknowledge fixture\"}],\"reject_reason\":null,\"reviewed_at\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"},\"message\":\"Delivery schedule submitted successfully.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A15 second customer schedule create",
+      "detail": "HTTP 201; expected 201/422 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"month\":\"2026-12\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 reject schedule 1789360108868\",\"quantity\":\"3.000\",\"notes\":\"reject fixture\"}],\"reject_reason\":null,\"reviewed_at\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"},\"message\":\"Delivery schedule submitted successfully.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "admin authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"email\":\"admin@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"slug\":\"system_admin\"},\"employee\":null,\"permissions\":[\"admin.roles.manage\",\"admin.settings.manage\",\"admin.audit_logs.view\",\"admin.backups.view\",\"admin.backups.manage\",\"admin.sod.view\",\"admin.users.manage\",\"admin.gov_tables.manage\",\"admin.scheduled_exports.view\",\"admin.activity.view\",\"admin.import.manage\",\"admin.print.bulk\",\"admin.users.manage_permissions\",\"admin.delegations.manage_any\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.salary_adjustments.act\",\"hr.profile_updates.self_review_override\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\""
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "a15-internal-schedule-review UI",
+      "detail": "document=200 uiUrl=http://localhost/accounting/portal-access"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 internal schedule queue",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"month\":\"2026-12\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 reject schedule 1789360108868\",\"quantity\":\"3.000\",\"notes\":\"reject fixture\"}],\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"vendor\":null,\"purchase_order\":null,\"reject_reason\":null,\"reviewed_at\":null,\"reviewed_by\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"},{\"id\":\"dGypLxpvAg\",\"month\":\"2026-11\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 schedule 1789360108767\",\"quantity\":\"2.000\",\"notes\":\"acknowledge fixture\"}],\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"vendor\":null,\"purchase_order\":null,\"reject_reason\":null,\"reviewed_at\":null,\"reviewed_by\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"}],\"links\":{\"first\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"last\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":1,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"label\":\"1\","
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "admin",
+      "name": "A15 internal schedule acknowledge",
+      "detail": "No pending disposable schedule was visible to the portal-access manager."
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "admin authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"email\":\"admin@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"slug\":\"system_admin\"},\"employee\":null,\"permissions\":[\"admin.roles.manage\",\"admin.settings.manage\",\"admin.audit_logs.view\",\"admin.backups.view\",\"admin.backups.manage\",\"admin.sod.view\",\"admin.users.manage\",\"admin.gov_tables.manage\",\"admin.scheduled_exports.view\",\"admin.activity.view\",\"admin.import.manage\",\"admin.print.bulk\",\"admin.users.manage_permissions\",\"admin.delegations.manage_any\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.salary_adjustments.act\",\"hr.profile_updates.self_review_override\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\""
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 schedule rejection queue",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"month\":\"2026-12\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 reject schedule 1789360108868\",\"quantity\":\"3.000\",\"notes\":\"reject fixture\"}],\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"vendor\":null,\"purchase_order\":null,\"reject_reason\":null,\"reviewed_at\":null,\"reviewed_by\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"},{\"id\":\"dGypLxpvAg\",\"month\":\"2026-11\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 schedule 1789360108767\",\"quantity\":\"2.000\",\"notes\":\"acknowledge fixture\"}],\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"vendor\":null,\"purchase_order\":null,\"reject_reason\":null,\"reviewed_at\":null,\"reviewed_by\":null,\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:28:28+08:00\"}],\"links\":{\"first\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"last\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":1,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/b2b/portal-access/delivery-schedules?page=1\",\"label\":\"1\","
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "admin",
+      "name": "A15 internal schedule reject",
+      "detail": "No independent pending disposable schedule was visible after acknowledgement."
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 internal notifications",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"42bc7ceb-031a-4140-93ca-5b50482c7933\",\"type\":\"portal.order_awaiting_review\",\"data\":{\"title\":\"Portal order SO-202609-0015 awaits review\",\"message\":\"Toyota Motor Philippines, Inc. Portal placed a sales order for Toyota Motor Philippines, Inc. via the customer portal. Review and confirm it to start MRP planning.\",\"link_to\":\"/crm/sales-orders/40awq4bKG2\",\"entity_type\":\"sales_order\",\"entity_id\":\"40awq4bKG2\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:27:44\"},{\"id\":\"05116167-223e-4aa4-87c1-65e9e09ad7ff\",\"type\":\"supplier_listing_submitted\",\"data\":{\"title\":\"Supplier listing awaiting review\",\"message\":\"Megaplast Industries Corp. submitted an item listing for PKG-001.\",\"link_to\":\"/purchasing/supplier-listings\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:26:45\"},{\"id\":\"e4f14e42-1bec-4ad4-858c-1ed212f37fc6\",\"type\":\"supplier_listing_submitted\",\"data\":{\"title\":\"Supplier listing awaiting review\",\"message\":\"Megaplast Industries Corp. submitted an item listing for B4-51545426.\",\"link_to\":\"/purchasing/supplier-listings\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:26:44\"},{\"id\":\"559d7291-42d5-4cf1-92b8-6ce7bc3c866c\",\"type\":\"portal.order_awaiting_review\",\"data\":{\"title\":\"Portal order SO-202609-0014 awaits review\",\"message\":\"Toyota Motor Philippines, Inc. Portal placed a sales order for Toyota Motor Philippines, Inc. via the customer portal. Review and confirm it to start MRP planni"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "admin",
+      "name": "A15 schedule notification evidence",
+      "detail": "rows=17; schedule=dGypLxpvAg; rejected=GqkbAVwxd1"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "warehouse authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.receive\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "a16-stock-adjustments UI",
+      "detail": "document=200 uiUrl=http://localhost/inventory/stock-adjustments"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "a16-stock-counts UI",
+      "detail": "document=200 uiUrl=http://localhost/inventory/stock-counts"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 adjustment options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"statuses\":[{\"value\":\"pending\",\"label\":\"Pending\"},{\"value\":\"approved\",\"label\":\"Approved\"}],\"directions\":[{\"value\":\"in\",\"label\":\"In\"},{\"value\":\"out\",\"label\":\"Out\"}],\"reasons\":[{\"value\":\"cycle_count_variance\",\"label\":\"Cycle Count Variance\"},{\"value\":\"damage\",\"label\":\"Damage\"},{\"value\":\"expiry\",\"label\":\"Expiry\"},{\"value\":\"theft\",\"label\":\"Theft\"},{\"value\":\"found_stock\",\"label\":\"Found Stock\"},{\"value\":\"system_correction\",\"label\":\"System Correction\"}]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 movement options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"movement_types\":[{\"value\":\"grn_receipt\",\"label\":\"Grn receipt\"},{\"value\":\"material_issue\",\"label\":\"Material issue\"},{\"value\":\"production_receipt\",\"label\":\"Production receipt\"},{\"value\":\"delivery\",\"label\":\"Delivery\"},{\"value\":\"transfer\",\"label\":\"Transfer\"},{\"value\":\"adjustment_in\",\"label\":\"Adjustment in\"},{\"value\":\"adjustment_out\",\"label\":\"Adjustment out\"},{\"value\":\"scrap\",\"label\":\"Scrap\"},{\"value\":\"return_to_vendor\",\"label\":\"Return to vendor\"},{\"value\":\"cycle_count\",\"label\":\"Cycle count\"},{\"value\":\"opening\",\"label\":\"Opening\"}]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 stock levels before adjustment",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"item\":{\"id\":\"WDQwPGbYPx\",\"code\":\"PKG-002\",\"name\":\"Shipping Box (50 pcs)\",\"unit_of_measure\":\"pcs\"},\"location\":{\"id\":\"WDQwPGbYPx\",\"code\":\"A-12\",\"full_code\":\"MW-A-A-12\"},\"quantity\":\"1744.000\",\"reserved_quantity\":\"0.000\",\"available\":\"1744.000\",\"weighted_avg_cost\":\"15.0000\",\"total_value\":\"26160.00\",\"lock_version\":0,\"last_counted_at\":null},{\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"location\":{\"id\":\"ajzw1lb3eW\",\"code\":\"A-11\",\"full_code\":\"MW-A-A-11\"},\"quantity\":\"1605.000\",\"reserved_quantity\":\"0.000\",\"available\":\"1605.000\",\"weighted_avg_cost\":\"0.5000\",\"total_value\":\"802.50\",\"lock_version\":3,\"last_counted_at\":null},{\"item\":{\"id\":\"6r9wnvwOBW\",\"code\":\"RM-052\",\"name\":\"Metal Core (Bobbin)\",\"unit_of_measure\":\"pcs\"},\"location\":{\"id\":\"6r9wnvwOBW\",\"code\":\"A-10\",\"full_code\":\"MW-A-A-10\"},\"quantity\":\"1470.000\",\"reserved_quantity\":\"0.000\",\"available\":\"1470.000\",\"weighted_avg_cost\":\"12.0000\",\"total_value\":\"17640.00\",\"lock_version\":0,\"last_counted_at\":null},{\"item\":{\"id\":\"BnoNyGw56v\",\"code\":\"RM-051\",\"name\":\"Large Metal Insert\",\"unit_of_measure\":\"pcs\"},\"location\":{\"id\":\"BnoNyGw56v\",\"code\":\"A-09\",\"full_code\":\"MW-A-A-09\"},\"quantity\":\"1333.000\",\"reserved_quantity\":\"0.000\",\"available\":\"1333.000\",\"weighted_avg_cost\":\"8.0000\",\"total_value\":\"10664.00\",\"lock_version\":0,\"last_counted_at\":null},{\"item\":{\"id\":\"0ldwDmpVa9\",\"code\":\"RM-050\",\"name\":\"Sma"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 warehouse high-value adjustment create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"direction\":\"in\",\"quantity\":\"100.000\",\"unit_cost\":\"1000.0000\",\"value\":\"100000.00\",\"reason_code\":\"cycle_count_variance\",\"reason_label\":\"Cycle Count Variance\",\"reason\":\"LIVE-B9 disposable high-value checker adjustment\",\"status\":\"approved\",\"status_label\":\"Approved\",\"item\":{\"id\":\"WDQwPGbYPx\",\"code\":\"PKG-002\",\"name\":\"Shipping Box (50 pcs)\"},\"location\":{\"id\":\"WDQwPGbYPx\",\"code\":\"A-12\"},\"stock_movement\":{\"id\":\"DlVpZawqJ8\",\"created_at\":\"2026-09-14T12:29:14+08:00\",\"movement_type\":\"adjustment_in\",\"movement_type_label\":\"Adjustment In\",\"quantity\":\"100.000\",\"unit_cost\":\"1000.0000\",\"total_cost\":\"100000.00\",\"lot_number\":null,\"expiry_date\":null,\"gl_handoff\":{\"status\":\"generated\",\"status_label\":\"Posted to GL\",\"message\":null,\"at\":\"2026-09-14T12:29:14+08:00\"},\"reference_type\":\"stock_adjustment\",\"reference_id\":\"GqkbAVwxd1\",\"remarks\":\"LIVE-B9 disposable high-value checker adjustment\"},\"requested_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\"},\"approved_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\"},\"approved_at\":\"2026-09-14T12:29:14+08:00\",\"created_at\":\"2026-09-14T12:29:14+08:00\"}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "warehouse",
+      "name": "A16 adjustment threshold state",
+      "detail": "id=GqkbAVwxd1; status=approved; value=not-returned"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "warehouse",
+      "name": "A16 high-value checker transition",
+      "detail": "The live threshold did not produce pending status; no Finance approval was claimed. state=approved"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "warehouse authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.receive\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 warehouse options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Live B4 Warehouse edited 51545426\",\"code\":\"B4W51545426\",\"address\":\"Disposable audit location\",\"is_active\":true,\"deleted_at\":null},{\"id\":\"dGypLxpvAg\",\"name\":\"Main Warehouse\",\"code\":\"MW\",\"address\":\"FCIE Special Economic Zone, Dasmariñas, Cavite\",\"is_active\":true,\"deleted_at\":null}]}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 stock count options",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"scopes\":[{\"value\":\"full\",\"label\":\"Full count (all locations)\"},{\"value\":\"warehouse\",\"label\":\"Single warehouse\"},{\"value\":\"zone\",\"label\":\"Single zone\"}],\"variance_tolerance_pct\":2,\"default_scope\":\"full\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 warehouse stock count create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"session_number\":\"SC-202609-0003\",\"title\":\"LIVE-B9 disposable count 1789360167695\",\"scope\":\"warehouse\",\"scope_label\":\"Warehouse\",\"status\":\"draft\",\"status_label\":\"Draft\",\"total_locations\":2,\"counted_locations\":0,\"variance_count\":0,\"variance_value\":\"0.00\",\"frozen_at\":null,\"completed_at\":null,\"notes\":null,\"created_at\":\"2026-09-14T04:29:27.000000Z\",\"updated_at\":\"2026-09-14T04:29:27.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 stock count start/freeze",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"session_number\":\"SC-202609-0003\",\"title\":\"LIVE-B9 disposable count 1789360167695\",\"scope\":\"warehouse\",\"scope_label\":\"Warehouse\",\"warehouse\":{\"id\":\"R8epjLbOaD\",\"name\":\"Live B4 Warehouse edited 51545426\",\"code\":\"B4W51545426\"},\"zone\":null,\"status\":\"in_progress\",\"status_label\":\"In Progress\",\"total_locations\":2,\"counted_locations\":0,\"variance_count\":0,\"variance_value\":\"0.00\",\"frozen_at\":\"2026-09-14T04:29:27.000000Z\",\"completed_at\":null,\"notes\":null,\"items\":[{\"id\":\"GVxwlObaXo\",\"session_id\":\"DzAwdKb5ld\",\"location\":{\"id\":\"9eQbB6qb7G\",\"code\":\"B4L51545426\",\"full_code\":\"B4L51545426\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"system_quantity\":\"2.900\",\"counted_quantity\":null,\"variance\":\"0.000\",\"variance_percent\":\"0.00\",\"lot_number\":null,\"status\":\"pending\",\"status_label\":\"Pending\",\"counted_at\":null,\"notes\":null},{\"id\":\"7K3NM3w6Z0\",\"session_id\":\"DzAwdKb5ld\",\"location\":{\"id\":\"xBywryYbjv\",\"code\":\"B4L251545426\",\"full_code\":\"B4L251545426\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"system_quantity\":\"0.500\",\"counted_quantity\":null,\"variance\":\"0.000\",\"variance_percent\":\"0.00\",\"lot_number\":null,\"status\":\"pending\",\"status_label\":\"Pending\",\"counted_at\":null,\"notes\":null}],\"created_at\":\"2026-09-14T04:29:27.000000Z\",\"updated_at\":\"2026-09-1"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 stock count items",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"session_number\":\"SC-202609-0003\",\"title\":\"LIVE-B9 disposable count 1789360167695\",\"scope\":\"warehouse\",\"scope_label\":\"Warehouse\",\"warehouse\":{\"id\":\"R8epjLbOaD\",\"name\":\"Live B4 Warehouse edited 51545426\",\"code\":\"B4W51545426\"},\"zone\":null,\"status\":\"in_progress\",\"status_label\":\"In Progress\",\"total_locations\":2,\"counted_locations\":0,\"variance_count\":0,\"variance_value\":\"0.00\",\"created_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"ret"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 record count variance",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GVxwlObaXo\",\"session_id\":\"DzAwdKb5ld\",\"location\":{\"id\":\"9eQbB6qb7G\",\"code\":\"B4L51545426\",\"full_code\":\"B4L51545426\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"system_quantity\":\"2.900\",\"counted_quantity\":\"3.900\",\"variance\":\"1.000\",\"variance_percent\":\"34.48\",\"lot_number\":null,\"status\":\"counted\",\"status_label\":\"Counted\",\"counted_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"r"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 approve count variance",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GVxwlObaXo\",\"session_id\":\"DzAwdKb5ld\",\"location\":{\"id\":\"9eQbB6qb7G\",\"code\":\"B4L51545426\",\"full_code\":\"B4L51545426\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\",\"unit_of_measure\":\"PCS\"},\"system_quantity\":\"2.900\",\"counted_quantity\":\"3.900\",\"variance\":\"1.000\",\"variance_percent\":\"34.48\",\"lot_number\":null,\"status\":\"verified\",\"status_label\":\"Verified\",\"counted_at\":\"2026-09-14T04:29:28.000000Z\",\"notes\":\"LIVE-B9 disposable variance\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 count variance replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Item must be counted first.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 complete stock count",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"session_number\":\"SC-202609-0003\",\"title\":\"LIVE-B9 disposable count 1789360167695\",\"scope\":\"warehouse\",\"scope_label\":\"Warehouse\",\"warehouse\":{\"id\":\"R8epjLbOaD\",\"name\":\"Live B4 Warehouse edited 51545426\",\"code\":\"B4W51545426\"},\"zone\":null,\"status\":\"completed\",\"status_label\":\"Completed\",\"total_locations\":2,\"counted_locations\":1,\"variance_count\":1,\"variance_value\":\"1.00\",\"created_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "A16 completed count exact state",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"session_number\":\"SC-202609-0003\",\"title\":\"LIVE-B9 disposable count 1789360167695\",\"scope\":\"warehouse\",\"scope_label\":\"Warehouse\",\"warehouse\":{\"id\":\"R8epjLbOaD\",\"name\":\"Live B4 Warehouse edited 51545426\",\"code\":\"B4W51545426\"},\"zone\":null,\"status\":\"completed\",\"status_label\":\"Completed\",\"total_locations\":2,\"counted_locations\":1,\"variance_count\":1,\"variance_value\":\"1.00\",\"created_by\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "qc authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\",\"email\":\"qc@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"6r9wnvwOBW\",\"name\":\"QC Inspector\",\"slug\":\"qc_inspector\"},\"employee\":{\"id\":\"6r9wnvwOBW\",\"employee_no\":\"DEMO-0023\",\"full_name\":\"Rosa Villareal\",\"department_id\":\"MYAbJ3wBl7\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"quality.view\",\"quality.inspections.create\",\"quality.inspections.edit\",\"quality.inspections.view\",\"quality.inspections.manage\",\"quality.specs.view\",\"quality.specs.manage\",\"quality.ncr.view\",\"quality.ncr.manage\",\"quality.calibration.view\",\"quality.calibration.manage\",\"quality.ppap.view\",\"quality.ppap.manage\",\"dashboard.quality.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.inspect\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "a17-qc-ppap-boundary UI",
+      "detail": "document=200 uiUrl=http://localhost/quality/inspections"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 PPAP list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"ppap_number\":\"PPAP-202609-0002\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":null,\"reviewed_at\":null,\"approved_at\":null,\"expires_at\":null,\"revision\":1,\"notes\":\"S41 exact duplicate probe\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"elements\":[{\"id\":\"GqkbAVwxd1\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"pending\",\"status_label\":\"Pending\",\"document_path\":null,\"notes\":null}],\"created_at\":\"2026-09-14T03:01:08.000000Z\"},{\"id\":\"dGypLxpvAg\",\"ppap_number\":\"PPAP-202609-0001\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"approved\",\"status_label\":\"Approved\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":null,\"reviewed_at\":\"2026-09-14T03:01:08.000000Z\",\"approved_at\":\"2026-09-14T03:01:08.000000Z\",\"expires_at\":\"2029-09-14T03:01:08.000000Z\",\"revision\":1,\"notes\":\"S41 prefilled partial edit\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"elements\":[{\"id\":\"dGypLxpvAg\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Sub"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 QC PPAP create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"ppap_number\":\"PPAP-202609-0003\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"draft\",\"status_label\":\"Draft\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":null,\"reviewed_at\":null,\"approved_at\":null,\"expires_at\":null,\"revision\":0,\"notes\":\"LIVE-B9 PPAP maker checker 1789360183463\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"product\":null,\"purchase_order\":null,\"submitter\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\"},\"approver\":null,\"elements\":[{\"id\":\"R8epjLbOaD\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"pending\",\"status_label\":\"Pending\",\"document_path\":null,\"notes\":null}],\"created_at\":\"2026-09-14T04:29:43.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 PPAP detail",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"ppap_number\":\"PPAP-202609-0003\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"draft\",\"status_label\":\"Draft\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":null,\"reviewed_at\":null,\"approved_at\":null,\"expires_at\":null,\"revision\":1,\"notes\":\"LIVE-B9 PPAP maker checker 1789360183463\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"product\":null,\"purchase_order\":null,\"submitter\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\"},\"approver\":null,\"elements\":[{\"id\":\"R8epjLbOaD\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"pending\",\"status_label\":\"Pending\",\"document_path\":null,\"notes\":null}],\"created_at\":\"2026-09-14T04:29:43.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 PPAP element evidence update",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"accepted\",\"status_label\":\"Accepted\",\"document_path\":null,\"notes\":\"LIVE-B9 evidence\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 PPAP submit",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"ppap_number\":\"PPAP-202609-0003\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"submitted\",\"status_label\":\"Submitted\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":null,\"reviewed_at\":null,\"approved_at\":null,\"expires_at\":null,\"revision\":1,\"notes\":\"LIVE-B9 PPAP maker checker 1789360183463\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"product\":null,\"purchase_order\":null,\"submitter\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\"},\"approver\":null,\"elements\":[{\"id\":\"R8epjLbOaD\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"accepted\",\"status_label\":\"Accepted\",\"document_path\":null,\"notes\":\"LIVE-B9 evidence\"}],\"created_at\":\"2026-09-14T04:29:43.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 QC self-review denied",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You cannot review a PPAP you submitted.\",\"errors\":{\"error\":[\"You cannot review a PPAP you submitted.\"]}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "qc",
+      "name": "A17 distinct QC checker fixture absent",
+      "detail": "Only qc_inspector is seeded with quality.ppap.manage; no QC manager/checker actor was invented. Independent review/approval is BLOCKED by fixture absence."
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 PPAP maker rejection cleanup",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"ppap_number\":\"PPAP-202609-0003\",\"ppap_level\":\"3\",\"ppap_level_label\":\"Level 3 — PSW + full supporting data\",\"status\":\"rejected\",\"status_label\":\"Rejected\",\"submission_date\":\"2026-09-14\",\"rejection_reason\":\"LIVE-B9 rejected disposable PPAP after self-review denial\",\"reviewed_at\":\"2026-09-14T04:29:43.000000Z\",\"approved_at\":null,\"expires_at\":null,\"revision\":1,\"notes\":\"LIVE-B9 PPAP maker checker 1789360183463\",\"vendor\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Asia Pacific Polymers, Inc.\"},\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited 51545426\"},\"product\":null,\"purchase_order\":null,\"submitter\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\"},\"approver\":null,\"elements\":[{\"id\":\"R8epjLbOaD\",\"element_type\":\"part_submission_warrant\",\"element_label\":\"Part Submission Warrant (PSW)\",\"status\":\"accepted\",\"status_label\":\"Accepted\",\"document_path\":null,\"notes\":\"LIVE-B9 evidence\"}],\"created_at\":\"2026-09-14T04:29:43.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A17 terminal PPAP replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only submitted/under-review PPAP submissions can be approved.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "supplier-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"must_change_password\":false}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "supplier-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp. Portal\",\"email\":\"portal@supp.test\",\"vendor_id\":\"dGypLxpvAg\",\"vendor_name\":\"Megaplast Industries Corp.\",\"must_change_password\":false}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "supplier-portal",
+      "name": "A17 supplier PPAP visibility",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[]}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "supplier-portal",
+      "name": "A17 supplier PPAP scoped visibility",
+      "detail": "rows=0; target=R8epjLbOaD"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "admin authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"email\":\"admin@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"slug\":\"system_admin\"},\"employee\":null,\"permissions\":[\"admin.roles.manage\",\"admin.settings.manage\",\"admin.audit_logs.view\",\"admin.backups.view\",\"admin.backups.manage\",\"admin.sod.view\",\"admin.users.manage\",\"admin.gov_tables.manage\",\"admin.scheduled_exports.view\",\"admin.activity.view\",\"admin.import.manage\",\"admin.print.bulk\",\"admin.users.manage_permissions\",\"admin.delegations.manage_any\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.salary_adjustments.act\",\"hr.profile_updates.self_review_override\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\""
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "a18-approval-board UI",
+      "detail": "document=200 uiUrl=http://localhost/approvals"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 approval board registered types",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"my_action\":[],\"awaiting_others\":[{\"id\":\"R8epjLbOaD\",\"type\":\"po\",\"number\":\"PO-202609-0001\",\"link\":\"/purchasing/purchase-orders/R8epjLbOaD\",\"step_order\":1,\"role_slug\":\"finance_officer\",\"since\":\"2026-09-14T10:02:28+08:00\",\"age_hours\":2,\"amount\":\"22.62\",\"summary\":\"Purchase order\",\"requester\":{\"name\":\"Elena Cruz\",\"role\":{\"name\":\"Purchasing Officer\",\"slug\":\"purchasing_officer\"}}},{\"id\":\"MYAbJ3wBl7\",\"type\":\"pr\",\"number\":\"PR-DEMO-BUDGET\",\"link\":\"/purchasing/purchase-requests/MYAbJ3wBl7\",\"step_order\":2,\"role_slug\":\"vice_president\",\"since\":\"2026-09-14T07:37:48+08:00\",\"age_hours\":4,\"amount\":null,\"summary\":\"Purchase request\",\"requester\":null}],\"approved\":[{\"id\":\"7yZw4BNA0o\",\"type\":\"asset_disposal\",\"number\":\"AST-2026-0002\",\"link\":\"/assets/7yZw4BNA0o\",\"action\":\"approved\",\"acted_at\":\"2026-09-14 12:16:28\",\"remarks\":\"VP final disposal approval\",\"amount\":\"600.00\",\"summary\":\"Disposal of LIVE-B8-1789357630425 A09 happy\",\"actor\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Kenji Watanabe\",\"role\":{\"name\":\"Vice President\",\"slug\":\"vice_president\"}}},{\"id\":\"35Mbaeb49K\",\"type\":\"po\",\"number\":\"PO-202609-0004\",\"link\":\"/purchasing/purchase-orders/35Mbaeb49K\",\"action\":\"approved\",\"acted_at\":\"2026-09-14 12:01:52\",\"remarks\":\"LIVE-B8-1789358179875 VP PO threshold approval\",\"amount\":\"56000.00\",\"summary\":\"Purchase order — Megaplast Industries Corp.\",\"actor\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Kenji Watanabe\",\"role\":{\"name\":\"Vice P"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 no reserved approval cards",
+      "detail": "board={\"data\":{\"my_action\":[],\"awaiting_others\":[{\"id\":\"R8epjLbOaD\",\"type\":\"po\",\"number\":\"PO-202609-0001\",\"link\":\"/purchasing/purchase-orders/R8epjLbOaD\",\"step_order\":1,\"role_slug\":\"finance_officer\",\"since\":\"2026-09-14T10:02:28+08:00\",\"age_hours\":2,\"amount\":\"22.62\",\"summary\":\"Purchase order\",\"requester\":{\"name\":\"Elena Cruz\",\"role\":{\"name\":\"Purchasing Officer\",\"slug\":\"purchasing_officer\"}}},{\"id\":\"MYAbJ3wBl7\",\"type\":\"pr\",\"number\":\"PR-DEMO-BUDGET\",\"link\":\"/purchasing/purchase-requests/MYAbJ3wBl7\",\"step_order\":2,\"role_slug\":\"vice_president\",\"since\":\"2026-09-14T07:37:48+08:00\",\"age_hours\":4,\"amount\":null,\"summary\":\"Purchase request\",\"requester\":null}],\"approved\":[{\"id\":\"7yZw4BNA0o\",\"type\":\"asset_disposal\",\"number\":\"AST-2026-0002\",\"link\":\"/assets/7yZw4BNA0o\",\"action\":\"approved\",\"acted_at\":\"2026-09-14 12:16:28\",\"remarks\":\"VP final disposal approval\",\"amount\":\"600.00\",\"summary\":\"Disposal of LIVE-B8-1789357630425 A09 happy\",\"actor\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Kenji Watanabe\",\"role\":{\"name\":\"Vice President\",\"slug\":\"vice_president\"}}},{\"id\":\"35Mbaeb49K\",\"type\":\"po\",\"number\":\"PO-202609-0004\",\"link\":\"/purchasing/purchase-orders/35Mbaeb49K\",\"action\":\"approved\",\"acted_at\":\"2026-09-14 12:01:52\",\"remarks\":\"LIVE-B8-1789358179875 VP PO threshold approval\",\"amount\":\"56000.00\",\"summary\":\"Purchase order — Megaplast Industries Corp.\",\"actor\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Kenji Watanabe\",\"role\":{\"name\":\"Vice P"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type department_transfer rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type separation_clearance rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type maintenance_request rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type 8d_report rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type bill_payment rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type work_order rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A18 reserved board type ncr rejected",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The selected type is invalid.\",\"errors\":{\"type\":[\"The selected type is invalid.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "hr authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Santos\",\"email\":\"hr@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"GqkbAVwxd1\",\"name\":\"HR Officer\",\"slug\":\"hr_officer\"},\"employee\":{\"id\":\"dGypLxpvAg\",\"employee_no\":\"DEMO-0001\",\"full_name\":\"Maria Santos\",\"department_id\":\"GqkbAVwxd1\"},\"permissions\":[\"hr.separation.cancel\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\",\"attendance.import\",\"attendance.edit\",\"attendance.shifts.manage\",\"attendance.holidays.manage\",\"attendance.ot.create\",\"attendance.ot.approve\",\"leave.view\",\"leave.create\",\"leave.approve_dept\",\"leave.approve_hr\",\"leave.types.manage\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.create\",\"payroll.periods.compute\",\"payroll.adjustments.vie"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "a18-clearance-direct UI",
+      "detail": "document=200 uiUrl=http://localhost/hr/clearances"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A18 separation clearance direct list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"clearance_no\":\"CLR-DEMO-001\",\"employee\":{\"id\":\"dGypLxpvAg\",\"employee_no\":\"DEMO-0001\",\"full_name\":\"Maria Santos\",\"department\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Human Resources\",\"code\":\"HR\"},\"position\":{\"id\":\"DzAwdKb5ld\",\"title\":\"HR Manager\"},\"pay_type\":null,\"date_hired\":null},\"separation_date\":\"2026-10-14\",\"separation_reason\":\"resigned\",\"clearance_items\":[{\"department\":\"Human Resources\",\"item_key\":\"company_id_returned\",\"status\":\"pending\",\"signed_by\":null,\"signed_at\":null,\"remarks\":null,\"signed_by_name\":null}],\"cleared_count\":0,\"items_total\":1,\"progress_pct\":0,\"final_pay_computed\":false,\"final_pay_amount\":null,\"final_pay_breakdown\":null,\"journal_entry\":null,\"status\":\"pending\",\"status_label\":\"Pending\",\"finalized_at\":null,\"remarks\":\"Defense demo separation clearance.\",\"created_at\":\"2026-09-13T23:37:49.000000Z\",\"updated_at\":\"2026-09-13T23:37:49.000000Z\"}],\"links\":{\"first\":\"http://localhost/api/v1/hr/clearances?page=1\",\"last\":\"http://localhost/api/v1/hr/clearances?page=1\",\"prev\":null,\"next\":null},\"meta\":{\"current_page\":1,\"from\":1,\"last_page\":1,\"links\":[{\"url\":null,\"label\":\"&laquo; Previous\",\"page\":null,\"active\":false},{\"url\":\"http://localhost/api/v1/hr/clearances?page=1\",\"label\":\"1\",\"page\":1,\"active\":true},{\"url\":null,\"label\":\"Next &raquo;\",\"page\":null,\"active\":false}],\"path\":\"http://localhost/api/v1/hr/clearances\",\"per_page\":100,\"to\":1,\"total\":1}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A18 invalid separation direct action",
+      "detail": "HTTP 404; expected 403/404/422 ; body={\"message\":\"The requested resource was not found.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A18 malformed clearance sign validation",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The item key field is required.\",\"errors\":{\"item_key\":[\"The item key field is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "maintenance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\",\"email\":\"maintenance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Maintenance Technician\",\"slug\":\"maintenance_tech\"},\"employee\":{\"id\":\"ajzw1lb3eW\",\"employee_no\":\"DEMO-0024\",\"full_name\":\"Juan Bautista\",\"department_id\":\"BnoNyGw56v\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"mrp.machines.view\",\"maintenance.view\",\"maintenance.wo.create\",\"maintenance.wo.complete\",\"assets.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "a18-maintenance-direct UI",
+      "detail": "document=200 uiUrl=http://localhost/maintenance/work-orders"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "A18 maintenance direct lifecycle list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"35Mbaeb49K\",\"mwo_number\":\"MWO-202609-0006\",\"maintainable_type\":\"machine\",\"maintainable\":{\"id\":\"dGypLxpvAg\",\"code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"schedule\":null,\"type\":\"corrective\",\"type_label\":\"Corrective\",\"priority\":\"low\",\"priority_label\":\"Low\",\"description\":\"Disposable S42 cancel maintenance WO continuation\",\"status\":\"cancelled\",\"status_label\":\"Cancelled\",\"available_actions\":[],\"started_at\":null,\"completed_at\":null,\"downtime_minutes\":0,\"cost\":\"0.00\",\"remarks\":\"S42 cleanup cancellation\",\"assignee\":null,\"creator\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T03:01:22.000000Z\",\"updated_at\":\"2026-09-14T03:01:23.000000Z\"},{\"id\":\"MYAbJ3wBl7\",\"mwo_number\":\"MWO-202609-0005\",\"maintainable_type\":\"machine\",\"maintainable\":{\"id\":\"dGypLxpvAg\",\"code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"schedule\":null,\"type\":\"corrective\",\"type_label\":\"Corrective\",\"priority\":\"low\",\"priority_label\":\"Low\",\"description\":\"Disposable S42 complete maintenance WO continuation\",\"status\":\"completed\",\"status_label\":\"Completed\",\"available_actions\":[],\"started_at\":\"2026-09-14T03:01:22.000000Z\",\"completed_at\":\"2026-09-14T03:01:22.000000Z\",\"downtime_minutes\":17,\"cost\":\"0.00\",\"remarks\":\"S42 completed disposable repair\",\"assignee\":null,\"creator\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T03:01:22.000000Z\",\"updated_at\":\"2026-09-14T03:01:22.000000Z\"},{\"id\":\"Dz"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "A18 maintenance direct invalid create",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The maintainable type field is required. (and 4 more errors)\",\"errors\":{\"maintainable_type\":[\"The maintainable type field is required.\"],\"maintainable_id\":[\"The maintainable id field is required.\"],\"type\":[\"The type field is required.\"],\"priority\":[\"The priority field is required.\"],\"description\":[\"The description field is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "a18-8d-direct UI",
+      "detail": "document=200 uiUrl=http://localhost/crm/complaints"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A18 8D direct complaint list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"R8epjLbOaD\",\"complaint_number\":\"CMP-202609-0003\",\"severity\":\"low\",\"severity_label\":\"Low\",\"status\":\"open\",\"status_label\":\"Open\",\"description\":\"LIVE-B7 disposable customer complaint\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T11:25:10+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":null,\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":null,\"sales_order\":null,\"ncr\":{\"id\":\"35MbaWep49\",\"ncr_number\":\"NCR-202609-0002\",\"status\":\"open\",\"severity\":\"low\",\"disposition\":null,\"status_label\":\"Open\",\"severity_label\":\"Low\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"assignee\":null,\"created_at\":\"2026-09-14T03:25:10.000000Z\",\"updated_at\":\"2026-09-14T03:25:10.000000Z\"},{\"id\":\"GqkbAVwxd1\",\"complaint_number\":\"CMP-202609-0002\",\"severity\":\"high\",\"severity_label\":\"High\",\"status\":\"closed\",\"status_label\":\"Closed\",\"description\":\"Disposable B5 customer complaint for 8D handoff\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T10:33:57+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":\"2026-09-14T02:39:49.000000Z\",\"closed_at\":\"2026-09-14T02:39:49.000000Z\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A18 invalid 8D direct finalize validation",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Cannot finalize 8D: d1_team is required.\",\"errors\":{\"error\":[\"Cannot finalize 8D: d1_team is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "finance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\",\"email\":\"finance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"GqkbAVwxd1\",\"employee_no\":\"DEMO-0002\",\"full_name\":\"Ana Reyes\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\",\"ac"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "a18-bill-payment-direct UI",
+      "detail": "document=200 uiUrl=http://localhost/accounting/bills"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A18 bill payment direct list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"DzAwdKb5ld\",\"bill_number\":\"BILL-C-1789347048794\",\"date\":\"2026-09-14\",\"due_date\":\"2026-10-14\",\"is_vatable\":false,\"subtotal\":\"321.09\",\"vat_amount\":\"0.00\",\"total_amount\":\"321.09\",\"amount_paid\":\"0.00\",\"balance\":\"321.09\",\"status\":\"unpaid\",\"status_label\":\"Unpaid\",\"cancelled_at\":null,\"is_overdue\":false,\"aging_bucket\":\"current\",\"remarks\":null,\"provenance_type\":\"service\",\"exception_evidence\":\"LIVE-B3 continuation\",\"exception_approved_at\":\"2026-09-14T08:50:48+08:00\",\"has_variances\":false,\"three_way_overridden\":false,\"three_way_override_reason\":null,\"three_way_overridden_at\":null,\"three_way_review_status\":\"not_applicable\",\"three_way_match_url\":null,\"vendor\":{\"id\":\"dGypLxpvAg\",\"name\":\"Megaplast Industries Corp.\"},\"created_at\":\"2026-09-14T08:50:48+08:00\",\"updated_at\":\"2026-09-14T09:48:13+08:00\"},{\"id\":\"R8epjLbOaD\",\"bill_number\":\"BILL-DEMO-SUP-001\",\"date\":\"2026-09-14\",\"due_date\":\"2026-10-14\",\"is_vatable\":false,\"subtotal\":\"1200.00\",\"vat_amount\":\"0.00\",\"total_amount\":\"1200.00\",\"amount_paid\":\"0.00\",\"balance\":\"1200.00\",\"status\":\"unpaid\",\"status_label\":\"Unpaid\",\"cancelled_at\":null,\"is_overdue\":false,\"aging_bucket\":\"current\",\"remarks\":\"Defense demo supplier-return source bill\",\"provenance_type\":\"stock\",\"exception_evidence\":null,\"exception_approved_at\":null,\"has_variances\":false,\"three_way_overridden\":false,\"three_way_override_reason\":null,\"three_way_overridden_at\":null,\"three_way_r"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A18 invalid bill payment validation",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The cash account id field is required. (and 4 more errors)\",\"errors\":{\"cash_account_id\":[\"The cash account id field is required.\"],\"payment_date\":[\"The payment date field is required.\"],\"amount\":[\"The amount field is required.\"],\"payment_method\":[\"The payment method field is required.\"],\"idempotency_key\":[\"The idempotency key field is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\","
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "A18 work-order direct lifecycle list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"wo_number\":\"WO-202609-0001\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"MYAbJ3wBl7\",\"material_plan_source\":\"bom\",\"batch_number\":null,\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"dGypLxpvAg\",\"so_number\":\"SO-202609-0001\"},\"machine\":null,\"mold\":null,\"quantity_target\":100,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-19T00:00:00+08:00\",\"planned_end\":\"2026-09-20T00:00:00+08:00\",\"actual_start\":null,\"actual_end\":null,\"status\":\"planned\",\"status_label\":\"Planned\",\"next_statuses\":[{\"value\":\"confirmed\",\"label\":\"Confirmed\"},{\"value\":\"cancelled\",\"label\":\"Cancelled\"}],\"pause_reason\":null,\"priority\":100,\"created_at\":\"2026-09-14T10:33:00+08:00\",\"updated_at\":\"2026-09-14T10:33:00+08:00\",\"deleted_at\":null},{\"id\":\"R8epjLbOaD\",\"wo_number\":\"WO-202609-0003\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"MYAbJ3wBl7\",\"material_plan_source\":\"bom\",\"batch_number\":null,\"material_lot_references\":[],\"product\":{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\"},\"sales_order\":{\"id\":\"R8epjLbOaD\",\"so_number\":\"SO-202609-0003\"},\"machine\":null,\"mold\":null,\"quantity_target\":200,\"quantity_produced\":0,\"quantity_good\":0,\"quan"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "A18 invalid work-order direct create validation",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The product id field is required. (and 4 more errors)\",\"errors\":{\"product_id\":[\"The product id field is required.\"],\"quantity_target\":[\"The quantity target field is required.\"],\"planned_start\":[\"The planned start field is required.\"],\"planned_end\":[\"The planned end field is required.\"],\"exception_reason\":[\"The exception reason field is required unless work order class is in standard.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "qc authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\",\"email\":\"qc@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"6r9wnvwOBW\",\"name\":\"QC Inspector\",\"slug\":\"qc_inspector\"},\"employee\":{\"id\":\"6r9wnvwOBW\",\"employee_no\":\"DEMO-0023\",\"full_name\":\"Rosa Villareal\",\"department_id\":\"MYAbJ3wBl7\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"quality.view\",\"quality.inspections.create\",\"quality.inspections.edit\",\"quality.inspections.view\",\"quality.inspections.manage\",\"quality.specs.view\",\"quality.specs.manage\",\"quality.ncr.view\",\"quality.ncr.manage\",\"quality.calibration.view\",\"quality.calibration.manage\",\"quality.ppap.view\",\"quality.ppap.manage\",\"dashboard.quality.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.inspect\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A18 NCR direct lifecycle list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"35MbaWep49\",\"ncr_number\":\"NCR-202609-0002\",\"source\":\"customer_complaint\",\"source_label\":\"Customer Complaint\",\"severity\":\"low\",\"severity_label\":\"Low\",\"status\":\"open\",\"status_label\":\"Open\",\"disposition\":null,\"disposition_label\":null,\"defect_description\":\"Customer complaint CMP-202609-0003: LIVE-B7 disposable customer complaint\",\"affected_quantity\":1,\"is_auto_generated\":false,\"root_cause\":null,\"corrective_action\":null,\"closed_at\":null,\"product\":null,\"inspection\":null,\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"assignee\":null,\"effectiveness_status\":null,\"effectiveness_status_label\":null,\"effectiveness_closed_at\":null,\"created_at\":\"2026-09-14T03:25:10.000000Z\",\"updated_at\":\"2026-09-14T03:25:10.000000Z\"},{\"id\":\"MYAbJg3wBl\",\"ncr_number\":\"NCR-202609-0001\",\"source\":\"customer_complaint\",\"source_label\":\"Customer Complaint\",\"severity\":\"high\",\"severity_label\":\"High\",\"status\":\"closed\",\"status_label\":\"Closed\",\"disposition\":\"rework\",\"disposition_label\":\"Rework (back to good stock)\",\"defect_description\":\"Customer complaint CMP-202609-0002: Disposable B5 customer complaint for 8D handoff\",\"affected_quantity\":1,\"is_auto_generated\":false,\"root_cause\":\"Process variation\",\"corrective_action\":\"Rework affected quantity and verify\",\"closed_at\":\"2026-09-14T02:39:34.000000Z\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"inspection\":null,\"c"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "A18 invalid NCR direct create validation",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The source field is required. (and 2 more errors)\",\"errors\":{\"source\":[\"The source field is required.\"],\"severity\":[\"The severity field is required.\"],\"defect_description\":[\"The defect description field is required.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "purchasing authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"35Mbaeb49K\",\"name\":\"Elena Cruz\",\"email\":\"purchasing@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"0ldwDmpVa9\",\"name\":\"Purchasing Officer\",\"slug\":\"purchasing_officer\"},\"employee\":{\"id\":\"MYAbJ3wBl7\",\"employee_no\":\"DEMO-0018\",\"full_name\":\"Elena Cruz\",\"department_id\":\"kABpVvpKRW\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.vendors.view\",\"accounting.bills.view\",\"inventory.view\",\"inventory.grn.create\",\"purchasing.view\",\"purchasing.pr.create\",\"purchasing.pr.approve\",\"purchasing.po.create\",\"purchasing.po.approve\",\"purchasing.po.send\",\"purchasing.suppliers.performance.view\",\"purchasing.suppliers.performance.recompute\",\"purchasing.supplier_listings.review\",\"purchasing.pr.manage\",\"purchasing.po.manage\",\"purchasing.suppliers.manage\",\"supply_chain.view\",\"supply_chain.shipments.manage\",\"supply_chain.deliveries.view\",\"dashboard.purchasing.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.manage\",\"return_management.receive\",\"return_management.inspect\",\"return_management.dispose\",\"return_management.complete\"],\"feature"
+    },
+    {
+      "status": "PASS",
+      "actor": "purchasing",
+      "name": "A18 purchasing cannot perform NCR direct action",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "purchasing",
+      "name": "A18 reserved direct-action boundary",
+      "detail": "Direct lifecycle endpoints validate or deny their own domain actions; no reserved workflow approval card or Approval Board success was observed."
+    }
+  ]
+}

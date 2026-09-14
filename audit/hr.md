@@ -129,3 +129,267 @@ rows with future effective dates as the period's starting rate). Cross-module: p
 - SPA pages were sampled (separations list/detail, self-service payslips/profile, careers), not
   exhaustively reviewed; all sampled pages handle loading/error/empty states and render money via
   formatPeso on string decimals.
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Re-audit verdict
+
+The current commit materially hardens several previously reported seams. Payroll and final-pay
+now share `EmployedDayFraction`; clearance signing resolves the checklist department; separation
+cancellation exists in the API; salary adjustments have a maker-checker path and effective-date
+handling in Payroll; and final-pay JE posting plus bank-file generation contain double-payment
+guards. Those controls are not all closed end-to-end: the final-pay compute state still accepts an
+undisbursed covering period, employee archive can still strand an open separation, and the HR edit
+endpoint bypasses the bank-account dual-approval workflow.
+
+### Prior finding status
+
+| ID | Current status | Evidence |
+|---|---|---|
+| HR-01 | **Mitigated at the money boundary, unresolved as a process state** | `FinalPayService` rechecks the covering period before posting (`api/app/Modules/HR/Services/FinalPayService.php:220-225,282-288,465-487`), and `BankFileService` rejects posted final-pay consumption (`api/app/Modules/Payroll/Services/BankFileService.php:102-148`). `compute()` still does not call that guard; see below. |
+| HR-02 | **Resolved statically** | Both paths delegate to `EmployedDayFraction` (`api/app/Modules/Payroll/Support/EmployedDayFraction.php:38-70`; `api/app/Modules/HR/Services/FinalPayService.php:415-439`). Parity coverage exists in `api/tests/Feature/HR/FinalPayProrationParityTest.php:129-206`. |
+| HR-03 | **Resolved in the service path** | `assertMaySignItem()` enforces department ownership with HR/admin fallback (`api/app/Modules/HR/Services/SeparationService.php:282-385`), with route/service regression coverage in `api/tests/Feature/HR/ClearanceDepartmentGateTest.php:92-193`. |
+| HR-04 | **Backend resolved; SPA still incomplete** | `cancel()` is implemented and guarded for pre-money states (`api/app/Modules/HR/Services/SeparationService.php:525-603`), but the scoped SPA API/page has no cancel action (`spa/src/api/separations.ts:11-25`; `spa/src/pages/hr/separations/detail.tsx:44-100`). |
+| HR-05 | **Appears resolved statically** | Future-dated and first-history-row cases are handled by `salarySegments()` (`api/app/Modules/Payroll/Services/PayrollCalculatorService.php:594-699`), with focused tests in `api/tests/Feature/Payroll/SalaryEffectiveDateProrationTest.php:109-184`. |
+| HR-06 | **Unresolved** | A voided covering period is excluded and then treated as no period, so last salary becomes zero (`api/app/Modules/HR/Services/FinalPayService.php:391-399,446-455`). |
+| HR-07 | **Unresolved** | Final-pay JE still books the combined gross debit without statutory withholding/liability lines (`api/app/Modules/HR/Services/FinalPayService.php:300-324`). |
+| HR-08 | **Unresolved** | Employee deletion still only deactivates the account and soft-deletes the employee (`api/app/Modules/HR/Services/EmployeeService.php:317-334`); no open-clearance guard was added. |
+| HR-09 | **Partially mitigated; policy remains unresolved** | Payroll now skips loans marked `is_final_pay_deduction` false (`api/app/Modules/Payroll/Services/PayrollCalculatorService.php:941-948`), but final-pay balance collection still includes every active/pending loan (`api/app/Modules/HR/Services/FinalPayService.php:564-579`). |
+| HR-10 | **Still scope-cut/unreachable through the supported property routes** | Property routes remain hidden (`api/app/Modules/HR/routes.php:118-130`), although legacy rows are still read by final pay. |
+| HR-11 | **Unresolved** | Existing accrual rows are trusted without reconciling current payroll (`api/app/Modules/HR/Services/FinalPayService.php:538-548`). |
+| HR-12 | **Resolved** | The documentation now names the shared Payroll helper (`CLAUDE.md:335-343`), and the implementation uses it. |
+
+### Findings
+
+#### HR-01 — Final-pay compute still creates an invalid undisbursed state
+
+**Broken process | High | Effort: S**
+
+**Location:** `api/app/Modules/HR/Services/FinalPayService.php:52-76,391-439`; guard only at
+`api/app/Modules/HR/Services/FinalPayService.php:465-487`.
+
+**Evidence/reproduction:** `compute()` calls `lastSalaryProRated()` and persists
+`final_pay_computed=true` without calling `assertCoveringPeriodAllowsFinalPay()`. With a covering
+period in `draft`, `computed`, `approved`, or `finalized`, the service therefore stores a
+non-zero last-salary component and returns a clearance that the SPA presents as ready to
+finalize (`spa/src/pages/hr/separations/detail.tsx:90-99`). Finalization later fails only when
+`postJournalEntry()` reaches the guard. Because `cancel()` refuses any clearance with
+`final_pay_computed` (`api/app/Modules/HR/Services/SeparationService.php:543-555`), a mistaken
+early compute cannot be cancelled and must be repaired by disbursing/voiding and recomputing.
+The code-reading evidence is also internally contradicted by the tests: the new guard test
+expects compute to refuse (`api/tests/Feature/HR/FinalPayDoublePayGuardTest.php:148-166`), while
+the older final-pay tests still expect compute on an open period to succeed
+(`api/tests/Feature/HR/FinalPayTest.php:167-188`). The posting and bank-file defenses reduce the
+actual double-payment risk, but the operator-visible state remains wrong and order-dependent.
+
+#### HR-06 — Voiding the covering payroll period silently removes earned final salary
+
+**Risk | Medium | Effort: M**
+
+**Location:** `api/app/Modules/HR/Services/FinalPayService.php:391-399,446-455`.
+
+**Evidence/reproduction:** `coveringPayrollPeriod()` filters out `voided` periods. When the
+employee's separation date is inside that voided cutoff, `lastSalaryProRated()` sees `null` and
+returns `0.00` rather than using the shared fallback or refusing with an actionable replacement-
+period message. `compute()` then persists a valid-looking final-pay breakdown missing the last
+salary. No error or `manual_required` state identifies the omitted earnings.
+
+#### HR-07 — Final-pay statutory withholding remains absent from the JE
+
+**Risk | Medium | Effort: M**
+
+**Location:** `api/app/Modules/HR/Services/FinalPayService.php:155-168,286-324`.
+
+**Evidence/reproduction:** The final-pay posting constructs one debit for `gross_plus`, then
+credits loan/advance/property recoveries and cash. There are no SSS, PhilHealth, Pag-IBIG, or BIR
+withholding calculations, liability credits, or a stored policy flag for the last-salary portion.
+The same earnings paid through Payroll carry statutory deductions, so a leaver can receive a
+different statutory treatment depending on whether the covering cutoff was disbursed first.
+This remains a Finance/policy boundary, but the current path neither applies nor explicitly
+blocks for that decision.
+
+#### HR-08 — Employee archive can strand an open separation
+
+**Stuck process | High | Effort: S**
+
+**Location:** `api/app/Modules/HR/Services/EmployeeService.php:317-334`;
+`api/app/Modules/HR/Services/SeparationService.php:463-469`.
+
+**Evidence/reproduction:** The delete path locks the employee, deactivates the linked account,
+and soft-deletes the row without checking for `pending`/`in_progress`/`completed` clearances,
+final-pay computation, or other open H2R records. Later `finalize()` uses a normal
+`Employee::query()->find()`, which excludes the trashed employee and throws `Clearance employee
+not found`. The clearance remains non-terminal and the employee cannot complete final pay through
+the supported workflow. The re-audit found no regression test covering archive during an open
+separation.
+
+#### HR-09 — Final-pay loan semantics still disagree with the reservation flag
+
+**Gap | Medium | Effort: M**
+
+**Location:** `api/app/Modules/Payroll/Services/PayrollCalculatorService.php:941-948`;
+`api/app/Modules/HR/Services/FinalPayService.php:348-355,564-579`.
+
+**Evidence/reproduction:** Payroll treats `is_final_pay_deduction=false` as an explicit reason
+to continue ordinary amortization, while final pay reads all active and pending loans without
+that predicate and only settles active loans. The current HR tests deliberately use a false flag
+and expect final pay to deduct the loan (`api/tests/Feature/HR/FinalPayTest.php:343-375`), so the
+implementation is internally consistent with that fixture but not with the flag's documented
+"reserve for final pay" meaning. A loan can be skipped by payroll yet included by final pay, or
+included by both if the flag is changed at the wrong point. The owner must choose whether the
+flag is authoritative, informational, or should be removed from the money path.
+
+#### HR-11 — Stale 13th-month accrual can understate final pay
+
+**Risk | Medium | Effort: M**
+
+**Location:** `api/app/Modules/HR/Services/FinalPayService.php:538-561`.
+
+**Evidence/reproduction:** If any accrual row exists for the separation year, the service returns
+`accrued_amount` immediately. It does not compare `total_basic_earned` or the accrued amount with
+computed, non-voided payroll through the separation date. A payroll recompute or late cutoff
+posted after accrual generation therefore leaves final pay using the older snapshot. The fallback
+rebuild is used only when no accrual row exists, so the presence of stale data suppresses the
+authoritative rebuild.
+
+#### HR-13 — Direct HR employee edits bypass bank-account dual approval
+
+**Broken process | High | Effort: M**
+
+**Location:** `api/app/Modules/HR/Requests/UpdateEmployeeRequest.php:52-54,98-99`;
+`api/app/Modules/HR/Services/EmployeeService.php:251-275`;
+`api/app/Modules/HR/routes.php:81-83`.
+
+**Evidence/reproduction:** A user with `hr.employees.view_sensitive` may submit
+`bank_name`/`bank_account_no` to the normal employee `PUT` route. The request allows those fields,
+and `EmployeeService::update()` writes them directly. The dedicated self-service path says bank
+changes require HR plus Finance approval (`api/app/Modules/HR/Services/ProfileUpdateRequestService.php:18-20,45-49`),
+but the generic HR edit path never creates a `ProfileUpdateRequest` and does not require
+`hr.profile_updates.finance_review`. The HR SPA exposes the direct fields in
+`spa/src/components/hr/EmployeeForm.tsx:426-431`, making this a supported bypass rather than a
+direct-service-only edge case.
+
+#### HR-14 — Separation cancellation is API-only, so the SPA still strands corrections
+
+**Missing | Medium | Effort: S**
+
+**Location:** `api/app/Modules/HR/routes.php:300-301` and
+`api/app/Modules/HR/Services/SeparationService.php:525-601` versus
+`spa/src/api/separations.ts:11-25` and `spa/src/pages/hr/separations/detail.tsx:44-100`.
+
+**Evidence/reproduction:** The backend exposes a permission-gated cancel endpoint and the
+service restores the pre-initiation status, but the scoped SPA API has no `cancel()` method and
+the separation detail page has no cancel button, mutation, reason field, or invalidation path.
+An HR operator following the supported UI can initiate a separation and then has no visible way
+to correct or rescind it; using the API directly is required. This is the remaining frontend
+half of prior HR-04.
+
+#### HR-15 — Hidden employee-property data is emitted on employee detail
+
+**Gap | Medium | Effort: S**
+
+**Location:** `api/app/Modules/HR/Services/EmployeeService.php:168-172`;
+`api/app/Modules/HR/Resources/EmployeeResource.php:87-92`;
+`api/app/Modules/HR/Resources/EmployeePropertyResource.php:15-26`.
+
+**Evidence/reproduction:** The employee detail service eagerly loads `property`, and the
+resource emits it whenever loaded without a permission check. A department-scoped employee
+viewer can therefore open a same-department employee detail and receive item names, quantities,
+replacement costs, and lost/issued status even though the property routes are explicitly hidden
+as a scope cut (`api/app/Modules/HR/routes.php:118-130`). The existing employee scope test checks
+documents and salary masking but not property omission.
+
+#### HR-16 — HR multipart API clients manually set the forbidden Content-Type
+
+**Bad practice | Medium | Effort: S**
+
+**Location:** `spa/src/api/hr/employees.ts:106-113` and
+`spa/src/api/hr/employee-documents.ts:10-13`.
+
+**Evidence/reproduction:** Both upload methods set `headers: { 'Content-Type': 'multipart/form-data' }`
+on browser `FormData` requests. The repository contract explicitly says not to set this header
+because the browser/axios must add the multipart boundary (`CLAUDE.md:467-468`). Photo and
+employee-document uploads can consequently arrive without a usable boundary and fail server
+MIME/file validation even when the selected file is valid. Training uploads correctly omit the
+manual header, so the inconsistency is localized to these two HR clients.
+
+#### HR-17 — Onboarding cron reports success when every delivery attempt fails
+
+**Risk | Medium | Effort: S**
+
+**Location:** `api/app/Modules/HR/Services/OnboardingService.php:185-248`;
+`api/app/Console/Commands/SendOnboardingReminders.php:19-23`.
+
+**Evidence/reproduction:** Each reminder delivery catches `Throwable`, logs a warning, leaves the
+row retryable, and continues. The command prints `Sent 0 onboarding reminders.` and returns
+`SUCCESS` even when all stale rows threw notification/database errors. Scheduler monitoring cannot
+distinguish a healthy zero-row run from a run in which every candidate failed. The tests verify
+retryability (`api/tests/Feature/HR/OnboardingTest.php:265-280`) but not command exit semantics.
+
+#### HR-18 — Concurrent password resets can email an invalid temporary password
+
+**Risk | Medium | Effort: M**
+
+**Location:** `api/app/Modules/HR/Services/UserProvisioningService.php:110-145`.
+
+**Evidence/reproduction:** `resetPasswordForUser()` does not lock or atomically claim the user
+row before reading the old password, writing a new hash, and scheduling the notification. Two
+authorized reset requests can both commit: the last hash wins, while both temporary passwords
+are delivered. The first notification then contains a password that no longer works, and the
+audit/history sequence does not identify the winning reset. Existing coverage is serial only
+(`api/tests/Feature/HR/UserProvisioningTest.php:131-147`).
+
+#### HR-19 — Bulk account provisioning returns raw exception text to the API caller
+
+**Risk | Medium | Effort: S**
+
+**Location:** `api/app/Modules/HR/Services/UserProvisioningService.php:219-225`.
+
+**Evidence/reproduction:** The bulk loop catches every `Throwable` and includes
+`$e->getMessage()` in the returned `failed` result. A database/constraint/storage exception can
+therefore expose SQL, table/index names, filesystem paths, or provider details to the HR client,
+contrary to the generic-error rule and the UI pattern forbidding technical details
+(`docs/PATTERNS.md:1624-1629`). The error is reported server-side, but the response should carry
+an operator-safe message and a correlation/reference for logs.
+
+### Clean areas and retained controls
+
+- Employee and clearance resources use HashIDs, encrypted casts, and sensitive-field masking;
+  the clearance checklist also converts raw signer IDs before emitting JSON
+  (`api/app/Modules/HR/Resources/EmployeeResource.php:64-77`; `api/app/Modules/HR/Resources/ClearanceResource.php:72-107`).
+- Employee list/detail and self-service reads use server-side row ownership/departments rather
+  than trusting URL HashIDs (`api/app/Modules/HR/Services/EmployeeService.php:43-61,152-172`;
+  `api/app/Modules/HR/Controllers/SelfServiceController.php:58-70,119-127,184-213`).
+- Self-service payroll, DTR, leave, and loan reads are session-employee scoped, and the read
+  tests cover department-head/approval-permission attempts to cross that boundary
+  (`api/tests/Feature/HR/SelfServiceOwnerScopeTest.php:25-65`).
+- Clearance item updates, final-pay JE posting, loan settlement, and salary-adjustment approval
+  use transaction/lock patterns with focused regression coverage; the cent-precision and
+  loan-residue paths were read as materially improved.
+- Recruitment posting/application transitions re-read locked rows, clean up a failed resume
+  upload, enforce the passed-interview gate, and record application decision history
+  (`api/app/Modules/HR/Services/RecruitmentService.php:122-183,224-337`).
+- Training and skill evidence uses the private local disk and employee competence scope for
+  downloads (`api/app/Modules/HR/Services/TrainingEvidenceService.php:12-50`;
+  `api/app/Modules/HR/Controllers/EmployeeSkillController.php:110-120`).
+- The sampled HR, careers, and self-service pages are lazy-loaded and generally implement
+  loading/error/empty states; the exceptions and process gaps above are separate from the
+  broad page-state posture.
+
+### Verification limits
+
+- This was a read-only static/code-reading re-audit at `56e0d431`; no tests, Docker, Artisan,
+  browser, build, database, queue, scheduler, or two-connection concurrency harness was run.
+- Tests were read for intended contracts and regression coverage only. In particular, the
+  conflicting open-period expectations around HR-01 were not resolved by execution.
+- JournalEntryService, ApprovalService, shared middleware, payroll bank/disbursement internals,
+  and database migrations were inspected only where directly needed for HR evidence; findings
+  at those boundaries remain cross-module flags rather than claims of a complete subsystem audit.
+- Runtime provider delivery, scheduler monitoring, browser multipart parsing, and deployed
+  storage behavior remain unverified.
+
+### Explicit no-code-change statement
+
+No application code, migration, test, registry, roadmap, or other file was modified by this
+re-audit. Only this dated section was appended to `audit/hr.md`; all prior audit content was
+preserved verbatim.

@@ -15,6 +15,7 @@ use App\Common\Middleware\SanitizeInput;
 use App\Common\Middleware\SessionTimeout;
 use App\Providers\ModuleServiceProvider;
 use App\Modules\B2B\Middleware\CheckPortalPasswordChange;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,8 +24,10 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -132,6 +135,43 @@ return Application::configure(basePath: dirname(__DIR__))
                 'errors'  => [$e->errorKey() => [$e->getMessage()]],
                 'code'    => $e->errorCode(),
             ], static fn ($v) => $v !== null), 403);
+        });
+
+        // Never let Laravel's debug renderer disclose framework paths or stack
+        // frames through an API authorization/HTTP error, even in local mode.
+        $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            $status = $e->getStatusCode();
+            $message = match ($status) {
+                401 => 'Unauthenticated.',
+                403 => 'You do not have permission to perform this action.',
+                404 => 'The requested resource was not found.',
+                422 => $e->getMessage() ?: 'The request could not be processed.',
+                429 => 'Too many requests. Please try again later.',
+                default => null,
+            };
+
+            return $message === null
+                ? null
+                : response()->json(['message' => $message], $status);
+        });
+
+        // The API must not return Laravel's debug exception payload for an
+        // unexpected 5xx either. The exception remains available to logging.
+        $exceptions->render(function (Throwable $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())
+                || $e instanceof HttpExceptionInterface
+                || $e instanceof AuthenticationException
+                || $e instanceof ValidationException
+                || $e instanceof BusinessRuleException
+                || $e instanceof ForbiddenActionException) {
+                return null;
+            }
+
+            return response()->json(['message' => 'An unexpected error occurred.'], 500);
         });
 
         // A refusal the system decided on purpose is not a fault to report.

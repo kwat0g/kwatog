@@ -21,7 +21,7 @@ class CreatePayrollAdjustmentRequest extends FormRequest
         return [
             'original_payroll_id' => ['required', 'string'],
             'type'                => ['required', Rule::in(PayrollAdjustmentType::values())],
-            'amount'              => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'amount'              => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999.99'],
             'reason'              => ['required', 'string', 'min:5', 'max:1000'],
         ];
     }

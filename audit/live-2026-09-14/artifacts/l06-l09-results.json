@@ -1,0 +1,1738 @@
+{
+  "stamp": "63796645",
+  "ids": {
+    "customer": "dGypLxpvAg",
+    "product": "dGypLxpvAg",
+    "so": "GkXwO7wP52",
+    "soNumber": "SO-202609-0017",
+    "plan": "40awq4bKG2"
+  },
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm-sales-orders UI",
+      "detail": "document=200 uiUrl=http://localhost/crm/sales-orders"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 CRM customer source list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Honda Philippines, Inc.\",\"code\":null,\"contact_person\":\"Procurement Officer\",\"email\":null,\"phone\":null,\"address\":\"Philippines\",\"tin\":\"000-111-444-000\",\"credit_limit\":\"4000000.00\",\"credit_used\":null,\"credit_available\":\"4000000.00\",\"credit_warning_ratio\":0.8,\"credit_warning\":false,\"payment_terms_days\":30,\"is_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"35Mbaeb49K\",\"name\":\"Live Customer B3-F-MU0IYLK7\",\"code\":\"CUS-2026-0001\",\"contact_person\":null,\"email\":\"customer-b3-f-mu0iylk7@example.test\",\"phone\":\"09178888888\",\"address\":null,\"tin\":null,\"credit_limit\":\"2500.10\",\"credit_used\":null,\"credit_available\":\"2500.10\",\"credit_warning_ratio\":0.8,\"credit_warning\":false,\"payment_terms_days\":30,\"is_active\":true,\"created_at\":\"2026-09-14T08:48:59+08:00\",\"updated_at\":\"2026-09-14T08:54:38+08:00\",\"deleted_at\":null},{\"id\":\"GqkbAVwxd1\",\"name\":\"Nissan Philippines, Inc.\",\"code\":null,\"contact_person\":\"Procurement Officer\",\"email\":null,\"phone\":null,\"address\":\"Philippines\",\"tin\":\"000-111-333-000\",\"credit_limit\":\"3500000.00\",\"credit_used\":null,\"credit_available\":\"3500000.00\",\"credit_warning_ratio\":0.8,\"credit_warning\":false,\"payment_terms_days\":30,\"is_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"DzAwdKb5ld\",\"name\":\"Suzuki Philippines, Inc.\",\"code\":null,\"contact_person\":\"Procurement Officer\",\"email\":null,\"phone\":null,\"address\":\"Philippines\",\"tin\":\"000-111-555-000\",\"credit_limit\":\"2000000.00\",\"credit_used\":null,\"credit_available\":\"2000000.00\",\"credit_warning_ratio\":0.8,\"credit_warning\":false,\"payment_terms_days\":45,\"is_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\",\"code\":null,\"contact_person\":\"Procurement Officer\",\"email\":null,\"phone\":null,\"address\":\"Philippines\",\"tin\":\"000-111-222-000\",\"credit_limit\":\"5000000.00\",\"credit_used\":\"6206.00\",\"credit_available\":\"4993794.00\",\"credit_warning_ratio\":0.8,\"credit_warning\":false,\"payment_terms_days\":30,\"is_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"MYAbJ3wBl7\",\"name\":\"Yamaha Motor Philippines, Inc.\",\"code\":null,\"contact_person\":\"Procurement Officer\",\"email\":null,\"p"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 CRM product source list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"35Mbaeb49K\",\"part_number\":\"BB-001\",\"name\":\"Wiper Motor Bobbin\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"22.00\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"kABpVvpKRW\",\"part_number\":\"BU-001\",\"name\":\"Windshield Wiper Bushing\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"21.00\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"28.00\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"DzAwdKb5ld\",\"part_number\":\"PC-002\",\"name\":\"Pivot Cap Cover Type B\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"28.50\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"MYAbJ3wBl7\",\"part_number\":\"RC-001\",\"name\":\"Relay Cover Standard\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"38.00\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"0ldwDmpVa9\",\"part_number\":\"RC-002\",\"name\":\"Relay Cover Large\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"56.00\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"18.50\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T10:58:18+08:00\",\"deleted_at\":null},{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"description\":null,\"unit_of_measure\":\"pcs\",\"standard_cost\":\"24.50\",\"is_active\":true,\"include_forecast_in_mrp\":false,\"has_bom\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updat"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 CRM price-agreement source list",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"dGypLxpvAg\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"price\":\"22.50\",\"effective_from\":\"2026-01-01\",\"effective_to\":\"2026-12-31\",\"pricing_method\":\"flat\",\"pricing_method_label\":\"Flat\",\"tiers\":null,\"is_currently_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"GqkbAVwxd1\",\"product\":{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"unit_of_measure\":\"pcs\"},\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"price\":\"30.00\",\"effective_from\":\"2026-01-01\",\"effective_to\":\"2026-12-31\",\"pricing_method\":\"flat\",\"pricing_method_label\":\"Flat\",\"tiers\":null,\"is_currently_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"R8epjLbOaD\",\"product\":{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\",\"unit_of_measure\":\"pcs\"},\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"price\":\"35.00\",\"effective_from\":\"2026-01-01\",\"effective_to\":\"2026-12-31\",\"pricing_method\":\"flat\",\"pricing_method_label\":\"Flat\",\"tiers\":null,\"is_currently_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"DzAwdKb5ld\",\"product\":{\"id\":\"kABpVvpKRW\",\"part_number\":\"BU-001\",\"name\":\"Windshield Wiper Bushing\",\"unit_of_measure\":\"pcs\"},\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"price\":\"26.00\",\"effective_from\":\"2026-01-01\",\"effective_to\":\"2026-12-31\",\"pricing_method\":\"flat\",\"pricing_method_label\":\"Flat\",\"tiers\":null,\"is_currently_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"MYAbJ3wBl7\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"customer\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Nissan Philippines, Inc.\"},\"price\":\"23.00\",\"effective_from\":\"2026-01-01\",\"effective_to\":\"2026-12-31\",\"pricing_method\":\"flat\",\"pricing_method_label\":\"Flat\",\"tiers\":null,\"is_currently_active\":true,\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T07:36:52+08:00\",\"deleted_at\":null},{\"id\":\"35Mbaeb49K\",\"product\":{\"id\":\"DzAwdKb5ld\""
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "ppc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Pedro Garcia\",\"email\":\"ppc@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"kABpVvpKRW\",\"name\":\"PPC Head\",\"slug\":\"ppc_head\"},\"employee\":{\"id\":\"DzAwdKb5ld\",\"employee_no\":\"DEMO-0017\",\"full_name\":\"Pedro Garcia\",\"department_id\":\"0ldwDmpVa9\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.work_orders.view\",\"production.schedule.view\",\"production.routings.view\",\"production.routings.manage\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.boms.manage\",\"mrp.machines.view\",\"mrp.molds.view\",\"mrp.plans.view\",\"mrp.plans.run\",\"mrp.runs.view\",\"mrp.runs.trigger\",\"maintenance.view\",\"assets.view\",\"dashboard.ppc.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"forecasting.manage\",\"return_management.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "ppc-boms UI",
+      "detail": "document=200 uiUrl=http://localhost/mrp/boms"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "ppc",
+      "name": "L06 source master hashes",
+      "detail": "customer=dGypLxpvAg; product=dGypLxpvAg; bom={\"id\":\"dGypLxpvAg\",\"cost_batch_size\":\"1.000\",\"version\":1,\"is_active\":true,\"item_count\":3,\"material_cost\":\"2.90\",\"labor_cost\":\"0.00\",\"machine_cost\":\"0.00\",\"overhead_cost\":\"0.00\",\"total_cost\":\"2.90\",\"cost_basis\":\"standard_cost+routing\",\"costed_at\":\"2026-09-14T10:33:00+08:00\",\"cost_warnings\":[],\"items\":[{\"id\":\"dGypLxpvAg\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\",\"item_type\":\"raw_material\"},\"quantity_per_unit\":\"0.0150\",\"unit\":\"kg\",\"waste_factor\":\"5.00\",\"effective_quantity\":\"0.015750\",\"cost_quantity\":\"0.015750\",\"unit_cost\":\"120.0000\",\"extended_cost\":\"1.89\",\"cost_source\":\"standard_cost\",\"sort_order\":0},{\"id\":\"GqkbAVwxd1\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\",\"item_type\":\"raw_material\"},\"quantity_per_unit\":\"0.0020\",\"unit\":\"kg\",\"waste_factor\":\"2.00\",\"effective_quantity\":\"0.002040\",\"cost_quantity\":\"0.002040\",\"unit_cost\":\"250.0000\",\"extended_cost\":\"0.51\",\"cost_source\":\"standard_cost\",\"sort_order\":1},{\"id\":\"R8epjLbOaD\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\",\"item_type\":\"packaging\"},\"quantity_per_unit\":\"1.0000\",\"unit\":\"pcs\",\"waste_factor\":\"0.00\",\"effective_quantity\":\"1.000000\",\"cost_quantity\":\"1.000000\",\"unit_cost\":\"0.5000\",\"extended_cost\":\"0.50\",\"cost_source\":\"standard_cost\",\"sort_order\":2}],\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T10:33:00+08:00\",\"deleted_at\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 CRM creates disposable SO",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"GkXwO7wP52\",\"so_number\":\"SO-202609-0017\",\"date\":\"2026-09-14\",\"subtotal\":\"22.50\",\"vat_amount\":\"2.70\",\"total_amount\":\"25.20\",\"status\":\"draft\",\"status_label\":\"Draft\",\"next_statuses\":[],\"payment_terms_days\":30,\"delivery_terms\":\"Disposable live P2P audit order\",\"incoterm\":null,\"notes\":\"LIVE-B11 disposable L06 63796645\",\"submission_source\":\"internal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":true,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"items\":[{\"id\":\"OX5b9mbBrk\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"22.50\",\"total\":\"22.50\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-09-28\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T13:30:30+08:00\",\"updated_at\":\"2026-09-14T13:30:30+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 CRM confirms disposable SO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GkXwO7wP52\",\"so_number\":\"SO-202609-0017\",\"date\":\"2026-09-14\",\"subtotal\":\"22.50\",\"vat_amount\":\"2.70\",\"total_amount\":\"25.20\",\"status\":\"confirmed\",\"status_label\":\"Confirmed\",\"next_statuses\":[{\"value\":\"in_production\",\"label\":\"In Production\"},{\"value\":\"partially_delivered\",\"label\":\"Partially Delivered\"},{\"value\":\"delivered\",\"label\":\"Delivered\"},{\"value\":\"invoiced\",\"label\":\"Invoiced\"}],\"payment_terms_days\":30,\"delivery_terms\":\"Disposable live P2P audit order\",\"incoterm\":null,\"notes\":\"LIVE-B11 disposable L06 63796645\",\"submission_source\":\"internal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":false,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"items\":[{\"id\":\"OX5b9mbBrk\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"22.50\",\"total\":\"22.50\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-09-28\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T13:30:30+08:00\",\"updated_at\":\"2026-09-14T13:30:30+08:00\",\"deleted_at\":null},\"chain_result\":{\"so_number\":\"SO-202609-0017\",\"work_orders_created\":0,\"auto_scheduled\":0,\"needs_manual\":0,\"shortages\":0,\"prs_created\":0,\"planning_status\":\"queued\",\"work_orders\":[],\"scheduling_conflicts\":[]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 SO confirmation replay denied",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only draft sales orders can be confirmed.\",\"errors\":{\"error\":[\"Only draft sales orders can be confirmed.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L06 confirmed SO exact detail",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GkXwO7wP52\",\"so_number\":\"SO-202609-0017\",\"date\":\"2026-09-14\",\"subtotal\":\"22.50\",\"vat_amount\":\"2.70\",\"total_amount\":\"25.20\",\"status\":\"confirmed\",\"status_label\":\"Confirmed\",\"next_statuses\":[{\"value\":\"in_production\",\"label\":\"In Production\"},{\"value\":\"partially_delivered\",\"label\":\"Partially Delivered\"},{\"value\":\"delivered\",\"label\":\"Delivered\"},{\"value\":\"invoiced\",\"label\":\"Invoiced\"}],\"payment_terms_days\":30,\"delivery_terms\":\"Disposable live P2P audit order\",\"incoterm\":null,\"notes\":\"LIVE-B11 disposable L06 63796645\",\"submission_source\":\"internal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":false,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"items\":[{\"id\":\"OX5b9mbBrk\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"22.50\",\"total\":\"22.50\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-09-28\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T13:30:30+08:00\",\"updated_at\":\"2026-09-14T13:30:30+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "crm",
+      "name": "L06 confirmed SO reference",
+      "detail": "so=GkXwO7wP52; so_number=SO-202609-0017; total=25.20; status=confirmed"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "ppc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Pedro Garcia\",\"email\":\"ppc@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"kABpVvpKRW\",\"name\":\"PPC Head\",\"slug\":\"ppc_head\"},\"employee\":{\"id\":\"DzAwdKb5ld\",\"employee_no\":\"DEMO-0017\",\"full_name\":\"Pedro Garcia\",\"department_id\":\"0ldwDmpVa9\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.work_orders.view\",\"production.schedule.view\",\"production.routings.view\",\"production.routings.manage\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.boms.manage\",\"mrp.machines.view\",\"mrp.molds.view\",\"mrp.plans.view\",\"mrp.plans.run\",\"mrp.runs.view\",\"mrp.runs.trigger\",\"maintenance.view\",\"assets.view\",\"dashboard.ppc.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"forecasting.manage\",\"return_management.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "L06 queued MRP plan for disposable SO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"40awq4bKG2\",\"mrp_plan_no\":\"MRP-202609-0015\",\"sales_order\":{\"id\":\"GkXwO7wP52\",\"so_number\":\"SO-202609-0017\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"}},\"version\":1,\"status\":\"active\",\"status_label\":\"Active\",\"total_lines\":1,\"shortages_found\":0,\"auto_pr_count\":0,\"draft_wo_count\":1,\"diagnostics\":[{\"item_id\":\"dGypLxpvAg\",\"item_code\":\"RM-001\",\"gross\":0.016,\"on_hand\":236.968,\"reserved\":0,\"in_transit\":20000,\"safety_stock\":200,\"open_purchase_requests\":0,\"standard_unit_cost\":\"120.0000\",\"gross_cost\":\"1.92\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"MYAbJ3wBl7\",\"item_code\":\"RM-010\",\"gross\":0.002,\"on_hand\":784.996,\"reserved\":0,\"in_transit\":0,\"safety_stock\":20,\"open_purchase_requests\":0,\"standard_unit_cost\":\"250.0000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"ajzw1lb3eW\",\"item_code\":\"PKG-001\",\"gross\":1,\"on_hand\":1605,\"reserved\":0,\"in_transit\":0,\"safety_stock\":500,\"open_purchase_requests\":0,\"standard_unit_cost\":\"0.5000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"}],\"cost_summary\":{\"material_cost\":\"2.90\",\"labor_cost\":\"0.00\",\"machine_cost\":\"0.00\",\"overhead_cost\":\"0.00\",\"planned_production_cost\":\"2.90\",\"products\":[{\"product_id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"quantity\":1,\"unit_cost\":\"2.90\",\"extended_cost\":\"2.90\"}]},\"generation\":{\"source\":\"sales_order\",\"trigger\":\"automatic\",\"reason\":\"sales_order_confirmed\",\"actor_type\":\"system\",\"run_id\":\"BnoNyGw56v\",\"actor_id\":null,\"source_id\":\"GkXwO7wP52\"},\"generator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"work_orders\":[{\"id\":\"kABpVvpKRW\",\"wo_number\":\"WO-202609-0007\",\"product_id\":\"dGypLxpvAg\",\"parent\":null,\"quantity_target\":1,\"status\":\"planned\",\"status_label\":\"Planned\",\"planned_start\":\"2026-09-26T00:00:00+08:00\"}],\"purchase_requests\":[],\"generated_at\":\"2026-09-14T13:30:31+08:00\",\"created_at\":\"2026-09-14T13:30:31+08:00\",\"updated_at\":\"2026-09-14T13:30:31+08:00\"}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "ppc",
+      "name": "L06 exact MRP plan state",
+      "detail": "plan=40awq4bKG2; plan_number=MRP-202609-0015; shortages=0; auto_pr=0; draft_wos=1; diagnostics=[{\"item_id\":\"dGypLxpvAg\",\"item_code\":\"RM-001\",\"gross\":0.016,\"on_hand\":236.968,\"reserved\":0,\"in_transit\":20000,\"safety_stock\":200,\"open_purchase_requests\":0,\"standard_unit_cost\":\"120.0000\",\"gross_cost\":\"1.92\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"MYAbJ3wBl7\",\"item_code\":\"RM-010\",\"gross\":0.002,\"on_hand\":784.996,\"reserved\":0,\"in_transit\":0,\"safety_stock\":20,\"open_purchase_requests\":0,\"standard_unit_cost\":\"250.0000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"ajzw1lb3eW\",\"item_code\":\"PKG-001\",\"gross\":1,\"on_hand\":1605,\"reserved\":0,\"in_transit\":0,\"safety_stock\":500,\"open_purchase_requests\":0,\"standard_unit_cost\":\"0.5000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"}]; purchase_requests=[]; work_orders=[{\"id\":\"kABpVvpKRW\",\"wo_number\":\"WO-202609-0007\",\"product_id\":\"dGypLxpvAg\",\"parent\":null,\"quantity_target\":1,\"status\":\"planned\",\"status_label\":\"Planned\",\"planned_start\":\"2026-09-26T00:00:00+08:00\"}]"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "L06 MRP plan links the confirmed SO",
+      "detail": "so=GkXwO7wP52; plan={\"id\":\"40awq4bKG2\",\"mrp_plan_no\":\"MRP-202609-0015\",\"sales_order\":{\"id\":\"GkXwO7wP52\",\"so_number\":\"SO-202609-0017\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"}},\"version\":1,\"status\":\"active\",\"status_label\":\"Active\",\"total_lines\":1,\"shortages_found\":0,\"auto_pr_count\":0,\"draft_wo_count\":1,\"diagnostics\":[{\"item_id\":\"dGypLxpvAg\",\"item_code\":\"RM-001\",\"gross\":0.016,\"on_hand\":236.968,\"reserved\":0,\"in_transit\":20000,\"safety_stock\":200,\"open_purchase_requests\":0,\"standard_unit_cost\":\"120.0000\",\"gross_cost\":\"1.92\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"MYAbJ3wBl7\",\"item_code\":\"RM-010\",\"gross\":0.002,\"on_hand\":784.996,\"reserved\":0,\"in_transit\":0,\"safety_stock\":20,\"open_purchase_requests\":0,\"standard_unit_cost\":\"250.0000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"},{\"item_id\":\"ajzw1lb3eW\",\"item_code\":\"PKG-001\",\"gross\":1,\"on_hand\":1605,\"reserved\":0,\"in_transit\":0,\"safety_stock\":500,\"open_purchase_requests\":0,\"standard_unit_cost\":\"0.5000\",\"gross_cost\":\"0.50\",\"net_cost\":\"0.00\",\"net\":0,\"action\":\"sufficient\"}],\"cost_summary\":{\"material_cost\":\"2.90\",\"labor_cost\":\"0.00\",\"machine_cost\":\"0.00\",\"overhead_cost\":\"0.00\",\"planned_production_cost\":\"2.90\",\"products\":[{\"product_id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"quantity\":1,\"unit_cost\":\"2.90\",\"extended_cost\":\"2.90\"}]},\"generation\":{\"source\":\"sales_order\",\"trigger\":\"automatic\",\"reason\":\"sales_order_confirmed\",\"actor_type\":\"system\",\"run_id\":\"BnoNyGw56v\",\"actor_id\":null,\"source_id\":\"GkXwO7wP52\"},\"generator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"work_orders\":[{\"id\":\"kABpVvpKRW\",\"wo_number\":\"WO-202609-0007\",\"product_id\":\"dGypLxpvAg\",\"parent\":null,\"quantity_target\":1,\"status\":\"planned\",\"status_label\":\"Planned\",\"planned_start\":\"2026-09-26T00:00:00+08:00\"}],\"purchase_requests\":[],\"generated_at\":\"2026-09-14T13:30:31+08:00\",\"created_at\":\"2026-09-14T13:30:31+08:00\",\"updated_at\":\"2026-09-14T13:30:31+08:00\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "L06 MRP plan exposes non-numeric references",
+      "detail": "recursive plan response reference check"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "ppc",
+      "name": "L06 shortage and consolidated auto-PR",
+      "detail": "MRP completed with shortages_found=0, auto_pr_count=0; no artificial stock depletion or high-quantity shortage was manufactured."
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "ppc",
+      "name": "L07 requisition to PO",
+      "detail": "No shortage means no source auto-PR; PR approval/conversion and PO approval/send were not manufactured from a manual substitute."
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "ppc",
+      "name": "L08 import and receipt",
+      "detail": "No source sent PO exists because the disposable SO MRP plan had no shortage auto-PR."
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "ppc",
+      "name": "L09 inventory and AP",
+      "detail": "No source GRN exists; stock, bill, three-way match, post, payment, and QC-fail stock/bill assertions were not manufactured."
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "l06-no-shortage-mrp-plans UI",
+      "detail": "document=200 uiUrl=http://localhost/mrp/plans"
+    }
+  ],
+  "evidence": [
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "7fd04950-63e5-4f13-adf7-2712a9324dcf",
+      "body": {
+        "data": {
+          "id": "6r9wnvwOBW",
+          "name": "Sara Sales",
+          "email": "crm@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "MYAbJ3wBl7",
+            "name": "Sales Officer",
+            "slug": "sales_officer"
+          },
+          "employee": null,
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "accounting.customers.view",
+            "accounting.customers.manage",
+            "inventory.view",
+            "crm.view",
+            "crm.products.view",
+            "crm.price_agreements.view",
+            "crm.sales_orders.view",
+            "crm.sales_orders.create",
+            "crm.sales_orders.update",
+            "crm.sales_orders.delete",
+            "crm.sales_orders.confirm",
+            "crm.sales_orders.cancel",
+            "crm.complaints.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "return_management.view",
+            "return_management.manage"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/crm/customers?per_page=100",
+      "status": 200,
+      "requestId": "6e69e12c-abd5-4a5e-bc7b-4f7590328d04",
+      "body": {
+        "data": [
+          {
+            "id": "R8epjLbOaD",
+            "name": "Honda Philippines, Inc.",
+            "code": null,
+            "contact_person": "Procurement Officer",
+            "email": null,
+            "phone": null,
+            "address": "Philippines",
+            "tin": "000-111-444-000",
+            "credit_limit": "4000000.00",
+            "credit_used": null,
+            "credit_available": "4000000.00",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 30,
+            "is_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "35Mbaeb49K",
+            "name": "Live Customer B3-F-MU0IYLK7",
+            "code": "CUS-2026-0001",
+            "contact_person": null,
+            "email": "customer-b3-f-mu0iylk7@example.test",
+            "phone": "09178888888",
+            "address": null,
+            "tin": null,
+            "credit_limit": "2500.10",
+            "credit_used": null,
+            "credit_available": "2500.10",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 30,
+            "is_active": true,
+            "created_at": "2026-09-14T08:48:59+08:00",
+            "updated_at": "2026-09-14T08:54:38+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "GqkbAVwxd1",
+            "name": "Nissan Philippines, Inc.",
+            "code": null,
+            "contact_person": "Procurement Officer",
+            "email": null,
+            "phone": null,
+            "address": "Philippines",
+            "tin": "000-111-333-000",
+            "credit_limit": "3500000.00",
+            "credit_used": null,
+            "credit_available": "3500000.00",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 30,
+            "is_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "DzAwdKb5ld",
+            "name": "Suzuki Philippines, Inc.",
+            "code": null,
+            "contact_person": "Procurement Officer",
+            "email": null,
+            "phone": null,
+            "address": "Philippines",
+            "tin": "000-111-555-000",
+            "credit_limit": "2000000.00",
+            "credit_used": null,
+            "credit_available": "2000000.00",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 45,
+            "is_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc.",
+            "code": null,
+            "contact_person": "Procurement Officer",
+            "email": null,
+            "phone": null,
+            "address": "Philippines",
+            "tin": "000-111-222-000",
+            "credit_limit": "5000000.00",
+            "credit_used": "6206.00",
+            "credit_available": "4993794.00",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 30,
+            "is_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "MYAbJ3wBl7",
+            "name": "Yamaha Motor Philippines, Inc.",
+            "code": null,
+            "contact_person": "Procurement Officer",
+            "email": null,
+            "phone": null,
+            "address": "Philippines",
+            "tin": "000-111-666-000",
+            "credit_limit": "2500000.00",
+            "credit_used": null,
+            "credit_available": "2500000.00",
+            "credit_warning_ratio": 0.8,
+            "credit_warning": false,
+            "payment_terms_days": 45,
+            "is_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          }
+        ],
+        "links": {
+          "first": "http://localhost/api/v1/crm/customers?page=1",
+          "last": "http://localhost/api/v1/crm/customers?page=1",
+          "prev": null,
+          "next": null
+        },
+        "meta": {
+          "current_page": 1,
+          "from": 1,
+          "last_page": 1,
+          "links": [
+            {
+              "url": null,
+              "label": "&laquo; Previous",
+              "page": null,
+              "active": false
+            },
+            {
+              "url": "http://localhost/api/v1/crm/customers?page=1",
+              "label": "1",
+              "page": 1,
+              "active": true
+            },
+            {
+              "url": null,
+              "label": "Next &raquo;",
+              "page": null,
+              "active": false
+            }
+          ],
+          "path": "http://localhost/api/v1/crm/customers",
+          "per_page": 100,
+          "to": 6,
+          "total": 6
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/crm/products?per_page=100",
+      "status": 200,
+      "requestId": "121db1f2-b59f-4ad4-a922-f7c3b150169d",
+      "body": {
+        "data": [
+          {
+            "id": "35Mbaeb49K",
+            "part_number": "BB-001",
+            "name": "Wiper Motor Bobbin",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "22.00",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "kABpVvpKRW",
+            "part_number": "BU-001",
+            "name": "Windshield Wiper Bushing",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "21.00",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "R8epjLbOaD",
+            "part_number": "PC-001",
+            "name": "Pivot Cap Cover Type A",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "28.00",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "DzAwdKb5ld",
+            "part_number": "PC-002",
+            "name": "Pivot Cap Cover Type B",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "28.50",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "MYAbJ3wBl7",
+            "part_number": "RC-001",
+            "name": "Relay Cover Standard",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "38.00",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "0ldwDmpVa9",
+            "part_number": "RC-002",
+            "name": "Relay Cover Large",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "56.00",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "18.50",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T10:58:18+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "GqkbAVwxd1",
+            "part_number": "WB-002",
+            "name": "Wiper Bushing (Heavy Duty)",
+            "description": null,
+            "unit_of_measure": "pcs",
+            "standard_cost": "24.50",
+            "is_active": true,
+            "include_forecast_in_mrp": false,
+            "has_bom": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          }
+        ],
+        "links": {
+          "first": "http://localhost/api/v1/crm/products?page=1",
+          "last": "http://localhost/api/v1/crm/products?page=1",
+          "prev": null,
+          "next": null
+        },
+        "meta": {
+          "current_page": 1,
+          "from": 1,
+          "last_page": 1,
+          "links": [
+            {
+              "url": null,
+              "label": "&laquo; Previous",
+              "page": null,
+              "active": false
+            },
+            {
+              "url": "http://localhost/api/v1/crm/products?page=1",
+              "label": "1",
+              "page": 1,
+              "active": true
+            },
+            {
+              "url": null,
+              "label": "Next &raquo;",
+              "page": null,
+              "active": false
+            }
+          ],
+          "path": "http://localhost/api/v1/crm/products",
+          "per_page": 100,
+          "to": 8,
+          "total": 8
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/crm/price-agreements?per_page=100",
+      "status": 200,
+      "requestId": "61d5073d-584a-4ddd-a104-99e3d13ecbd3",
+      "body": {
+        "data": [
+          {
+            "id": "dGypLxpvAg",
+            "product": {
+              "id": "dGypLxpvAg",
+              "part_number": "WB-001",
+              "name": "Wiper Bushing (Standard)",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "dGypLxpvAg",
+              "name": "Toyota Motor Philippines, Inc."
+            },
+            "price": "22.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "GqkbAVwxd1",
+            "product": {
+              "id": "GqkbAVwxd1",
+              "part_number": "WB-002",
+              "name": "Wiper Bushing (Heavy Duty)",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "dGypLxpvAg",
+              "name": "Toyota Motor Philippines, Inc."
+            },
+            "price": "30.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "R8epjLbOaD",
+            "product": {
+              "id": "R8epjLbOaD",
+              "part_number": "PC-001",
+              "name": "Pivot Cap Cover Type A",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "dGypLxpvAg",
+              "name": "Toyota Motor Philippines, Inc."
+            },
+            "price": "35.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "DzAwdKb5ld",
+            "product": {
+              "id": "kABpVvpKRW",
+              "part_number": "BU-001",
+              "name": "Windshield Wiper Bushing",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "dGypLxpvAg",
+              "name": "Toyota Motor Philippines, Inc."
+            },
+            "price": "26.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "MYAbJ3wBl7",
+            "product": {
+              "id": "dGypLxpvAg",
+              "part_number": "WB-001",
+              "name": "Wiper Bushing (Standard)",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "GqkbAVwxd1",
+              "name": "Nissan Philippines, Inc."
+            },
+            "price": "23.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "35Mbaeb49K",
+            "product": {
+              "id": "DzAwdKb5ld",
+              "part_number": "PC-002",
+              "name": "Pivot Cap Cover Type B",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "GqkbAVwxd1",
+              "name": "Nissan Philippines, Inc."
+            },
+            "price": "35.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "kABpVvpKRW",
+            "product": {
+              "id": "MYAbJ3wBl7",
+              "part_number": "RC-001",
+              "name": "Relay Cover Standard",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "GqkbAVwxd1",
+              "name": "Nissan Philippines, Inc."
+            },
+            "price": "47.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "0ldwDmpVa9",
+            "product": {
+              "id": "GqkbAVwxd1",
+              "part_number": "WB-002",
+              "name": "Wiper Bushing (Heavy Duty)",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "R8epjLbOaD",
+              "name": "Honda Philippines, Inc."
+            },
+            "price": "31.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "BnoNyGw56v",
+            "product": {
+              "id": "R8epjLbOaD",
+              "part_number": "PC-001",
+              "name": "Pivot Cap Cover Type A",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "R8epjLbOaD",
+              "name": "Honda Philippines, Inc."
+            },
+            "price": "35.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "6r9wnvwOBW",
+            "product": {
+              "id": "0ldwDmpVa9",
+              "part_number": "RC-002",
+              "name": "Relay Cover Large",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "R8epjLbOaD",
+              "name": "Honda Philippines, Inc."
+            },
+            "price": "70.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "ajzw1lb3eW",
+            "product": {
+              "id": "35Mbaeb49K",
+              "part_number": "BB-001",
+              "name": "Wiper Motor Bobbin",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "DzAwdKb5ld",
+              "name": "Suzuki Philippines, Inc."
+            },
+            "price": "28.00",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "WDQwPGbYPx",
+            "product": {
+              "id": "kABpVvpKRW",
+              "part_number": "BU-001",
+              "name": "Windshield Wiper Bushing",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "DzAwdKb5ld",
+              "name": "Suzuki Philippines, Inc."
+            },
+            "price": "26.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "zW1p05N0BA",
+            "product": {
+              "id": "35Mbaeb49K",
+              "part_number": "BB-001",
+              "name": "Wiper Motor Bobbin",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "MYAbJ3wBl7",
+              "name": "Yamaha Motor Philippines, Inc."
+            },
+            "price": "28.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "E1mbe9bGrz",
+            "product": {
+              "id": "dGypLxpvAg",
+              "part_number": "WB-001",
+              "name": "Wiper Bushing (Standard)",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "MYAbJ3wBl7",
+              "name": "Yamaha Motor Philippines, Inc."
+            },
+            "price": "23.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          },
+          {
+            "id": "40awq4bKG2",
+            "product": {
+              "id": "MYAbJ3wBl7",
+              "part_number": "RC-001",
+              "name": "Relay Cover Standard",
+              "unit_of_measure": "pcs"
+            },
+            "customer": {
+              "id": "MYAbJ3wBl7",
+              "name": "Yamaha Motor Philippines, Inc."
+            },
+            "price": "47.50",
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-12-31",
+            "pricing_method": "flat",
+            "pricing_method_label": "Flat",
+            "tiers": null,
+            "is_currently_active": true,
+            "created_at": "2026-09-14T07:36:52+08:00",
+            "updated_at": "2026-09-14T07:36:52+08:00",
+            "deleted_at": null
+          }
+        ],
+        "links": {
+          "first": "http://localhost/api/v1/crm/price-agreements?page=1",
+          "last": "http://localhost/api/v1/crm/price-agreements?page=1",
+          "prev": null,
+          "next": null
+        },
+        "meta": {
+          "current_page": 1,
+          "from": 1,
+          "last_page": 1,
+          "links": [
+            {
+              "url": null,
+              "label": "&laquo; Previous",
+              "page": null,
+              "active": false
+            },
+            {
+              "url": "http://localhost/api/v1/crm/price-agreements?page=1",
+              "label": "1",
+              "page": 1,
+              "active": true
+            },
+            {
+              "url": null,
+              "label": "Next &raquo;",
+              "page": null,
+              "active": false
+            }
+          ],
+          "path": "http://localhost/api/v1/crm/price-agreements",
+          "per_page": 100,
+          "to": 15,
+          "total": 15
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "a66a0c52-fa43-435a-9eda-92fafd826d49",
+      "body": ""
+    },
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "38cc77ba-7900-40f7-8626-48bf6e2d5f35",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "name": "Pedro Garcia",
+          "email": "ppc@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "kABpVvpKRW",
+            "name": "PPC Head",
+            "slug": "ppc_head"
+          },
+          "employee": {
+            "id": "DzAwdKb5ld",
+            "employee_no": "DEMO-0017",
+            "full_name": "Pedro Garcia",
+            "department_id": "0ldwDmpVa9"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.work_orders.view",
+            "production.schedule.view",
+            "production.routings.view",
+            "production.routings.manage",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.boms.manage",
+            "mrp.machines.view",
+            "mrp.molds.view",
+            "mrp.plans.view",
+            "mrp.plans.run",
+            "mrp.runs.view",
+            "mrp.runs.trigger",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.ppc.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "forecasting.manage",
+            "return_management.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/mrp/products/dGypLxpvAg/bom",
+      "status": 200,
+      "requestId": "02bc7202-a426-4476-874e-338c7c1b3939",
+      "body": {
+        "data": {
+          "id": "dGypLxpvAg",
+          "cost_batch_size": "1.000",
+          "version": 1,
+          "is_active": true,
+          "item_count": 3,
+          "material_cost": "2.90",
+          "labor_cost": "0.00",
+          "machine_cost": "0.00",
+          "overhead_cost": "0.00",
+          "total_cost": "2.90",
+          "cost_basis": "standard_cost+routing",
+          "costed_at": "2026-09-14T10:33:00+08:00",
+          "cost_warnings": [],
+          "items": [
+            {
+              "id": "dGypLxpvAg",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg",
+                "item_type": "raw_material"
+              },
+              "quantity_per_unit": "0.0150",
+              "unit": "kg",
+              "waste_factor": "5.00",
+              "effective_quantity": "0.015750",
+              "cost_quantity": "0.015750",
+              "unit_cost": "120.0000",
+              "extended_cost": "1.89",
+              "cost_source": "standard_cost",
+              "sort_order": 0
+            },
+            {
+              "id": "GqkbAVwxd1",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg",
+                "item_type": "raw_material"
+              },
+              "quantity_per_unit": "0.0020",
+              "unit": "kg",
+              "waste_factor": "2.00",
+              "effective_quantity": "0.002040",
+              "cost_quantity": "0.002040",
+              "unit_cost": "250.0000",
+              "extended_cost": "0.51",
+              "cost_source": "standard_cost",
+              "sort_order": 1
+            },
+            {
+              "id": "R8epjLbOaD",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs",
+                "item_type": "packaging"
+              },
+              "quantity_per_unit": "1.0000",
+              "unit": "pcs",
+              "waste_factor": "0.00",
+              "effective_quantity": "1.000000",
+              "cost_quantity": "1.000000",
+              "unit_cost": "0.5000",
+              "extended_cost": "0.50",
+              "cost_source": "standard_cost",
+              "sort_order": 2
+            }
+          ],
+          "created_at": "2026-09-14T07:36:52+08:00",
+          "updated_at": "2026-09-14T10:33:00+08:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "c0097bee-1f3b-4fca-a531-82b858f76a95",
+      "body": ""
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "efcb4293-9e32-4134-91af-822d0467c2d6",
+      "body": {
+        "data": {
+          "id": "6r9wnvwOBW",
+          "name": "Sara Sales",
+          "email": "crm@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "MYAbJ3wBl7",
+            "name": "Sales Officer",
+            "slug": "sales_officer"
+          },
+          "employee": null,
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "accounting.customers.view",
+            "accounting.customers.manage",
+            "inventory.view",
+            "crm.view",
+            "crm.products.view",
+            "crm.price_agreements.view",
+            "crm.sales_orders.view",
+            "crm.sales_orders.create",
+            "crm.sales_orders.update",
+            "crm.sales_orders.delete",
+            "crm.sales_orders.confirm",
+            "crm.sales_orders.cancel",
+            "crm.complaints.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "return_management.view",
+            "return_management.manage"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/sales-orders",
+      "status": 201,
+      "requestId": "e4efc32f-a5b5-43f8-a088-8005cfef397d",
+      "body": {
+        "data": {
+          "id": "GkXwO7wP52",
+          "so_number": "SO-202609-0017",
+          "date": "2026-09-14",
+          "subtotal": "22.50",
+          "vat_amount": "2.70",
+          "total_amount": "25.20",
+          "status": "draft",
+          "status_label": "Draft",
+          "next_statuses": [],
+          "payment_terms_days": 30,
+          "delivery_terms": "Disposable live P2P audit order",
+          "incoterm": null,
+          "notes": "LIVE-B11 disposable L06 63796645",
+          "submission_source": "internal",
+          "customer_confirmation_requested_at": null,
+          "latest_response": null,
+          "capabilities": {
+            "can_respond": false,
+            "can_confirm": false
+          },
+          "is_editable": true,
+          "is_cancellable": true,
+          "item_count": 1,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "items": [
+            {
+              "id": "OX5b9mbBrk",
+              "product": {
+                "id": "dGypLxpvAg",
+                "part_number": "WB-001",
+                "name": "Wiper Bushing (Standard)",
+                "unit_of_measure": "pcs"
+              },
+              "quantity": "1.00",
+              "unit_price": "22.50",
+              "total": "22.50",
+              "quantity_delivered": "0.00",
+              "remaining_quantity": "1.00",
+              "delivery_date": "2026-09-28"
+            }
+          ],
+          "mrp_plan": null,
+          "work_orders": [],
+          "inspections": [],
+          "deliveries": [],
+          "invoices": [],
+          "created_at": "2026-09-14T13:30:30+08:00",
+          "updated_at": "2026-09-14T13:30:30+08:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/sales-orders/GkXwO7wP52/confirm",
+      "status": 200,
+      "requestId": "2d296221-0621-44c5-8c78-f8aa8309adfd",
+      "body": {
+        "data": {
+          "id": "GkXwO7wP52",
+          "so_number": "SO-202609-0017",
+          "date": "2026-09-14",
+          "subtotal": "22.50",
+          "vat_amount": "2.70",
+          "total_amount": "25.20",
+          "status": "confirmed",
+          "status_label": "Confirmed",
+          "next_statuses": [
+            {
+              "value": "in_production",
+              "label": "In Production"
+            },
+            {
+              "value": "partially_delivered",
+              "label": "Partially Delivered"
+            },
+            {
+              "value": "delivered",
+              "label": "Delivered"
+            },
+            {
+              "value": "invoiced",
+              "label": "Invoiced"
+            }
+          ],
+          "payment_terms_days": 30,
+          "delivery_terms": "Disposable live P2P audit order",
+          "incoterm": null,
+          "notes": "LIVE-B11 disposable L06 63796645",
+          "submission_source": "internal",
+          "customer_confirmation_requested_at": null,
+          "latest_response": null,
+          "capabilities": {
+            "can_respond": false,
+            "can_confirm": false
+          },
+          "is_editable": false,
+          "is_cancellable": true,
+          "item_count": 1,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "items": [
+            {
+              "id": "OX5b9mbBrk",
+              "product": {
+                "id": "dGypLxpvAg",
+                "part_number": "WB-001",
+                "name": "Wiper Bushing (Standard)",
+                "unit_of_measure": "pcs"
+              },
+              "quantity": "1.00",
+              "unit_price": "22.50",
+              "total": "22.50",
+              "quantity_delivered": "0.00",
+              "remaining_quantity": "1.00",
+              "delivery_date": "2026-09-28"
+            }
+          ],
+          "mrp_plan": null,
+          "work_orders": [],
+          "inspections": [],
+          "deliveries": [],
+          "invoices": [],
+          "created_at": "2026-09-14T13:30:30+08:00",
+          "updated_at": "2026-09-14T13:30:30+08:00",
+          "deleted_at": null
+        },
+        "chain_result": {
+          "so_number": "SO-202609-0017",
+          "work_orders_created": 0,
+          "auto_scheduled": 0,
+          "needs_manual": 0,
+          "shortages": 0,
+          "prs_created": 0,
+          "planning_status": "queued",
+          "work_orders": [],
+          "scheduling_conflicts": []
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/sales-orders/GkXwO7wP52/confirm",
+      "status": 422,
+      "requestId": "c62e51d0-bccd-449c-8278-40c7a180e443",
+      "body": {
+        "message": "Only draft sales orders can be confirmed.",
+        "errors": {
+          "error": [
+            "Only draft sales orders can be confirmed."
+          ]
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/crm/sales-orders/GkXwO7wP52",
+      "status": 200,
+      "requestId": "cc2fd41b-9d61-49cb-9eed-b7c87acefb30",
+      "body": {
+        "data": {
+          "id": "GkXwO7wP52",
+          "so_number": "SO-202609-0017",
+          "date": "2026-09-14",
+          "subtotal": "22.50",
+          "vat_amount": "2.70",
+          "total_amount": "25.20",
+          "status": "confirmed",
+          "status_label": "Confirmed",
+          "next_statuses": [
+            {
+              "value": "in_production",
+              "label": "In Production"
+            },
+            {
+              "value": "partially_delivered",
+              "label": "Partially Delivered"
+            },
+            {
+              "value": "delivered",
+              "label": "Delivered"
+            },
+            {
+              "value": "invoiced",
+              "label": "Invoiced"
+            }
+          ],
+          "payment_terms_days": 30,
+          "delivery_terms": "Disposable live P2P audit order",
+          "incoterm": null,
+          "notes": "LIVE-B11 disposable L06 63796645",
+          "submission_source": "internal",
+          "customer_confirmation_requested_at": null,
+          "latest_response": null,
+          "capabilities": {
+            "can_respond": false,
+            "can_confirm": false
+          },
+          "is_editable": false,
+          "is_cancellable": true,
+          "item_count": 1,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "items": [
+            {
+              "id": "OX5b9mbBrk",
+              "product": {
+                "id": "dGypLxpvAg",
+                "part_number": "WB-001",
+                "name": "Wiper Bushing (Standard)",
+                "unit_of_measure": "pcs"
+              },
+              "quantity": "1.00",
+              "unit_price": "22.50",
+              "total": "22.50",
+              "quantity_delivered": "0.00",
+              "remaining_quantity": "1.00",
+              "delivery_date": "2026-09-28"
+            }
+          ],
+          "mrp_plan": null,
+          "work_orders": [],
+          "inspections": [],
+          "deliveries": [],
+          "invoices": [],
+          "created_at": "2026-09-14T13:30:30+08:00",
+          "updated_at": "2026-09-14T13:30:30+08:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "482ea9eb-7581-4650-9c0f-201d0ac712fb",
+      "body": ""
+    },
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "21022969-70b0-4f89-9fb3-70e2edc699dc",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "name": "Pedro Garcia",
+          "email": "ppc@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "kABpVvpKRW",
+            "name": "PPC Head",
+            "slug": "ppc_head"
+          },
+          "employee": {
+            "id": "DzAwdKb5ld",
+            "employee_no": "DEMO-0017",
+            "full_name": "Pedro Garcia",
+            "department_id": "0ldwDmpVa9"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.work_orders.view",
+            "production.schedule.view",
+            "production.routings.view",
+            "production.routings.manage",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.boms.manage",
+            "mrp.machines.view",
+            "mrp.molds.view",
+            "mrp.plans.view",
+            "mrp.plans.run",
+            "mrp.runs.view",
+            "mrp.runs.trigger",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.ppc.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "forecasting.manage",
+            "return_management.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/mrp/sales-orders/GkXwO7wP52/mrp-plan",
+      "status": 200,
+      "requestId": "270ba0b7-75cd-40f4-abde-8a44855ba055",
+      "body": {
+        "data": {
+          "id": "40awq4bKG2",
+          "mrp_plan_no": "MRP-202609-0015",
+          "sales_order": {
+            "id": "GkXwO7wP52",
+            "so_number": "SO-202609-0017",
+            "customer": {
+              "id": "dGypLxpvAg",
+              "name": "Toyota Motor Philippines, Inc."
+            }
+          },
+          "version": 1,
+          "status": "active",
+          "status_label": "Active",
+          "total_lines": 1,
+          "shortages_found": 0,
+          "auto_pr_count": 0,
+          "draft_wo_count": 1,
+          "diagnostics": [
+            {
+              "item_id": "dGypLxpvAg",
+              "item_code": "RM-001",
+              "gross": 0.016,
+              "on_hand": 236.968,
+              "reserved": 0,
+              "in_transit": 20000,
+              "safety_stock": 200,
+              "open_purchase_requests": 0,
+              "standard_unit_cost": "120.0000",
+              "gross_cost": "1.92",
+              "net_cost": "0.00",
+              "net": 0,
+              "action": "sufficient"
+            },
+            {
+              "item_id": "MYAbJ3wBl7",
+              "item_code": "RM-010",
+              "gross": 0.002,
+              "on_hand": 784.996,
+              "reserved": 0,
+              "in_transit": 0,
+              "safety_stock": 20,
+              "open_purchase_requests": 0,
+              "standard_unit_cost": "250.0000",
+              "gross_cost": "0.50",
+              "net_cost": "0.00",
+              "net": 0,
+              "action": "sufficient"
+            },
+            {
+              "item_id": "ajzw1lb3eW",
+              "item_code": "PKG-001",
+              "gross": 1,
+              "on_hand": 1605,
+              "reserved": 0,
+              "in_transit": 0,
+              "safety_stock": 500,
+              "open_purchase_requests": 0,
+              "standard_unit_cost": "0.5000",
+              "gross_cost": "0.50",
+              "net_cost": "0.00",
+              "net": 0,
+              "action": "sufficient"
+            }
+          ],
+          "cost_summary": {
+            "material_cost": "2.90",
+            "labor_cost": "0.00",
+            "machine_cost": "0.00",
+            "overhead_cost": "0.00",
+            "planned_production_cost": "2.90",
+            "products": [
+              {
+                "product_id": "dGypLxpvAg",
+                "part_number": "WB-001",
+                "name": "Wiper Bushing (Standard)",
+                "quantity": 1,
+                "unit_cost": "2.90",
+                "extended_cost": "2.90"
+              }
+            ]
+          },
+          "generation": {
+            "source": "sales_order",
+            "trigger": "automatic",
+            "reason": "sales_order_confirmed",
+            "actor_type": "system",
+            "run_id": "BnoNyGw56v",
+            "actor_id": null,
+            "source_id": "GkXwO7wP52"
+          },
+          "generator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "work_orders": [
+            {
+              "id": "kABpVvpKRW",
+              "wo_number": "WO-202609-0007",
+              "product_id": "dGypLxpvAg",
+              "parent": null,
+              "quantity_target": 1,
+              "status": "planned",
+              "status_label": "Planned",
+              "planned_start": "2026-09-26T00:00:00+08:00"
+            }
+          ],
+          "purchase_requests": [],
+          "generated_at": "2026-09-14T13:30:31+08:00",
+          "created_at": "2026-09-14T13:30:31+08:00",
+          "updated_at": "2026-09-14T13:30:31+08:00"
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "85f98b14-e971-42bd-9dea-e78ec7c7a42d",
+      "body": ""
+    }
+  ],
+  "residuals": [
+    {
+      "type": "sales-order",
+      "id": "GkXwO7wP52",
+      "detail": "confirmed disposable source for L06-L09"
+    },
+    {
+      "type": "mrp-plan",
+      "id": "40awq4bKG2",
+      "detail": "queue-created plan for disposable SO"
+    }
+  ],
+  "counts": {
+    "PASS": 17,
+    "OBSERVED": 3,
+    "BLOCKED": 4
+  }
+}

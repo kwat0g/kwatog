@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\HR\Requests;
 
 use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Position;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdatePositionRequest extends FormRequest
 {
@@ -27,7 +29,25 @@ class UpdatePositionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title'         => ['sometimes', 'required', 'string', 'max:100', "regex:/^[\\p{L}0-9\\s.&\\-,()\\/]+$/u"],
+            'title'         => [
+                'sometimes', 'required', 'string', 'max:100', "regex:/^[\\p{L}0-9\\s.&\\-,()\\/]+$/u",
+                Rule::unique('positions', 'title')
+                    ->ignore($this->route('position') instanceof Position ? $this->route('position')->getKey() : $this->route('position'))
+                    ->where(function ($query) {
+                        $department = $this->input('department_id');
+                        if ($department === null && $this->route('position') instanceof Position) {
+                            $department = $this->route('position')->department_id;
+                        }
+
+                        $departmentId = is_numeric($department)
+                            ? (int) $department
+                            : Department::tryDecodeHash((string) $department);
+
+                        return $query
+                            ->where('department_id', $departmentId)
+                            ->whereNull('deleted_at');
+                    }),
+            ],
             'department_id' => ['sometimes', 'required', 'string'],
             'salary_grade'  => ['sometimes', 'nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]+$/'],
         ];

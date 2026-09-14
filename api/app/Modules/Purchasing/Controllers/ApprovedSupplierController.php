@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Requests\StoreApprovedSupplierRequest;
 use App\Modules\Purchasing\Requests\UpdateApprovedSupplierRequest;
@@ -47,7 +48,12 @@ class ApprovedSupplierController
 
     public function restore(ApprovedSupplier $approvedSupplier): JsonResponse
     {
-        $approvedSupplier->restore();
+        try {
+            $this->service->restore($approvedSupplier);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         return response()->json(['message' => 'Approved supplier restored.']);
     }
 }

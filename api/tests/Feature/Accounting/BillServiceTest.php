@@ -235,6 +235,36 @@ class BillServiceTest extends TestCase
         $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
     }
 
+    public function test_bill_payment_replay_returns_the_original_payment_and_journal(): void
+    {
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Replay Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-REPLAY-1', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+        $data = [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-11',
+            'amount' => '40.00',
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => 'bill-payment-test-1',
+        ];
+
+        $first = $service->recordPayment($bill, $data, $user);
+        $replay = $service->recordPayment($bill->fresh(), $data, $user);
+
+        $this->assertSame($first->id, $replay->id);
+        $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+        $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+        $this->assertSame('40.00', (string) $bill->refresh()->amount_paid);
+    }
+
     public function test_cannot_bill_against_cancelled_po(): void
     {
         $user = $this->newUser();

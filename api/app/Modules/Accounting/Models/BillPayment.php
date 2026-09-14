@@ -20,6 +20,7 @@ class BillPayment extends Model
     protected $fillable = [
         'bill_id', 'cash_account_id', 'payment_date',
         'amount', 'payment_method', 'reference_number',
+        'idempotency_key',
         'journal_entry_id', 'created_by', 'status', 'voided_at', 'voided_by',
         'void_reason', 'void_reversal_journal_entry_id', 'replacement_payment_id',
     ];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Vendor;
@@ -128,6 +129,26 @@ class ApprovedSupplierService
     public function delete(ApprovedSupplier $row): void
     {
         $row->delete();
+    }
+
+    public function restore(ApprovedSupplier $row): ApprovedSupplier
+    {
+        return DB::transaction(function () use ($row) {
+            $activeDuplicate = ApprovedSupplier::query()
+                ->where('item_id', $row->item_id)
+                ->where('vendor_id', $row->vendor_id)
+                ->whereKeyNot($row->getKey())
+                ->exists();
+
+            if ($activeDuplicate) {
+                throw new BusinessRuleException(
+                    'Cannot restore this approved supplier link while an active link for the same item and vendor exists.'
+                );
+            }
+
+            $row->restore();
+            return $row->fresh(['item', 'vendor']);
+        });
     }
 
     private function setPreferred(ApprovedSupplier $row): void

@@ -1,0 +1,1440 @@
+{
+  "generated_at": "2026-09-14T06:18:18.654Z",
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.approve\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L17 correction reads finished-goods output",
+      "detail": "HTTP 200; body={\"data\":[{\"id\":\"GqkbAVwxd1\",\"recorded_at\":\"2026-09-14T13:47:16+08:00\",\"good_count\":2,\"reject_count\":1,\"total_count\":3,\"shift\":null,\"batch_code\":\"WO-202609-0008-B01\",\"remarks\":\"LIVE-B12 output good/reject\",\"material_lineage\":{\"work_order_class\":\"standard\",\"exception_reason\":null,\"authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"materials\":[{\"item_id\":\"dGypLxpvAg\",\"bom_quantity\":\"0.047\",\"actual_quantity_issued\":\"0.047\"},{\"item_id\":\"MYAbJ3wBl7\",\"bom_quantity\":\"0.006\",\"actual_quantity_issued\":\"0.006\"},{\"item_id\":\"ajzw1lb3eW\",\"bom_quantity\":\"3.000\",\"actual_quantity_issued\":\"3.000\"}]},\"production_receipt_handoff\":{\"status\":\"manual_required\",\"status_label\":\"Inventory action required\",\"message\":\"Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.\",\"at\":\"2026-09-14T13:50:04+08:00\"},\"recorder\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\"},\"defects\":[{\"id\":\"GqkbAVwxd1\",\"count\":1,\"defect_type\":{\"id\":\"0ldwDmpVa9\",\"code\":\"BUBBLE\",\"name\":\"Air Bubbles\"}}]}]}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L17 correction sees manual-required receipt",
+      "detail": "output=GqkbAVwxd1; handoff={\"status\":\"manual_required\",\"status_label\":\"Inventory action required\",\"message\":\"Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.\",\"at\":\"2026-09-14T13:50:04+08:00\"}; movement_ids="
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L17 narrow finished-goods receipt retry",
+      "detail": "HTTP 422; body={\"message\":\"Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L17 receipt retry stock reconciliation",
+      "detail": "before_movements=; after_movements=; after={\"id\":\"GqkbAVwxd1\",\"recorded_at\":\"2026-09-14T13:47:16+08:00\",\"good_count\":2,\"reject_count\":1,\"total_count\":3,\"shift\":null,\"batch_code\":\"WO-202609-0008-B01\",\"remarks\":\"LIVE-B12 output good/reject\",\"material_lineage\":{\"work_order_class\":\"standard\",\"exception_reason\":null,\"authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"materials\":[{\"item_id\":\"dGypLxpvAg\",\"bom_quantity\":\"0.047\",\"actual_quantity_issued\":\"0.047\"},{\"item_id\":\"MYAbJ3wBl7\",\"bom_quantity\":\"0.006\",\"actual_quantity_issued\":\"0.006\"},{\"item_id\":\"ajzw1lb3eW\",\"bom_quantity\":\"3.000\",\"actual_quantity_issued\":\"3.000\"}]},\"production_receipt_handoff\":{\"status\":\"manual_required\",\"status_label\":\"Inventory action required\",\"message\":\"Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.\",\"at\":\"2026-09-14T14:18:15+08:00\"},\"recorder\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\"},\"defects\":[{\"id\":\"GqkbAVwxd1\",\"count\":1,\"defect_type\":{\"id\":\"0ldwDmpVa9\",\"code\":\"BUBBLE\",\"name\":\"Air Bubbles\"}}]}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "warehouse authenticated",
+      "detail": "HTTP 200; body={\"data\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Carlos Mendoza\",\"email\":\"warehouse@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"BnoNyGw56v\",\"name\":\"Warehouse Staff\",\"slug\":\"warehouse_staff\"},\"employee\":{\"id\":\"BnoNyGw56v\",\"employee_no\":\"DEMO-0022\",\"full_name\":\"Carlos Mendoza\",\"department_id\":\"35Mbaeb49K\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.items.manage\",\"inventory.warehouse.manage\",\"inventory.grn.create\",\"inventory.issue.create\",\"inventory.adjust\",\"inventory.stock_count.view\",\"inventory.stock_count.manage\",\"inventory.picking.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"supply_chain.deliveries.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.warehouse.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.receive\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "warehouse",
+      "name": "L17 correction reads stock movements under Warehouse scope",
+      "detail": "HTTP 200; body={\"data\":[{\"id\":\"36aN7aw0xV\",\"created_at\":\"2026-09-14T13:47:15+08:00\",\"movement_type\":\"material_issue\",\"movement_type_label\":\"Material Issue\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\"},\"from_location\":{\"id\":\"ajzw1lb3eW\",\"code\":\"A-11\"},\"to_location\":null,\"quantity\":\"3.000\",\"unit_cost\":\"0.5000\",\"total_cost\":\"1.50\",\"lot_number\":null,\"expiry_date\":null,\"gl_handoff\":{\"status\":\"generated\",\"status_label\":\"Posted to GL\",\"message\":null,\"at\":\"2026-09-14T13:47:15+08:00\",\"journal_entry\":{\"id\":\"G6ONoVpjvd\",\"entry_number\":\"JE-202609-0040\"}},\"reference_type\":\"work_order\",\"reference_id\":\"0ldwDmpVa9\",\"remarks\":\"WO WO-202609-0008 material issue (reservation #6)\",\"creator\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\"}},{\"id\":\"eQ9pgkpOm7\",\"created_at\":\"2026-09-14T13:47:15+08:00\",\"movement_type\":\"material_issue\",\"movement_type_label\":\"Material Issue\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\"},\"from_location\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"A-05\"},\"to_location\":null,\"quantity\":\"0.006\",\"unit_cost\":\"250.0000\",\"total_cost\":\"1.50\",\"lot_number\":null,\"expiry_date\":null,\"gl_handoff\":{\"status\":\"generated\",\"status_label\":\"Posted to GL\",\"message\":null,\"at\":\"2026-09-14T13:47:15+08:00\",\"journal_entry\":{\"id\":\"29awRBwjWx\",\"entry_number\":\"JE-202609-0039\"}},\"reference_type\":\"work_order\",\"reference_id\":\"0ldwDmpVa9\",\"remarks\":\"WO WO-202609-0008 material issue (reservation #5)\",\"creator\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\"}},{\"id\":\"dlzNEdpVMA\",\"created_at\":\"2026-09-14T13:47:15+08:00\",\"movement_type\":\"material_issue\",\"movement_type_label\":\"Material Issue\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\"},\"from_location\":{\"id\":\"dGypLxpvAg\",\"code\":\"A-01\"},\"to_location\":null,\"quantity\":\"0.047\",\"unit_cost\":\"120.0000\",\"total_cost\":\"5.64\",\"lot_number\":null,\"expiry_date\":null,\"gl_handoff\":{\"status\":\"generated\",\"status_label\":\"Posted to GL\",\"message\":null,\"at\":\"2026-09-14T13:47:15+08:00\",\"journal_entry\":{\"id\":\"Wx5b2mNdal\",\"entry_number\":\"JE-202609-0038\"}},\"reference_type\":\"work_order\",\"reference_id\":\"0ldwDmpVa9\",\"remarks\":\"WO WO-202609-0008 material issue (reservation #4)\",\"creator\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\"}},{\"id\":\"2PLbWyp5OW\",\"created_at\":\"2026-09-14T12:29:28+08:00\",\"movement_type\":\"adjustment_in\",\"movement_type_label\":\"Adjustment In\",\"item\":{\"id\":\"E1mbe9bGrz\",\"code\":\"B4-51545426\",\"name\":\"Live B4 Resin edited"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "warehouse",
+      "name": "L17 correction stock GL manual target",
+      "detail": "No explicit manual_required stock GL handoff among 27 movements; Finance retry not sent."
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "warehouse",
+      "name": "L17 correction scope note",
+      "detail": "Finance has accounting.journal.post but not inventory.view; stock movement discovery was therefore performed as Warehouse and no unauthorized Finance list request is counted as product evidence."
+    }
+  ],
+  "evidence": [
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B13-R-1",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "name": "Ricardo Tanaka",
+          "email": "production@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "35Mbaeb49K",
+            "name": "Production Manager",
+            "slug": "production_manager"
+          },
+          "employee": {
+            "id": "R8epjLbOaD",
+            "employee_no": "DEMO-0016",
+            "full_name": "Ricardo Tanaka",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "hr.salary_adjustments.view",
+            "hr.salary_adjustments.act",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "loans.view",
+            "loans.approve",
+            "inventory.view",
+            "purchasing.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.wo.record",
+            "production.work_orders.view",
+            "production.work_orders.lifecycle",
+            "production.machines.manage",
+            "production.machines.transition",
+            "production.molds.manage",
+            "production.schedule.view",
+            "production.schedule.confirm",
+            "production.dashboard.view",
+            "production.routings.view",
+            "production.operator.access",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.machines.view",
+            "mrp.plans.view",
+            "mrp.runs.view",
+            "quality.view",
+            "quality.inspections.view",
+            "quality.ncr.view",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.plant_manager.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.approve"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/production/work-orders/0ldwDmpVa9/outputs",
+      "status": 200,
+      "requestId": "LIVE-B13-R-2",
+      "body": {
+        "data": [
+          {
+            "id": "GqkbAVwxd1",
+            "recorded_at": "2026-09-14T13:47:16+08:00",
+            "good_count": 2,
+            "reject_count": 1,
+            "total_count": 3,
+            "shift": null,
+            "batch_code": "WO-202609-0008-B01",
+            "remarks": "LIVE-B12 output good/reject",
+            "material_lineage": {
+              "work_order_class": "standard",
+              "exception_reason": null,
+              "authorized_by": "6r9wnvwOBW",
+              "material_plan_source": "bom",
+              "materials": [
+                {
+                  "item_id": "dGypLxpvAg",
+                  "bom_quantity": "0.047",
+                  "actual_quantity_issued": "0.047"
+                },
+                {
+                  "item_id": "MYAbJ3wBl7",
+                  "bom_quantity": "0.006",
+                  "actual_quantity_issued": "0.006"
+                },
+                {
+                  "item_id": "ajzw1lb3eW",
+                  "bom_quantity": "3.000",
+                  "actual_quantity_issued": "3.000"
+                }
+              ]
+            },
+            "production_receipt_handoff": {
+              "status": "manual_required",
+              "status_label": "Inventory action required",
+              "message": "Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.",
+              "at": "2026-09-14T13:50:04+08:00"
+            },
+            "recorder": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            },
+            "defects": [
+              {
+                "id": "GqkbAVwxd1",
+                "count": 1,
+                "defect_type": {
+                  "id": "0ldwDmpVa9",
+                  "code": "BUBBLE",
+                  "name": "Air Bubbles"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/outputs/GqkbAVwxd1/retry-receipt",
+      "status": 422,
+      "requestId": "LIVE-B13-R-3",
+      "body": {
+        "message": "Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again."
+      }
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/production/work-orders/0ldwDmpVa9/outputs",
+      "status": 200,
+      "requestId": "LIVE-B13-R-4",
+      "body": {
+        "data": [
+          {
+            "id": "GqkbAVwxd1",
+            "recorded_at": "2026-09-14T13:47:16+08:00",
+            "good_count": 2,
+            "reject_count": 1,
+            "total_count": 3,
+            "shift": null,
+            "batch_code": "WO-202609-0008-B01",
+            "remarks": "LIVE-B12 output good/reject",
+            "material_lineage": {
+              "work_order_class": "standard",
+              "exception_reason": null,
+              "authorized_by": "6r9wnvwOBW",
+              "material_plan_source": "bom",
+              "materials": [
+                {
+                  "item_id": "dGypLxpvAg",
+                  "bom_quantity": "0.047",
+                  "actual_quantity_issued": "0.047"
+                },
+                {
+                  "item_id": "MYAbJ3wBl7",
+                  "bom_quantity": "0.006",
+                  "actual_quantity_issued": "0.006"
+                },
+                {
+                  "item_id": "ajzw1lb3eW",
+                  "bom_quantity": "3.000",
+                  "actual_quantity_issued": "3.000"
+                }
+              ]
+            },
+            "production_receipt_handoff": {
+              "status": "manual_required",
+              "status_label": "Inventory action required",
+              "message": "Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.",
+              "at": "2026-09-14T14:18:15+08:00"
+            },
+            "recorder": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            },
+            "defects": [
+              {
+                "id": "GqkbAVwxd1",
+                "count": 1,
+                "defect_type": {
+                  "id": "0ldwDmpVa9",
+                  "code": "BUBBLE",
+                  "name": "Air Bubbles"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B13-R-5",
+      "body": ""
+    },
+    {
+      "actor": "warehouse",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B13-R-6",
+      "body": {
+        "data": {
+          "id": "ajzw1lb3eW",
+          "name": "Carlos Mendoza",
+          "email": "warehouse@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "BnoNyGw56v",
+            "name": "Warehouse Staff",
+            "slug": "warehouse_staff"
+          },
+          "employee": {
+            "id": "BnoNyGw56v",
+            "employee_no": "DEMO-0022",
+            "full_name": "Carlos Mendoza",
+            "department_id": "35Mbaeb49K"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "inventory.view",
+            "inventory.items.manage",
+            "inventory.warehouse.manage",
+            "inventory.grn.create",
+            "inventory.issue.create",
+            "inventory.adjust",
+            "inventory.stock_count.view",
+            "inventory.stock_count.manage",
+            "inventory.picking.view",
+            "inventory.mrb.view",
+            "inventory.mrb.manage",
+            "supply_chain.deliveries.view",
+            "hr.separation.view",
+            "hr.clearance.sign",
+            "dashboard.warehouse.view",
+            "dashboard.layout.reset",
+            "notifications.view",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.receive"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "warehouse",
+      "method": "GET",
+      "path": "/inventory/stock-movements?per_page=200",
+      "status": 200,
+      "requestId": "LIVE-B13-R-7",
+      "body": {
+        "data": [
+          {
+            "id": "36aN7aw0xV",
+            "created_at": "2026-09-14T13:47:15+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "ajzw1lb3eW",
+              "code": "PKG-001",
+              "name": "Standard Poly Bag"
+            },
+            "from_location": {
+              "id": "ajzw1lb3eW",
+              "code": "A-11"
+            },
+            "to_location": null,
+            "quantity": "3.000",
+            "unit_cost": "0.5000",
+            "total_cost": "1.50",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T13:47:15+08:00",
+              "journal_entry": {
+                "id": "G6ONoVpjvd",
+                "entry_number": "JE-202609-0040"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "0ldwDmpVa9",
+            "remarks": "WO WO-202609-0008 material issue (reservation #6)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "eQ9pgkpOm7",
+            "created_at": "2026-09-14T13:47:15+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "MYAbJ3wBl7",
+              "code": "RM-010",
+              "name": "Black Colorant"
+            },
+            "from_location": {
+              "id": "MYAbJ3wBl7",
+              "code": "A-05"
+            },
+            "to_location": null,
+            "quantity": "0.006",
+            "unit_cost": "250.0000",
+            "total_cost": "1.50",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T13:47:15+08:00",
+              "journal_entry": {
+                "id": "29awRBwjWx",
+                "entry_number": "JE-202609-0039"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "0ldwDmpVa9",
+            "remarks": "WO WO-202609-0008 material issue (reservation #5)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "dlzNEdpVMA",
+            "created_at": "2026-09-14T13:47:15+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "dGypLxpvAg",
+              "code": "RM-001",
+              "name": "Plastic Resin Type A (ABS)"
+            },
+            "from_location": {
+              "id": "dGypLxpvAg",
+              "code": "A-01"
+            },
+            "to_location": null,
+            "quantity": "0.047",
+            "unit_cost": "120.0000",
+            "total_cost": "5.64",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T13:47:15+08:00",
+              "journal_entry": {
+                "id": "Wx5b2mNdal",
+                "entry_number": "JE-202609-0038"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "0ldwDmpVa9",
+            "remarks": "WO WO-202609-0008 material issue (reservation #4)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "2PLbWyp5OW",
+            "created_at": "2026-09-14T12:29:28+08:00",
+            "movement_type": "adjustment_in",
+            "movement_type_label": "Adjustment In",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "9eQbB6qb7G",
+              "code": "B4L51545426"
+            },
+            "quantity": "1.000",
+            "unit_cost": "10.1121",
+            "total_cost": "10.11",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T12:29:28+08:00",
+              "journal_entry": {
+                "id": "n2VN3awv1A",
+                "entry_number": "JE-202609-0032"
+              }
+            },
+            "reference_type": "stock_count_session",
+            "reference_id": "DzAwdKb5ld",
+            "remarks": "Cycle count adjustment — session SC-202609-0003",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "DlVpZawqJ8",
+            "created_at": "2026-09-14T12:29:14+08:00",
+            "movement_type": "adjustment_in",
+            "movement_type_label": "Adjustment In",
+            "item": {
+              "id": "WDQwPGbYPx",
+              "code": "PKG-002",
+              "name": "Shipping Box (50 pcs)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "WDQwPGbYPx",
+              "code": "A-12"
+            },
+            "quantity": "100.000",
+            "unit_cost": "1000.0000",
+            "total_cost": "100000.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T12:29:14+08:00",
+              "journal_entry": {
+                "id": "1kPNxQbXyR",
+                "entry_number": "JE-202609-0031"
+              }
+            },
+            "reference_type": "stock_adjustment",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "LIVE-B9 disposable high-value checker adjustment",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "8njw6dNk3K",
+            "created_at": "2026-09-14T10:37:10+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "ajzw1lb3eW",
+              "code": "PKG-001",
+              "name": "Standard Poly Bag"
+            },
+            "from_location": {
+              "id": "ajzw1lb3eW",
+              "code": "A-11"
+            },
+            "to_location": null,
+            "quantity": "2.000",
+            "unit_cost": "0.5000",
+            "total_cost": "1.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:37:10+08:00",
+              "journal_entry": {
+                "id": "VW1wmxbLZ0",
+                "entry_number": "JE-202609-0028"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "MYAbJ3wBl7",
+            "remarks": "WO WO-202609-0005 material issue (reservation #3)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "7K3NM3w6Z0",
+            "created_at": "2026-09-14T10:37:10+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "MYAbJ3wBl7",
+              "code": "RM-010",
+              "name": "Black Colorant"
+            },
+            "from_location": {
+              "id": "MYAbJ3wBl7",
+              "code": "A-05"
+            },
+            "to_location": null,
+            "quantity": "0.004",
+            "unit_cost": "250.0000",
+            "total_cost": "1.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:37:10+08:00",
+              "journal_entry": {
+                "id": "xBywrYbjv1",
+                "entry_number": "JE-202609-0027"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "MYAbJ3wBl7",
+            "remarks": "WO WO-202609-0005 material issue (reservation #2)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "GVxwlObaXo",
+            "created_at": "2026-09-14T10:37:10+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "dGypLxpvAg",
+              "code": "RM-001",
+              "name": "Plastic Resin Type A (ABS)"
+            },
+            "from_location": {
+              "id": "dGypLxpvAg",
+              "code": "A-01"
+            },
+            "to_location": null,
+            "quantity": "0.032",
+            "unit_cost": "120.0000",
+            "total_cost": "3.84",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:37:10+08:00",
+              "journal_entry": {
+                "id": "9eQbBqN7GL",
+                "entry_number": "JE-202609-0026"
+              }
+            },
+            "reference_type": "work_order",
+            "reference_id": "MYAbJ3wBl7",
+            "remarks": "WO WO-202609-0005 material issue (reservation #1)",
+            "creator": {
+              "id": "DzAwdKb5ld",
+              "name": "Ricardo Tanaka"
+            }
+          },
+          {
+            "id": "v7ONK2p2jd",
+            "created_at": "2026-09-14T10:11:48+08:00",
+            "movement_type": "scrap",
+            "movement_type_label": "Scrap",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": {
+              "id": "VW1wmPxbLZ",
+              "code": "B4Q51545426"
+            },
+            "to_location": null,
+            "quantity": "0.100",
+            "unit_cost": "10.1250",
+            "total_cost": "1.01",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:11:48+08:00",
+              "journal_entry": {
+                "id": "A3JpYKbYX9",
+                "entry_number": "JE-202609-0025"
+              }
+            },
+            "reference_type": "material_review_record",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "MRB scrap MRB-202609-0001",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "OX5b9mbBrk",
+            "created_at": "2026-09-14T10:11:33+08:00",
+            "movement_type": "grn_receipt",
+            "movement_type_label": "Grn Receipt",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "9eQbB6qb7G",
+              "code": "B4L51545426"
+            },
+            "quantity": "1.500",
+            "unit_cost": "10.1000",
+            "total_cost": "15.15",
+            "lot_number": "B4CONT51545426",
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_required",
+              "status_label": "Not required",
+              "message": null,
+              "at": "2026-09-14T10:11:33+08:00",
+              "journal_entry": null
+            },
+            "reference_type": "goods_receipt_note",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "GRN GRN-202609-0001",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "GkXwO7wP52",
+            "created_at": "2026-09-14T10:06:06+08:00",
+            "movement_type": "transfer",
+            "movement_type_label": "Transfer",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": {
+              "id": "9eQbB6qb7G",
+              "code": "B4L51545426"
+            },
+            "to_location": {
+              "id": "VW1wmPxbLZ",
+              "code": "B4Q51545426"
+            },
+            "quantity": "0.100",
+            "unit_cost": "10.1250",
+            "total_cost": "1.01",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_required",
+              "status_label": "Not required",
+              "message": null,
+              "at": "2026-09-14T10:06:06+08:00",
+              "journal_entry": null
+            },
+            "reference_type": "material_review_record",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "MRB hold MRB-202609-0001",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "40awq4bKG2",
+            "created_at": "2026-09-14T10:06:05+08:00",
+            "movement_type": "material_issue",
+            "movement_type_label": "Material Issue",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": {
+              "id": "xBywryYbjv",
+              "code": "B4L251545426"
+            },
+            "to_location": null,
+            "quantity": "0.250",
+            "unit_cost": "10.1250",
+            "total_cost": "2.53",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:06:05+08:00",
+              "journal_entry": {
+                "id": "dlzNEdpVMA",
+                "entry_number": "JE-202609-0022"
+              }
+            },
+            "reference_type": "material_issue_slip",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "MIS MI-202609-0001",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "XKEbGkbgWk",
+            "created_at": "2026-09-14T10:06:05+08:00",
+            "movement_type": "adjustment_in",
+            "movement_type_label": "Adjustment In",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "xBywryYbjv",
+              "code": "B4L251545426"
+            },
+            "quantity": "0.250",
+            "unit_cost": "10.1250",
+            "total_cost": "2.53",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:06:06+08:00",
+              "journal_entry": {
+                "id": "eQ9pgkpOm7",
+                "entry_number": "JE-202609-0023"
+              }
+            },
+            "reference_type": "material_issue_slip",
+            "reference_id": "GqkbAVwxd1",
+            "remarks": "MIS MI-202609-0001 cancel reversal",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "E1mbe9bGrz",
+            "created_at": "2026-09-14T10:06:04+08:00",
+            "movement_type": "transfer",
+            "movement_type_label": "Transfer",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": {
+              "id": "9eQbB6qb7G",
+              "code": "B4L51545426"
+            },
+            "to_location": {
+              "id": "xBywryYbjv",
+              "code": "B4L251545426"
+            },
+            "quantity": "0.500",
+            "unit_cost": "10.1250",
+            "total_cost": "5.06",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_required",
+              "status_label": "Not required",
+              "message": null,
+              "at": "2026-09-14T10:06:04+08:00",
+              "journal_entry": null
+            },
+            "reference_type": "stock_transfer",
+            "reference_id": "R8epjLbOaD",
+            "remarks": "Live B4 WMS transfer 51545426",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "zW1p05N0BA",
+            "created_at": "2026-09-14T10:06:04+08:00",
+            "movement_type": "adjustment_in",
+            "movement_type_label": "Adjustment In",
+            "item": {
+              "id": "E1mbe9bGrz",
+              "code": "B4-51545426",
+              "name": "Live B4 Resin edited 51545426"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "9eQbB6qb7G",
+              "code": "B4L51545426"
+            },
+            "quantity": "2.000",
+            "unit_cost": "10.1250",
+            "total_cost": "20.25",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "generated",
+              "status_label": "Posted to GL",
+              "message": null,
+              "at": "2026-09-14T10:06:04+08:00",
+              "journal_entry": {
+                "id": "2PLbWyp5OW",
+                "entry_number": "JE-202609-0021"
+              }
+            },
+            "reference_type": "stock_adjustment",
+            "reference_id": "dGypLxpvAg",
+            "remarks": "Live B4 seed stock 51545426",
+            "creator": {
+              "id": "ajzw1lb3eW",
+              "name": "Carlos Mendoza"
+            }
+          },
+          {
+            "id": "dGypLxpvAg",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "dGypLxpvAg",
+              "code": "RM-001",
+              "name": "Plastic Resin Type A (ABS)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "dGypLxpvAg",
+              "code": "A-01"
+            },
+            "quantity": "237.000",
+            "unit_cost": "120.0000",
+            "total_cost": "28440.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "WDQwPGbYPx",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "WDQwPGbYPx",
+              "code": "PKG-002",
+              "name": "Shipping Box (50 pcs)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "WDQwPGbYPx",
+              "code": "A-12"
+            },
+            "quantity": "1744.000",
+            "unit_cost": "15.0000",
+            "total_cost": "26160.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "ajzw1lb3eW",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "ajzw1lb3eW",
+              "code": "PKG-001",
+              "name": "Standard Poly Bag"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "ajzw1lb3eW",
+              "code": "A-11"
+            },
+            "quantity": "1607.000",
+            "unit_cost": "0.5000",
+            "total_cost": "803.50",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "6r9wnvwOBW",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "6r9wnvwOBW",
+              "code": "RM-052",
+              "name": "Metal Core (Bobbin)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "6r9wnvwOBW",
+              "code": "A-10"
+            },
+            "quantity": "1470.000",
+            "unit_cost": "12.0000",
+            "total_cost": "17640.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "BnoNyGw56v",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "BnoNyGw56v",
+              "code": "RM-051",
+              "name": "Large Metal Insert"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "BnoNyGw56v",
+              "code": "A-09"
+            },
+            "quantity": "1333.000",
+            "unit_cost": "8.0000",
+            "total_cost": "10664.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "0ldwDmpVa9",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "0ldwDmpVa9",
+              "code": "RM-050",
+              "name": "Small Metal Insert"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "0ldwDmpVa9",
+              "code": "A-08"
+            },
+            "quantity": "1196.000",
+            "unit_cost": "5.5000",
+            "total_cost": "6578.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "kABpVvpKRW",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "kABpVvpKRW",
+              "code": "RM-012",
+              "name": "Gray Colorant"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "kABpVvpKRW",
+              "code": "A-07"
+            },
+            "quantity": "1059.000",
+            "unit_cost": "260.0000",
+            "total_cost": "275340.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "35Mbaeb49K",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "35Mbaeb49K",
+              "code": "RM-011",
+              "name": "White Colorant"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "35Mbaeb49K",
+              "code": "A-06"
+            },
+            "quantity": "922.000",
+            "unit_cost": "280.0000",
+            "total_cost": "258160.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "MYAbJ3wBl7",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "MYAbJ3wBl7",
+              "code": "RM-010",
+              "name": "Black Colorant"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "MYAbJ3wBl7",
+              "code": "A-05"
+            },
+            "quantity": "785.000",
+            "unit_cost": "250.0000",
+            "total_cost": "196250.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "DzAwdKb5ld",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "DzAwdKb5ld",
+              "code": "RM-004",
+              "name": "Plastic Resin Type D (POM)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "DzAwdKb5ld",
+              "code": "A-04"
+            },
+            "quantity": "648.000",
+            "unit_cost": "180.0000",
+            "total_cost": "116640.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "R8epjLbOaD",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "R8epjLbOaD",
+              "code": "RM-003",
+              "name": "Plastic Resin Type C (PA)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "R8epjLbOaD",
+              "code": "A-03"
+            },
+            "quantity": "511.000",
+            "unit_cost": "150.0000",
+            "total_cost": "76650.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          },
+          {
+            "id": "GqkbAVwxd1",
+            "created_at": "2026-09-14T07:37:49+08:00",
+            "movement_type": "opening",
+            "movement_type_label": "Opening",
+            "item": {
+              "id": "GqkbAVwxd1",
+              "code": "RM-002",
+              "name": "Plastic Resin Type B (PP)"
+            },
+            "from_location": null,
+            "to_location": {
+              "id": "GqkbAVwxd1",
+              "code": "A-02"
+            },
+            "quantity": "374.000",
+            "unit_cost": "95.0000",
+            "total_cost": "35530.00",
+            "lot_number": null,
+            "expiry_date": null,
+            "gl_handoff": {
+              "status": "not_started",
+              "status_label": "Not attempted",
+              "message": null,
+              "at": null,
+              "journal_entry": null
+            },
+            "reference_type": null,
+            "reference_id": null,
+            "remarks": "Opening balance — demo seed",
+            "creator": {
+              "id": "dGypLxpvAg",
+              "name": "System Administrator"
+            }
+          }
+        ],
+        "links": {
+          "first": "http://localhost/api/v1/inventory/stock-movements?page=1",
+          "last": "http://localhost/api/v1/inventory/stock-movements?page=1",
+          "prev": null,
+          "next": null
+        },
+        "meta": {
+          "current_page": 1,
+          "from": 1,
+          "last_page": 1,
+          "links": [
+            {
+              "url": null,
+              "label": "&laquo; Previous",
+              "page": null,
+              "active": false
+            },
+            {
+              "url": "http://localhost/api/v1/inventory/stock-movements?page=1",
+              "label": "1",
+              "page": 1,
+              "active": true
+            },
+            {
+              "url": null,
+              "label": "Next &raquo;",
+              "page": null,
+              "active": false
+            }
+          ],
+          "path": "http://localhost/api/v1/inventory/stock-movements",
+          "per_page": 200,
+          "to": 27,
+          "total": 27
+        }
+      }
+    },
+    {
+      "actor": "warehouse",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B13-R-8",
+      "body": ""
+    }
+  ]
+}

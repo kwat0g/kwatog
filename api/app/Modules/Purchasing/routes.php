@@ -89,7 +89,9 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/approved-suppliers',      [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
-    Route::patch('/approved-suppliers/{approvedSupplier}/restore', [ApprovedSupplierController::class, 'restore'])->middleware('permission:purchasing.suppliers.manage');
+    Route::patch('/approved-suppliers/{approvedSupplier}/restore', [ApprovedSupplierController::class, 'restore'])
+        ->middleware('permission:purchasing.suppliers.manage')
+        ->withTrashed();
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
     Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.view');

@@ -44,14 +44,23 @@ class PositionService
 
     public function create(array $data): Position
     {
-        return DB::transaction(fn () => Position::create($data)
-            ->load('department')
-            ->loadCount('employees'));
+        return DB::transaction(function () use ($data) {
+            $this->assertUniqueActiveTitle($data['title'], (int) $data['department_id']);
+
+            return Position::create($data)
+                ->load('department')
+                ->loadCount('employees');
+        });
     }
 
     public function update(Position $position, array $data): Position
     {
         return DB::transaction(function () use ($position, $data) {
+            $this->assertUniqueActiveTitle(
+                (string) ($data['title'] ?? $position->title),
+                (int) ($data['department_id'] ?? $position->department_id),
+                $position,
+            );
             $position->update($data);
             return $position->fresh('department')->loadCount('employees');
         });
@@ -63,5 +72,20 @@ class PositionService
             throw new BusinessRuleException('Cannot delete position: employees assigned.');
         }
         $position->delete();
+    }
+
+    private function assertUniqueActiveTitle(string $title, int $departmentId, ?Position $ignore = null): void
+    {
+        $exists = Position::query()
+            ->where('department_id', $departmentId)
+            ->whereRaw('lower(btrim(title)) = lower(btrim(?))', [$title])
+            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
+            ->exists();
+
+        if ($exists) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'title' => 'A position with this title already exists in the selected department.',
+            ]);
+        }
     }
 }

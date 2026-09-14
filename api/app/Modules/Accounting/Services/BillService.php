@@ -558,6 +558,15 @@ class BillService
             $lockedBill = Bill::query()
                 ->lockForUpdate()
                 ->findOrFail($bill->getKey());
+            if (! empty($data['idempotency_key'])) {
+                $existing = BillPayment::query()
+                    ->where('bill_id', $lockedBill->id)
+                    ->where('idempotency_key', $data['idempotency_key'])
+                    ->first();
+                if ($existing) {
+                    return $existing->fresh(['cashAccount', 'journalEntry']);
+                }
+            }
             if ($lockedBill->status === BillStatus::Cancelled) {
                 throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
             }
@@ -606,6 +615,7 @@ class BillService
                 'amount' => $amount,
                 'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
+                'idempotency_key' => $data['idempotency_key'] ?? null,
                 'created_by' => $by->id,
                 'status' => BillPaymentStatus::Posted,
             ]);

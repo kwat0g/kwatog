@@ -197,6 +197,7 @@ class DeliveryService
             'creator:id,name,role_id',
             'invoice:id,invoice_number,total_amount,status',
             'items.salesOrderItem:id,sales_order_id,product_id,quantity,unit_price',
+            'items.salesOrderItem.product:id,part_number,name',
             'items.inspection:id,inspection_number,stage,status',
             // ADV3 — surface the shipment lot for the detail page.
             'shipmentLot.product:id,part_number,name',

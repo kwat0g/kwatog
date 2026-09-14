@@ -119,6 +119,25 @@ class SupplierResponsePortalTest extends TestCase
         ]);
     }
 
+    public function test_portal_accept_replay_reuses_the_original_response(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+
+        $this->actAs($user);
+        $payload = ['type' => 'accept', 'notes' => 'Accepted once.'];
+        $first = $this->postJson($this->respondUrl($po), $payload)
+            ->assertCreated()
+            ->json('data.id');
+        $replay = $this->postJson($this->respondUrl($po), $payload)
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertSame($first, $replay);
+        $this->assertSame(1, PurchaseOrderResponse::query()->where('purchase_order_id', $po->id)->count());
+    }
+
     public function test_portal_propose_response_stores_items(): void
     {
         $vendor = Vendor::factory()->create();

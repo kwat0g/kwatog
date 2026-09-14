@@ -23,7 +23,9 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/customers',            [CustomerController::class, 'store'])  ->middleware('permission:accounting.customers.manage');
     Route::put('/customers/{customer}',  [CustomerController::class, 'update']) ->middleware('permission:accounting.customers.manage');
     Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
-    Route::patch('/customers/{customer}/restore', [CustomerController::class, 'restore'])->middleware('permission:accounting.customers.manage');
+    Route::patch('/customers/{customer}/restore', [CustomerController::class, 'restore'])
+        ->middleware('permission:accounting.customers.manage')
+        ->withTrashed();
 
     /* ─── Products ─── */
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');

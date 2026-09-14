@@ -1,0 +1,272 @@
+{
+  "generated_at": "2026-09-14T04:35:52.864Z",
+  "ids": {
+    "payrollPeriod": "0ldwDmpVa9",
+    "schedule": "dGypLxpvAg",
+    "scheduleReject": "GqkbAVwxd1",
+    "previousSo": "40awq4bKG2",
+    "budget": "MYAbJ3wBl7",
+    "customerSoCorrected": "XKEbGkbgWk",
+    "soResponseCorrected": "dGypLxpvAg"
+  },
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "hr authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"name\":\"Maria Santos\",\"email\":\"hr@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"GqkbAVwxd1\",\"name\":\"HR Officer\",\"slug\":\"hr_officer\"},\"employee\":{\"id\":\"dGypLxpvAg\",\"employee_no\":\"DEMO-0001\",\"full_name\":\"Maria Santos\",\"department_id\":\"GqkbAVwxd1\"},\"permissions\":[\"hr.separation.cancel\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\",\"attendance.import\",\"attendance.edit\",\"attendance.shifts.manage\",\"attendance.holidays.manage\",\"attendance.ot.create\",\"attendance.ot.approve\",\"leave.view\",\"leave.create\",\"leave.approve_dept\",\"leave.approve_hr\",\"leave.types.manage\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.create\",\"payroll.periods.compute\",\"payroll.adjustments.vie"
+    },
+    {
+      "status": "PASS",
+      "actor": "hr",
+      "name": "A10 HR correction permission denial is intentional",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "admin authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"email\":\"admin@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"slug\":\"system_admin\"},\"employee\":null,\"permissions\":[\"admin.roles.manage\",\"admin.settings.manage\",\"admin.audit_logs.view\",\"admin.backups.view\",\"admin.backups.manage\",\"admin.sod.view\",\"admin.users.manage\",\"admin.gov_tables.manage\",\"admin.scheduled_exports.view\",\"admin.activity.view\",\"admin.import.manage\",\"admin.print.bulk\",\"admin.users.manage_permissions\",\"admin.delegations.manage_any\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.salary_adjustments.act\",\"hr.profile_updates.self_review_override\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\""
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A10 disposable processing period force-unlock",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"period_start\":\"2026-10-01\",\"period_end\":\"2026-10-15\",\"payroll_date\":\"2026-10-15\",\"is_first_half\":true,\"is_thirteenth_month\":false,\"status\":\"draft\",\"status_label\":\"Draft\",\"lifecycle_steps\":[{\"key\":\"draft\",\"label\":\"Draft\",\"state\":\"done\"},{\"key\":\"processing\",\"label\":\"Computed\",\"state\":\"pending\"},{\"key\":\"approved\",\"label\":\"Approved\",\"state\":\"pending\"},{\"key\":\"finalized\",\"label\":\"Finalized\",\"state\":\"pending\"},{\"key\":\"disbursed\",\"label\":\"Disbursed\",\"state\":\"pending\"}],\"is_locked\":false,\"label\":\"Oct 1–Oct 15, 2026 · 1st half · LIVE-B9 disposable payroll 1789359961276\",\"is_company_wide\":false,\"scope_label\":\"LIVE-B9 disposable payroll 1789359961276\",\"scope_employment_types\":[],\"scope_pay_types\":[],\"scope_departments\":[{\"id\":\"R8epjLbOaD\",\"name\":\"Finance & Accounting\"}],\"disbursement_status\":\"pending\",\"disbursed_at\":null,\"is_auto_created\":false,\"auto_created_at\":null,\"employee_count\":0,\"bank_file_status\":\"not_started\",\"bank_file_status_label\":\"Not started\",\"bank_file_note\":null,\"bank_file_at\":null,\"processing_started_at\":null,\"is_compute_stale\":false,\"compute_progress\":null,\"voided_at\":null,\"void_reason\":null,\"approved_at\":null,\"finalized_at\":null,\"correction_requested_at\":null,\"correction_reason\":null,\"summary\":null,\"gl_entry_number\":null,\"gl_handoff_status\":\"not_started\",\"gl_handoff_status_label\":\"Not attempted\",\"gl_handoff_note\":null,\"gl_handoff_at\":null,\"cr"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "admin",
+      "name": "A10 compute/anomaly/Finance downstream",
+      "detail": "The live compute handoff stayed processing during the serial run; no anomaly, GL, bank, payslip, or disbursement effect was claimed. The disposable period was force-unlocked to draft as recovery cleanup."
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "finance authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\",\"email\":\"finance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"GqkbAVwxd1\",\"employee_no\":\"DEMO-0002\",\"full_name\":\"Ana Reyes\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\",\"ac"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "a11-budget-valid UI",
+      "detail": "document=200 uiUrl=http://localhost/budgeting"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 valid disposable budget create",
+      "detail": "HTTP 201; expected 201 ; body={\"success\":true,\"data\":{\"id\":\"MYAbJ3wBl7\",\"fiscal_year_id\":\"dGypLxpvAg\",\"fiscal_year\":{\"id\":\"dGypLxpvAg\",\"year\":2026,\"start_date\":\"2026-01-01\",\"end_date\":\"2026-12-31\",\"status\":\"active\",\"status_label\":\"Active\",\"created_at\":\"2026-09-13T23:37:48.000000Z\",\"updated_at\":\"2026-09-13T23:37:48.000000Z\"},\"department_id\":null,\"department\":null,\"budget_type\":\"operating\",\"name\":\"LIVE-B9 valid budget 1789360449157\",\"total_allocated\":\"1000.00\",\"total_spent\":\"\",\"total_committed\":\"\",\"available\":\"1000.00\",\"utilization_pct\":0,\"status\":null,\"status_label\":\"\",\"submitted_at\":null,\"approved_at\":null,\"line_items\":[{\"id\":\"ajzw1lb3eW\",\"budget_id\":\"MYAbJ3wBl7\",\"account_id\":\"DAMpXKw6VJ\",\"account\":{\"id\":\"DAMpXKw6VJ\",\"code\":\"5010\",\"name\":\"Direct Materials\"},\"jan\":\"1000.00\",\"feb\":\"0.00\",\"mar\":\"0.00\",\"apr\":\"0.00\",\"may\":\"0.00\",\"jun\":\"0.00\",\"jul\":\"0.00\",\"aug\":\"0.00\",\"sep\":\"0.00\",\"oct\":\"0.00\",\"nov\":\"0.00\",\"dec\":\"0.00\",\"annual_total\":\"1000.00\",\"actual_total\":\"0.00\",\"variance\":\"0.00\"}],\"created_at\":\"2026-09-14T04:34:09.000000Z\",\"updated_at\":\"2026-09-14T04:34:09.000000Z\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 valid budget submit",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":{\"id\":\"MYAbJ3wBl7\",\"fiscal_year_id\":\"dGypLxpvAg\",\"fiscal_year\":{\"id\":\"dGypLxpvAg\",\"year\":2026,\"start_date\":\"2026-01-01\",\"end_date\":\"2026-12-31\",\"status\":\"active\",\"status_label\":\"Active\",\"created_at\":\"2026-09-13T23:37:48.000000Z\",\"updated_at\":\"2026-09-13T23:37:48.000000Z\"},\"department_id\":null,\"department\":null,\"budget_type\":\"operating\",\"name\":\"LIVE-B9 valid budget 1789360449157\",\"total_allocated\":\"1000.00\",\"total_spent\":\"0.00\",\"total_committed\":\"0.00\",\"available\":\"1000.00\",\"utilization_pct\":0,\"status\":\"submitted\",\"status_label\":\"Submitted\",\"submitted_by\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\"},\"submitted_at\":\"2026-09-14T04:34:09.000000Z\",\"approved_by\":null,\"approved_at\":null,\"line_items\":[{\"id\":\"ajzw1lb3eW\",\"budget_id\":\"MYAbJ3wBl7\",\"account_id\":\"DAMpXKw6VJ\",\"account\":{\"id\":\"DAMpXKw6VJ\",\"code\":\"5010\",\"name\":\"Direct Materials\"},\"jan\":\"1000.00\",\"feb\":\"0.00\",\"mar\":\"0.00\",\"apr\":\"0.00\",\"may\":\"0.00\",\"jun\":\"0.00\",\"jul\":\"0.00\",\"aug\":\"0.00\",\"sep\":\"0.00\",\"oct\":\"0.00\",\"nov\":\"0.00\",\"dec\":\"0.00\",\"annual_total\":\"1000.00\",\"actual_total\":\"0.00\",\"variance\":\"0.00\"}],\"created_at\":\"2026-09-14T04:34:09.000000Z\",\"updated_at\":\"2026-09-14T04:34:09.000000Z\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance",
+      "name": "A11 Finance maker self-approval denial",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"The user who submitted a budget cannot approve the same budget.\",\"errors\":{\"error\":[\"The user who submitted a budget cannot approve the same budget.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "finance2 authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dlzNEdpVMA\",\"name\":\"Liza Gomez\",\"email\":\"finance2@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"R8epjLbOaD\",\"name\":\"Finance Officer\",\"slug\":\"finance_officer\"},\"employee\":{\"id\":\"BnoNy0Kp56\",\"employee_no\":\"DEMO-0009\",\"full_name\":\"Liza Gomez\",\"department_id\":\"R8epjLbOaD\"},\"permissions\":[\"accounting.invoices.prebill_approve\",\"accounting.bills.exception_approve\",\"accounting.bills.three_way_override\",\"accounting.bills.void_payment\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"payroll.periods.view\",\"payroll.periods.approve\",\"payroll.periods.request_correction\",\"payroll.periods.finalize\",\"loans.view\",\"loans.create\",\"loans.approve\",\"loans.write_off\",\"accounting.view\",\"accounting.dashboard.view\",\"accounting.coa.view\",\"accounting.coa.manage\",\"accounting.coa.deactivate\",\"accounting.journal.view\",\"accounting.journal.create\",\"accounting.journal.post\",\"accounting.journal.reverse\",\"accounting.vendors.view\",\"accounting.vendors.manage\",\"accounting.bills.view\",\"accounting.bills.create\",\"accounting.bills.update\",\"accounting.bills.pay\",\"accounting.customers.view\",\"accounting.invoices.view\",\"accounting.invoices.create\",\"accounting.invoices.update\",\"accounting.invoices.collect\",\"accounting.credit_notes.view\",\"accounting.credit_notes.manage\","
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "a11-finance2-budget-checker UI",
+      "detail": "document=200 uiUrl=http://localhost/budgeting/MYAbJ3wBl7"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 distinct Finance2 budget checker approval",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":{\"id\":\"MYAbJ3wBl7\",\"fiscal_year_id\":\"dGypLxpvAg\",\"fiscal_year\":{\"id\":\"dGypLxpvAg\",\"year\":2026,\"start_date\":\"2026-01-01\",\"end_date\":\"2026-12-31\",\"status\":\"active\",\"status_label\":\"Active\",\"created_at\":\"2026-09-13T23:37:48.000000Z\",\"updated_at\":\"2026-09-13T23:37:48.000000Z\"},\"department_id\":null,\"department\":null,\"budget_type\":\"operating\",\"name\":\"LIVE-B9 valid budget 1789360449157\",\"total_allocated\":\"1000.00\",\"total_spent\":\"0.00\",\"total_committed\":\"0.00\",\"available\":\"1000.00\",\"utilization_pct\":0,\"status\":\"active\",\"status_label\":\"Active\",\"submitted_by\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\"},\"submitted_at\":\"2026-09-14T04:34:09.000000Z\",\"approved_by\":{\"id\":\"dlzNEdpVMA\",\"name\":\"Liza Gomez\"},\"approved_at\":\"2026-09-14T04:34:23.000000Z\",\"line_items\":[{\"id\":\"ajzw1lb3eW\",\"budget_id\":\"MYAbJ3wBl7\",\"account_id\":\"DAMpXKw6VJ\",\"account\":{\"id\":\"DAMpXKw6VJ\",\"code\":\"5010\",\"name\":\"Direct Materials\"},\"jan\":\"1000.00\",\"feb\":\"0.00\",\"mar\":\"0.00\",\"apr\":\"0.00\",\"may\":\"0.00\",\"jun\":\"0.00\",\"jul\":\"0.00\",\"aug\":\"0.00\",\"sep\":\"0.00\",\"oct\":\"0.00\",\"nov\":\"0.00\",\"dec\":\"0.00\",\"annual_total\":\"1000.00\",\"actual_total\":\"0.00\",\"variance\":\"0.00\"}],\"created_at\":\"2026-09-14T04:34:09.000000Z\",\"updated_at\":\"2026-09-14T04:34:23.000000Z\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "finance2",
+      "name": "A11 budget approval actor/lifecycle",
+      "detail": "submitted_by=finance; approved_by=finance2; status=active; total_allocated=1000.00"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 Finance2 active budget replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Budget cannot transition from active to active.\",\"errors\":{\"error\":[\"Budget cannot transition from active to active.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 Finance2 closes active budget",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":{\"id\":\"MYAbJ3wBl7\",\"fiscal_year_id\":\"dGypLxpvAg\",\"fiscal_year\":{\"id\":\"dGypLxpvAg\",\"year\":2026,\"start_date\":\"2026-01-01\",\"end_date\":\"2026-12-31\",\"status\":\"active\",\"status_label\":\"Active\",\"created_at\":\"2026-09-13T23:37:48.000000Z\",\"updated_at\":\"2026-09-13T23:37:48.000000Z\"},\"department_id\":null,\"department\":null,\"budget_type\":\"operating\",\"name\":\"LIVE-B9 valid budget 1789360449157\",\"total_allocated\":\"1000.00\",\"total_spent\":\"0.00\",\"total_committed\":\"0.00\",\"available\":\"1000.00\",\"utilization_pct\":0,\"status\":\"closed\",\"status_label\":\"Closed\",\"submitted_by\":{\"id\":\"R8epjLbOaD\",\"name\":\"Ana Reyes\"},\"submitted_at\":\"2026-09-14T04:34:09.000000Z\",\"approved_by\":{\"id\":\"dlzNEdpVMA\",\"name\":\"Liza Gomez\"},\"approved_at\":\"2026-09-14T04:34:23.000000Z\",\"line_items\":[{\"id\":\"ajzw1lb3eW\",\"budget_id\":\"MYAbJ3wBl7\",\"account_id\":\"DAMpXKw6VJ\",\"account\":{\"id\":\"DAMpXKw6VJ\",\"code\":\"5010\",\"name\":\"Direct Materials\"},\"jan\":\"1000.00\",\"feb\":\"0.00\",\"mar\":\"0.00\",\"apr\":\"0.00\",\"may\":\"0.00\",\"jun\":\"0.00\",\"jul\":\"0.00\",\"aug\":\"0.00\",\"sep\":\"0.00\",\"oct\":\"0.00\",\"nov\":\"0.00\",\"dec\":\"0.00\",\"annual_total\":\"1000.00\",\"actual_total\":\"0.00\",\"variance\":\"0.00\"}],\"created_at\":\"2026-09-14T04:34:09.000000Z\",\"updated_at\":\"2026-09-14T04:34:24.000000Z\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 Finance2 closed budget replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Budget cannot transition from closed to closed.\",\"errors\":{\"error\":[\"Budget cannot transition from closed to closed.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 budget availability exact decimal",
+      "detail": "HTTP 200; expected 200 ; body={\"success\":true,\"data\":{\"can_proceed\":true,\"level\":\"ok\",\"message\":\"No active budget for this department.\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "finance2",
+      "name": "A11 budget actuals sync valid fiscal year",
+      "detail": "HTTP 202; expected 202 ; body={\"success\":true,\"data\":{\"dispatched\":true,\"outbox_id\":\"1aa36870-2860-49f7-8cee-5cf67b9fc253\",\"status\":\"pending\",\"run_id\":\"d8501ce1-3328-4e98-b777-eba1760ff0ca\",\"fiscal_year_id\":\"dGypLxpvAg\",\"run_status\":\"queued\"},\"error\":null,\"meta\":null}"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:34:36+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "customer-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:34:36+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A14 corrected disposable SO create",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"XKEbGkbgWk\",\"so_number\":\"SO-202609-0016\",\"date\":\"2026-09-14\",\"subtotal\":\"35.00\",\"vat_amount\":\"4.20\",\"total_amount\":\"39.20\",\"status\":\"draft\",\"status_label\":\"Draft\",\"next_statuses\":[],\"payment_terms_days\":30,\"delivery_terms\":null,\"incoterm\":null,\"notes\":\"LIVE-B9 corrected customer response order\",\"submission_source\":\"customer_portal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":true,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"items\":[{\"id\":\"GkXwO7wP52\",\"product\":{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"35.00\",\"total\":\"35.00\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-11-20\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T12:34:37+08:00\",\"updated_at\":\"2026-09-14T12:34:37+08:00\",\"deleted_at\":null},\"message\":\"Order submitted. It will be confirmed by our sales team.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "a14-corrected-crm-so UI",
+      "detail": "document=200 uiUrl=http://localhost/crm/sales-orders/XKEbGkbgWk"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A14 CRM releases draft for customer confirmation",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"XKEbGkbgWk\",\"so_number\":\"SO-202609-0016\",\"date\":\"2026-09-14\",\"subtotal\":\"35.00\",\"vat_amount\":\"4.20\",\"total_amount\":\"39.20\",\"status\":\"draft\",\"status_label\":\"Draft\",\"next_statuses\":[],\"payment_terms_days\":30,\"delivery_terms\":null,\"incoterm\":null,\"notes\":\"LIVE-B9 corrected customer response order\",\"submission_source\":\"customer_portal\",\"customer_confirmation_requested_at\":\"2026-09-14T12:34:53+08:00\",\"latest_response\":null,\"capabilities\":{\"can_respond\":true,\"can_confirm\":true},\"is_editable\":true,\"is_cancellable\":true,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"items\":[{\"id\":\"GkXwO7wP52\",\"product\":{\"id\":\"R8epjLbOaD\",\"part_number\":\"PC-001\",\"name\":\"Pivot Cap Cover Type A\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"35.00\",\"total\":\"35.00\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-11-20\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T12:34:37+08:00\",\"updated_at\":\"2026-09-14T12:34:53+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal csrf",
+      "detail": "HTTP 204; expected 200/204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "signed-out",
+      "name": "customer-portal portal login",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"user\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:35:05+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "customer-portal portal identity",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc. Portal\",\"email\":\"portal@cust.test\",\"is_active\":true,\"must_change_password\":false,\"failed_login_attempts\":0,\"locked_until\":null,\"status\":\"active\",\"deleted_at\":null,\"customer_id\":\"dGypLxpvAg\",\"customer_name\":\"Toyota Motor Philippines, Inc.\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"last_login_at\":\"2026-09-14T12:35:05+08:00\",\"created_at\":\"2026-09-14T07:37:48+08:00\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "customer-portal",
+      "name": "A14 corrected customer SO response",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"type\":\"accept\",\"status\":\"accepted\",\"proposed_delivery_date\":null,\"notes\":\"LIVE-B9 corrected customer acceptance\",\"responded_at\":\"2026-09-14T12:35:06+08:00\",\"resolved_at\":null,\"resolution_notes\":null,\"items\":[]},\"message\":\"Your response was submitted to our sales team.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "customer-portal",
+      "name": "A14 corrected customer response replay",
+      "detail": "HTTP 201; expected 409/422 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"type\":\"accept\",\"status\":\"accepted\",\"proposed_delivery_date\":null,\"notes\":\"exact replay\",\"responded_at\":\"2026-09-14T12:35:06+08:00\",\"resolved_at\":null,\"resolution_notes\":null,\"items\":[]},\"message\":\"Your response was submitted to our sales team.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "crm",
+      "name": "A14 CRM accepts corrected SO response",
+      "detail": "HTTP 422; expected 200 ; body={\"message\":\"Only a pending customer response can be resolved.\",\"errors\":{\"error\":[\"Only a pending customer response can be resolved.\"]}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "crm",
+      "name": "A14 corrected customer SO financial/chain state",
+      "detail": "so=XKEbGkbgWk; response=dGypLxpvAg; body={\"data\":{\"id\":\"dGypLxpvAg\",\"type\":\"accept\",\"status\":\"accepted\",\"proposed_delivery_date\":null,\"notes\":\"LIVE-B9 corrected customer acceptance\",\"responded_at\":\"2026-09-14T12:35:06+08:00\",\"resolved_at\":null,\"resolution_notes\":null,\"items\":[]},\"message\":\"Your response was submitted to our sales team.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "A14 cancel first disposable confirmed SO",
+      "detail": "HTTP 200; expected 200/422 ; body={\"data\":{\"id\":\"40awq4bKG2\",\"so_number\":\"SO-202609-0015\",\"date\":\"2026-09-14\",\"subtotal\":\"30.00\",\"vat_amount\":\"3.60\",\"total_amount\":\"33.60\",\"status\":\"cancelled\",\"status_label\":\"Cancelled\",\"next_statuses\":[],\"payment_terms_days\":30,\"delivery_terms\":null,\"incoterm\":null,\"notes\":\"LIVE-B9 disposable customer response order\\n\\n[Cancelled: LIVE-B9 cleanup of incorrect first-path fixture]\",\"submission_source\":\"customer_portal\",\"customer_confirmation_requested_at\":null,\"latest_response\":null,\"capabilities\":{\"can_respond\":false,\"can_confirm\":false},\"is_editable\":false,\"is_cancellable\":false,\"item_count\":1,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"creator\":{\"id\":\"2PLbWyp5OW\",\"name\":\"Edge System\"},\"items\":[{\"id\":\"XKEbGkbgWk\",\"product\":{\"id\":\"GqkbAVwxd1\",\"part_number\":\"WB-002\",\"name\":\"Wiper Bushing (Heavy Duty)\",\"unit_of_measure\":\"pcs\"},\"quantity\":\"1.00\",\"unit_price\":\"30.00\",\"total\":\"30.00\",\"quantity_delivered\":\"0.00\",\"remaining_quantity\":\"1.00\",\"delivery_date\":\"2026-11-15\"}],\"mrp_plan\":null,\"work_orders\":[],\"inspections\":[],\"deliveries\":[],\"invoices\":[],\"created_at\":\"2026-09-14T12:27:44+08:00\",\"updated_at\":\"2026-09-14T12:35:36+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "admin authenticated",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"email\":\"admin@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"dGypLxpvAg\",\"name\":\"System Administrator\",\"slug\":\"system_admin\"},\"employee\":null,\"permissions\":[\"admin.roles.manage\",\"admin.settings.manage\",\"admin.audit_logs.view\",\"admin.backups.view\",\"admin.backups.manage\",\"admin.sod.view\",\"admin.users.manage\",\"admin.gov_tables.manage\",\"admin.scheduled_exports.view\",\"admin.activity.view\",\"admin.import.manage\",\"admin.print.bulk\",\"admin.users.manage_permissions\",\"admin.delegations.manage_any\",\"hr.departments.view\",\"hr.departments.manage\",\"hr.positions.view\",\"hr.positions.manage\",\"hr.employees.view\",\"hr.employees.create\",\"hr.employees.edit\",\"hr.employees.delete\",\"hr.employees.export\",\"hr.employees.documents.view\",\"hr.employees.documents.upload\",\"hr.employees.documents.delete\",\"hr.employees.view_sensitive\",\"hr.employees.separate\",\"hr.employees.account_status\",\"hr.employees.provision_account\",\"hr.employees.deactivate_account\",\"hr.employees.reset_password\",\"hr.directory.view\",\"hr.profile_updates.finance_review\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.request\",\"hr.salary_adjustments.act\",\"hr.profile_updates.self_review_override\",\"hr.trainings.view\",\"hr.trainings.manage\",\"hr.employees.trainings.view\",\"hr.employees.trainings.manage\",\"attendance.view\""
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "a15-submitted-review UI",
+      "detail": "document=200 uiUrl=http://localhost/accounting/portal-access"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 acknowledge submitted schedule",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"month\":\"2026-11\",\"status\":\"acknowledged\",\"status_label\":\"Acknowledged\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 schedule 1789360108767\",\"quantity\":\"2.000\",\"notes\":\"acknowledge fixture\"}],\"reject_reason\":null,\"reviewed_at\":\"2026-09-14T12:35:52+08:00\",\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:35:52+08:00\"},\"message\":\"Delivery schedule acknowledged.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 acknowledge terminal replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only submitted delivery schedules can be acknowledged.\",\"errors\":{\"error\":[\"Only submitted delivery schedules can be acknowledged.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 reject submitted schedule",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"month\":\"2026-12\",\"status\":\"rejected\",\"status_label\":\"Rejected\",\"source\":\"customer\",\"lines\":[{\"purchase_order_item_id\":null,\"product_name\":\"LIVE-B9 reject schedule 1789360108868\",\"quantity\":\"3.000\",\"notes\":\"reject fixture\"}],\"reject_reason\":\"LIVE-B9 corrected schedule rejection\",\"reviewed_at\":\"2026-09-14T12:35:52+08:00\",\"created_at\":\"2026-09-14T12:28:28+08:00\",\"updated_at\":\"2026-09-14T12:35:52+08:00\"},\"message\":\"Delivery schedule rejected.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "admin",
+      "name": "A15 reject terminal replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Only submitted delivery schedules can be rejected.\",\"errors\":{\"error\":[\"Only submitted delivery schedules can be rejected.\"]}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "admin",
+      "name": "A15 corrected notification evidence",
+      "detail": "rows=20; schedule_ack=dGypLxpvAg; schedule_reject=GqkbAVwxd1"
+    }
+  ]
+}

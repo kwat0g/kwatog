@@ -313,13 +313,22 @@ class LoanService
         ?string $remarks = null,
         ?string $paymentDate = null,
         ?int $clearanceId = null,
+        ?string $idempotencyKey = null,
     ): LoanPayment {
-        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId) {
+        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId, $idempotencyKey) {
             // Loan payment serialization invariant: every path that changes a
             // loan row must make its decisions from the current row while
             // holding that row lock, then commit the payment detail and loan
             // aggregate in this same transaction.
             $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->getKey());
+            if ($idempotencyKey !== null) {
+                $existing = $authoritative->payments()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
             if ($authoritative->status !== LoanStatus::Active) {
                 throw new BusinessRuleException('Only active loans accept payments.');
             }
@@ -342,6 +351,7 @@ class LoanService
                 'payment_date' => $paymentDate ?? $now->toDateString(),
                 'payment_type' => $type->value,
                 'remarks' => $remarks,
+                'idempotency_key' => $idempotencyKey,
                 'created_at' => $now,
             ]);
 

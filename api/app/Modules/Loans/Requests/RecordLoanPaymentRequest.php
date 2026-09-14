@@ -10,6 +10,11 @@ class RecordLoanPaymentRequest extends FormRequest
 {
     public function authorize(): bool { return $this->user()?->hasPermission('loans.write_off') ?? false; }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['idempotency_key' => $this->header('Idempotency-Key')]);
+    }
+
     public function rules(): array
     {
         return [
@@ -20,6 +25,7 @@ class RecordLoanPaymentRequest extends FormRequest
             'amount'       => ['required', 'string', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
             'payment_date' => ['required', 'date_format:Y-m-d'],
             'remarks'      => ['nullable', 'string', 'max:1000'],
+            'idempotency_key' => ['required', 'string', 'max:128', 'regex:/^[A-Za-z0-9._:-]+$/'],
         ];
     }
 

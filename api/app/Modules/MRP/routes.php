@@ -35,7 +35,9 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/machines',          [MachineController::class, 'store']) ->middleware('permission:production.machines.manage');
     Route::put('/machines/{machine}', [MachineController::class, 'update'])->middleware('permission:production.machines.manage');
     Route::delete('/machines/{machine}', [MachineController::class, 'destroy'])->middleware('permission:production.machines.manage');
-    Route::patch('/machines/{machine}/restore', [MachineController::class, 'restore'])->middleware('permission:production.machines.manage');
+     Route::patch('/machines/{machine}/restore', [MachineController::class, 'restore'])
+         ->middleware('permission:production.machines.manage')
+         ->withTrashed();
     Route::patch('/machines/{machine}/transition-status', [MachineController::class, 'transitionStatus'])
         ->middleware('permission:production.machines.transition');
 
@@ -55,7 +57,9 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/molds',          [MoldController::class, 'store']) ->middleware('permission:production.molds.manage');
     Route::put('/molds/{mold}',    [MoldController::class, 'update'])->middleware('permission:production.molds.manage');
     Route::delete('/molds/{mold}', [MoldController::class, 'destroy'])->middleware('permission:production.molds.manage');
-    Route::patch('/molds/{mold}/restore', [MoldController::class, 'restore'])->middleware('permission:production.molds.manage');
+     Route::patch('/molds/{mold}/restore', [MoldController::class, 'restore'])
+         ->middleware('permission:production.molds.manage')
+         ->withTrashed();
     Route::post('/molds/{mold}/commission',   [MoldController::class, 'commission'])  ->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/decommission', [MoldController::class, 'decommission'])->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/compatibility', [MoldController::class, 'syncCompatibility'])

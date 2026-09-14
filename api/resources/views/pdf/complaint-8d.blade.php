@@ -15,7 +15,7 @@
   </div>
   <div class="col">
     <label>Severity</label>
-    <div class="v">{{ ucfirst($complaint->severity) }}</div>
+    <div class="v">{{ ucfirst($complaint->severity?->value ?? '') }}</div>
     <label style="margin-top:8px;">Received</label>
     <div class="v">{{ optional($complaint->received_date)?->format('M d, Y') }}</div>
     @if ($complaint->product)

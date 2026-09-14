@@ -329,6 +329,23 @@ class InspectionService
             throw new BusinessRuleException("Inspection spec for {$product->part_number} has no immutable revision.");
         }
 
+        // Automatic in-process/outgoing listeners may already have opened the
+        // inspection before the operator reaches this form. Reusing that row is
+        // the safe idempotent result; inserting a second row would hit the
+        // database uniqueness guard and surface as a misleading 500.
+        $existing = Inspection::query()
+            ->when($stage === InspectionStage::Outgoing,
+                fn ($query) => $query->where('work_order_output_id', $output?->id),
+                fn ($query) => $query
+                    ->where('stage', $stage->value)
+                    ->where('entity_type', $data['entity_type'] ?? null)
+                    ->where('entity_id', $data['entity_id'] ?? null),
+            )
+            ->first();
+        if ($existing) {
+            return $this->show($existing);
+        }
+
         // AQL plan only applies to outgoing. Incoming + in-process default to
         // 100% inspection of the batch; the inspector may override the
         // sample size by patching the row before recording measurements.

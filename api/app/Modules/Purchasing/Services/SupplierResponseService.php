@@ -85,6 +85,22 @@ class SupplierResponseService
                 throw new BusinessRuleException('Invalid supplier response type.');
             }
 
+            // Supplier accept is terminal for the portal side. A browser
+            // retry must return the existing decision instead of creating a
+            // second response and notification for the same PO/vendor cycle.
+            if ($type === PurchaseOrderResponseType::Accept) {
+                $existing = PurchaseOrderResponse::query()
+                    ->where('purchase_order_id', $row->id)
+                    ->where('vendor_id', $row->vendor_id)
+                    ->where('response_type', PurchaseOrderResponseType::Accept->value)
+                    ->where('status', PurchaseOrderResponseStatus::Accepted->value)
+                    ->latest('id')
+                    ->first();
+                if ($existing) {
+                    return $existing->load('items');
+                }
+            }
+
             // A re-submission replaces the prior pending reply. The old row is
             // kept for the audit trail; only the newest pending response is
             // actionable by purchasing.

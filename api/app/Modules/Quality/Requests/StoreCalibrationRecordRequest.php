@@ -18,10 +18,11 @@ class StoreCalibrationRecordRequest extends FormRequest
     public function rules(): array
     {
         $id = $this->route('calibrationRecord')?->id;
+        $partial = $this->isMethod('PATCH') || $this->isMethod('PUT');
 
         return [
-            'equipment_code'        => ['required', 'string', 'max:50', Rule::unique('calibration_records', 'equipment_code')->ignore($id)],
-            'name'                  => ['required', 'string', 'max:150'],
+            'equipment_code'        => [$partial ? 'sometimes' : 'required', 'string', 'max:50', Rule::unique('calibration_records', 'equipment_code')->ignore($id)],
+            'name'                  => [$partial ? 'sometimes' : 'required', 'string', 'max:150'],
             'location'              => ['nullable', 'string', 'max:100'],
             // An instrument cannot have been calibrated in the future. The
             // date-order invariant against the *stored* last date lives in

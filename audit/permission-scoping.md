@@ -123,3 +123,64 @@ mirroring `outstandingLoans()`.
 - Full Playwright/SPA visual behaviour; SPA checked at guard/route/API-client level only.
 - The `dashboard.chain_recovery.manage` replay semantics under concurrent replay (service
   exception paths read; no race exercise).
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Re-audit verdict
+
+The 2026-09-10/11 approval-chain remediation is present at this commit: PO and loan row
+scopes now admit current plant-wide step participants, the seeded step roles hold the
+permissions accepted by their act routes, and the drift tests cover the enforced workflows.
+The earlier aggregator defects around badges, purchasing widgets, the payroll registry,
+escalation recipient selection/auto-resolution, and the missing badge matrix test remain
+unresolved. No scoped application files differ from `56e0d431`; the worktree changes seen
+elsewhere are unrelated and were not modified.
+
+### Prior finding status
+
+| ID | Status at 56e0d431 | Current evidence |
+|---|---|---|
+| PS-01 | Resolved in source; regression coverage present | `PurchaseOrderAccessPolicy.php:49-79` and `LoanAccessPolicy.php:83-93` add chain-participant visibility; `RolePermissionSeeder.php:579-585,700-725` grants the PO/loan act permissions; `ApprovalBoardScopeTest.php:173-225` and `ApprovalChainRolePermissionDriftTest.php:65-150` pin the repaired path. |
+| PS-02 | Unresolved | `BadgeService.php:171-230,234-242,281-289` still counts approval, leave, overtime, and profile rows without the owning module row scope. |
+| PS-03 | Unresolved | `DashboardWidgetDataService.php:134-135` and `CoreWidgetAnalytics.php:254-284` still count PR/PO rows company-wide behind `purchasing.view`; seeded layouts still expose these keys to department-scoped viewers at `DashboardRoleLayoutSeeder.php:85-90,107-110`. |
+| PS-04 | Unresolved | `DashboardWidgetSeeder.php:204-211` still gates team widgets on self-scoped `leave.view`/`attendance.view`; `DashboardLayoutService.php:242-263` makes those widgets pickable by every holder, while `DashboardWidgetDataService.php:123-129` returns department aggregates. |
+| PS-05 | Unresolved/dead surface | `ApprovalTypeRegistry.php:53-60` still advertises payroll approval cards, but payroll has its own approve route at `api/app/Modules/Payroll/routes.php:68-73` and no `ApprovalService::submit()` path. |
+| PS-06 | Unresolved | `ApprovalEscalationService.php:302-329` still chooses the lowest-ID role holder, and `autoResolveRecord()` at `233-292` changes only approval records, not the underlying document lifecycle. |
+| PS-07 | Resolved | PO summaries now use `vendor_name` at `ApprovalBoardService.php:410-450`; the prior raw `vendor_id` card text is gone. |
+| PS-08 | Unresolved test gap | `BadgeControllerTest.php:325-373` tests raw approval counts and severity, but still has no department/self visibility matrix for badges. |
+| PS-09 | Unresolved, with stronger widget evidence | `/chains` remains guarded by `crm.sales_orders.view` at `spa/src/routes/dashboardRoutes.tsx:96-99`, while the bottleneck API and the `chain.stage_breakdown` widget use `dashboard.view_bottlenecks` (`api/routes/api.php:118-121`; `DashboardWidgetSeeder.php:183`). `production_manager` is a seeded holder of the latter but not the former, so its widget link can land on a denied page. |
+| PS-10 | Not reverified | The prior combined-suite pollution evidence was not rerun because this audit was read-only and tests were explicitly prohibited. |
+
+### Findings
+
+| ID | Category | Severity | Effort | Title | Location | Evidence/Reproduction |
+|---|---|---|---|---|---|---|
+| PS-11 | Broken process | Medium | S | Salary-adjustment approval cards link to a malformed employee URL | `api/app/Common/Support/ApprovalTypeRegistry.php:65-74`; `api/app/Common/Services/ApprovalBoardService.php:337-348,381-391` | The registry correctly declares `link_record=false` and `/hr/employees`, but both board card builders concatenate `$meta['link'].$hashId` instead of calling `ApprovalTypeRegistry::linkFor()`. A pending or completed salary-adjustment card therefore emits `/hr/employees<hash>` rather than `/hr/employees`; selecting it cannot reach the tab where the `hr.salary_adjustments.act` action is available. |
+| PS-12 | Risk | Medium | S | Approval board can surface soft-deleted asset and return-request records | `api/app/Common/Support/ApprovalSourceScope.php:49-56,72-81`; `api/app/Common/Services/ApprovalBoardService.php:146-152,168-171,405-419`; `api/app/Modules/Assets/Models/Asset.php:21-26`; `api/app/Modules/ReturnManagement/Models/ReturnRequest.php:25-34` | Asset and return requests are treated as unscoped because they are absent from `ApprovalSourceScope::hasScope()`, but both owning models use `SoftDeletes`. The board then loads sources with `DB::table()` without `whereNull('deleted_at')`. Create an approval record for a soft-deleted asset/RMA and call the board as an `assets.view`/`return_management.view` holder: the owning Eloquent list would exclude the row, while the board can render its number, summary, amount, and link. |
+| PS-13 | Risk | Medium | M | Chain bottlenecks disclose every configured audience to any bottleneck-permission holder | `api/app/Common/Controllers/ChainBottleneckController.php:22-57`; `api/routes/api.php:118-121`; `api/app/Common/Services/ChainBottleneckService.php:35-50,782-806` | The API runs `detectAll()` and applies no audience restriction when `?audience` is absent. The route requires only `dashboard.view_bottlenecks`, not the source module permission, and the SPA calls it without an audience at `spa/src/pages/chains/index.tsx:121-124`. A finance or production user can therefore receive QC, purchasing, payroll, and other groups' document numbers/status/hash IDs, despite each detector carrying an intended role audience in settings. |
+| PS-14 | Risk | Low | S | Chain bottleneck synthetic document numbers expose raw integer IDs | `api/app/Common/Services/ChainBottleneckService.php:391-399,488-512`; `api/tests/Feature/Chain/ChainBottleneckServiceTest.php:268-276` | The movement detector builds `MOV-{$row->id}` and the payroll detector builds `PAY-{$row->id}` before the shared mapper. `entity_id` is hash-encoded, but `doc_number` remains a raw auto-increment-derived identifier in the API response and SPA display. The existing test explicitly asserts `MOV-{$stale->id}`, pinning the leak. |
+| PS-15 | Broken process | Medium | M | Alert read state is global, so one user suppresses another user's unread alert | `api/app/Common/Models/Alert.php:26-34,41-48`; `api/app/Common/Services/AlertEngineService.php:166-175`; `api/app/Common/Controllers/AlertController.php:90-98`; `api/routes/api.php:108-115` | Alerts are global operational rows, but `is_read` is one column on the alert. User A can `PATCH /api/v1/alerts/{hash}/read`; `markRead()` sets the shared row to true, and User B's `/alerts/unread-count` then excludes it. The same shared flag is rendered in Action Center at `ActionCenterService.php:198-210`. There is no per-user read ledger comparable to Laravel notifications. |
+| PS-16 | Gap | Medium | M | Approval escalation command reports success after all per-record notification/update failures | `api/app/Common/Services/ApprovalEscalationService.php:31-54,67-97,127-148`; `api/app/Console/Commands/RunApprovalEscalations.php:19-29` | Reminder, escalation, and auto-resolve loops catch every `Throwable`, log it, and return only successful counts. The command always returns `SUCCESS`. If notification delivery or the row update fails for every stale record, the scheduled run prints zero counts and exits 0, indistinguishable from an idle queue; no failed-record count or non-zero outcome is exposed. |
+| PS-17 | Risk | Medium | M | HR dashboard panels use self-scoped permissions for company-wide queries, including an ungated global action count | `api/app/Modules/Dashboard/Services/HrDashboardService.php:48-68,246-278,332-392`; `api/tests/Feature/Dashboard/DashboardPanelGateTest.php:187-204` | `pending_leaves` and `leave_calendar_week` are gated by `leave.view`, which is included in every role's self-service grant, but query all leave rows and return employee names. `pending_my_action` has no permission gate and `hrPendingMyAction()` counts all pending HR leave/profile/clearance rows despite its name. A custom role with `dashboard.hr.view` plus the ordinary self-service grant, a supported permission-derived dashboard case, receives company-wide HR queue/calendar data. The existing panel test asserts presence by grant but does not assert row scope. |
+| PS-18 | Gap | Medium | M | PR/PO approval submission has no immediate checker notification | `api/app/Common/Services/ApprovalService.php:39-105`; `api/app/Modules/Purchasing/Services/PurchaseRequestService.php:354-359`; `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:499-514`; `api/app/Common/Services/ApprovalEscalationService.php:21-97` | Shared submission only creates approval records and the PR/PO services update status; neither path sends an in-app notification or dispatches an approval-submitted event. The only shared notification path is a later reminder/escalation sweep. Loan and leave have explicit submitted listeners (`NotifyOnLoanSubmitted.php:24-48`, `NotifyOnLeaveSubmitted.php:18-44`), but Purchasing has no corresponding submitted listener. Submit a PR/PO: the checker gets a board/badge item, but no notification until the configured stale threshold, creating a silent approval queue. |
+
+### Clean areas confirmed
+
+- Approval-board open and history cards share the owning row-scope decision, and delegated out-of-scope cards are redacted rather than exposing source data (`ApprovalBoardService.php:125-153,196-249,321-334`).
+- The PO and loan participant-scope remediation is coherent across policy, seeded permissions, board visibility, and the approval-chain drift tests; PS-01 is no longer an open stall at the audited source level.
+- Global Search uses Eloquent models for soft-delete exclusion, reuses `DepartmentScope` for employees and `PurchaseOrderAccessPolicy` for POs, honors module toggles, escapes wildcard input, and emits hash IDs (`GlobalSearchService.php:51-61,171-210,236-266,380-431`).
+- Dashboard landing dispatch is permission-derived and rarity-ordered without role-name branches (`DashboardDispatchService.php:32-79`), while plain and rich widget layouts share the same permission strip (`DashboardLayoutService.php:61-79,274-311`).
+- Action Center no longer duplicates approval work or accepts fabricated approval keys; source permissions, current-queue existence, HashID parsing, and SQL-fault rendering are covered by `ActionCenterControllerTest.php:97-115,194-285,368-402`.
+- Dashboard route/API gates, lazy loading, and the main loading/error/empty states are present for the audited dashboard, approval, action-center, chain-recovery, and alert pages. The frontend guards remain UX-only with independent backend enforcement, as required.
+- KPI visibility is centralized through `KpiSnapshotService::MODULE_PERMISSIONS`, copied into widget seed permissions, and checked by `WidgetSeedIntegrityTest.php:216-235`.
+
+### Verification limits
+
+- This was a source-reading audit only. No PHPUnit/Vitest/Playwright tests, Docker commands, Artisan commands, database queries, browser sessions, queue runs, scheduler runs, or concurrency harnesses were executed.
+- The PS-10 test-pollution status is therefore not independently reconfirmed at this commit.
+- No live role matrix, feature-toggle matrix, notification delivery/provider result, or production-sized query plan was available; the reproductions above are static call-path reproductions grounded in current source and existing test fixtures.
+- Cross-module row-scope implementations were read only where required to verify aggregator reuse. Defects in a module's own list/detail authorization remain flagged as dependencies rather than re-audited as module findings.
+
+### No code change
+
+No application code, migration, test, registry, roadmap, or other audit content was changed. This section is the only append made to this file.

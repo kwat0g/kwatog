@@ -79,6 +79,22 @@ class SalesOrderResponseService
                 throw new BusinessRuleException('Invalid customer response type.');
             }
 
+            // Accept is terminal on the customer side. A browser retry or a
+            // lost response must return the same response row rather than
+            // appending a second accepted decision.
+            if ($type === SalesOrderResponseType::Accept) {
+                $existing = SalesOrderResponse::query()
+                    ->where('sales_order_id', $row->id)
+                    ->where('customer_id', $row->customer_id)
+                    ->where('response_type', SalesOrderResponseType::Accept->value)
+                    ->where('status', SalesOrderResponseStatus::Accepted->value)
+                    ->latest('id')
+                    ->first();
+                if ($existing) {
+                    return $existing->load('items');
+                }
+            }
+
             // A re-submission replaces the prior pending reply. The old row is
             // kept for the audit trail; only the newest pending response is
             // actionable by internal sales.
@@ -127,6 +143,18 @@ class SalesOrderResponseService
                 ->lockForUpdate()
                 ->with('items')
                 ->findOrFail($response->id);
+            if ($locked->status === SalesOrderResponseStatus::Accepted && $decision === 'accept') {
+                if ($locked->resolved_at === null) {
+                    $locked->resolved_by = $by->id;
+                    $locked->resolved_at = now();
+                    $locked->resolution_notes = $notes;
+                    $locked->save();
+                    $this->emailCustomerDecision($locked->load('items', 'salesOrder'), $decision);
+                }
+
+                return $locked->fresh()->load('items');
+            }
+
             if ($locked->status !== SalesOrderResponseStatus::Pending) {
                 throw new BusinessRuleException('Only a pending customer response can be resolved.');
             }

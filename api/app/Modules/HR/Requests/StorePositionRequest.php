@@ -6,6 +6,7 @@ namespace App\Modules\HR\Requests;
 
 use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePositionRequest extends FormRequest
 {
@@ -31,7 +32,14 @@ class StorePositionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'title'         => ['required', 'string', 'max:100', "regex:/^[\\p{L}0-9\\s.&\\-,()\\/]+$/u"],
+            'title'         => [
+                'required', 'string', 'max:100', "regex:/^[\\p{L}0-9\\s.&\\-,()\\/]+$/u",
+                Rule::unique('positions', 'title')->where(function ($query) {
+                    return $query
+                        ->where('department_id', Department::tryDecodeHash((string) $this->input('department_id')))
+                        ->whereNull('deleted_at');
+                }),
+            ],
             'department_id' => ['required', 'string'],
             'salary_grade'  => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]+$/'],
         ];

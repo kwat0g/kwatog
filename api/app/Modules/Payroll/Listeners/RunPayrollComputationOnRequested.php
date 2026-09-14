@@ -46,10 +46,14 @@ class RunPayrollComputationOnRequested implements ShouldQueue
 
     public function handle(
         PayrollComputationRequested $event,
-        PayrollCalculatorService $calculator,
-        PayrollPeriodService $periods,
-        PayrollProgressTracker $progress,
+        ?PayrollCalculatorService $calculator = null,
+        ?PayrollPeriodService $periods = null,
+        ?PayrollProgressTracker $progress = null,
     ): void {
+        $calculator ??= app(PayrollCalculatorService::class);
+        $periods ??= app(PayrollPeriodService::class);
+        $progress ??= app(PayrollProgressTracker::class);
+
         $period = PayrollPeriod::query()->find($event->period->id);
         if (! $period) {
             app(ChainListenerRunService::class)->recordOutcome(

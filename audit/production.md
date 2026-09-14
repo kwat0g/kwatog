@@ -105,3 +105,66 @@ page's false promise is production's surface.
 - Edge-device ingestion paths (`auth:edge_device`), biometric/MRP/CRM modules except where Production calls them (SalesOrderService::markInProduction, MoldService, StockMovementService).
 - Deep rendering math of GanttChart/ShopFloorMap/OeeGauge beyond division/empty guards; notification mail templates; DailyProductionSummary command internals beyond the summary service it feeds.
 - Performance under load (dashboard 30s cache noted; OEE trend per-day loop bounded at 92 days).
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Result
+
+This is a read-only re-audit of the requested Production backend/frontend scope at
+commit `56e0d431e41d74d422ad81684ff50e0b2b49960e`. No application code, migration,
+test, registry, or roadmap files were changed. Existing findings are retained by
+ID below; only their current status and materially current evidence are restated.
+
+### Status changes
+
+| ID | Status | Current evidence |
+|---|---|---|
+| PR-01 | Closed in source | `spa/src/api/factory.ts:8-11` now sends `status[]`; `WorkOrderService.php:97-108` normalizes and validates scalar/array status filters before `whereIn`. `WorkOrderListFilterTest.php:32-84` covers the union and invalid-status cases. |
+| PR-03 | Closed in source | `WorkOrderService.php:339-355` and `:477-493` lock the machine and call `assertMachineNotOccupied()` before binding it; the helper is at `:932-946`. `WorkOrderStartResumeOccupancyTest.php:120-220` covers start, resume, and mold-availability conflicts. |
+| PR-10 | Closed in source | `TriggerInProcessQC.php:41-117` creates an idempotent in-process inspection on the `in_progress` transition, and `AppServiceProvider.php:329-331` explicitly registers the listener. This does not close the separate floor quick-check defects in PR-05. |
+
+### Unresolved findings
+
+| ID | Category | Severity | Effort | Location | Current evidence / reproduction |
+|---|---|---:|---:|---|---|
+| PR-02 | Broken process | High | M | `spa/src/pages/factory/RecordOutput.tsx:47-75`; `api/app/Modules/Production/Requests/RecordOutputRequest.php:28-55` | The floor form submits `good_count`, `reject_count`, and remarks only. Any `reject_count > 0` reaches the request validator without `defects`, returns 422, and the UI reduces it to `Failed to record output`. Rejects cannot be classified or recorded from the shop floor. |
+| PR-04 | Broken process | High | M | `api/app/Modules/Production/Services/WorkOrderOutputService.php:263-285`; `api/app/Modules/Production/Controllers/WorkOrderController.php:297-308` | `ClosedPeriodException` is outside the receipt-handoff degrade union. A closed-period exception therefore rolls back the output row, WO counters, and mold-shot update and returns 422. Month-end accounting close can still stop physical production capture. `WorkOrderOutputFgReceiptTest.php:424-447` pins this behavior. |
+| PR-05 | Broken process | High | M | `spa/src/pages/factory/QcQuickCheck.tsx:69-82,277-330`; `api/app/Modules/Quality/Services/InspectionService.php:332-397` | The FAIL confirmation says it raises an NCR and holds the batch, but the request only creates a Draft inspection with a defect description in `notes`; it does not complete the inspection, call NCR creation, or create a hold. The same create path uses the WO target as the in-process batch/sample basis, so the newly registered automatic trigger (`TriggerInProcessQC.php:75-109`) can scaffold one measurement matrix per target piece. A 10,000-piece WO with several spec items creates thousands of draft measurement rows, while the quick-check sample input is only written into notes. |
+| PR-06 | Gap | Medium | M | `api/app/Modules/Production/Services/WorkOrderService.php:506-525` | `complete()` permits `quantity_produced = 0` and does not require good/reject output or reconcile `work_order_materials.actual_quantity_issued` against the material plan. A legacy or manually altered WO can therefore complete with no production evidence or no material issue. |
+| PR-07 | Risk | Medium | M | `api/app/Modules/Production/Services/WorkOrderService.php:589-608` | `cancel()` releases only reservations. It does not reverse `MaterialIssue` movements already posted by `start()`, so a started WO cancelled from `paused` leaves warehouse stock consumed against a cancelled order. |
+| PR-08 | Risk | Medium | M | `api/app/Modules/Production/Services/WorkOrderOutputService.php:252-260`; `api/app/Modules/Production/Services/WorkOrderService.php:830-842` | Output records pass piece total (`good + reject`) to `MoldService::incrementShots()`, and assignment capacity compares `quantity_target` directly to shot life. A multi-cavity mold therefore consumes/alerts by pieces rather than actual mold shots. |
+| PR-09 | Risk | Medium | M | `api/app/Modules/Production/Services/WorkOrderService.php:407-423`; `api/app/Modules/Production/Services/OeeService.php:47-64,246-261`; `api/app/Modules/Production/Models/MachineDowntime.php:19-22` | Pausing creates downtime without checking for another open row on the machine; OEE groups/sums rows without overlap protection and attributes a full row to the window containing `start_time`. `maintenance_order_id` remains fillable but no Production path writes it. An additional current gap is that OEE requires `duration_minutes` to be non-null, so an ongoing breakdown (`end_time = null`, as created at `WorkOrderService.php:412-418`) contributes zero downtime until restoration. |
+| PR-11 | Gap | Medium | M | `api/app/Modules/Production/Services/WoOperationService.php:203-232`; `api/app/Modules/Production/Controllers/WoOperationController.php:165-184` | Operation output updates only `wo_operations.qty_completed/qty_scrapped`. There is no `qty_planned` cap and no handoff to `work_orders` totals, mold shots, finished-goods receipt, or the canonical output/defect ledger. The WO detail exposes both ledgers, so operation output can exceed plan while WO progress and inventory remain unchanged. |
+| PR-12 | Broken process | Medium | S | `api/app/Modules/Production/Services/ProductionSummaryService.php:52-66` | The breakdown query is `whereBetween(start_time)` OR `whereNull(end_time)` followed by `where(category, breakdown)`. SQL precedence makes any open row a breakdown and any row starting that day match regardless of category. Daily and weekly summary consumers receive misclassified downtime. |
+| PR-13 | Bad practice | Low | S | `spa/src/pages/production/schedule.tsx:92-100` | The schedule-confirm mutation has `onSuccess` but no `onError`. A backend conflict or exclusion-constraint rejection leaves the operator with no toast or actionable feedback. |
+| PR-14 | Bad practice | Low | S | `api/app/Modules/Production/Controllers/OeeController.php:42-58,70-74` | OEE report and machine windows parse arbitrary date strings with `Carbon::parse()` and do not enforce `from <= to`; malformed input can become a 500 and reversed input can produce an empty/misleading report. Invalid `machine_id` silently falls back to all machines. |
+| PR-15 | Bad practice | Low | S | `api/app/Modules/Production/Services/ProductionDashboardService.php:124-156` | `QC Pending`, `Delivered Unpaid`, and `At Risk` remain declared output stages but no sales-order status maps to them. The dashboard permanently renders those stages as zero, presenting incomplete chain information as a real distribution. |
+| PR-16 | Stuck process | Low | S | `spa/src/pages/factory/RecordOutput.tsx:50-75`; `api/app/Modules/Production/Services/WorkOrderOutputService.php:177-193` | The floor idempotency key changes only after success. If a key is durably associated with a different payload, every retry reuses it and receives the fingerprint-conflict error; the page shows only the generic failure toast and offers no reset/retry path short of reload. |
+| PR-17 | Missing | Low | S | `spa/src/routes/factoryRoutes.tsx:12-25` | Factory routes have `AuthGuard` and `PermissionGuard` but no `ModuleGuard`. The backend still enforces `feature:production`, but the SPA has no module-disabled state and can render the factory shell before the API rejects its requests. |
+| PR-18 | Bad practice | Low | S | `api/app/Modules/Production/Controllers/WorkOrderController.php:338-340`; `api/app/Modules/Production/Resources/WorkOrderOutputResource.php:41-45` | Receipt retry loads recorder and defects but not `productionReceiptMovement`. When a movement is linked, the resource conditionally emits `movement_id` as null because the relation is not eager-loaded. |
+
+### New findings
+
+| ID | Category | Severity | Effort | Location | Evidence / reproduction |
+|---|---|---:|---:|---|---|
+| RA-01 | Gap | High | M | `api/app/Modules/Production/Services/WorkOrderService.php:300-320,1050-1075`; `api/app/Modules/Inventory/Services/StockMovementService.php:108-163` | The start path issues reserved material without a `lotNumber`, so the authoritative `material_issue` movement has no supplier-lot identity. The later WO snapshot searches only the latest `grn_items` row for the item and records its lot, regardless of the locked reservation/location actually issued; it also records BOM quantity rather than actual issued quantity. With two receipts for the same resin, a WO can therefore display the newer lot while consuming the older lot. This is false IATF backward traceability, not merely missing optional metadata. |
+| RA-02 | Broken process | Medium | S | `api/app/Modules/Production/Services/OeeService.php:141-163`; `spa/src/components/production/ShopFloorMap.tsx:248-257` | The dashboard machine payload exposes `active_wo` as `wo_number` (`WO-...`), but the Shop Floor Map treats that field as a route ID and links to `/production/work-orders/${active_wo}`. Work-order route binding expects a HashID, so the map's "View Work Order" link for a running machine resolves to 404 rather than the active WO. |
+| RA-03 | Stuck process | Medium | M | `spa/src/pages/production/work-orders/create.tsx:32-43,87-98`; `api/app/Modules/Production/Requests/StoreWorkOrderRequest.php:44-45`; `api/app/Modules/Production/Services/WorkOrderService.php:729-742` | The backend supports `service`, `non_stock`, and `prototype` work-order classes with an authorized exception reason, but the manual create form has no class/reason fields and always sends the default standard shape. Creating a no-BOM one-off through the UI produces a standard WO that later fails the start gate (“require an effective BOM/material plan”), while the supported no-BOM exception path is unreachable from the page. |
+| RA-04 | Risk | Medium | M | `api/app/Modules/Production/Services/OeeService.php:47-64`; `api/app/Modules/Production/Services/WorkOrderService.php:407-418` | A live machine breakdown is represented by an open downtime row with null duration, but OEE sums only rows with non-null `duration_minutes`. During the entire active breakdown window, availability and OEE can therefore omit the outage and show an overstated result until the restoration listener closes the row. |
+
+### Clean areas
+
+- Durable output idempotency is present: the WO-scoped key and fingerprint are checked against the durable row before the status guard, and the WO row is locked before totals are incremented (`WorkOrderOutputService.php:141-201`).
+- WO lifecycle transitions use lock-then-recheck semantics, and committed status changes stage both the outbox and chain records in the transaction (`WorkOrderService.php:231-277,329-389,573-585,800-821`).
+- Material reservation is transactional, split across locations when required, and excludes quarantine/scrap locations (`WorkOrderService.php:959-1042`).
+- Routing versions are immutable in practice, serialized per product, and guarded by a one-active-version database invariant (`ProductionRoutingService.php:120-151,202-235,267-319`); the focused routing tests cover stale-version and authorization behavior.
+- Production resources consistently expose HashIDs for the production-owned identifiers reviewed here, and the output/WO resources return decimal quantities as strings where precision matters.
+- Receipt-handoff failures other than closed-period exceptions leave a durable `manual_required` state and replayable outbox request (`WorkOrderOutputService.php:267-301`; `CreateProductionReceiptOnOutputRequested.php:67-93`).
+
+### Verification limits
+
+- This was code-reading only. No PHPUnit, Playwright, browser, Docker, Artisan, queue worker, Redis/Reverb, database, migration, or live HTTP execution was run.
+- Focused Production tests were read for context but not executed; their assertions are not current runtime verification.
+- MRP scheduler internals, Quality lifecycle internals, Inventory stock-ledger policy, Supply Chain delivery allocation, and shared approval/aggregator infrastructure were inspected only at the Production call sites relevant to these findings.
+- The current worktree had unrelated modifications in `audit/accounting-budgeting.md`, `audit/mrp.md`, and `spa/playwright.config.ts`; none were changed.
+- No application code, migrations, tests, registry, roadmap, or existing audit content was modified; only this new section was appended to `audit/production.md`.

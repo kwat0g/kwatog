@@ -96,3 +96,167 @@ file Wednesday, correction gone (audit trail survives via HasAuditLog, pay does 
   conversion exists (by design, not verified against real device exports).
 - Correctness of the 2026 PH holiday list vs official proclamations; OvertimeRequestFactory;
   self-service overtime SPA page; CSV performance near the 5 MB cap.
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Scope and verdict
+
+Read-only source re-audit of `api/app/Modules/Attendance/**`,
+`spa/src/pages/attendance/**`, `spa/src/api/attendance/**`,
+`spa/src/types/attendance.ts`, the attendance migrations/seed data, payroll and
+HR self-service consumers, attendance routes, SPA routes, and directly relevant
+tests. The requested project docs and the prior attendance audit were read in
+full. Current commit verified as `56e0d431e41d74d422ad81684ff50e0b2b49960e`.
+
+AT-01 and AT-02 are resolved by current source inspection. AT-03 through AT-12
+remain materially unresolved. Six new findings are recorded below. The most
+serious current defect is the normal paired-CSV/manual-entry path losing
+overnight overtime for night-shift workers; the DTR arithmetic is correct only
+because it temporarily advances the punch, while the persisted punch used by
+auto-detection remains on the start date.
+
+### Prior finding status
+
+| ID | Status at current commit | Severity | Effort | Current evidence / reproduction |
+|----|--------------------------|----------|--------|----------------------------------|
+| AT-01 | Resolved in source; runtime not rerun | High | S | `api/app/Modules/Payroll/Services/PayrollCalculatorService.php:477-483` now multiplies ND by `day_type_rate`; the regression matrix remains at `api/tests/Feature/Payroll/PayrollCalculatorServiceTest.php:812-858`, including rate `2.60`. |
+| AT-02 | Resolved in source and directly covered | High | M | `api/app/Modules/Attendance/Services/DTRImportService.php:374-387` skips any changed manual row and permits only an exact replay; paired and raw paths both call it at lines 108 and 257. `api/tests/Feature/Attendance/ImportManualCorrectionGuardTest.php:90-249` covers overwrite, fill, exact replay, and both import paths. |
+| AT-03 | Confirmed unresolved | Medium | M | `api/app/Modules/Attendance/Services/DTRComputationService.php:60-63` still derives rest day from an explicit flag or Sunday. There is no configured plant rest-day calendar, and the import path does not set the flag. A non-Sunday fixed or rotating rest day therefore receives ordinary-day treatment. |
+| AT-04 | Confirmed unresolved | Medium | S | `DTRImportService::importRawPunches()` remains at `api/app/Modules/Attendance/Services/DTRImportService.php:166` with no route or controller call; `api/app/Modules/Attendance/routes.php:40` exposes only the paired import. Existing raw-punch tests invoke the service directly, so the implemented path is still unreachable to operators. |
+| AT-05 | Confirmed unresolved | Medium | M | `api/app/Modules/Attendance/Requests/StoreOvertimeRequestRequest.php:28-37` exposes the admin maximum of 8 hours; `DTRComputationService.php:214-220` caps paid approved OT at 240 minutes, while `OvertimeService.php:95-115` can persist an uncapped auto-detected request. Approval records 8 hours but payroll uses approved-row presence plus punch-derived, capped hours, so approval intent and pay remain divergent. |
+| AT-06 | Confirmed unresolved | Medium | S | `api/database/migrations/2026_08_13_100000_add_auto_overtime_source_unique.php:29-49` protects only `is_auto_detected = true`. `OvertimeService::create()` at `api/app/Modules/Attendance/Services/OvertimeService.php:193-203` has no employee/date duplicate guard or manual uniqueness backstop; separate pending manual requests can still be filed and approved for one day. |
+| AT-07 | Confirmed unresolved | Medium | M | `api/app/Modules/Attendance/Services/DTRComputationService.php:60-62` looks up one holiday using the row start date, and `compute()` applies that one holiday to the full interval. A 18:00-to-06:00 row crossing into a holiday still assigns the whole row the start-date rate. |
+| AT-08 | Confirmed unresolved | Medium | M | `api/app/Modules/Attendance/Services/OvertimeDecisionPolicy.php:21-24` still hardcodes `system_admin` and `hr_officer`; department visibility is re-expressed in `AttendanceService.php:64-80`, `OvertimeService.php:173-187`, `AttendanceController.php:81-106`, and `OvertimeController.php:45-61,96-113`. Adding a legitimate all-record role or changing row policy still requires multiple code edits. |
+| AT-09 | Confirmed unresolved | Medium | M | `DTRComputationService.php:47-58` pins a resolved shift but does not re-resolve a previously pinned row. `ShiftAssignmentService.php:61-72` can return null for a soft-deleted assigned shift; DTR then falls back to the default while retaining the stale `shift_id`. Holiday/assignment changes still have no attendance recompute sweep, and `api/routes/console.php` has no attendance recompute schedule. |
+| AT-10 | Confirmed unresolved | Low | M | `api/database/seeders/HolidaySeeder.php:14-41` seeds only 2026 and sets `is_recurring` false. `HolidayService::forDate()` at `api/app/Modules/Attendance/Services/HolidayService.php:78-104` performs literal year/date lookup and never expands recurring rows. A future year has no holiday pay rules unless manually populated. |
+| AT-11 | Confirmed unresolved | Low | S | `spa/src/api/attendance/attendances.ts:50-55` still sets `Content-Type: multipart/form-data` manually, contrary to the project client rule. The browser may currently repair the boundary, but the request is adapter-dependent and can fail when the client/adapter changes. |
+| AT-12 | Confirmed unresolved | Low | S | `api/app/Modules/Attendance/Services/DTRImportService.php:264-266` always appends `punch:<flag>` to existing remarks. Replaying a raw-punch file for a flagged day therefore accumulates duplicate remarks; the raw endpoint is currently unrouted, but the defect remains in the implemented service. |
+
+### New findings
+
+#### AR-01 - Night-shift overtime disappears on paired/manual overnight punches
+
+**Category:** Broken process
+**Severity:** High
+**Effort:** M
+**Location:** `api/app/Modules/Attendance/Requests/StoreAttendanceRequest.php:53-56`; `api/app/Modules/Attendance/Requests/UpdateAttendanceRequest.php:37-42`; `api/app/Modules/Attendance/Services/DTRImportService.php:99-103`; `api/app/Modules/Attendance/Services/DTRComputationService.php:176-182`; `api/app/Modules/Attendance/Services/OvertimeService.php:81-90`
+
+**Evidence/reproduction:** For a 18:00-06:00 night shift on attendance date
+`2026-06-15`, submit `time_in=18:00` and `time_out=07:00` through the manual
+form or paired CSV. The request/import code persists both timestamps on
+`2026-06-15`. `DTRComputationService::compute()` temporarily adds one day to
+the local `$timeOut` at lines 179-182, so the stored DTR hours look correct,
+but it does not write that advanced timestamp back to the model. The subsequent
+`AttendanceService::create()`/import path calls auto-detection after save; the
+detector builds shift end as `2026-06-16 06:00` and compares it to the stored
+`2026-06-15 07:00`, producing zero extra minutes. No auto OT request is created;
+absent a separate manual OT approval, the row remains at zero OT and payroll
+misses the hour. A manually approved request can trigger a later recompute, but
+auto-detection itself cannot discover the overnight excess. The raw-punch path
+can avoid this only when it is used, and AT-04 shows that path is not routed.
+
+#### AR-02 - OT decision notifications link to a nonexistent SPA route
+
+**Category:** Stuck process
+**Severity:** Medium
+**Effort:** S
+**Location:** `api/app/Modules/Attendance/Listeners/NotifyOnOvertimeDecided.php:26-34`; `spa/src/routes/selfServiceRoutes.tsx:29-33`
+
+**Evidence/reproduction:** Every approved or rejected OT decision sends
+`/self-service/overtime/{hash_id}` as `link_to`, but the SPA registers only
+`/self-service/overtime`, with no `:id` route. Clicking the notification takes
+the employee to the catch-all/404 instead of the request. Cancellation is also
+published through `OvertimeRequestDecided(..., false)` at
+`api/app/Modules/Attendance/Services/OvertimeService.php:342-351`, so a
+withdrawal is presented to the employee as a rejected decision by the listener
+rather than as a cancellation.
+
+#### AR-03 - Bulk attendance responses expose sequential integer IDs
+
+**Category:** Bad practice
+**Severity:** Medium
+**Effort:** S
+**Location:** `api/app/Modules/Attendance/Controllers/ShiftController.php:66-75`; `api/app/Modules/Attendance/Services/ShiftAssignmentService.php:21-40`; `api/app/Modules/Attendance/Controllers/OvertimeController.php:133-158`; `api/app/Modules/Attendance/Services/OvertimeService.php:249-274`; `spa/src/api/attendance/shifts.ts:16-19`; `spa/src/api/attendance/overtime.ts:40-48`
+
+**Evidence/reproduction:** A successful bulk shift assignment returns
+`shift_id` and `department_id` from the service's raw integer result. A partial
+bulk OT approval returns each failed request's raw integer `id`; the SPA type
+also declares that field as `number`. These are API responses, not only
+internal service values, and violate the project HashID contract. The leak does
+not itself authorize access, but it exposes sequential primary keys and makes
+the attendance API inconsistent with the hashed IDs used by the same endpoints'
+request payloads and resources.
+
+#### AR-04 - Configurable shift grace periods are not manageable in the SPA
+
+**Category:** Gap
+**Severity:** Medium
+**Effort:** S
+**Location:** `api/app/Modules/Attendance/Requests/StoreShiftRequest.php:23-35`; `api/app/Modules/Attendance/Requests/UpdateShiftRequest.php:24-37`; `api/app/Modules/Attendance/Resources/ShiftResource.php:17-25`; `spa/src/types/attendance.ts:3-30`; `spa/src/pages/attendance/shifts/index.tsx:284-307`
+
+**Evidence/reproduction:** The backend accepts, stores, and returns
+`grace_minutes`, and DTR computation consumes it at
+`api/app/Modules/Attendance/Services/DTRComputationService.php:77-83`. The
+attendance `Shift` and create/update DTO types omit the field, and the shift
+modal has no grace-period input. An operator cannot configure the labor rule
+from the supported shift-management page; new shifts use the backend default,
+and existing configured grace values cannot be changed from the UI.
+
+#### AR-05 - Philippine-local date defaults are derived from UTC
+
+**Category:** Broken process
+**Severity:** Medium
+**Effort:** S
+**Location:** `spa/src/pages/attendance/index.tsx:36-40`; `spa/src/pages/attendance/shifts/assign.tsx:40-46`
+
+**Evidence/reproduction:** Both pages use `new Date().toISOString()` to seed
+calendar dates. In the plant's Philippine timezone, between local midnight and
+08:00 the ISO date is still the previous UTC date. The attendance page then
+defaults its list range and manual-DTR date to yesterday, while bulk shift
+assignment defaults its effective date to yesterday. The code can also remain
+stale after a long-lived page crosses local midnight. The overtime form already
+has a separate local-date helper, demonstrating that the attendance surfaces do
+not share one safe date primitive.
+
+#### AR-06 - Department-head OT list advertises a create action that its route denies
+
+**Category:** Stuck process
+**Severity:** Medium
+**Effort:** S
+**Location:** `spa/src/pages/attendance/overtime/index.tsx:203-205`; `spa/src/routes/hrRoutes.tsx:125-130`; `api/app/Modules/Attendance/routes.php:43-44`; `api/database/seeders/RolePermissionSeeder.php:873-882`
+
+**Evidence/reproduction:** The department-head role has
+`attendance.ot.approve` but not `attendance.edit` or
+`attendance.ot.create`. That role passes the SPA guard for
+`/hr/attendance/overtime`, so the list always renders `New OT request`, but
+clicking it enters `/hr/attendance/overtime/create`, whose guard requires
+`attendance.edit`. The corresponding POST endpoint independently requires
+`attendance.ot.create`. The operator is shown an action that terminates at a
+403/permission screen; the button must be permission-derived from the actual
+create route or the role must be intentionally granted the create capability.
+
+### Clean areas observed
+
+- Attendance, shift, holiday, and overtime resources expose HashIDs rather than integer primary keys, and attendance/overtime numeric decimal fields are serialized as strings.
+- The attendance mutation paths and import day writes use `DB::transaction()`, and `AttendanceDateMutabilityGuard` locks overlapping payroll periods before writes.
+- Archived attendance rows are deliberately not resurrected by import; the current source returns an actionable business message instead of publishing SQL internals.
+- Manual-correction protection now covers overwrite, field fill, removal, exact replay, paired CSV, and raw-punch paths.
+- The pure DTR engine has broad existing unit coverage for holiday/rest-day rates, night bands, cross-midnight arithmetic, tardiness, undertime, and OT caps; this was inspected but not rerun.
+- Active holiday-date uniqueness, one-default-shift uniqueness, and auto-OT source uniqueness have database backstops, with source-level tests for their main service paths.
+- The attendance list/import/overtime/shift/holiday pages statically include loading, error, empty, and stale-data handling; no browser rendering claim is made here.
+
+### Verification limits
+
+No tests, Docker commands, Artisan commands, browser runs, migrations, or live
+database checks were run, per request. Findings are based on source, route,
+schema/migration, seed, and existing-test reading at the stated commit. Queue
+delivery, timezone behavior in a real browser, database concurrency, current
+permissions after seeding, and payroll results were not runtime-verified. The
+existing test files were inspected but their prior reported results were not
+independently reproduced.
+
+### No code change
+
+No application code, migration, test, registry, roadmap, or pre-existing audit
+content was modified. Only this dated section was appended to
+`audit/attendance.md`.

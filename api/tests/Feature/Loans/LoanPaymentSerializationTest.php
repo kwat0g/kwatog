@@ -64,4 +64,38 @@ class LoanPaymentSerializationTest extends TestCase
         $this->assertSame(LoanStatus::Active, $loan->status);
         $this->assertDatabaseCount('loan_payments', 2);
     }
+
+    public function test_manual_payment_replay_returns_the_original_ledger_row(): void
+    {
+        $loan = EmployeeLoan::factory()->create([
+            'principal' => '1000.00',
+            'interest_rate' => '0.00',
+            'monthly_amortization' => '500.00',
+            'total_paid' => '0.00',
+            'balance' => '1000.00',
+            'pay_periods_total' => 2,
+            'pay_periods_remaining' => 2,
+        ]);
+
+        $service = app(LoanService::class);
+        $first = $service->recordPayment(
+            $loan,
+            '100.00',
+            LoanPaymentType::Manual,
+            remarks: 'replay-safe',
+            idempotencyKey: 'loan-payment-test-1',
+        );
+        $replay = $service->recordPayment(
+            $loan->fresh(),
+            '100.00',
+            LoanPaymentType::Manual,
+            remarks: 'replay-safe',
+            idempotencyKey: 'loan-payment-test-1',
+        );
+
+        $this->assertSame($first->id, $replay->id);
+        $this->assertSame(1, LoanPayment::query()->where('loan_id', $loan->id)->count());
+        $this->assertSame('100.00', (string) $loan->refresh()->total_paid);
+        $this->assertSame('900.00', (string) $loan->balance);
+    }
 }

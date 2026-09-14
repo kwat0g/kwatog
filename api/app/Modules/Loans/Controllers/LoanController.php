@@ -133,6 +133,7 @@ class LoanController
                 LoanPaymentType::Manual,
                 remarks: $request->validated('remarks'),
                 paymentDate: $request->validated('payment_date'),
+                idempotencyKey: $request->validated('idempotency_key'),
             );
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());

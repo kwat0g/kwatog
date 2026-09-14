@@ -197,6 +197,36 @@ class ReturnRequestScenarioTest extends TestCase
         $this->assertSame($product->id, ReturnRequestItem::query()->value('product_id'));
     }
 
+    public function test_draft_patch_can_update_notes_without_repeating_the_create_payload(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+
+        $created = $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'finance_only' => true,
+                'finance_only_reason' => 'Non-stock service credit.',
+                'reason_code' => 'defective',
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'quantity' => '1.000',
+                    'unit_price' => '100.00',
+                ]],
+            ])
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/return-management/return-requests/{$created}", [
+                'customer_notes' => 'Notes-only draft edit',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.customer_notes', 'Notes-only draft edit');
+    }
+
     public function test_index_filters_by_customer_hash_id(): void
     {
         $admin = $this->admin();

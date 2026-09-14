@@ -8,6 +8,8 @@ use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -110,6 +112,37 @@ class SalesOrderResponsePortalTest extends TestCase
         ]);
         // The order is not confirmed by the customer's acceptance.
         $this->assertSame('draft', $so->fresh()->status->value);
+    }
+
+    public function test_portal_accept_replay_is_idempotent_and_crm_can_acknowledge_it(): void
+    {
+        $customer = Customer::factory()->create();
+        $portalUser = $this->makePortalUser($customer);
+        $so = $this->makeSo($customer);
+
+        $this->actAs($portalUser);
+        $payload = ['type' => 'accept', 'notes' => 'Accepted once.'];
+        $first = $this->postJson($this->respondUrl($so), $payload)
+            ->assertCreated()
+            ->json('data.id');
+        $replay = $this->postJson($this->respondUrl($so), $payload)
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertSame($first, $replay);
+        $this->assertSame(1, SalesOrderResponse::query()->where('sales_order_id', $so->id)->count());
+
+        $sales = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $this->actingAs($sales, 'sanctum')
+            ->patchJson("/api/v1/crm/sales-order-responses/{$first}/accept")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'accepted');
+
+        $this->assertNotNull(
+            SalesOrderResponse::query()->findOrFail(SalesOrderResponse::tryDecodeHash($first))->resolved_at
+        );
     }
 
     public function test_portal_propose_stores_items(): void

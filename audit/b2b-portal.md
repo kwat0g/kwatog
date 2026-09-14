@@ -43,3 +43,102 @@ Audited all ~57 backend files under `api/app/Modules/B2B/**`, the 26 SPA portal 
 - Deployment config: actual `SESSION_SAME_SITE`, `SANCTUM_STATEFUL_DOMAINS`, nginx headers for portal origins — CSRF protection for the customer portal relies on Sanctum stateful middleware + SameSite=Lax defaults.
 - Purchasing-side internal review UI routes for listings (outside unit).
 - Only `--filter='B2B'` was run (151 pass / 690 assertions); full suite untouched.
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Re-audit verdict
+
+The supplier bearer-token finding is resolved in the current source: both portal guards are session-backed, the supplier login response no longer returns a token, and the SPA portal client has no browser storage or `Authorization` hook. Supplier cross-tenant read/write defenses remain strong in source and in the existing supplier HTTP drill. The customer portal still crosses its external contract boundary by serializing the internal sales-order resource, and the ERP party lifecycle is still not connected to portal access. No Critical findings were identified from code reading.
+
+### Prior finding status
+
+| ID | Current status | Recheck |
+|----|----------------|---------|
+| BP-01 | **Resolved in source** | `f3fa4f61` migrated supplier auth to sessions; current guard/client/login evidence is below. |
+| BP-02 | **Unresolved** | Vendor/customer `is_active` and soft-delete state still do not disable linked portal users or active sessions. |
+| BP-03 | **Unresolved, expanded** | Internal `SalesOrderResource` is still used by four customer portal responses; detail also loads work orders. |
+| BP-04 | **Unresolved** | Supplier item-listing Eloquent audit events still run under the portal guard without an external actor context. |
+| BP-05 | **Unresolved** | Customer password expiry exists, but supplier expiry and idle timeout for both portals remain absent. |
+| BP-06 | **Unresolved** | Locked accounts still return a distinguishable `423` response with remaining minutes. |
+| BP-07 | **Partially addressed, still open** | Customer HTTP tests cover selected order/invoice/delivery cases, but no complete customer route-level cross-tenant matrix exists. |
+| BP-08 | **Unresolved** | Password reset still deletes Sanctum tokens only; the live session-backed portal cookie is not invalidated. |
+
+### Findings
+
+**BP-02 — Broken process — Medium — M**
+
+- **Location:** `api/app/Modules/B2B/Services/B2bAuthService.php:76-78`; `api/app/Common/Middleware/EnsurePortalGuard.php:48-55`; `api/app/Modules/B2B/Middleware/B2BTenancyScopeMiddleware.php:27-64`; `api/app/Modules/B2B/Services/SupplierPortalService.php:122-172`; `api/app/Modules/B2B/Services/CustomerPortalService.php:72-111,294-322,470-527`.
+- **Evidence/reproduction:** Login and request authorization check only the portal-user `is_active` flag. The tenancy middleware scopes by the portal user's stored `vendor_id`/`customer_id`, not by the linked party's current liveness. Customer catalog filtering checks an active customer at `CustomerPortalService.php:142-143`, but the customer dashboard, orders, invoices, deliveries, complaints, schedules, and returns do not apply the same party-liveness gate; supplier portal queries have no equivalent vendor check. Deactivate or soft-delete a `Vendor`/`Customer` in ERP while its portal user remains active, then reuse the session against `/b2b/supplier/dashboard` or `/b2b/customer/orders`: the portal principal remains usable and the party's data/actions continue to resolve.
+- **Impact:** ERP operators cannot rely on the natural vendor/customer deactivation action to cut off an external organization. A stale session can continue reading data and performing portal writes, including supplier invoice submission and customer order/complaint/return actions.
+- **Cross-module flag:** `Accounting` owns `Vendor`/`Customer`; B2B must receive a lifecycle hook or re-check their authoritative state on login and every portal request.
+
+**BP-03 — Bad practice — Medium — S**
+
+- **Location:** `api/app/Modules/B2B/Controllers/CustomerPortalController.php:27,66,103,123,129-134`; `api/app/Modules/B2B/Services/CustomerPortalService.php:97-103,294-322`; `api/app/Modules/CRM/Resources/SalesOrderResource.php:31-52,58-61,65-93,127-130`; `spa/src/types/b2b.ts:158-174`; `spa/src/pages/portal/customer/orders/detail.tsx:116-144`.
+- **Evidence/reproduction:** Customer dashboard, order creation response, order list, and order detail all instantiate `CRM\Resources\SalesOrderResource`. That resource always emits internal lifecycle/capability fields such as `next_statuses`, `is_editable`, `is_cancellable`, `submission_source`, `customer_confirmation_requested_at`, `deleted_at`, and response-resolution fields; when relations are loaded it emits internal creator, work orders, production quantities, planned start, and chain context. `salesOrderDetail()` explicitly loads `workOrders`, and the SPA renders the resulting production progress. `CustomerPortalServiceTest.php:176-202` asserts `data.work_orders`, so the exposure is currently codified by a passing-shape expectation rather than accidentally unreachable.
+- **Impact:** This is not a cross-customer row leak, but it exposes ERP workflow and production information to an external customer and couples the public contract to an internal resource. The list/dashboard paths also lack a customer-visible status allowlist, so internal lifecycle rows can be returned through the same resource.
+- **Cross-module flag:** `CRM` owns the resource. B2B needs a customer-specific allowlist resource and an explicit customer-visible status policy; the internal resource must not be made portal-safe by weakening its ERP contract.
+
+**BP-04 — Bad practice — Medium — S**
+
+- **Location:** `api/app/Modules/Purchasing/Models/SupplierItemListing.php:7,18-20`; `api/app/Modules/Purchasing/Services/SupplierListingService.php:75-101,107-119`; `api/app/Common/Traits/HasAuditLog.php:91-103`; `api/app/Modules/B2B/Controllers/SupplierListingPortalController.php:91-143`.
+- **Evidence/reproduction:** `SupplierItemListing` uses `HasAuditLog`, while portal `submit()` and `update()` execute under `auth:supplier_portal` without `SystemUserResolver::impersonate()` and without a `recordPortalAudit` event. `HasAuditLog::auditActor()` sees the supplier portal user's numeric primary key, treats it as an internal user only if that unrelated `users.id` happens to exist, otherwise records `actor_type=system`; neither result carries the supplier portal user ID. Submit or update a listing as a supplier and inspect its audit row: the external actor is absent, or a numeric-ID collision can attribute the change to the wrong internal user.
+- **Additional evidence:** `update()` checks `Pending` before its transaction and does not re-read/lock the listing at `SupplierListingService.php:107-117`; a concurrent Purchasing approval can therefore interleave with a supplier update. The status is not mass-assigned, but approved commercial fields can still be changed after review.
+- **Impact:** IATF/accountability evidence cannot identify which external contact submitted or changed an offer, and the review boundary is not fully serialized.
+- **Cross-module flag:** This is in `Purchasing\Services\SupplierListingService`; B2B owns the portal call path, while the owning module must provide the state/audit-safe write seam.
+
+**BP-05 — Risk — Low — S**
+
+- **Location:** `api/app/Modules/B2B/routes.php:33-40,126-133`; `api/app/Modules/B2B/Middleware/CheckPortalPasswordExpiry.php:17-43`; `api/app/Common/Middleware/SessionTimeout.php:24-31,33-49`.
+- **Evidence/reproduction:** The customer route group mounts `CheckPortalPasswordExpiry`, but the supplier group does not. Neither portal group mounts `session.timeout`; `SessionTimeout` deliberately returns for routes that do not resolve as internal Sanctum routes. The comment at `SessionTimeout.php:33-37` still describes portal clients as bearer-token clients even though both guards now use sessions. A supplier with a password older than the configured expiry can continue signing in, and an authenticated supplier or customer session remains usable after the configured internal idle period because no portal idle check runs.
+- **Impact:** Portal credentials have inconsistent lifecycle policy, and a stolen or unattended portal cookie has no application-level idle cutoff.
+
+**BP-06 — Risk — Low — S**
+
+- **Location:** `api/app/Modules/B2B/Services/B2bAuthService.php:64-67,139-152`; `api/tests/Feature/B2B/SupplierPortalAuthTest.php:143-168`; `api/tests/Feature/B2B/SupplierPortalCrossTenantTest.php:549-565`.
+- **Evidence/reproduction:** Unknown email and wrong password return the generic `422` validation response, but a known locked account returns `423` with `Account locked. Try again in N minutes.` and the remaining lock duration. Send the same login request to an unknown address and to a known address after five failures: the status/body distinguish account existence and lock state. Existing tests prove the lock response and separately compare known-invalid versus unknown credentials, but do not compare locked versus unknown accounts.
+- **Impact:** The public login endpoint remains an account and lock-state oracle, enabling targeted enumeration even though the ordinary invalid-credential path is generic.
+
+**BP-07 — Missing — Low — M**
+
+- **Location:** `api/app/Modules/B2B/routes.php:138-152,160-163`; `api/tests/Feature/B2B/CustomerPortalServiceTest.php:148-160,227-239,291-333`; `api/tests/Feature/B2B/CustomerPortalDeliveryConfirmTest.php:127-145`.
+- **Evidence/reproduction:** Current customer tests cover a foreign sales-order detail, foreign invoice detail, and foreign delivery confirmation, plus some own-record paths. There is no customer equivalent of `SupplierPortalCrossTenantTest` that drives every customer identifier-bearing endpoint through HTTP. Uncovered or not matrix-proven include order chain/respond, invoice PDF, delivery detail, every delivery-proof combination, complaint 8D report, and return-request detail/source combinations. A future route-binding or relation-loading regression in any of those paths can therefore ship without the supplier drill's systematic negative assertion.
+- **Impact:** Customer isolation is partly tested but not proven across the complete public route surface. This is a verification gap, not evidence that a current customer row leak was found.
+
+**BP-08 — Risk — Low — S**
+
+- **Location:** `api/app/Modules/B2B/Services/PortalPasswordResetService.php:118-136`; `api/config/auth.php:16-23`; `api/tests/Feature/B2B/PortalPasswordResetTest.php:141-168`.
+- **Evidence/reproduction:** Reset updates the password and clears lock state, then calls `$user->tokens()->delete()` at line 134. Both portal guards are now `session` guards, so that deletes `personal_access_tokens` rows but does not invalidate an existing database-backed session. Reset a customer password from one browser while another browser remains logged into `/b2b/customer/me` or a portal data route: no source path changes the session record or otherwise revokes the existing cookie session. The test only asserts that old bearer tokens are deleted, which is no longer the credential used by the portal.
+- **Impact:** Password reset does not reliably terminate sessions created with the old password after compromise or account recovery.
+
+**BP-09 — Missing — Medium — S**
+
+- **Location:** `api/app/Modules/B2B/Services/CustomerPortalService.php:719-755`; `api/app/Modules/B2B/Models/DeliverySchedule.php:18-20`; `api/app/Modules/B2B/Services/SupplierPortalService.php:784-797`; `api/tests/Feature/B2B/CustomerPortalServiceTest.php:597-614`.
+- **Evidence/reproduction:** Customer delivery-schedule submission inserts a `DeliverySchedule` row at lines 749-754 and returns it, but neither the model has `HasAuditLog` nor the service calls `recordCustomerAudit`. The supplier counterpart records `supplier_sched.sub` at `SupplierPortalService.php:792`. Submit a customer schedule and inspect `audit_logs`: there is no external actor event for the write; the existing test asserts only the row/status. This is asymmetric with the other customer writes, which record `customer_portal` audit rows.
+- **Impact:** An externally visible planning commitment has no durable portal-user, IP, user-agent, correlation, or request provenance, contrary to the roadmap auditability standard.
+
+**BP-10 — Bad practice — Low — S**
+
+- **Location:** `api/app/Common/Support/HashIdFilter.php:15-20`; B2B callers `api/app/Modules/B2B/Services/CustomerPortalService.php:197,607`; `api/app/Modules/B2B/Services/SupplierPortalService.php:753,850`; response callers `api/app/Modules/CRM/Services/SalesOrderResponseService.php:180-181` and `api/app/Modules/Purchasing/Services/SupplierResponseService.php:211-212`.
+- **Evidence/reproduction:** The shared decoder accepts any digit-only value as a raw integer primary key before attempting HashID decoding. Consequently an external request such as customer order `items[0].product_id=1`, customer complaint `order_id=1`, supplier schedule `purchase_order_id=1`, or a numeric proposed line ID can be accepted if the resulting row passes the later ownership/business checks. The production path has no environment guard; the helper comment says raw integers are for tests, but the implementation permits them in live requests.
+- **Impact:** This weakens the HashID boundary and allows raw primary-key probing/acceptance on portal payloads. Current response resources and URL bindings are predominantly HashID-safe, so this is a contract-hardening issue rather than evidence of a current cross-tenant write.
+- **Cross-module flag:** The decoder is shared infrastructure and the response services are CRM/Purchasing dependencies; fix at the common request-decoding contract rather than adding ad hoc checks to one portal endpoint.
+
+### Clean areas confirmed by source reading
+
+- **Supplier auth migration:** `api/config/auth.php:16-23`, `api/app/Modules/B2B/Controllers/SupplierAuthController.php:43-69`, `spa/src/api/b2b/client.ts:3-14`, and `spa/src/api/b2b/supplier.ts:23-38` establish HTTP-only cookie sessions; no supplier token is returned or stored. `spa/src/api/b2b/client.test.ts:7-23` also guards against an `Authorization` default and browser storage.
+- **Separate portal guards:** `api/app/Common/Middleware/EnsurePortalGuard.php:15-55` rejects guard/model mismatches and inactive portal accounts; `api/config/auth.php:16-38` uses distinct providers for supplier and customer users.
+- **HashID response discipline:** Portal auth responses, portal resources, route-bound models, document downloads, and portal URLs use HashIDs in the inspected paths. The supplier cross-tenant drill covers collections, bound details, mutations, files, schedules, and PPAP rows in `api/tests/Feature/B2B/SupplierPortalCrossTenantTest.php:200-448`.
+- **Supplier allowlists and file boundaries:** `SupplierPurchaseOrderResource`, `SupplierBillResource`, `CustomerPortalInvoiceResource`, `CustomerPortalComplaintResource`, and `CustomerReturnRequestResource` use portal-specific allowlists; supplier documents and customer delivery proofs are served from the `local` disk through authenticated controller paths.
+- **Credential lifecycle controls:** Login lockout, throttling, case-normalized invitation uniqueness, hashed single-use reset tokens, password history, first-login gating, and operator deactivation/reactivation are present in the inspected service/tests. These controls do not close BP-02 or BP-08 because party lifecycle and session invalidation are separate boundaries.
+
+### Verification limits
+
+- This was a read-only code-reading re-audit at commit `56e0d431`; no tests, Docker, Artisan, browser, build, or runtime HTTP commands were run.
+- The report does not verify deployed cookie attributes, `SESSION_LIFETIME`, `SANCTUM_STATEFUL_DOMAINS`, CSRF behavior across production origins, session-store behavior, queue/mail delivery, or PHP worker lifecycle behavior.
+- Customer isolation evidence was inspected from the existing tests only; the missing full customer HTTP matrix was not executed or added.
+- Shared-module findings are flagged for the owning module; no independent full audit of CRM, Purchasing, Accounting, Return Management, or shared auth infrastructure was performed in this unit.
+
+### No code change
+
+No application code, migrations, tests, registry, roadmap, or existing audit content was modified. This append is the only requested file change.

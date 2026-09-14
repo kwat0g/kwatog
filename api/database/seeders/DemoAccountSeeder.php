@@ -22,6 +22,8 @@ class DemoAccountSeeder extends Seeder
         ['email' => 'admin@ogami.test',       'name' => 'System Administrator', 'role' => 'system_admin',       'dept' => null],
         ['email' => 'hr@ogami.test',          'name' => 'Maria Santos',         'role' => 'hr_officer',         'dept' => 'HR'],
         ['email' => 'finance@ogami.test',     'name' => 'Ana Reyes',            'role' => 'finance_officer',    'dept' => 'FIN'],
+        // Distinct same-role checker for Finance-maker workflows.
+        ['email' => 'finance2@ogami.test',    'name' => 'Liza Gomez',           'role' => 'finance_officer',    'dept' => 'FIN'],
         ['email' => 'production@ogami.test',  'name' => 'Ricardo Tanaka',       'role' => 'production_manager', 'dept' => 'PROD'],
         ['email' => 'ppc@ogami.test',         'name' => 'Pedro Garcia',         'role' => 'ppc_head',           'dept' => 'PPC'],
         ['email' => 'purchasing@ogami.test',  'name' => 'Elena Cruz',           'role' => 'purchasing_officer', 'dept' => 'PUR'],

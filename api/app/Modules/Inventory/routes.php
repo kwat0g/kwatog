@@ -29,7 +29,9 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/item-categories', [ItemCategoryController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/item-categories/{itemCategory}', [ItemCategoryController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/item-categories/{itemCategory}', [ItemCategoryController::class, 'destroy'])->middleware('permission:inventory.items.manage');
-    Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])->middleware('permission:inventory.items.manage');
+    Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])
+        ->middleware('permission:inventory.items.manage')
+        ->withTrashed();
 
     /* ─── Items ─── */
     // Item lookups double as PR-form data (the PR create page renders an item
@@ -62,6 +64,9 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/uoms', [UomController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/uoms/{uom}', [UomController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/uoms/{uom}', [UomController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+    Route::patch('/uoms/{uom}/restore', [UomController::class, 'restore'])
+        ->middleware('permission:inventory.items.manage')
+        ->withTrashed();
 
     Route::get('/items/{item}/uom-conversions', [UomController::class, 'conversions'])
         ->middleware('permission:inventory.view');

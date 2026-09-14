@@ -51,7 +51,11 @@ class StockMovementResource extends JsonResource
                 ] : null),
             ],
             'reference_type' => $this->reference_type,
-            'reference_id'   => $this->reference_id,
+            // References are polymorphic integers internally, but API IDs are
+            // always HashIDs even when the target type is not loaded.
+            'reference_id'   => $this->reference_id === null
+                ? null
+                : app('hashids')->encode((int) $this->reference_id),
             'remarks'        => $this->remarks,
             'creator'        => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,

@@ -1,0 +1,3293 @@
+{
+  "generated_at": "2026-09-14T05:48:31.170Z",
+  "ids": {
+    "customer": "dGypLxpvAg",
+    "product": "dGypLxpvAg",
+    "so": "OX5b9mbBrk",
+    "plan": "XKEbGkbgWk",
+    "wo": "0ldwDmpVa9",
+    "schedule": "GkXwO7wP52",
+    "scrapNcr": "kABpV2vpKR",
+    "scrapComplaint": "DzAwdKb5ld",
+    "reworkNcr": "0ldwD5mpVa",
+    "reworkComplaint": "MYAbJ3wBl7",
+    "output": "GqkbAVwxd1",
+    "inProcess": null,
+    "outgoing": null,
+    "outgoingFail": null
+  },
+  "residuals": [
+    {
+      "type": "work-order-output",
+      "id": "GqkbAVwxd1",
+      "detail": "good/reject production output"
+    }
+  ],
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "ppc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Pedro Garcia\",\"email\":\"ppc@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"kABpVvpKRW\",\"name\":\"PPC Head\",\"slug\":\"ppc_head\"},\"employee\":{\"id\":\"DzAwdKb5ld\",\"employee_no\":\"DEMO-0017\",\"full_name\":\"Pedro Garcia\",\"department_id\":\"0ldwDmpVa9\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.work_orders.view\",\"production.schedule.view\",\"production.routings.view\",\"production.routings.manage\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.boms.manage\",\"mrp.machines.view\",\"mrp.molds.view\",\"mrp.plans.view\",\"mrp.plans.run\",\"mrp.runs.view\",\"mrp.runs.trigger\",\"maintenance.view\",\"assets.view\",\"dashboard.ppc.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"forecasting.manage\",\"return_management.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "l10-ppc-schedule UI",
+      "detail": "document=200 uiUrl=http://localhost/production/schedule"
+    },
+    {
+      "status": "FAIL",
+      "actor": "ppc",
+      "name": "L10 confirms returned schedule row",
+      "detail": "HTTP 403; expected 200 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "ppc",
+      "name": "L10 returned schedule terminal replay",
+      "detail": "HTTP 403; expected 200/422 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.approve\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 reads scheduled planned WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":null,\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":null,\"mold\":null,\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":null,\"actual_end\":null,\"status\":\"planned\",\"status_label\":\"Planned\",\"next_statuses\":[{\"value\":\"confirmed\",\"label\":\"Confirmed\"},{\"value\":\"cancelled\",\"label\":\"Cancelled\"}],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-5.67\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-1.53\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-1.50\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-8.70\"},\"outputs\":[],\"inspections\":[],\"created_at\":\"2026-09-14T13:42:32+08:00\",\"updated_at\":\"2026-09-14T13:42:32+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "production",
+      "name": "L11 scheduled WO assignment evidence",
+      "detail": "wo=0ldwDmpVa9; status=planned; detail_machine=null; detail_mold=null; scheduler_machine=dGypLxpvAg; scheduler_mold=dGypLxpvAg"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 confirms planned WO with scheduler assignment",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":null,\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":null,\"actual_end\":null,\"status\":\"confirmed\",\"status_label\":\"Confirmed\",\"next_statuses\":[{\"value\":\"in_progress\",\"label\":\"In Progress\"},{\"value\":\"cancelled\",\"label\":\"Cancelled\"}],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-5.67\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-1.53\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"0.000\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-1.50\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"0.00\",\"cost_variance\":\"-8.70\"},\"outputs\":[],\"inspections\":[],\"created_at\":\"2026-09-14T13:42:32+08:00\",\"updated_at\":\"2026-09-14T13:47"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 starts planned WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":\"BATCH-202609-0002\",\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":\"2026-09-14T13:47:15+08:00\",\"actual_end\":null,\"status\":\"in_progress\",\"status_label\":\"In Progress\",\"next_statuses\":[{\"value\":\"paused\",\"label\":\"Paused\"},{\"value\":\"completed\",\"label\":\"Completed\"}],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.047\",\"actual_cost\":\"5.64\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.006\",\"actual_cost\":\"1.50\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"3.000\",\"actual_cost\":\"1.50\",\"cost_variance\":\"0.00\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"8.64\",\"cost_variance\":\"-0.06\"},\"outputs\":[],\"inspections\":[],\"created_at\":\"2026-09-14T13:42:32+08:00\""
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 pauses production WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":\"BATCH-202609-0002\",\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":\"2026-09-14T13:47:15+08:00\",\"actual_end\":null,\"status\":\"paused\",\"status_label\":\"Paused\",\"next_statuses\":[{\"value\":\"in_progress\",\"label\":\"In Progress\"},{\"value\":\"cancelled\",\"label\":\"Cancelled\"}],\"pause_reason\":\"LIVE-B12 pause probe\",\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.047\",\"actual_cost\":\"5.64\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.006\",\"actual_cost\":\"1.50\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"3.000\",\"actual_cost\":\"1.50\",\"cost_variance\":\"0.00\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"8.64\",\"cost_variance\":\"-0.06\"},\"outputs\":[],\"inspections\":[],\"created_at\":\"2026-09-"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 resumes production WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":\"BATCH-202609-0002\",\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":0,\"quantity_good\":0,\"quantity_rejected\":0,\"progress_percentage\":0,\"scrap_rate\":\"0.00\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":\"2026-09-14T13:47:15+08:00\",\"actual_end\":null,\"status\":\"in_progress\",\"status_label\":\"In Progress\",\"next_statuses\":[{\"value\":\"paused\",\"label\":\"Paused\"},{\"value\":\"completed\",\"label\":\"Completed\"}],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.047\",\"actual_cost\":\"5.64\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.006\",\"actual_cost\":\"1.50\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"3.000\",\"actual_cost\":\"1.50\",\"cost_variance\":\"0.00\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"8.64\",\"cost_variance\":\"-0.06\"},\"outputs\":[],\"inspections\":[],\"created_at\":\"2026-09-14T13:42:32+08:00\""
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 records good/reject output",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"GqkbAVwxd1\",\"recorded_at\":\"2026-09-14T13:47:16+08:00\",\"good_count\":2,\"reject_count\":1,\"total_count\":3,\"shift\":null,\"batch_code\":\"WO-202609-0008-B01\",\"remarks\":\"LIVE-B12 output good/reject\",\"material_lineage\":{\"work_order_class\":\"standard\",\"exception_reason\":null,\"authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"materials\":[{\"item_id\":\"dGypLxpvAg\",\"bom_quantity\":\"0.047\",\"actual_quantity_issued\":\"0.047\"},{\"item_id\":\"MYAbJ3wBl7\",\"bom_quantity\":\"0.006\",\"actual_quantity_issued\":\"0.006\"},{\"item_id\":\"ajzw1lb3eW\",\"bom_quantity\":\"3.000\",\"actual_quantity_issued\":\"3.000\"}]},\"production_receipt_handoff\":{\"status\":\"manual_required\",\"status_label\":\"Inventory action required\",\"message\":\"Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.\",\"at\":\"2026-09-14T13:47:16+08:00\"},\"defects\":[{\"id\":\"GqkbAVwxd1\",\"count\":1,\"defect_type\":{\"id\":\"0ldwDmpVa9\",\"code\":\"BUBBLE\",\"name\":\"Air Bubbles\"}}]}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "production",
+      "name": "L11 output and receipt handoff",
+      "detail": "output=GqkbAVwxd1; good=2; reject=1; scrap_rate=undefined; receipt={\"status\":\"manual_required\",\"status_label\":\"Inventory action required\",\"message\":\"Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.\",\"at\":\"2026-09-14T13:47:16+08:00\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "production",
+      "name": "L11 reads mold shot count",
+      "detail": "HTTP 403; expected 200 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "production",
+      "name": "L11 mold shot reconciliation",
+      "detail": "mold=dGypLxpvAg; shots=undefined; max=undefined"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 completes production WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":\"BATCH-202609-0002\",\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":3,\"quantity_good\":2,\"quantity_rejected\":1,\"progress_percentage\":100,\"scrap_rate\":\"33.33\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":\"2026-09-14T13:47:15+08:00\",\"actual_end\":\"2026-09-14T13:47:16+08:00\",\"status\":\"completed\",\"status_label\":\"Completed\",\"next_statuses\":[{\"value\":\"closed\",\"label\":\"Closed\"}],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.047\",\"actual_cost\":\"5.64\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.006\",\"actual_cost\":\"1.50\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"3.000\",\"actual_cost\":\"1.50\",\"cost_variance\":\"0.00\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"8.64\",\"cost_variance\":\"-0.06\"},\"outputs\":[{\"id\":\"GqkbAVwxd1\",\"recorded_at\":\"2026-09-14T13:47:16+08:00\",\"good_count\":2,\"re"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 closes production WO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\",\"work_order_class\":\"standard\",\"exception_reason\":null,\"exception_authorized_by\":\"6r9wnvwOBW\",\"material_plan_source\":\"bom\",\"batch_number\":\"BATCH-202609-0002\",\"material_lot_references\":[],\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"machine\":{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\"},\"mold\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\"},\"parent\":null,\"children\":[],\"production_readiness\":{\"ready\":true,\"blocking_work_orders\":[]},\"quantity_target\":3,\"quantity_produced\":3,\"quantity_good\":2,\"quantity_rejected\":1,\"progress_percentage\":100,\"scrap_rate\":\"33.33\",\"planned_start\":\"2026-09-26T00:00:00+08:00\",\"planned_end\":\"2026-09-27T00:00:00+08:00\",\"actual_start\":\"2026-09-14T13:47:15+08:00\",\"actual_end\":\"2026-09-14T13:47:16+08:00\",\"status\":\"closed\",\"status_label\":\"Closed\",\"next_statuses\":[],\"pause_reason\":null,\"priority\":50,\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"materials\":[{\"id\":\"8njw6dNk3K\",\"item\":{\"id\":\"dGypLxpvAg\",\"code\":\"RM-001\",\"name\":\"Plastic Resin Type A (ABS)\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.047\",\"standard_unit_cost\":\"120.0000\",\"standard_cost\":\"5.67\",\"actual_quantity_issued\":\"0.047\",\"actual_cost\":\"5.64\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"DlVpZawqJ8\",\"item\":{\"id\":\"MYAbJ3wBl7\",\"code\":\"RM-010\",\"name\":\"Black Colorant\",\"unit_of_measure\":\"kg\"},\"bom_quantity\":\"0.006\",\"standard_unit_cost\":\"250.0000\",\"standard_cost\":\"1.53\",\"actual_quantity_issued\":\"0.006\",\"actual_cost\":\"1.50\",\"cost_variance\":\"-0.03\",\"variance\":\"0.000\"},{\"id\":\"2PLbWyp5OW\",\"item\":{\"id\":\"ajzw1lb3eW\",\"code\":\"PKG-001\",\"name\":\"Standard Poly Bag\",\"unit_of_measure\":\"pcs\"},\"bom_quantity\":\"3.000\",\"standard_unit_cost\":\"0.5000\",\"standard_cost\":\"1.50\",\"actual_quantity_issued\":\"3.000\",\"actual_cost\":\"1.50\",\"cost_variance\":\"0.00\",\"variance\":\"0.000\"}],\"material_cost_summary\":{\"standard_cost\":\"8.70\",\"actual_cost\":\"8.64\",\"cost_variance\":\"-0.06\"},\"outputs\":[{\"id\":\"GqkbAVwxd1\",\"recorded_at\":\"2026-09-14T13:47:16+08:00\",\"good_count\":2,\"reject_count\":1,\"shift\":null,\"batch_code\":\""
+    },
+    {
+      "status": "FAIL",
+      "actor": "production",
+      "name": "L11 closed WO replay",
+      "detail": "HTTP 409; expected 200/422 ; body={\"message\":\"Illegal work-order lifecycle transition: closed → closed.\",\"code\":\"ILLEGAL_WORK_ORDER_TRANSITION\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "l11-production-closed-wo UI",
+      "detail": "document=200 uiUrl=http://localhost/production/work-orders/0ldwDmpVa9"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "qc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\",\"email\":\"qc@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"6r9wnvwOBW\",\"name\":\"QC Inspector\",\"slug\":\"qc_inspector\"},\"employee\":{\"id\":\"6r9wnvwOBW\",\"employee_no\":\"DEMO-0023\",\"full_name\":\"Rosa Villareal\",\"department_id\":\"MYAbJ3wBl7\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"quality.view\",\"quality.inspections.create\",\"quality.inspections.edit\",\"quality.inspections.view\",\"quality.inspections.manage\",\"quality.specs.view\",\"quality.specs.manage\",\"quality.ncr.view\",\"quality.ncr.manage\",\"quality.calibration.view\",\"quality.calibration.manage\",\"quality.ppap.view\",\"quality.ppap.manage\",\"dashboard.quality.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.inspect\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "qc",
+      "name": "L11 creates in-process inspection",
+      "detail": "HTTP 500; expected 201 ; body={\"message\":\"An unexpected error occurred.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "qc",
+      "name": "L12 creates outgoing output-bound inspection",
+      "detail": "HTTP 500; expected 201 ; body={\"message\":\"An unexpected error occurred.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "qc",
+      "name": "L12 creates outgoing fail inspection",
+      "detail": "HTTP 500; expected 201 ; body={\"message\":\"An unexpected error occurred.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "crm authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\",\"email\":\"crm@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Sales Officer\",\"slug\":\"sales_officer\"},\"employee\":null,\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"accounting.customers.view\",\"accounting.customers.manage\",\"inventory.view\",\"crm.view\",\"crm.products.view\",\"crm.price_agreements.view\",\"crm.sales_orders.view\",\"crm.sales_orders.create\",\"crm.sales_orders.update\",\"crm.sales_orders.delete\",\"crm.sales_orders.confirm\",\"crm.sales_orders.cancel\",\"crm.complaints.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.manage\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint DzAwdKb5ld 8D update",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"complaint_number\":\"CMP-202609-0004\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"open\",\"status_label\":\"Open\",\"description\":\"LIVE-B12 complaint source for scrap disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:30+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":null,\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"kABpV2vpKR\",\"ncr_number\":\"NCR-202609-0003\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"scrap\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"R8epjLbOaD\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":null},\"created_at\":\"2026-09-14T05:43:30.000000Z\",\"updated_at\":\"2026-09-14T05:43:30.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint DzAwdKb5ld 8D finalize",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"complaint_number\":\"CMP-202609-0004\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"open\",\"status_label\":\"Open\",\"description\":\"LIVE-B12 complaint source for scrap disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:30+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":null,\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"kABpV2vpKR\",\"ncr_number\":\"NCR-202609-0003\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"scrap\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"R8epjLbOaD\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:44.000000Z\"},\"created_at\":\"2026-09-14T05:43:30.000000Z\",\"updated_at\":\"2026-09-14T05:43:30.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint DzAwdKb5ld resolve",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"complaint_number\":\"CMP-202609-0004\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"resolved\",\"status_label\":\"Resolved\",\"description\":\"LIVE-B12 complaint source for scrap disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:30+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":\"2026-09-14T05:47:45.000000Z\",\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"kABpV2vpKR\",\"ncr_number\":\"NCR-202609-0003\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"scrap\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"R8epjLbOaD\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:44.000000Z\"},\"created_at\":\"2026-09-14T05:43:30.000000Z\",\"updated_at\":\"2026-09-14T05:47:45.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint DzAwdKb5ld close",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"complaint_number\":\"CMP-202609-0004\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"closed\",\"status_label\":\"Closed\",\"description\":\"LIVE-B12 complaint source for scrap disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:30+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":\"2026-09-14T05:47:45.000000Z\",\"closed_at\":\"2026-09-14T05:47:45.000000Z\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"kABpV2vpKR\",\"ncr_number\":\"NCR-202609-0003\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"scrap\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"R8epjLbOaD\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:44.000000Z\"},\"created_at\":\"2026-09-14T05:43:30.000000Z\",\"updated_at\":\"2026-09-14T05:47:45.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint MYAbJ3wBl7 8D update",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"complaint_number\":\"CMP-202609-0005\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"open\",\"status_label\":\"Open\",\"description\":\"LIVE-B12 complaint source for rework disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:31+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":null,\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"0ldwD5mpVa\",\"ncr_number\":\"NCR-202609-0004\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"rework\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"DzAwdKb5ld\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":null},\"created_at\":\"2026-09-14T05:43:31.000000Z\",\"updated_at\":\"2026-09-14T05:43:31.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint MYAbJ3wBl7 8D finalize",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"complaint_number\":\"CMP-202609-0005\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"open\",\"status_label\":\"Open\",\"description\":\"LIVE-B12 complaint source for rework disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:31+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":null,\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"0ldwD5mpVa\",\"ncr_number\":\"NCR-202609-0004\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"rework\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"DzAwdKb5ld\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:45.000000Z\"},\"created_at\":\"2026-09-14T05:43:31.000000Z\",\"updated_at\":\"2026-09-14T05:43:31.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint MYAbJ3wBl7 resolve",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"complaint_number\":\"CMP-202609-0005\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"resolved\",\"status_label\":\"Resolved\",\"description\":\"LIVE-B12 complaint source for rework disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:31+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":\"2026-09-14T05:47:45.000000Z\",\"closed_at\":null,\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"0ldwD5mpVa\",\"ncr_number\":\"NCR-202609-0004\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"rework\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"DzAwdKb5ld\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:45.000000Z\"},\"created_at\":\"2026-09-14T05:43:31.000000Z\",\"updated_at\":\"2026-09-14T05:47:45.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "crm",
+      "name": "L13 complaint MYAbJ3wBl7 close",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"complaint_number\":\"CMP-202609-0005\",\"severity\":\"medium\",\"severity_label\":\"Medium\",\"status\":\"closed\",\"status_label\":\"Closed\",\"description\":\"LIVE-B12 complaint source for rework disposition 64546743\",\"affected_quantity\":1,\"ncr_handoff\":{\"status\":\"generated\",\"status_label\":\"NCR opened\",\"message\":null,\"at\":\"2026-09-14T13:43:31+08:00\"},\"received_date\":\"2026-09-14\",\"resolved_at\":\"2026-09-14T05:47:45.000000Z\",\"closed_at\":\"2026-09-14T05:47:45.000000Z\",\"customer\":{\"id\":\"dGypLxpvAg\",\"name\":\"Toyota Motor Philippines, Inc.\"},\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\"},\"sales_order\":{\"id\":\"OX5b9mbBrk\",\"so_number\":\"SO-202609-0018\"},\"ncr\":{\"id\":\"0ldwD5mpVa\",\"ncr_number\":\"NCR-202609-0004\",\"status\":\"closed\",\"severity\":\"medium\",\"disposition\":\"rework\",\"status_label\":\"Closed\",\"severity_label\":\"Medium\"},\"creator\":{\"id\":\"6r9wnvwOBW\",\"name\":\"Sara Sales\"},\"assignee\":null,\"eight_d_report\":{\"id\":\"DzAwdKb5ld\",\"d1_team\":\"LIVE-B12 team\",\"d2_problem\":\"Customer-reported nonconformance\",\"d3_containment\":\"Quarantine affected quantity\",\"d4_root_cause\":\"Process variation review\",\"d5_corrective_action\":\"Correct process window\",\"d6_verification\":\"Verify next lot\",\"d7_prevention\":\"Update control plan\",\"d8_recognition\":\"Customer response recorded\",\"finalized_at\":\"2026-09-14T05:47:45.000000Z\"},\"created_at\":\"2026-09-14T05:43:31.000000Z\",\"updated_at\":\"2026-09-14T05:47:45.000000Z\"}}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "crm",
+      "name": "L13 retry complaint use_as_is no-SO",
+      "detail": "HTTP 500; expected 201 repeat of prior generic 500; body={\"message\":\"An unexpected error occurred.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "crm",
+      "name": "L13 retry complaint return_to_supplier no-SO",
+      "detail": "HTTP 500; expected 201 repeat of prior generic 500; body={\"message\":\"An unexpected error occurred.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "qc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"WDQwPGbYPx\",\"name\":\"Rosa Villareal\",\"email\":\"qc@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"6r9wnvwOBW\",\"name\":\"QC Inspector\",\"slug\":\"qc_inspector\"},\"employee\":{\"id\":\"6r9wnvwOBW\",\"employee_no\":\"DEMO-0023\",\"full_name\":\"Rosa Villareal\",\"department_id\":\"MYAbJ3wBl7\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"inventory.view\",\"inventory.mrb.view\",\"inventory.mrb.manage\",\"quality.view\",\"quality.inspections.create\",\"quality.inspections.edit\",\"quality.inspections.view\",\"quality.inspections.manage\",\"quality.specs.view\",\"quality.specs.manage\",\"quality.ncr.view\",\"quality.ncr.manage\",\"quality.calibration.view\",\"quality.calibration.manage\",\"quality.ppap.view\",\"quality.ppap.manage\",\"dashboard.quality.view\",\"dashboard.layout.reset\",\"notifications.view\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"return_management.view\",\"return_management.inspect\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "L13 Pareto analytics",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"from\":\"2026-01-01\",\"to\":\"2026-12-31\",\"total_defects\":2,\"rows\":[{\"parameter_name\":\"Length\",\"defect_count\":1,\"percentage\":50,\"cumulative_percentage\":50,\"is_critical\":true},{\"parameter_name\":\"Width\",\"defect_count\":1,\"percentage\":50,\"cumulative_percentage\":100,\"is_critical\":true}]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "qc",
+      "name": "L13 notification feed",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":[{\"id\":\"ae92892a-ee63-4267-8fcb-cff43a72c477\",\"type\":\"chain.outgoing_qc_required\",\"data\":{\"title\":\"Outgoing QC required\",\"message\":\"Outgoing QC required for WO WO-202609-0008.\",\"link_to\":\"/production/work-orders/0ldwDmpVa9\",\"entity_type\":\"work_order\",\"entity_id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\"},\"read_at\":null,\"created_at\":\"2026-09-14 13:47:21\"},{\"id\":\"c56e90b7-f3ae-4975-878a-e14534a955bd\",\"type\":\"chain.in_process_qc_required\",\"data\":{\"title\":\"In-process QC required\",\"message\":\"In-process QC required for WO WO-202609-0008.\",\"link_to\":\"/production/work-orders/0ldwDmpVa9\",\"entity_type\":\"work_order\",\"entity_id\":\"0ldwDmpVa9\",\"wo_number\":\"WO-202609-0008\"},\"read_at\":null,\"created_at\":\"2026-09-14 13:47:20\"},{\"id\":\"824f76f3-e66d-4852-a0a4-48370b0d7df2\",\"type\":\"chain.in_process_qc_required\",\"data\":{\"title\":\"In-process QC required\",\"message\":\"In-process QC required for WO WO-202609-0005.\",\"link_to\":\"/production/work-orders/MYAbJ3wBl7\",\"entity_type\":\"work_order\",\"entity_id\":\"MYAbJ3wBl7\",\"wo_number\":\"WO-202609-0005\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:46:48\"},{\"id\":\"92a1113f-9544-4c2d-937c-bef3478a85fa\",\"type\":\"chain.payslip_ready\",\"data\":{\"title\":\"Payslip Ready\",\"message\":\"Your payslip for 2026-06-01 00:00:00 – 2026-06-15 00:00:00 is ready.\",\"link_to\":\"/self-service/payslips\",\"entity_type\":\"payroll_period\",\"entity_id\":\"kABpVvpKRW\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:46:45\"},{\"id\":\"cbc48e7d-50c5-4055-bb8e-1d9aa29827d9\",\"type\":\"chain.payslip_ready\",\"data\":{\"title\":\"Payslip Ready\",\"message\":\"Your payslip for 2026-06-16 00:00:00 – 2026-06-30 00:00:00 is ready.\",\"link_to\":\"/self-service/payslips\",\"entity_type\":\"payroll_period\",\"entity_id\":\"35Mbaeb49K\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:46:43\"},{\"id\":\"5bf42bdb-6d18-4862-a7eb-7a3cae8581a1\",\"type\":\"chain.payslip_ready\",\"data\":{\"title\":\"Payslip Ready\",\"message\":\"Your payslip for 2026-07-01 00:00:00 – 2026-07-15 00:00:00 is ready.\",\"link_to\":\"/self-service/payslips\",\"entity_type\":\"payroll_period\",\"entity_id\":\"MYAbJ3wBl7\"},\"read_at\":null,\"created_at\":\"2026-09-14 12:46:42\"},{\"id\":\"207dd2d6-01ba-424e-b647-841f73238df6\",\"type\":\"chain.payslip_ready\",\"data\":{\"title\":\"Payslip Ready\",\"message\":\"Your"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "qc",
+      "name": "L13 notification/action links",
+      "detail": "rows=21; captured direct action links in NCR auto-create implementation response where present"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "maintenance authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\",\"email\":\"maintenance@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Maintenance Technician\",\"slug\":\"maintenance_tech\"},\"employee\":{\"id\":\"ajzw1lb3eW\",\"employee_no\":\"DEMO-0024\",\"full_name\":\"Juan Bautista\",\"department_id\":\"BnoNyGw56v\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"mrp.machines.view\",\"maintenance.view\",\"maintenance.wo.create\",\"maintenance.wo.complete\",\"assets.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "l14-maintenance-work-orders UI",
+      "detail": "document=200 uiUrl=http://localhost/maintenance/work-orders"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "maintenance",
+      "name": "L14 corrective MWO assignment source",
+      "detail": "assignees=403; source={\"data\":{\"maintainable_types\":[{\"value\":\"machine\",\"label\":\"Machine\"},{\"value\":\"mold\",\"label\":\"Mold\"}],\"types\":[{\"value\":\"preventive\",\"label\":\"Preventive\"},{\"value\":\"corrective\",\"label\":\"Corrective\"}],\"priorities\":[{\"value\":\"critical\",\"label\":\"Critical\"},{\"value\":\"high\",\"label\":\"High\"},{\"value\":\"medium\",\"label\":\"Medium\"},{\"value\":\"low\",\"label\":\"Low\"}],\"statuses\":[{\"value\":\"open\",\"label\":\"Open\",\"is_terminal\":false},{\"value\":\"assigned\",\"label\":\"Assigned\",\"is_terminal\":false},{\"value\":\"in_progress\",\"label\":\"In progress\",\"is_terminal\":false},{\"value\":\"completed\",\"label\":\"Completed\",\"is_terminal\":true},{\"value\":\"cancelled\",\"label\":\"Cancelled\",\"is_terminal\":true}],\"default_type\":\"corrective\",\"default_priority\":\"medium\"}}; no direct service MWO manufactured."
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "maintenance",
+      "name": "L14 condition-reading threshold/MWO automation",
+      "detail": "Condition-reading routes are scope-cut and absent; no hidden condition-reading assumption was made."
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 downtime analytics",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"total_downtime_minutes\":0,\"breakdown_count\":0,\"mtbf_hours\":null,\"mttr_minutes\":null,\"availability_pct\":100,\"category_breakdown\":[]},\"meta\":{\"days\":30,\"default_days\":30}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "employee",
+      "name": "employee authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"BnoNyGw56v\",\"name\":\"Manuel Cruz\",\"email\":\"employee@ogami.test\",\"is_active\":true,\"must_change_password\":\"[REDACTED]\",\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"E1mbe9bGrz\",\"name\":\"Employee\",\"slug\":\"employee\"},\"employee\":{\"id\":\"0ldwDmpVa9\",\"employee_no\":\"DEMO-0021\",\"full_name\":\"Manuel Cruz\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"dashboard.layout.reset\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "employee",
+      "name": "L14 wrong-role production lifecycle denial",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "FAIL",
+      "actor": "employee",
+      "name": "L14 wrong-role NCR terminal denial",
+      "detail": "HTTP 404; expected 403 ; body={\"message\":\"The requested resource was not found.\"}"
+    }
+  ],
+  "evidence": [
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1001",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "name": "Pedro Garcia",
+          "email": "ppc@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "kABpVvpKRW",
+            "name": "PPC Head",
+            "slug": "ppc_head"
+          },
+          "employee": {
+            "id": "DzAwdKb5ld",
+            "employee_no": "DEMO-0017",
+            "full_name": "Pedro Garcia",
+            "department_id": "0ldwDmpVa9"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.work_orders.view",
+            "production.schedule.view",
+            "production.routings.view",
+            "production.routings.manage",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.boms.manage",
+            "mrp.machines.view",
+            "mrp.molds.view",
+            "mrp.plans.view",
+            "mrp.plans.run",
+            "mrp.runs.view",
+            "mrp.runs.trigger",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.ppc.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "forecasting.manage",
+            "return_management.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/mrp/scheduler/confirm",
+      "status": 403,
+      "requestId": "LIVE-B12-C-1002",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/mrp/scheduler/confirm",
+      "status": 403,
+      "requestId": "LIVE-B12-C-1003",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1004",
+      "body": "",
+      "contentType": null
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1005",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "name": "Ricardo Tanaka",
+          "email": "production@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "35Mbaeb49K",
+            "name": "Production Manager",
+            "slug": "production_manager"
+          },
+          "employee": {
+            "id": "R8epjLbOaD",
+            "employee_no": "DEMO-0016",
+            "full_name": "Ricardo Tanaka",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "hr.salary_adjustments.view",
+            "hr.salary_adjustments.act",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "loans.view",
+            "loans.approve",
+            "inventory.view",
+            "purchasing.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.wo.record",
+            "production.work_orders.view",
+            "production.work_orders.lifecycle",
+            "production.machines.manage",
+            "production.machines.transition",
+            "production.molds.manage",
+            "production.schedule.view",
+            "production.schedule.confirm",
+            "production.dashboard.view",
+            "production.routings.view",
+            "production.operator.access",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.machines.view",
+            "mrp.plans.view",
+            "mrp.runs.view",
+            "quality.view",
+            "quality.inspections.view",
+            "quality.ncr.view",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.plant_manager.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.approve"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/production/work-orders/0ldwDmpVa9",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1006",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": null,
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": null,
+          "mold": null,
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 0,
+          "quantity_good": 0,
+          "quantity_rejected": 0,
+          "progress_percentage": 0,
+          "scrap_rate": "0.00",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": null,
+          "actual_end": null,
+          "status": "planned",
+          "status_label": "Planned",
+          "next_statuses": [
+            {
+              "value": "confirmed",
+              "label": "Confirmed"
+            },
+            {
+              "value": "cancelled",
+              "label": "Cancelled"
+            }
+          ],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-5.67",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-1.53",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-1.50",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "0.00",
+            "cost_variance": "-8.70"
+          },
+          "outputs": [],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:42:32+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/confirm",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1007",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": null,
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 0,
+          "quantity_good": 0,
+          "quantity_rejected": 0,
+          "progress_percentage": 0,
+          "scrap_rate": "0.00",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": null,
+          "actual_end": null,
+          "status": "confirmed",
+          "status_label": "Confirmed",
+          "next_statuses": [
+            {
+              "value": "in_progress",
+              "label": "In Progress"
+            },
+            {
+              "value": "cancelled",
+              "label": "Cancelled"
+            }
+          ],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-5.67",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-1.53",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "0.000",
+              "actual_cost": "0.00",
+              "cost_variance": "-1.50",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "0.00",
+            "cost_variance": "-8.70"
+          },
+          "outputs": [],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:15+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/start",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1008",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": "BATCH-202609-0002",
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 0,
+          "quantity_good": 0,
+          "quantity_rejected": 0,
+          "progress_percentage": 0,
+          "scrap_rate": "0.00",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": "2026-09-14T13:47:15+08:00",
+          "actual_end": null,
+          "status": "in_progress",
+          "status_label": "In Progress",
+          "next_statuses": [
+            {
+              "value": "paused",
+              "label": "Paused"
+            },
+            {
+              "value": "completed",
+              "label": "Completed"
+            }
+          ],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.047",
+              "actual_cost": "5.64",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.006",
+              "actual_cost": "1.50",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "3.000",
+              "actual_cost": "1.50",
+              "cost_variance": "0.00",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "8.64",
+            "cost_variance": "-0.06"
+          },
+          "outputs": [],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:15+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/production/downtime-categories",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1009",
+      "body": {
+        "data": [
+          {
+            "value": "breakdown",
+            "label": "Machine breakdown",
+            "is_planned": false
+          },
+          {
+            "value": "changeover",
+            "label": "Changeover",
+            "is_planned": true
+          },
+          {
+            "value": "material_shortage",
+            "label": "Material shortage",
+            "is_planned": false
+          },
+          {
+            "value": "no_order",
+            "label": "No production order",
+            "is_planned": false
+          },
+          {
+            "value": "planned_maintenance",
+            "label": "Planned maintenance",
+            "is_planned": true
+          }
+        ]
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/pause",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1010",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": "BATCH-202609-0002",
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 0,
+          "quantity_good": 0,
+          "quantity_rejected": 0,
+          "progress_percentage": 0,
+          "scrap_rate": "0.00",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": "2026-09-14T13:47:15+08:00",
+          "actual_end": null,
+          "status": "paused",
+          "status_label": "Paused",
+          "next_statuses": [
+            {
+              "value": "in_progress",
+              "label": "In Progress"
+            },
+            {
+              "value": "cancelled",
+              "label": "Cancelled"
+            }
+          ],
+          "pause_reason": "LIVE-B12 pause probe",
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.047",
+              "actual_cost": "5.64",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.006",
+              "actual_cost": "1.50",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "3.000",
+              "actual_cost": "1.50",
+              "cost_variance": "0.00",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "8.64",
+            "cost_variance": "-0.06"
+          },
+          "outputs": [],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:16+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/resume",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1011",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": "BATCH-202609-0002",
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 0,
+          "quantity_good": 0,
+          "quantity_rejected": 0,
+          "progress_percentage": 0,
+          "scrap_rate": "0.00",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": "2026-09-14T13:47:15+08:00",
+          "actual_end": null,
+          "status": "in_progress",
+          "status_label": "In Progress",
+          "next_statuses": [
+            {
+              "value": "paused",
+              "label": "Paused"
+            },
+            {
+              "value": "completed",
+              "label": "Completed"
+            }
+          ],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.047",
+              "actual_cost": "5.64",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.006",
+              "actual_cost": "1.50",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "3.000",
+              "actual_cost": "1.50",
+              "cost_variance": "0.00",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "8.64",
+            "cost_variance": "-0.06"
+          },
+          "outputs": [],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:16+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/production/defect-types",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1012",
+      "body": {
+        "data": [
+          {
+            "id": "0ldwDmpVa9",
+            "code": "BUBBLE",
+            "name": "Air Bubbles",
+            "description": "Internal bubbles / voids."
+          },
+          {
+            "id": "R8epjLbOaD",
+            "code": "BURN",
+            "name": "Burn Marks",
+            "description": "Discoloration from trapped air or overheating."
+          },
+          {
+            "id": "MYAbJ3wBl7",
+            "code": "COLOR",
+            "name": "Color Mismatch",
+            "description": "Color does not match standard."
+          },
+          {
+            "id": "35Mbaeb49K",
+            "code": "CRACK",
+            "name": "Cracks",
+            "description": "Visible cracks in part."
+          },
+          {
+            "id": "DzAwdKb5ld",
+            "code": "DIM",
+            "name": "Dimensional",
+            "description": "Out-of-spec dimensions."
+          },
+          {
+            "id": "GqkbAVwxd1",
+            "code": "FLSH",
+            "name": "Flash",
+            "description": "Excess material at parting line."
+          },
+          {
+            "id": "BnoNyGw56v",
+            "code": "INC",
+            "name": "Inclusions",
+            "description": "Foreign matter embedded in part."
+          },
+          {
+            "id": "6r9wnvwOBW",
+            "code": "MISMATCH",
+            "name": "Mold Mismatch",
+            "description": "Mold halves misaligned."
+          },
+          {
+            "id": "ajzw1lb3eW",
+            "code": "OTHER",
+            "name": "Other",
+            "description": "Catch-all."
+          },
+          {
+            "id": "dGypLxpvAg",
+            "code": "SHRT",
+            "name": "Short Shot",
+            "description": "Incomplete fill of cavity."
+          },
+          {
+            "id": "kABpVvpKRW",
+            "code": "WARP",
+            "name": "Warpage",
+            "description": "Distorted from intended geometry."
+          }
+        ]
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/outputs",
+      "status": 201,
+      "requestId": "LIVE-B12-C-1013",
+      "body": {
+        "data": {
+          "id": "GqkbAVwxd1",
+          "recorded_at": "2026-09-14T13:47:16+08:00",
+          "good_count": 2,
+          "reject_count": 1,
+          "total_count": 3,
+          "shift": null,
+          "batch_code": "WO-202609-0008-B01",
+          "remarks": "LIVE-B12 output good/reject",
+          "material_lineage": {
+            "work_order_class": "standard",
+            "exception_reason": null,
+            "authorized_by": "6r9wnvwOBW",
+            "material_plan_source": "bom",
+            "materials": [
+              {
+                "item_id": "dGypLxpvAg",
+                "bom_quantity": "0.047",
+                "actual_quantity_issued": "0.047"
+              },
+              {
+                "item_id": "MYAbJ3wBl7",
+                "bom_quantity": "0.006",
+                "actual_quantity_issued": "0.006"
+              },
+              {
+                "item_id": "ajzw1lb3eW",
+                "bom_quantity": "3.000",
+                "actual_quantity_issued": "3.000"
+              }
+            ]
+          },
+          "production_receipt_handoff": {
+            "status": "manual_required",
+            "status_label": "Inventory action required",
+            "message": "Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.",
+            "at": "2026-09-14T13:47:16+08:00"
+          },
+          "defects": [
+            {
+              "id": "GqkbAVwxd1",
+              "count": 1,
+              "defect_type": {
+                "id": "0ldwDmpVa9",
+                "code": "BUBBLE",
+                "name": "Air Bubbles"
+              }
+            }
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/mrp/molds/dGypLxpvAg",
+      "status": 403,
+      "requestId": "LIVE-B12-C-1014",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/complete",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1015",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": "BATCH-202609-0002",
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 3,
+          "quantity_good": 2,
+          "quantity_rejected": 1,
+          "progress_percentage": 100,
+          "scrap_rate": "33.33",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": "2026-09-14T13:47:15+08:00",
+          "actual_end": "2026-09-14T13:47:16+08:00",
+          "status": "completed",
+          "status_label": "Completed",
+          "next_statuses": [
+            {
+              "value": "closed",
+              "label": "Closed"
+            }
+          ],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.047",
+              "actual_cost": "5.64",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.006",
+              "actual_cost": "1.50",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "3.000",
+              "actual_cost": "1.50",
+              "cost_variance": "0.00",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "8.64",
+            "cost_variance": "-0.06"
+          },
+          "outputs": [
+            {
+              "id": "GqkbAVwxd1",
+              "recorded_at": "2026-09-14T13:47:16+08:00",
+              "good_count": 2,
+              "reject_count": 1,
+              "shift": null,
+              "batch_code": "WO-202609-0008-B01",
+              "remarks": "LIVE-B12 output good/reject",
+              "material_lineage": {
+                "work_order_class": "standard",
+                "exception_reason": null,
+                "authorized_by": "6r9wnvwOBW",
+                "material_plan_source": "bom",
+                "materials": [
+                  {
+                    "item_id": "dGypLxpvAg",
+                    "bom_quantity": "0.047",
+                    "actual_quantity_issued": "0.047"
+                  },
+                  {
+                    "item_id": "MYAbJ3wBl7",
+                    "bom_quantity": "0.006",
+                    "actual_quantity_issued": "0.006"
+                  },
+                  {
+                    "item_id": "ajzw1lb3eW",
+                    "bom_quantity": "3.000",
+                    "actual_quantity_issued": "3.000"
+                  }
+                ]
+              },
+              "production_receipt_handoff": {
+                "status": "manual_required",
+                "status_label": "Inventory action required",
+                "message": "Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.",
+                "at": "2026-09-14T13:47:16+08:00"
+              },
+              "recorder": {
+                "id": "DzAwdKb5ld",
+                "name": "Ricardo Tanaka"
+              },
+              "defects": [
+                {
+                  "id": "GqkbAVwxd1",
+                  "count": 1,
+                  "defect_type": {
+                    "id": "0ldwDmpVa9",
+                    "code": "BUBBLE",
+                    "name": "Air Bubbles"
+                  }
+                }
+              ]
+            }
+          ],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:16+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/close",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1016",
+      "body": {
+        "data": {
+          "id": "0ldwDmpVa9",
+          "wo_number": "WO-202609-0008",
+          "work_order_class": "standard",
+          "exception_reason": null,
+          "exception_authorized_by": "6r9wnvwOBW",
+          "material_plan_source": "bom",
+          "batch_number": "BATCH-202609-0002",
+          "material_lot_references": [],
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "machine": {
+            "id": "dGypLxpvAg",
+            "machine_code": "IMM-01",
+            "name": "Toshiba EC100SX"
+          },
+          "mold": {
+            "id": "dGypLxpvAg",
+            "mold_code": "M-WB-001",
+            "name": "WB-001 4-cav steel mold A"
+          },
+          "parent": null,
+          "children": [],
+          "production_readiness": {
+            "ready": true,
+            "blocking_work_orders": []
+          },
+          "quantity_target": 3,
+          "quantity_produced": 3,
+          "quantity_good": 2,
+          "quantity_rejected": 1,
+          "progress_percentage": 100,
+          "scrap_rate": "33.33",
+          "planned_start": "2026-09-26T00:00:00+08:00",
+          "planned_end": "2026-09-27T00:00:00+08:00",
+          "actual_start": "2026-09-14T13:47:15+08:00",
+          "actual_end": "2026-09-14T13:47:16+08:00",
+          "status": "closed",
+          "status_label": "Closed",
+          "next_statuses": [],
+          "pause_reason": null,
+          "priority": 50,
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "materials": [
+            {
+              "id": "8njw6dNk3K",
+              "item": {
+                "id": "dGypLxpvAg",
+                "code": "RM-001",
+                "name": "Plastic Resin Type A (ABS)",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.047",
+              "standard_unit_cost": "120.0000",
+              "standard_cost": "5.67",
+              "actual_quantity_issued": "0.047",
+              "actual_cost": "5.64",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "DlVpZawqJ8",
+              "item": {
+                "id": "MYAbJ3wBl7",
+                "code": "RM-010",
+                "name": "Black Colorant",
+                "unit_of_measure": "kg"
+              },
+              "bom_quantity": "0.006",
+              "standard_unit_cost": "250.0000",
+              "standard_cost": "1.53",
+              "actual_quantity_issued": "0.006",
+              "actual_cost": "1.50",
+              "cost_variance": "-0.03",
+              "variance": "0.000"
+            },
+            {
+              "id": "2PLbWyp5OW",
+              "item": {
+                "id": "ajzw1lb3eW",
+                "code": "PKG-001",
+                "name": "Standard Poly Bag",
+                "unit_of_measure": "pcs"
+              },
+              "bom_quantity": "3.000",
+              "standard_unit_cost": "0.5000",
+              "standard_cost": "1.50",
+              "actual_quantity_issued": "3.000",
+              "actual_cost": "1.50",
+              "cost_variance": "0.00",
+              "variance": "0.000"
+            }
+          ],
+          "material_cost_summary": {
+            "standard_cost": "8.70",
+            "actual_cost": "8.64",
+            "cost_variance": "-0.06"
+          },
+          "outputs": [
+            {
+              "id": "GqkbAVwxd1",
+              "recorded_at": "2026-09-14T13:47:16+08:00",
+              "good_count": 2,
+              "reject_count": 1,
+              "shift": null,
+              "batch_code": "WO-202609-0008-B01",
+              "remarks": "LIVE-B12 output good/reject",
+              "material_lineage": {
+                "work_order_class": "standard",
+                "exception_reason": null,
+                "authorized_by": "6r9wnvwOBW",
+                "material_plan_source": "bom",
+                "materials": [
+                  {
+                    "item_id": "dGypLxpvAg",
+                    "bom_quantity": "0.047",
+                    "actual_quantity_issued": "0.047"
+                  },
+                  {
+                    "item_id": "MYAbJ3wBl7",
+                    "bom_quantity": "0.006",
+                    "actual_quantity_issued": "0.006"
+                  },
+                  {
+                    "item_id": "ajzw1lb3eW",
+                    "bom_quantity": "3.000",
+                    "actual_quantity_issued": "3.000"
+                  }
+                ]
+              },
+              "production_receipt_handoff": {
+                "status": "manual_required",
+                "status_label": "Inventory action required",
+                "message": "Finished-goods inventory receipt could not be created automatically. Fix the item/location setup, then replay the handoff or create the receipt manually.",
+                "at": "2026-09-14T13:47:16+08:00"
+              },
+              "recorder": {
+                "id": "DzAwdKb5ld",
+                "name": "Ricardo Tanaka"
+              },
+              "defects": [
+                {
+                  "id": "GqkbAVwxd1",
+                  "count": 1,
+                  "defect_type": {
+                    "id": "0ldwDmpVa9",
+                    "code": "BUBBLE",
+                    "name": "Air Bubbles"
+                  }
+                }
+              ]
+            }
+          ],
+          "inspections": [],
+          "created_at": "2026-09-14T13:42:32+08:00",
+          "updated_at": "2026-09-14T13:47:17+08:00",
+          "deleted_at": null
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/close",
+      "status": 409,
+      "requestId": "LIVE-B12-C-1017",
+      "body": {
+        "message": "Illegal work-order lifecycle transition: closed → closed.",
+        "code": "ILLEGAL_WORK_ORDER_TRANSITION"
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1018",
+      "body": "",
+      "contentType": null
+    },
+    {
+      "actor": "qc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1019",
+      "body": {
+        "data": {
+          "id": "WDQwPGbYPx",
+          "name": "Rosa Villareal",
+          "email": "qc@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "6r9wnvwOBW",
+            "name": "QC Inspector",
+            "slug": "qc_inspector"
+          },
+          "employee": {
+            "id": "6r9wnvwOBW",
+            "employee_no": "DEMO-0023",
+            "full_name": "Rosa Villareal",
+            "department_id": "MYAbJ3wBl7"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "inventory.view",
+            "inventory.mrb.view",
+            "inventory.mrb.manage",
+            "quality.view",
+            "quality.inspections.create",
+            "quality.inspections.edit",
+            "quality.inspections.view",
+            "quality.inspections.manage",
+            "quality.specs.view",
+            "quality.specs.manage",
+            "quality.ncr.view",
+            "quality.ncr.manage",
+            "quality.calibration.view",
+            "quality.calibration.manage",
+            "quality.ppap.view",
+            "quality.ppap.manage",
+            "dashboard.quality.view",
+            "dashboard.layout.reset",
+            "notifications.view",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "return_management.view",
+            "return_management.inspect"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "POST",
+      "path": "/quality/inspections",
+      "status": 500,
+      "requestId": "LIVE-B12-C-1020",
+      "body": {
+        "message": "An unexpected error occurred."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "POST",
+      "path": "/quality/inspections",
+      "status": 500,
+      "requestId": "LIVE-B12-C-1021",
+      "body": {
+        "message": "An unexpected error occurred."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "POST",
+      "path": "/quality/inspections",
+      "status": 500,
+      "requestId": "LIVE-B12-C-1022",
+      "body": {
+        "message": "An unexpected error occurred."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1023",
+      "body": "",
+      "contentType": null
+    },
+    {
+      "actor": "crm",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1024",
+      "body": {
+        "data": {
+          "id": "6r9wnvwOBW",
+          "name": "Sara Sales",
+          "email": "crm@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "MYAbJ3wBl7",
+            "name": "Sales Officer",
+            "slug": "sales_officer"
+          },
+          "employee": null,
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "accounting.customers.view",
+            "accounting.customers.manage",
+            "inventory.view",
+            "crm.view",
+            "crm.products.view",
+            "crm.price_agreements.view",
+            "crm.sales_orders.view",
+            "crm.sales_orders.create",
+            "crm.sales_orders.update",
+            "crm.sales_orders.delete",
+            "crm.sales_orders.confirm",
+            "crm.sales_orders.cancel",
+            "crm.complaints.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "return_management.view",
+            "return_management.manage"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "PATCH",
+      "path": "/crm/complaints/DzAwdKb5ld/8d",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1025",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "complaint_number": "CMP-202609-0004",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "open",
+          "status_label": "Open",
+          "description": "LIVE-B12 complaint source for scrap disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:30+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": null,
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "kABpV2vpKR",
+            "ncr_number": "NCR-202609-0003",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "scrap",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "R8epjLbOaD",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": null
+          },
+          "created_at": "2026-09-14T05:43:30.000000Z",
+          "updated_at": "2026-09-14T05:43:30.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/DzAwdKb5ld/8d/finalize",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1026",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "complaint_number": "CMP-202609-0004",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "open",
+          "status_label": "Open",
+          "description": "LIVE-B12 complaint source for scrap disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:30+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": null,
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "kABpV2vpKR",
+            "ncr_number": "NCR-202609-0003",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "scrap",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "R8epjLbOaD",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:44.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:30.000000Z",
+          "updated_at": "2026-09-14T05:43:30.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/DzAwdKb5ld/resolve",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1027",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "complaint_number": "CMP-202609-0004",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "resolved",
+          "status_label": "Resolved",
+          "description": "LIVE-B12 complaint source for scrap disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:30+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": "2026-09-14T05:47:45.000000Z",
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "kABpV2vpKR",
+            "ncr_number": "NCR-202609-0003",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "scrap",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "R8epjLbOaD",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:44.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:30.000000Z",
+          "updated_at": "2026-09-14T05:47:45.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/DzAwdKb5ld/close",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1028",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "complaint_number": "CMP-202609-0004",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "closed",
+          "status_label": "Closed",
+          "description": "LIVE-B12 complaint source for scrap disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:30+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": "2026-09-14T05:47:45.000000Z",
+          "closed_at": "2026-09-14T05:47:45.000000Z",
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "kABpV2vpKR",
+            "ncr_number": "NCR-202609-0003",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "scrap",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "R8epjLbOaD",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:44.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:30.000000Z",
+          "updated_at": "2026-09-14T05:47:45.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "PATCH",
+      "path": "/crm/complaints/MYAbJ3wBl7/8d",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1029",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "complaint_number": "CMP-202609-0005",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "open",
+          "status_label": "Open",
+          "description": "LIVE-B12 complaint source for rework disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:31+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": null,
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "0ldwD5mpVa",
+            "ncr_number": "NCR-202609-0004",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "rework",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "DzAwdKb5ld",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": null
+          },
+          "created_at": "2026-09-14T05:43:31.000000Z",
+          "updated_at": "2026-09-14T05:43:31.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/MYAbJ3wBl7/8d/finalize",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1030",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "complaint_number": "CMP-202609-0005",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "open",
+          "status_label": "Open",
+          "description": "LIVE-B12 complaint source for rework disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:31+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": null,
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "0ldwD5mpVa",
+            "ncr_number": "NCR-202609-0004",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "rework",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "DzAwdKb5ld",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:45.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:31.000000Z",
+          "updated_at": "2026-09-14T05:43:31.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/MYAbJ3wBl7/resolve",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1031",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "complaint_number": "CMP-202609-0005",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "resolved",
+          "status_label": "Resolved",
+          "description": "LIVE-B12 complaint source for rework disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:31+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": "2026-09-14T05:47:45.000000Z",
+          "closed_at": null,
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "0ldwD5mpVa",
+            "ncr_number": "NCR-202609-0004",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "rework",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "DzAwdKb5ld",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:45.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:31.000000Z",
+          "updated_at": "2026-09-14T05:47:45.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints/MYAbJ3wBl7/close",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1032",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "complaint_number": "CMP-202609-0005",
+          "severity": "medium",
+          "severity_label": "Medium",
+          "status": "closed",
+          "status_label": "Closed",
+          "description": "LIVE-B12 complaint source for rework disposition 64546743",
+          "affected_quantity": 1,
+          "ncr_handoff": {
+            "status": "generated",
+            "status_label": "NCR opened",
+            "message": null,
+            "at": "2026-09-14T13:43:31+08:00"
+          },
+          "received_date": "2026-09-14",
+          "resolved_at": "2026-09-14T05:47:45.000000Z",
+          "closed_at": "2026-09-14T05:47:45.000000Z",
+          "customer": {
+            "id": "dGypLxpvAg",
+            "name": "Toyota Motor Philippines, Inc."
+          },
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)"
+          },
+          "sales_order": {
+            "id": "OX5b9mbBrk",
+            "so_number": "SO-202609-0018"
+          },
+          "ncr": {
+            "id": "0ldwD5mpVa",
+            "ncr_number": "NCR-202609-0004",
+            "status": "closed",
+            "severity": "medium",
+            "disposition": "rework",
+            "status_label": "Closed",
+            "severity_label": "Medium"
+          },
+          "creator": {
+            "id": "6r9wnvwOBW",
+            "name": "Sara Sales"
+          },
+          "assignee": null,
+          "eight_d_report": {
+            "id": "DzAwdKb5ld",
+            "d1_team": "LIVE-B12 team",
+            "d2_problem": "Customer-reported nonconformance",
+            "d3_containment": "Quarantine affected quantity",
+            "d4_root_cause": "Process variation review",
+            "d5_corrective_action": "Correct process window",
+            "d6_verification": "Verify next lot",
+            "d7_prevention": "Update control plan",
+            "d8_recognition": "Customer response recorded",
+            "finalized_at": "2026-09-14T05:47:45.000000Z"
+          },
+          "created_at": "2026-09-14T05:43:31.000000Z",
+          "updated_at": "2026-09-14T05:47:45.000000Z"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints",
+      "status": 500,
+      "requestId": "LIVE-B12-C-1033",
+      "body": {
+        "message": "An unexpected error occurred."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/crm/complaints",
+      "status": 500,
+      "requestId": "LIVE-B12-C-1034",
+      "body": {
+        "message": "An unexpected error occurred."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "crm",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1035",
+      "body": "",
+      "contentType": null
+    },
+    {
+      "actor": "qc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1036",
+      "body": {
+        "data": {
+          "id": "WDQwPGbYPx",
+          "name": "Rosa Villareal",
+          "email": "qc@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "6r9wnvwOBW",
+            "name": "QC Inspector",
+            "slug": "qc_inspector"
+          },
+          "employee": {
+            "id": "6r9wnvwOBW",
+            "employee_no": "DEMO-0023",
+            "full_name": "Rosa Villareal",
+            "department_id": "MYAbJ3wBl7"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "inventory.view",
+            "inventory.mrb.view",
+            "inventory.mrb.manage",
+            "quality.view",
+            "quality.inspections.create",
+            "quality.inspections.edit",
+            "quality.inspections.view",
+            "quality.inspections.manage",
+            "quality.specs.view",
+            "quality.specs.manage",
+            "quality.ncr.view",
+            "quality.ncr.manage",
+            "quality.calibration.view",
+            "quality.calibration.manage",
+            "quality.ppap.view",
+            "quality.ppap.manage",
+            "dashboard.quality.view",
+            "dashboard.layout.reset",
+            "notifications.view",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "return_management.view",
+            "return_management.inspect"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "GET",
+      "path": "/quality/analytics/defect-pareto?from=2026-01-01&to=2026-12-31",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1037",
+      "body": {
+        "data": {
+          "from": "2026-01-01",
+          "to": "2026-12-31",
+          "total_defects": 2,
+          "rows": [
+            {
+              "parameter_name": "Length",
+              "defect_count": 1,
+              "percentage": 50,
+              "cumulative_percentage": 50,
+              "is_critical": true
+            },
+            {
+              "parameter_name": "Width",
+              "defect_count": 1,
+              "percentage": 50,
+              "cumulative_percentage": 100,
+              "is_critical": true
+            }
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "qc",
+      "method": "GET",
+      "path": "/notifications?per_page=100",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1038",
+      "body": {
+        "data": [
+          {
+            "id": "ae92892a-ee63-4267-8fcb-cff43a72c477",
+            "type": "chain.outgoing_qc_required",
+            "data": {
+              "title": "Outgoing QC required",
+              "message": "Outgoing QC required for WO WO-202609-0008.",
+              "link_to": "/production/work-orders/0ldwDmpVa9",
+              "entity_type": "work_order",
+              "entity_id": "0ldwDmpVa9",
+              "wo_number": "WO-202609-0008"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 13:47:21"
+          },
+          {
+            "id": "c56e90b7-f3ae-4975-878a-e14534a955bd",
+            "type": "chain.in_process_qc_required",
+            "data": {
+              "title": "In-process QC required",
+              "message": "In-process QC required for WO WO-202609-0008.",
+              "link_to": "/production/work-orders/0ldwDmpVa9",
+              "entity_type": "work_order",
+              "entity_id": "0ldwDmpVa9",
+              "wo_number": "WO-202609-0008"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 13:47:20"
+          },
+          {
+            "id": "824f76f3-e66d-4852-a0a4-48370b0d7df2",
+            "type": "chain.in_process_qc_required",
+            "data": {
+              "title": "In-process QC required",
+              "message": "In-process QC required for WO WO-202609-0005.",
+              "link_to": "/production/work-orders/MYAbJ3wBl7",
+              "entity_type": "work_order",
+              "entity_id": "MYAbJ3wBl7",
+              "wo_number": "WO-202609-0005"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:48"
+          },
+          {
+            "id": "92a1113f-9544-4c2d-937c-bef3478a85fa",
+            "type": "chain.payslip_ready",
+            "data": {
+              "title": "Payslip Ready",
+              "message": "Your payslip for 2026-06-01 00:00:00 – 2026-06-15 00:00:00 is ready.",
+              "link_to": "/self-service/payslips",
+              "entity_type": "payroll_period",
+              "entity_id": "kABpVvpKRW"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:45"
+          },
+          {
+            "id": "cbc48e7d-50c5-4055-bb8e-1d9aa29827d9",
+            "type": "chain.payslip_ready",
+            "data": {
+              "title": "Payslip Ready",
+              "message": "Your payslip for 2026-06-16 00:00:00 – 2026-06-30 00:00:00 is ready.",
+              "link_to": "/self-service/payslips",
+              "entity_type": "payroll_period",
+              "entity_id": "35Mbaeb49K"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:43"
+          },
+          {
+            "id": "5bf42bdb-6d18-4862-a7eb-7a3cae8581a1",
+            "type": "chain.payslip_ready",
+            "data": {
+              "title": "Payslip Ready",
+              "message": "Your payslip for 2026-07-01 00:00:00 – 2026-07-15 00:00:00 is ready.",
+              "link_to": "/self-service/payslips",
+              "entity_type": "payroll_period",
+              "entity_id": "MYAbJ3wBl7"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:42"
+          },
+          {
+            "id": "207dd2d6-01ba-424e-b647-841f73238df6",
+            "type": "chain.payslip_ready",
+            "data": {
+              "title": "Payslip Ready",
+              "message": "Your payslip for 2026-07-16 00:00:00 – 2026-07-31 00:00:00 is ready.",
+              "link_to": "/self-service/payslips",
+              "entity_type": "payroll_period",
+              "entity_id": "DzAwdKb5ld"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:40"
+          },
+          {
+            "id": "eb411ce2-845e-4b2d-bb54-b3eb36769730",
+            "type": "chain.payslip_ready",
+            "data": {
+              "title": "Payslip Ready",
+              "message": "Your payslip for 2026-08-16 00:00:00 – 2026-08-31 00:00:00 is ready.",
+              "link_to": "/self-service/payslips",
+              "entity_type": "payroll_period",
+              "entity_id": "R8epjLbOaD"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:39"
+          },
+          {
+            "id": "d219b926-ece1-4307-95e6-01b97188d275",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0004 changed to Approved but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/0ldwDmpVa9",
+              "entity_type": "return_request",
+              "entity_id": "0ldwDmpVa9",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:37"
+          },
+          {
+            "id": "b8e1d7aa-7299-42f9-81d7-9b9781d5187a",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0005 changed to Cancelled but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/BnoNyGw56v",
+              "entity_type": "return_request",
+              "entity_id": "BnoNyGw56v",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:37"
+          },
+          {
+            "id": "944a025e-9388-41d8-8f0e-15fa29b6664e",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0004 changed to Approved but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/0ldwDmpVa9",
+              "entity_type": "return_request",
+              "entity_id": "0ldwDmpVa9",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:37"
+          },
+          {
+            "id": "589f6595-ae7b-423a-809e-c4f693f24c68",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0004 changed to Approved but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/0ldwDmpVa9",
+              "entity_type": "return_request",
+              "entity_id": "0ldwDmpVa9",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:37"
+          },
+          {
+            "id": "f5a436ee-718e-449e-8477-fe6a76f5999d",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0003 changed to Cancelled but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/kABpVvpKRW",
+              "entity_type": "return_request",
+              "entity_id": "kABpVvpKRW",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "e3c0a28d-e1e6-4421-9a3b-902b8ec3fc89",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0002 changed to Rejected but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/35Mbaeb49K",
+              "entity_type": "return_request",
+              "entity_id": "35Mbaeb49K",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "db7b14ff-64e2-4711-b61a-9270794c7d32",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0001 changed to Received but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/MYAbJ3wBl7",
+              "entity_type": "return_request",
+              "entity_id": "MYAbJ3wBl7",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "98aa1398-c618-472e-a7e4-aaeaa1ae570b",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0001 changed to Received but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/MYAbJ3wBl7",
+              "entity_type": "return_request",
+              "entity_id": "MYAbJ3wBl7",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "809d58da-60d6-49f9-a30a-6db646d2fd7d",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0001 changed to Received but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/MYAbJ3wBl7",
+              "entity_type": "return_request",
+              "entity_id": "MYAbJ3wBl7",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "789d1504-e55b-4738-a6be-d94c13ad303b",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0002 changed to Rejected but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/35Mbaeb49K",
+              "entity_type": "return_request",
+              "entity_id": "35Mbaeb49K",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "75bdddf2-453c-4d2e-bec0-6b0f0f6d5152",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0001 changed to Received but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/MYAbJ3wBl7",
+              "entity_type": "return_request",
+              "entity_id": "MYAbJ3wBl7",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "2fa68cd4-6f24-4531-a7df-0ef210ee22d2",
+            "type": "email.delivery_failed",
+            "data": {
+              "title": "Email delivery failed",
+              "message": "Return request email: Return request RMA-202609-0001 changed to Received but the customer has no usable email address. Contact the customer through an approved channel.",
+              "link_to": "/return-management/MYAbJ3wBl7",
+              "entity_type": "return_request",
+              "entity_id": "MYAbJ3wBl7",
+              "failure_reason": "The party email was missing, invalid, unreachable, or rejected by the email provider."
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 12:46:36"
+          },
+          {
+            "id": "8a29551e-b216-4c0d-86e7-1f9c51667398",
+            "type": "chain.incoming_qc_required",
+            "data": {
+              "title": "Incoming QC required",
+              "message": "Incoming QC required for GRN GRN-202609-0001.",
+              "link_to": "/inventory/grns/GqkbAVwxd1",
+              "entity_type": "grn",
+              "entity_id": "GqkbAVwxd1",
+              "grn_number": "GRN-202609-0001"
+            },
+            "read_at": null,
+            "created_at": "2026-09-14 10:11:04"
+          }
+        ],
+        "meta": {
+          "current_page": 1,
+          "last_page": 1,
+          "per_page": 100,
+          "total": 21,
+          "unread_count": 21
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1040",
+      "body": {
+        "data": {
+          "id": "zW1p05N0BA",
+          "name": "Juan Bautista",
+          "email": "maintenance@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "ajzw1lb3eW",
+            "name": "Maintenance Technician",
+            "slug": "maintenance_tech"
+          },
+          "employee": {
+            "id": "ajzw1lb3eW",
+            "employee_no": "DEMO-0024",
+            "full_name": "Juan Bautista",
+            "department_id": "BnoNyGw56v"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "mrp.machines.view",
+            "maintenance.view",
+            "maintenance.wo.create",
+            "maintenance.wo.complete",
+            "assets.view",
+            "hr.separation.view",
+            "hr.clearance.sign",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/maintenance/work-orders/options",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1041",
+      "body": {
+        "data": {
+          "maintainable_types": [
+            {
+              "value": "machine",
+              "label": "Machine"
+            },
+            {
+              "value": "mold",
+              "label": "Mold"
+            }
+          ],
+          "types": [
+            {
+              "value": "preventive",
+              "label": "Preventive"
+            },
+            {
+              "value": "corrective",
+              "label": "Corrective"
+            }
+          ],
+          "priorities": [
+            {
+              "value": "critical",
+              "label": "Critical"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "low",
+              "label": "Low"
+            }
+          ],
+          "statuses": [
+            {
+              "value": "open",
+              "label": "Open",
+              "is_terminal": false
+            },
+            {
+              "value": "assigned",
+              "label": "Assigned",
+              "is_terminal": false
+            },
+            {
+              "value": "in_progress",
+              "label": "In progress",
+              "is_terminal": false
+            },
+            {
+              "value": "completed",
+              "label": "Completed",
+              "is_terminal": true
+            },
+            {
+              "value": "cancelled",
+              "label": "Cancelled",
+              "is_terminal": true
+            }
+          ],
+          "default_type": "corrective",
+          "default_priority": "medium"
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/maintenance/work-orders/assignees",
+      "status": 403,
+      "requestId": "LIVE-B12-C-1042",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/maintenance/condition-readings/health-snapshot",
+      "status": 404,
+      "requestId": "LIVE-B12-C-1043",
+      "body": {
+        "message": "The requested resource was not found."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/maintenance/downtime-analytics/summary",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1044",
+      "body": {
+        "data": {
+          "total_downtime_minutes": 0,
+          "breakdown_count": 0,
+          "mtbf_hours": null,
+          "mttr_minutes": null,
+          "availability_pct": 100,
+          "category_breakdown": []
+        },
+        "meta": {
+          "days": 30,
+          "default_days": 30
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "maintenance",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1045",
+      "body": "",
+      "contentType": null
+    },
+    {
+      "actor": "employee",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-C-1046",
+      "body": {
+        "data": {
+          "id": "BnoNyGw56v",
+          "name": "Manuel Cruz",
+          "email": "employee@ogami.test",
+          "is_active": true,
+          "must_change_password": "[REDACTED]",
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "E1mbe9bGrz",
+            "name": "Employee",
+            "slug": "employee"
+          },
+          "employee": {
+            "id": "0ldwDmpVa9",
+            "employee_no": "DEMO-0021",
+            "full_name": "Manuel Cruz",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "dashboard.layout.reset",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "employee",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/start",
+      "status": 403,
+      "requestId": "LIVE-B12-C-1047",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "employee",
+      "method": "POST",
+      "path": "/quality/ncrs/invalid/close",
+      "status": 404,
+      "requestId": "LIVE-B12-C-1048",
+      "body": {
+        "message": "The requested resource was not found."
+      },
+      "contentType": "application/json"
+    },
+    {
+      "actor": "employee",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-C-1049",
+      "body": "",
+      "contentType": null
+    }
+  ]
+}

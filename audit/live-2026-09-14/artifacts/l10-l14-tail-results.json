@@ -1,0 +1,1197 @@
+{
+  "generated_at": "2026-09-14T05:51:19.954Z",
+  "machine": "XKEbGkbgWk",
+  "results": [
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "ppc authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"MYAbJ3wBl7\",\"name\":\"Pedro Garcia\",\"email\":\"ppc@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"kABpVvpKRW\",\"name\":\"PPC Head\",\"slug\":\"ppc_head\"},\"employee\":{\"id\":\"DzAwdKb5ld\",\"employee_no\":\"DEMO-0017\",\"full_name\":\"Pedro Garcia\",\"department_id\":\"0ldwDmpVa9\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.work_orders.view\",\"production.schedule.view\",\"production.routings.view\",\"production.routings.manage\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.boms.manage\",\"mrp.machines.view\",\"mrp.molds.view\",\"mrp.plans.view\",\"mrp.plans.run\",\"mrp.runs.view\",\"mrp.runs.trigger\",\"maintenance.view\",\"assets.view\",\"dashboard.ppc.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"forecasting.manage\",\"return_management.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "ppc",
+      "name": "L11 PPC reads execution mold shot history",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"cavity_count\":4,\"cycle_time_seconds\":20,\"output_rate_per_hour\":720,\"setup_time_minutes\":90,\"current_shot_count\":3,\"max_shots_before_maintenance\":100000,\"shot_percentage\":0,\"nearing_limit\":false,\"lifetime_total_shots\":3,\"lifetime_max_shots\":500000,\"status\":\"available\",\"status_label\":\"Available\",\"location\":\"Tooling Crib · Bay A\",\"commissioned_at\":null,\"decommissioned_at\":null,\"last_maintenance_at\":null,\"maintenance_count\":0,\"total_maintenance_cost\":\"0.00\",\"acquisition_cost\":\"0.00\",\"estimated_replacement_cost\":\"0.00\",\"maintenance_frequency_shots\":null,\"drawing_number\":null,\"storage_location\":null,\"cost_per_shot\":0,\"shots_remaining\":99997,\"compatible_machines_count\":0,\"compatible_machines\":[{\"id\":\"GqkbAVwxd1\",\"machine_code\":\"IMM-02\",\"name\":\"Toshiba EC100SX\",\"tonnage\":100},{\"id\":\"R8epjLbOaD\",\"machine_code\":\"IMM-03\",\"name\":\"Sumitomo SE130\",\"tonnage\":130},{\"id\":\"DzAwdKb5ld\",\"machine_code\":\"IMM-04\",\"name\":\"Sumitomo SE130\",\"tonnage\":130},{\"id\":\"MYAbJ3wBl7\",\"machine_code\":\"IMM-05\",\"name\":\"Nissei NEX180\",\"tonnage\":180},{\"id\":\"35Mbaeb49K\",\"machine_code\":\"IMM-06\",\"name\":\"Nissei NEX180\",\"tonnage\":180},{\"id\":\"kABpVvpKRW\",\"machine_code\":\"IMM-07\",\"name\":\"Fanuc Roboshot\",\"tonnage\":220},{\"id\":\"0ldwDmpVa9\",\"machine_code\":\"IMM-08\",\"name\":\"Fanuc Roboshot\",\"tonnage\":220},{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\",\"tonnage\":100}],\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T13:47:16+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "ppc",
+      "name": "L11 mold shot evidence",
+      "detail": "mold=dGypLxpvAg; before/after resource={\"data\":{\"id\":\"dGypLxpvAg\",\"mold_code\":\"M-WB-001\",\"name\":\"WB-001 4-cav steel mold A\",\"product\":{\"id\":\"dGypLxpvAg\",\"part_number\":\"WB-001\",\"name\":\"Wiper Bushing (Standard)\",\"unit_of_measure\":\"pcs\"},\"cavity_count\":4,\"cycle_time_seconds\":20,\"output_rate_per_hour\":720,\"setup_time_minutes\":90,\"current_shot_count\":3,\"max_shots_before_maintenance\":100000,\"shot_percentage\":0,\"nearing_limit\":false,\"lifetime_total_shots\":3,\"lifetime_max_shots\":500000,\"status\":\"available\",\"status_label\":\"Available\",\"location\":\"Tooling Crib · Bay A\",\"commissioned_at\":null,\"decommissioned_at\":null,\"last_maintenance_at\":null,\"maintenance_count\":0,\"total_maintenance_cost\":\"0.00\",\"acquisition_cost\":\"0.00\",\"estimated_replacement_cost\":\"0.00\",\"maintenance_frequency_shots\":null,\"drawing_number\":null,\"storage_location\":null,\"cost_per_shot\":0,\"shots_remaining\":99997,\"compatible_machines_count\":0,\"compatible_machines\":[{\"id\":\"GqkbAVwxd1\",\"machine_code\":\"IMM-02\",\"name\":\"Toshiba EC100SX\",\"tonnage\":100},{\"id\":\"R8epjLbOaD\",\"machine_code\":\"IMM-03\",\"name\":\"Sumitomo SE130\",\"tonnage\":130},{\"id\":\"DzAwdKb5ld\",\"machine_code\":\"IMM-04\",\"name\":\"Sumitomo SE130\",\"tonnage\":130},{\"id\":\"MYAbJ3wBl7\",\"machine_code\":\"IMM-05\",\"name\":\"Nissei NEX180\",\"tonnage\":180},{\"id\":\"35Mbaeb49K\",\"machine_code\":\"IMM-06\",\"name\":\"Nissei NEX180\",\"tonnage\":180},{\"id\":\"kABpVvpKRW\",\"machine_code\":\"IMM-07\",\"name\":\"Fanuc Roboshot\",\"tonnage\":220},{\"id\":\"0ldwDmpVa9\",\"machine_code\":\"IMM-08\",\"name\":\"Fanuc Roboshot\",\"tonnage\":220},{\"id\":\"dGypLxpvAg\",\"machine_code\":\"IMM-01\",\"name\":\"Toshiba EC100SX\",\"tonnage\":100}],\"created_at\":\"2026-09-14T07:36:52+08:00\",\"updated_at\":\"2026-09-14T13:47:16+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.approve\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\","
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L11 production receipt handoff narrow retry",
+      "detail": "HTTP 422; expected 200/409/422 ; body={\"message\":\"Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again.\"}"
+    },
+    {
+      "status": "OBSERVED",
+      "actor": "production",
+      "name": "L11 finished-goods stock handoff",
+      "detail": "output=GqkbAVwxd1; retry={\"message\":\"Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "employee",
+      "name": "employee authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"BnoNyGw56v\",\"name\":\"Manuel Cruz\",\"email\":\"employee@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"E1mbe9bGrz\",\"name\":\"Employee\",\"slug\":\"employee\"},\"employee\":{\"id\":\"0ldwDmpVa9\",\"employee_no\":\"DEMO-0021\",\"full_name\":\"Manuel Cruz\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"dashboard.layout.reset\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "employee",
+      "name": "L13 direct wrong-role closed NCR denial",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.approve\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\","
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L14 creates disposable interruption machine",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"XKEbGkbgWk\",\"machine_code\":\"B12M-64985859\",\"name\":\"LIVE-B12 interruption machine\",\"tonnage\":100,\"machine_type\":\"injection_molder\",\"operators_required\":\"1.0\",\"available_hours_per_day\":\"8.0\",\"status\":\"idle\",\"status_label\":\"Idle\",\"is_available_now\":true,\"compatible_molds_count\":0,\"created_at\":\"2026-09-14T13:50:34+08:00\",\"updated_at\":\"2026-09-14T13:50:34+08:00\",\"deleted_at\":null}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "maintenance authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\",\"email\":\"maintenance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Maintenance Technician\",\"slug\":\"maintenance_tech\"},\"employee\":{\"id\":\"ajzw1lb3eW\",\"employee_no\":\"DEMO-0024\",\"full_name\":\"Juan Bautista\",\"department_id\":\"BnoNyGw56v\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"mrp.machines.view\",\"maintenance.view\",\"maintenance.wo.create\",\"maintenance.wo.complete\",\"assets.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "l14-maintenance-work-orders-tail UI",
+      "detail": "document=200 uiUrl=http://localhost/maintenance/work-orders"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 creates corrective MWO on disposable machine",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"kABpVvpKRW\",\"mwo_number\":\"MWO-202609-0007\",\"maintainable_type\":\"machine\",\"maintainable\":{\"id\":\"XKEbGkbgWk\",\"code\":\"B12M-64985859\",\"name\":\"LIVE-B12 interruption machine\"},\"schedule\":null,\"type\":\"corrective\",\"type_label\":\"Corrective\",\"priority\":\"high\",\"priority_label\":\"High\",\"description\":\"LIVE-B12 corrective interruption MWO 64985859\",\"status\":\"open\",\"status_label\":\"Open\",\"available_actions\":[\"start\",\"cancel\"],\"started_at\":null,\"completed_at\":null,\"downtime_minutes\":0,\"cost\":\"\",\"remarks\":null,\"assignee\":null,\"creator\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"logs\":[],\"spare_parts\":[],\"created_at\":\"2026-09-14T05:50:50.000000Z\",\"updated_at\":\"2026-09-14T05:50:50.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 maintenance assignment boundary",
+      "detail": "HTTP 403; expected 403 ; body={\"message\":\"You do not have permission to perform this action.\"}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 starts corrective MWO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"kABpVvpKRW\",\"mwo_number\":\"MWO-202609-0007\",\"maintainable_type\":\"machine\",\"maintainable\":{\"id\":\"XKEbGkbgWk\",\"code\":\"B12M-64985859\",\"name\":\"LIVE-B12 interruption machine\"},\"schedule\":null,\"type\":\"corrective\",\"type_label\":\"Corrective\",\"priority\":\"high\",\"priority_label\":\"High\",\"description\":\"LIVE-B12 corrective interruption MWO 64985859\",\"status\":\"in_progress\",\"status_label\":\"In progress\",\"available_actions\":[\"complete\",\"cancel\"],\"started_at\":\"2026-09-14T05:50:50.000000Z\",\"completed_at\":null,\"downtime_minutes\":0,\"cost\":\"0.00\",\"remarks\":null,\"assignee\":null,\"creator\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"logs\":[{\"id\":\"0ldwDmpVa9\",\"description\":\"Maintenance started.\",\"logger\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T05:50:50.000000Z\"}],\"spare_parts\":[],\"created_at\":\"2026-09-14T05:50:50.000000Z\",\"updated_at\":\"2026-09-14T05:50:50.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 logs corrective MWO",
+      "detail": "HTTP 201; expected 201 ; body={\"data\":{\"id\":\"BnoNyGw56v\",\"description\":\"LIVE-B12 breakdown diagnosis and repair\",\"created_at\":\"2026-09-14T05:50:50.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 completes corrective MWO",
+      "detail": "HTTP 200; expected 200 ; body={\"data\":{\"id\":\"kABpVvpKRW\",\"mwo_number\":\"MWO-202609-0007\",\"maintainable_type\":\"machine\",\"maintainable\":{\"id\":\"XKEbGkbgWk\",\"code\":\"B12M-64985859\",\"name\":\"LIVE-B12 interruption machine\"},\"schedule\":null,\"type\":\"corrective\",\"type_label\":\"Corrective\",\"priority\":\"high\",\"priority_label\":\"High\",\"description\":\"LIVE-B12 corrective interruption MWO 64985859\",\"status\":\"completed\",\"status_label\":\"Completed\",\"available_actions\":[],\"started_at\":\"2026-09-14T05:50:50.000000Z\",\"completed_at\":\"2026-09-14T05:50:50.000000Z\",\"downtime_minutes\":22,\"cost\":\"0.00\",\"remarks\":\"LIVE-B12 completed corrective repair\",\"assignee\":null,\"creator\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"logs\":[{\"id\":\"0ldwDmpVa9\",\"description\":\"Maintenance started.\",\"logger\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T05:50:50.000000Z\"},{\"id\":\"BnoNyGw56v\",\"description\":\"LIVE-B12 breakdown diagnosis and repair\",\"logger\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T05:50:50.000000Z\"},{\"id\":\"6r9wnvwOBW\",\"description\":\"Maintenance completed.\",\"logger\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\"},\"created_at\":\"2026-09-14T05:50:50.000000Z\"}],\"spare_parts\":[],\"created_at\":\"2026-09-14T05:50:50.000000Z\",\"updated_at\":\"2026-09-14T05:50:50.000000Z\"}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "L14 corrective MWO terminal replay",
+      "detail": "HTTP 422; expected 422 ; body={\"message\":\"Maintenance work order cannot transition from Completed to Completed.\",\"errors\":{\"status\":[\"Maintenance work order cannot transition from Completed to Completed.\"]}}"
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "production authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"DzAwdKb5ld\",\"name\":\"Ricardo Tanaka\",\"email\":\"production@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"35Mbaeb49K\",\"name\":\"Production Manager\",\"slug\":\"production_manager\"},\"employee\":{\"id\":\"R8epjLbOaD\",\"employee_no\":\"DEMO-0016\",\"full_name\":\"Ricardo Tanaka\",\"department_id\":\"DzAwdKb5ld\"},\"permissions\":[\"hr.directory.view\",\"hr.salary_adjustments.view\",\"hr.salary_adjustments.act\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"loans.view\",\"loans.approve\",\"inventory.view\",\"purchasing.view\",\"production.view\",\"production.wo.create\",\"production.wo.confirm\",\"production.wo.record\",\"production.work_orders.view\",\"production.work_orders.lifecycle\",\"production.machines.manage\",\"production.machines.transition\",\"production.molds.manage\",\"production.schedule.view\",\"production.schedule.confirm\",\"production.dashboard.view\",\"production.routings.view\",\"production.operator.access\",\"mrp.view\",\"mrp.schedule\",\"mrp.boms.view\",\"mrp.machines.view\",\"mrp.plans.view\",\"mrp.runs.view\",\"quality.view\",\"quality.inspections.view\",\"quality.ncr.view\",\"maintenance.view\",\"assets.view\",\"dashboard.plant_manager.view\",\"dashboard.view_bottlenecks\",\"dashboard.chain_recovery.view\",\"dashboard.chain_recovery.manage\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"alerts.view\",\"alerts.dismiss\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\",\"forecasting.view\",\"return_management.view\",\"return_management.approve\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\","
+    },
+    {
+      "status": "PASS",
+      "actor": "production",
+      "name": "L14 archives disposable interruption machine",
+      "detail": "HTTP 204; expected 204 ; body=\"\""
+    },
+    {
+      "status": "PASS",
+      "actor": "maintenance",
+      "name": "maintenance authenticated",
+      "detail": "HTTP 200; expected 200 uiUrl=http://localhost/dashboard; body={\"data\":{\"id\":\"zW1p05N0BA\",\"name\":\"Juan Bautista\",\"email\":\"maintenance@ogami.test\",\"is_active\":true,\"must_change_password\":false,\"theme_mode\":\"system\",\"sidebar_collapsed\":false,\"role\":{\"id\":\"ajzw1lb3eW\",\"name\":\"Maintenance Technician\",\"slug\":\"maintenance_tech\"},\"employee\":{\"id\":\"ajzw1lb3eW\",\"employee_no\":\"DEMO-0024\",\"full_name\":\"Juan Bautista\",\"department_id\":\"BnoNyGw56v\"},\"permissions\":[\"hr.directory.view\",\"attendance.view\",\"leave.view\",\"leave.create\",\"payroll.view\",\"mrp.machines.view\",\"maintenance.view\",\"maintenance.wo.create\",\"maintenance.wo.complete\",\"assets.view\",\"hr.separation.view\",\"hr.clearance.sign\",\"dashboard.layout.reset\",\"search.global\",\"notifications.view\",\"notifications.preferences.manage\",\"dashboard.action_center.view\",\"calendar.view\",\"approvals.board.view\"],\"features\":[\"hr\",\"attendance\",\"leave\",\"payroll\",\"loans\",\"accounting\",\"inventory\",\"purchasing\",\"supply_chain\",\"production\",\"mrp\",\"crm\",\"quality\",\"maintenance\",\"recruitment\",\"assets\",\"return_management\",\"search\",\"notifications\",\"b2b_portals\",\"forecasting\",\"budgeting\"]}}"
+    },
+    {
+      "status": "BLOCKED",
+      "actor": "maintenance",
+      "name": "L14 condition-reading threshold path",
+      "detail": "Condition-reading routes are explicitly scope-cut and absent."
+    }
+  ],
+  "evidence": [
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2001",
+      "body": {
+        "data": {
+          "id": "MYAbJ3wBl7",
+          "name": "Pedro Garcia",
+          "email": "ppc@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "kABpVvpKRW",
+            "name": "PPC Head",
+            "slug": "ppc_head"
+          },
+          "employee": {
+            "id": "DzAwdKb5ld",
+            "employee_no": "DEMO-0017",
+            "full_name": "Pedro Garcia",
+            "department_id": "0ldwDmpVa9"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.work_orders.view",
+            "production.schedule.view",
+            "production.routings.view",
+            "production.routings.manage",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.boms.manage",
+            "mrp.machines.view",
+            "mrp.molds.view",
+            "mrp.plans.view",
+            "mrp.plans.run",
+            "mrp.runs.view",
+            "mrp.runs.trigger",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.ppc.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "forecasting.manage",
+            "return_management.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "GET",
+      "path": "/mrp/molds/dGypLxpvAg",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2002",
+      "body": {
+        "data": {
+          "id": "dGypLxpvAg",
+          "mold_code": "M-WB-001",
+          "name": "WB-001 4-cav steel mold A",
+          "product": {
+            "id": "dGypLxpvAg",
+            "part_number": "WB-001",
+            "name": "Wiper Bushing (Standard)",
+            "unit_of_measure": "pcs"
+          },
+          "cavity_count": 4,
+          "cycle_time_seconds": 20,
+          "output_rate_per_hour": 720,
+          "setup_time_minutes": 90,
+          "current_shot_count": 3,
+          "max_shots_before_maintenance": 100000,
+          "shot_percentage": 0,
+          "nearing_limit": false,
+          "lifetime_total_shots": 3,
+          "lifetime_max_shots": 500000,
+          "status": "available",
+          "status_label": "Available",
+          "location": "Tooling Crib · Bay A",
+          "commissioned_at": null,
+          "decommissioned_at": null,
+          "last_maintenance_at": null,
+          "maintenance_count": 0,
+          "total_maintenance_cost": "0.00",
+          "acquisition_cost": "0.00",
+          "estimated_replacement_cost": "0.00",
+          "maintenance_frequency_shots": null,
+          "drawing_number": null,
+          "storage_location": null,
+          "cost_per_shot": 0,
+          "shots_remaining": 99997,
+          "compatible_machines_count": 0,
+          "compatible_machines": [
+            {
+              "id": "GqkbAVwxd1",
+              "machine_code": "IMM-02",
+              "name": "Toshiba EC100SX",
+              "tonnage": 100
+            },
+            {
+              "id": "R8epjLbOaD",
+              "machine_code": "IMM-03",
+              "name": "Sumitomo SE130",
+              "tonnage": 130
+            },
+            {
+              "id": "DzAwdKb5ld",
+              "machine_code": "IMM-04",
+              "name": "Sumitomo SE130",
+              "tonnage": 130
+            },
+            {
+              "id": "MYAbJ3wBl7",
+              "machine_code": "IMM-05",
+              "name": "Nissei NEX180",
+              "tonnage": 180
+            },
+            {
+              "id": "35Mbaeb49K",
+              "machine_code": "IMM-06",
+              "name": "Nissei NEX180",
+              "tonnage": 180
+            },
+            {
+              "id": "kABpVvpKRW",
+              "machine_code": "IMM-07",
+              "name": "Fanuc Roboshot",
+              "tonnage": 220
+            },
+            {
+              "id": "0ldwDmpVa9",
+              "machine_code": "IMM-08",
+              "name": "Fanuc Roboshot",
+              "tonnage": 220
+            },
+            {
+              "id": "dGypLxpvAg",
+              "machine_code": "IMM-01",
+              "name": "Toshiba EC100SX",
+              "tonnage": 100
+            }
+          ],
+          "created_at": "2026-09-14T07:36:52+08:00",
+          "updated_at": "2026-09-14T13:47:16+08:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "actor": "ppc",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2003",
+      "body": ""
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2004",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "name": "Ricardo Tanaka",
+          "email": "production@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "35Mbaeb49K",
+            "name": "Production Manager",
+            "slug": "production_manager"
+          },
+          "employee": {
+            "id": "R8epjLbOaD",
+            "employee_no": "DEMO-0016",
+            "full_name": "Ricardo Tanaka",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "hr.salary_adjustments.view",
+            "hr.salary_adjustments.act",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "loans.view",
+            "loans.approve",
+            "inventory.view",
+            "purchasing.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.wo.record",
+            "production.work_orders.view",
+            "production.work_orders.lifecycle",
+            "production.machines.manage",
+            "production.machines.transition",
+            "production.molds.manage",
+            "production.schedule.view",
+            "production.schedule.confirm",
+            "production.dashboard.view",
+            "production.routings.view",
+            "production.operator.access",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.machines.view",
+            "mrp.plans.view",
+            "mrp.runs.view",
+            "quality.view",
+            "quality.inspections.view",
+            "quality.ncr.view",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.plant_manager.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.approve"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/production/work-orders/0ldwDmpVa9/outputs/GqkbAVwxd1/retry-receipt",
+      "status": 422,
+      "requestId": "LIVE-B12-T-2005",
+      "body": {
+        "message": "Finished-goods receipt still needs Inventory setup. Fix the prerequisite, then retry again."
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2006",
+      "body": ""
+    },
+    {
+      "actor": "employee",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2007",
+      "body": {
+        "data": {
+          "id": "BnoNyGw56v",
+          "name": "Manuel Cruz",
+          "email": "employee@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "E1mbe9bGrz",
+            "name": "Employee",
+            "slug": "employee"
+          },
+          "employee": {
+            "id": "0ldwDmpVa9",
+            "employee_no": "DEMO-0021",
+            "full_name": "Manuel Cruz",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "dashboard.layout.reset",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "employee",
+      "method": "POST",
+      "path": "/quality/ncrs/kABpV2vpKR/close",
+      "status": 403,
+      "requestId": "LIVE-B12-T-2008",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      }
+    },
+    {
+      "actor": "employee",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2009",
+      "body": ""
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2010",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "name": "Ricardo Tanaka",
+          "email": "production@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "35Mbaeb49K",
+            "name": "Production Manager",
+            "slug": "production_manager"
+          },
+          "employee": {
+            "id": "R8epjLbOaD",
+            "employee_no": "DEMO-0016",
+            "full_name": "Ricardo Tanaka",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "hr.salary_adjustments.view",
+            "hr.salary_adjustments.act",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "loans.view",
+            "loans.approve",
+            "inventory.view",
+            "purchasing.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.wo.record",
+            "production.work_orders.view",
+            "production.work_orders.lifecycle",
+            "production.machines.manage",
+            "production.machines.transition",
+            "production.molds.manage",
+            "production.schedule.view",
+            "production.schedule.confirm",
+            "production.dashboard.view",
+            "production.routings.view",
+            "production.operator.access",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.machines.view",
+            "mrp.plans.view",
+            "mrp.runs.view",
+            "quality.view",
+            "quality.inspections.view",
+            "quality.ncr.view",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.plant_manager.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.approve"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/mrp/machines",
+      "status": 201,
+      "requestId": "LIVE-B12-T-2011",
+      "body": {
+        "data": {
+          "id": "XKEbGkbgWk",
+          "machine_code": "B12M-64985859",
+          "name": "LIVE-B12 interruption machine",
+          "tonnage": 100,
+          "machine_type": "injection_molder",
+          "operators_required": "1.0",
+          "available_hours_per_day": "8.0",
+          "status": "idle",
+          "status_label": "Idle",
+          "is_available_now": true,
+          "compatible_molds_count": 0,
+          "created_at": "2026-09-14T13:50:34+08:00",
+          "updated_at": "2026-09-14T13:50:34+08:00",
+          "deleted_at": null
+        }
+      }
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2012",
+      "body": ""
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2013",
+      "body": {
+        "data": {
+          "id": "zW1p05N0BA",
+          "name": "Juan Bautista",
+          "email": "maintenance@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "ajzw1lb3eW",
+            "name": "Maintenance Technician",
+            "slug": "maintenance_tech"
+          },
+          "employee": {
+            "id": "ajzw1lb3eW",
+            "employee_no": "DEMO-0024",
+            "full_name": "Juan Bautista",
+            "department_id": "BnoNyGw56v"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "mrp.machines.view",
+            "maintenance.view",
+            "maintenance.wo.create",
+            "maintenance.wo.complete",
+            "assets.view",
+            "hr.separation.view",
+            "hr.clearance.sign",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "POST",
+      "path": "/maintenance/work-orders",
+      "status": 201,
+      "requestId": "LIVE-B12-T-2014",
+      "body": {
+        "data": {
+          "id": "kABpVvpKRW",
+          "mwo_number": "MWO-202609-0007",
+          "maintainable_type": "machine",
+          "maintainable": {
+            "id": "XKEbGkbgWk",
+            "code": "B12M-64985859",
+            "name": "LIVE-B12 interruption machine"
+          },
+          "schedule": null,
+          "type": "corrective",
+          "type_label": "Corrective",
+          "priority": "high",
+          "priority_label": "High",
+          "description": "LIVE-B12 corrective interruption MWO 64985859",
+          "status": "open",
+          "status_label": "Open",
+          "available_actions": [
+            "start",
+            "cancel"
+          ],
+          "started_at": null,
+          "completed_at": null,
+          "downtime_minutes": 0,
+          "cost": "",
+          "remarks": null,
+          "assignee": null,
+          "creator": {
+            "id": "zW1p05N0BA",
+            "name": "Juan Bautista"
+          },
+          "logs": [],
+          "spare_parts": [],
+          "created_at": "2026-09-14T05:50:50.000000Z",
+          "updated_at": "2026-09-14T05:50:50.000000Z"
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "PATCH",
+      "path": "/maintenance/work-orders/kABpVvpKRW/assign",
+      "status": 403,
+      "requestId": "LIVE-B12-T-2015",
+      "body": {
+        "message": "You do not have permission to perform this action."
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "PATCH",
+      "path": "/maintenance/work-orders/kABpVvpKRW/start",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2016",
+      "body": {
+        "data": {
+          "id": "kABpVvpKRW",
+          "mwo_number": "MWO-202609-0007",
+          "maintainable_type": "machine",
+          "maintainable": {
+            "id": "XKEbGkbgWk",
+            "code": "B12M-64985859",
+            "name": "LIVE-B12 interruption machine"
+          },
+          "schedule": null,
+          "type": "corrective",
+          "type_label": "Corrective",
+          "priority": "high",
+          "priority_label": "High",
+          "description": "LIVE-B12 corrective interruption MWO 64985859",
+          "status": "in_progress",
+          "status_label": "In progress",
+          "available_actions": [
+            "complete",
+            "cancel"
+          ],
+          "started_at": "2026-09-14T05:50:50.000000Z",
+          "completed_at": null,
+          "downtime_minutes": 0,
+          "cost": "0.00",
+          "remarks": null,
+          "assignee": null,
+          "creator": {
+            "id": "zW1p05N0BA",
+            "name": "Juan Bautista"
+          },
+          "logs": [
+            {
+              "id": "0ldwDmpVa9",
+              "description": "Maintenance started.",
+              "logger": {
+                "id": "zW1p05N0BA",
+                "name": "Juan Bautista"
+              },
+              "created_at": "2026-09-14T05:50:50.000000Z"
+            }
+          ],
+          "spare_parts": [],
+          "created_at": "2026-09-14T05:50:50.000000Z",
+          "updated_at": "2026-09-14T05:50:50.000000Z"
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "POST",
+      "path": "/maintenance/work-orders/kABpVvpKRW/logs",
+      "status": 201,
+      "requestId": "LIVE-B12-T-2017",
+      "body": {
+        "data": {
+          "id": "BnoNyGw56v",
+          "description": "LIVE-B12 breakdown diagnosis and repair",
+          "created_at": "2026-09-14T05:50:50.000000Z"
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "PATCH",
+      "path": "/maintenance/work-orders/kABpVvpKRW/complete",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2018",
+      "body": {
+        "data": {
+          "id": "kABpVvpKRW",
+          "mwo_number": "MWO-202609-0007",
+          "maintainable_type": "machine",
+          "maintainable": {
+            "id": "XKEbGkbgWk",
+            "code": "B12M-64985859",
+            "name": "LIVE-B12 interruption machine"
+          },
+          "schedule": null,
+          "type": "corrective",
+          "type_label": "Corrective",
+          "priority": "high",
+          "priority_label": "High",
+          "description": "LIVE-B12 corrective interruption MWO 64985859",
+          "status": "completed",
+          "status_label": "Completed",
+          "available_actions": [],
+          "started_at": "2026-09-14T05:50:50.000000Z",
+          "completed_at": "2026-09-14T05:50:50.000000Z",
+          "downtime_minutes": 22,
+          "cost": "0.00",
+          "remarks": "LIVE-B12 completed corrective repair",
+          "assignee": null,
+          "creator": {
+            "id": "zW1p05N0BA",
+            "name": "Juan Bautista"
+          },
+          "logs": [
+            {
+              "id": "0ldwDmpVa9",
+              "description": "Maintenance started.",
+              "logger": {
+                "id": "zW1p05N0BA",
+                "name": "Juan Bautista"
+              },
+              "created_at": "2026-09-14T05:50:50.000000Z"
+            },
+            {
+              "id": "BnoNyGw56v",
+              "description": "LIVE-B12 breakdown diagnosis and repair",
+              "logger": {
+                "id": "zW1p05N0BA",
+                "name": "Juan Bautista"
+              },
+              "created_at": "2026-09-14T05:50:50.000000Z"
+            },
+            {
+              "id": "6r9wnvwOBW",
+              "description": "Maintenance completed.",
+              "logger": {
+                "id": "zW1p05N0BA",
+                "name": "Juan Bautista"
+              },
+              "created_at": "2026-09-14T05:50:50.000000Z"
+            }
+          ],
+          "spare_parts": [],
+          "created_at": "2026-09-14T05:50:50.000000Z",
+          "updated_at": "2026-09-14T05:50:50.000000Z"
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "PATCH",
+      "path": "/maintenance/work-orders/kABpVvpKRW/complete",
+      "status": 422,
+      "requestId": "LIVE-B12-T-2019",
+      "body": {
+        "message": "Maintenance work order cannot transition from Completed to Completed.",
+        "errors": {
+          "status": [
+            "Maintenance work order cannot transition from Completed to Completed."
+          ]
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2020",
+      "body": ""
+    },
+    {
+      "actor": "production",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2021",
+      "body": {
+        "data": {
+          "id": "DzAwdKb5ld",
+          "name": "Ricardo Tanaka",
+          "email": "production@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "35Mbaeb49K",
+            "name": "Production Manager",
+            "slug": "production_manager"
+          },
+          "employee": {
+            "id": "R8epjLbOaD",
+            "employee_no": "DEMO-0016",
+            "full_name": "Ricardo Tanaka",
+            "department_id": "DzAwdKb5ld"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "hr.salary_adjustments.view",
+            "hr.salary_adjustments.act",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "loans.view",
+            "loans.approve",
+            "inventory.view",
+            "purchasing.view",
+            "production.view",
+            "production.wo.create",
+            "production.wo.confirm",
+            "production.wo.record",
+            "production.work_orders.view",
+            "production.work_orders.lifecycle",
+            "production.machines.manage",
+            "production.machines.transition",
+            "production.molds.manage",
+            "production.schedule.view",
+            "production.schedule.confirm",
+            "production.dashboard.view",
+            "production.routings.view",
+            "production.operator.access",
+            "mrp.view",
+            "mrp.schedule",
+            "mrp.boms.view",
+            "mrp.machines.view",
+            "mrp.plans.view",
+            "mrp.runs.view",
+            "quality.view",
+            "quality.inspections.view",
+            "quality.ncr.view",
+            "maintenance.view",
+            "assets.view",
+            "dashboard.plant_manager.view",
+            "dashboard.view_bottlenecks",
+            "dashboard.chain_recovery.view",
+            "dashboard.chain_recovery.manage",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "alerts.view",
+            "alerts.dismiss",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view",
+            "forecasting.view",
+            "return_management.view",
+            "return_management.approve"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "production",
+      "method": "DELETE",
+      "path": "/mrp/machines/XKEbGkbgWk",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2022",
+      "body": ""
+    },
+    {
+      "actor": "production",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2023",
+      "body": ""
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/auth/user",
+      "status": 200,
+      "requestId": "LIVE-B12-T-2024",
+      "body": {
+        "data": {
+          "id": "zW1p05N0BA",
+          "name": "Juan Bautista",
+          "email": "maintenance@ogami.test",
+          "is_active": true,
+          "must_change_password": false,
+          "theme_mode": "system",
+          "sidebar_collapsed": false,
+          "role": {
+            "id": "ajzw1lb3eW",
+            "name": "Maintenance Technician",
+            "slug": "maintenance_tech"
+          },
+          "employee": {
+            "id": "ajzw1lb3eW",
+            "employee_no": "DEMO-0024",
+            "full_name": "Juan Bautista",
+            "department_id": "BnoNyGw56v"
+          },
+          "permissions": [
+            "hr.directory.view",
+            "attendance.view",
+            "leave.view",
+            "leave.create",
+            "payroll.view",
+            "mrp.machines.view",
+            "maintenance.view",
+            "maintenance.wo.create",
+            "maintenance.wo.complete",
+            "assets.view",
+            "hr.separation.view",
+            "hr.clearance.sign",
+            "dashboard.layout.reset",
+            "search.global",
+            "notifications.view",
+            "notifications.preferences.manage",
+            "dashboard.action_center.view",
+            "calendar.view",
+            "approvals.board.view"
+          ],
+          "features": [
+            "hr",
+            "attendance",
+            "leave",
+            "payroll",
+            "loans",
+            "accounting",
+            "inventory",
+            "purchasing",
+            "supply_chain",
+            "production",
+            "mrp",
+            "crm",
+            "quality",
+            "maintenance",
+            "recruitment",
+            "assets",
+            "return_management",
+            "search",
+            "notifications",
+            "b2b_portals",
+            "forecasting",
+            "budgeting"
+          ]
+        }
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "GET",
+      "path": "/maintenance/condition-readings/health-snapshot",
+      "status": 404,
+      "requestId": "LIVE-B12-T-2025",
+      "body": {
+        "message": "The requested resource was not found."
+      }
+    },
+    {
+      "actor": "maintenance",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": 204,
+      "requestId": "LIVE-B12-T-2026",
+      "body": ""
+    }
+  ]
+}

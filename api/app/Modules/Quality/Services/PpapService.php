@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
@@ -120,6 +121,9 @@ class PpapService
         if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
             throw new BusinessRuleException('Only submitted PPAP submissions can be reviewed.');
         }
+        if ((int) $ppap->submitted_by === (int) $by->id) {
+            throw new ForbiddenActionException('You cannot review a PPAP you submitted.');
+        }
         $ppap->update([
             'status'      => PpapStatus::UnderReview->value,
             'reviewed_by' => $by->id,
@@ -136,6 +140,9 @@ class PpapService
     {
         if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
             throw new BusinessRuleException('Only submitted/under-review PPAP submissions can be approved.');
+        }
+        if ((int) $ppap->submitted_by === (int) $by->id) {
+            throw new ForbiddenActionException('You cannot approve a PPAP you submitted.');
         }
         $unresolved = $ppap->elements()
             ->whereNotIn('status', [PpapElementStatus::Accepted->value, PpapElementStatus::NotApplicable->value])

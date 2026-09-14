@@ -109,6 +109,7 @@ final class MrpPlanningResponseSerializer
         return in_array($key, [
             'item_id', 'product_id', 'sales_order_line_id', 'so_id',
             'plan_id', 'mrp_plan_id', 'work_order_id', 'run_id',
+            'machine_id', 'mold_id',
             'source_id', 'actor_id',
         ], true);
     }

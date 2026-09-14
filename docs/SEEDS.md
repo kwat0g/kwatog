@@ -247,12 +247,12 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | work_order | [{order:1, role:"production_manager", label:"Approved by"}] |
 | ncr | [{order:1, role:"qc_head", label:"Reviewed by"}, {order:2, role:"qc_manager", label:"Approved by"}] |
 | maintenance_request | [{order:1, role:"maintenance_head", label:"Assigned by"}] |
-| asset_disposal | [{order:1, role:"finance_officer", label:"Reviewed by"}, {order:2, role:"system_admin", label:"Approved by"}] |
+| asset_disposal | [{order:1, role:"finance_officer", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |
 | payroll | [{order:1, role:"hr_officer", label:"Reviewed by"}, {order:2, role:"finance_officer", label:"Confirmed by"}] |
 | separation_clearance | [{order:1, role:"department_head"}, {order:2, role:"warehouse_head"}, {order:3, role:"maintenance_head"}, {order:4, role:"finance_officer"}, {order:5, role:"hr_officer"}] |
 | 8d_report | [{order:1, role:"qc_manager", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |
 
-## 13. DEMO ACCOUNTS (16, password: `password`)
+## 13. DEMO ACCOUNTS (17, password: `password`)
 
 | Email | Name | Role | Department |
 |---|---|---|---|
@@ -260,6 +260,7 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | vp@ogami.test | Kenji Watanabe | vice_president | EXEC |
 | hr@ogami.test | Maria Santos | hr_officer | HR |
 | finance@ogami.test | Ana Reyes | finance_officer | FIN |
+| finance2@ogami.test | Liza Gomez | finance_officer | FIN |
 | production@ogami.test | Ricardo Tanaka | production_manager | PROD |
 | ppc@ogami.test | Pedro Garcia | ppc_head | PPC |
 | purchasing@ogami.test | Elena Cruz | purchasing_officer | PUR |
@@ -276,6 +277,8 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 > because a purchasing-created PR/PO can never be approved by its creator
 > (self-approval guard) — Marco covers PO step 1 on Elena's documents.
 > system_admin is IT-only and sits in NO business approval chain.
+> `finance2@ogami.test` is a distinct same-role Finance checker for workflows
+> whose maker is `finance@ogami.test`; it does not add permissions.
 
 ## 14. DEMO PRODUCTS (8) with BOMs
 

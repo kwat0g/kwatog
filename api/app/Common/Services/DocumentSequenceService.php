@@ -20,6 +20,12 @@ use InvalidArgumentException;
  */
 class DocumentSequenceService
 {
+    /** Historical/demo imports can predate the sequence row. */
+    private const PERSISTED_SOURCES = [
+        'complaint' => ['customer_complaints', 'complaint_number'],
+        'ncr'       => ['non_conformance_reports', 'ncr_number'],
+    ];
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /** @return array<string, array{prefix: string, reset: 'monthly'|'yearly', pad: int}> */
@@ -84,17 +90,38 @@ class DocumentSequenceService
                     ->first();
             }
 
-            $next = (int) $row->last_number + 1;
+            $datePart = $reset === 'yearly'
+                ? sprintf('%04d', $year)
+                : sprintf('%04d%02d', $year, $month);
+            $persistedMax = $this->maxPersistedSequence($documentType, $prefix, $datePart);
+            $next = max((int) $row->last_number, $persistedMax) + 1;
             DB::table('document_sequences')
                 ->where('id', $row->id)
                 ->update(['last_number' => $next]);
 
-            $datePart = $reset === 'yearly'
-                ? sprintf('%04d', $year)
-                : sprintf('%04d%02d', $year, $month);
-
             return sprintf('%s-%s-%s', $prefix, $datePart, str_pad((string) $next, $pad, '0', STR_PAD_LEFT));
         });
+    }
+
+    private function maxPersistedSequence(string $documentType, string $prefix, string $datePart): int
+    {
+        $source = self::PERSISTED_SOURCES[$documentType] ?? null;
+        if ($source === null) {
+            return 0;
+        }
+
+        [$table, $column] = $source;
+        $start = $prefix.'-'.$datePart.'-';
+
+        return DB::table($table)
+            ->where($column, 'like', $start.'%')
+            ->pluck($column)
+            ->map(static function (mixed $number): int {
+                return preg_match('/(\d+)$/', (string) $number, $matches) === 1
+                    ? (int) $matches[1]
+                    : 0;
+            })
+            ->max() ?? 0;
     }
 
     /** @return array<int, string> */

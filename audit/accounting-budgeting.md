@@ -268,3 +268,153 @@ resolution, PostgreSQL concurrent behavior, browser layout behavior, deployed
 queue/scheduler recovery, or backup restoration because those would require
 execution environments and, in some cases, database-mutating tests. Those limits
 are explicitly covered by the roadmap’s open/verified status above.
+
+## Code-reading re-audit — 2026-09-14 (56e0d431)
+
+### Re-audit method and status
+
+This re-audit read the current checkout at `56e0d431` against the requested
+Accounting + Budgeting scope, the 2026-09-06 scope map, the prior report, and all
+requested project guidance. No application code, migration, test, registry, or
+configuration was changed. No tests or Docker commands were run. The only write
+is this appended report section.
+
+All seven prior findings were rechecked. None is closed in the current source:
+
+| ID | Current status | Changed status | Current evidence |
+|---|---|---|---|
+| ACC-BUD-001 | Unresolved | Expanded | Enforcement still performs a derived read with no atomic reservation or source claim. |
+| ACC-BUD-002 | Unresolved | Expanded | Budget and FiscalYear still lack enum casts; the sync-run status is also string constants without an enum/check contract. |
+| ACC-BUD-003 | Unresolved | Unchanged | Budget list, fiscal-year, and options query failures still have no independent rendered error state or stale indicator. |
+| ACC-BUD-004 | Unresolved | Unchanged | Budget create/edit still uses local state rather than RHF/Zod and does not map server validation to fields. |
+| ACC-BUD-005 | Unresolved | Expanded | Budget UI still converts decimal strings to numbers; BudgetLineItem also exposes a float-returning money helper. |
+| ACC-BUD-006 | Unresolved | Unchanged | Budget-vs-actual still has a plain failure message and no successful-empty or sync-status failure recovery state. |
+| ACC-BUD-007 | Unresolved | Unchanged | Budget detail lifecycle mutations still invalidate only the detail query. |
+
+No prior finding changed to a resolved status. Findings below are only the
+materially unresolved or new evidence found in this pass.
+
+### ACC-BUD-001
+
+- **Category:** Risk
+- **Severity:** High
+- **Status:** Unresolved, with current approval-path evidence
+- **Location:** `api/app/Modules/Accounting/Services/BudgetEnforcementService.php:28-57,101-111,183-210`; directly relevant call site `api/app/Modules/Purchasing/Services/PurchaseOrderService.php:539-545`
+- **Evidence/reproduction:** `checkAvailability()` hydrates derived GL/PO totals and compares the requested amount, but never locks the budget aggregate, reserves the amount, or records an idempotent source claim. `assess()` persists only warning metadata. PO approval calls `enforce()` outside the approval transaction, so two concurrent approval requests can read the same available amount and both pass before either PO becomes an open commitment.
+- **Reproduction:** Set one department budget's remaining amount below the sum of two pending PO amounts, enable `budgeting.enforcement_mode=block`, and approve both POs concurrently. The read-only checks can both pass; the subsequent open-PO commitment total can exceed the approved allocation. `BudgetEnforcementWiringTest` covers serial allow/block behavior, not this reservation race.
+- **Estimated effort:** L
+- **Cross-module note:** The authoritative reservation must be owned by the Purchasing source transaction and Accounting consumption model together; a UI warning or a second client-side budget state will not close this boundary.
+
+### ACC-BUD-002
+
+- **Category:** Bad practice
+- **Severity:** Medium
+- **Status:** Unresolved, with sync-run status included in the evidence
+- **Location:** `api/app/Modules/Accounting/Models/Budget.php:41-44`; `api/app/Modules/Accounting/Models/FiscalYear.php:30-33`; `api/app/Modules/Accounting/Models/BudgetActualsSyncRun.php:13-16,30-37`
+- **Evidence/reproduction:** `Budget` has no enum cast for `budget_type` or `status`, `FiscalYear` has no enum cast or FiscalYear status enum, and `BudgetActualsSyncRun` stores four status strings as constants with no enum cast. Services and resources therefore compare and label raw strings (`BudgetService.php:22-30,360-364`; `BudgetResource.php:32-33`; `FiscalYearResource.php:20-21`).
+- **Reproduction:** Hydrate a Budget, FiscalYear, or BudgetActualsSyncRun from a persisted row and inspect its status/type. It is a string, so ordinary model assignment can bypass the typed model contract even where a migration check exists for only part of the lifecycle.
+- **Estimated effort:** S
+- **Cross-module note:** Preserve the legacy `approved` budget status while introducing casts; Purchasing consumption currently treats both `approved` and `active` as live statuses.
+
+### ACC-BUD-003
+
+- **Category:** Gap
+- **Severity:** Medium
+- **Status:** Unresolved
+- **Location:** `spa/src/pages/budgeting/index.tsx:30-64,68-83,191-220`
+- **Evidence/reproduction:** Only the overview query's error is rendered. `fiscalYearsQuery.error`, `budgetListQuery.error`, and the options query error are not rendered. A failed budget list reaches the same `No budgets found` branch as a successful empty list, and none of these queries uses `placeholderData` or exposes a stale/refetch state when filters change.
+- **Reproduction:** Return HTTP 500 from `/budgets`, `/budgets/fiscal-years`, or `/budgets/options` while the overview succeeds. The page can show an empty budget panel or infinite threshold fallbacks instead of a retryable error and can present old/new query transitions without stale context.
+- **Estimated effort:** S
+
+### ACC-BUD-004
+
+- **Category:** Gap
+- **Severity:** Medium
+- **Status:** Unresolved
+- **Location:** `spa/src/pages/budgeting/create.tsx:38-55,92-117,127-155`
+- **Evidence/reproduction:** The form remains local state plus a hand-written `submit()`; it is not React Hook Form + Zod. Errors from budget, accounts, departments, and options queries are silent. `reportMutationError` receives the mutation error without field-level mapping, and the submit button's `disabled` expression omits `saveMutation.isPending` even though it shows a loading state.
+- **Reproduction:** Return a 422 containing `line_items.0.account_id` or another line-specific error and observe no field error. Double-click Create during a slow save; the page-level disabled expression does not prevent a second mutation request while the first is pending.
+- **Estimated effort:** M
+
+### ACC-BUD-005
+
+- **Category:** Risk
+- **Severity:** Medium
+- **Status:** Unresolved, with a backend helper also violating the decimal contract
+- **Location:** `spa/src/pages/budgeting/index.tsx:144-147`; `spa/src/pages/budgeting/create.tsx:122-124`; `spa/src/pages/budgeting/departments.tsx:61-65,100`; `spa/src/pages/budgeting/budget-vs-actual.tsx:57-74`; `api/app/Modules/Accounting/Models/BudgetLineItem.php:51-60`
+- **Evidence/reproduction:** Budget pages parse API decimal strings with `Number()` for totals, chart values, percentages, and absolute values. The backend `BudgetLineItem::monthAmount()` also returns a decimal column as `float`. These are presentation paths today, but they can drift at cent-sensitive or large values and contradict the repository's decimal-string money contract.
+- **Reproduction:** Supply several line/month values such as `0.10`, `0.20`, and large 15,2 values, then compare client-derived totals/percentages with the API's exact `total_*`, `variance`, and `utilization_pct` strings/numbers. The client calculations need not equal the server's exact arithmetic.
+- **Estimated effort:** M
+
+### ACC-BUD-006
+
+- **Category:** Gap
+- **Severity:** Medium
+- **Status:** Unresolved
+- **Location:** `spa/src/pages/budgeting/budget-vs-actual.tsx:39-44,61-74,95-116`
+- **Evidence/reproduction:** Report failure renders only plain red text with no retry action. A successful `{ rows: [] }` response renders the report shell and empty tables without a contextual empty state. `syncStatusQuery.error` is not rendered, so a failed status request is indistinguishable from no status.
+- **Reproduction:** Fail `/budgets/budget-vs-actual` and observe no retry control; return zero rows and observe no no-data explanation; fail `/budgets/sync-actuals/status` and observe no status error or manual recovery path.
+- **Estimated effort:** S
+
+### ACC-BUD-007
+
+- **Category:** Risk
+- **Severity:** Low
+- **Status:** Unresolved
+- **Location:** `spa/src/pages/budgeting/detail.tsx:69-97`; list/summary consumers `spa/src/pages/budgeting/index.tsx:43-57`
+- **Evidence/reproduction:** Submit, approve, and close each invalidate only `['budget', id]`. They do not invalidate `['budgets', ...]` or `['budget-overview', ...]`, so the overview/list can retain the old status and aggregate after a successful detail action.
+- **Reproduction:** Open the overview and a budget detail, complete a lifecycle action in the detail, then return to the overview without a full reload. The list and summary can show stale data until an unrelated refetch or stale-time expiry.
+- **Estimated effort:** S
+
+### ACC-BUD-008
+
+- **Category:** Risk
+- **Severity:** Medium
+- **Location:** `spa/src/pages/accounting/invoices/create.tsx:28-34,84-89,148-150`; `spa/src/pages/accounting/bills/create.tsx:29-36,167-172,258-260`; `spa/src/pages/accounting/credit-notes/index.tsx:39-42,149-153`
+- **Evidence/reproduction:** Accounting money/quantity inputs use `z.coerce.number()`, calculate subtotals/VAT/totals with JavaScript arithmetic, and reconstruct API values with `String(number)`. The API resources and backend services use exact decimal strings, so the form preview and submitted decimal representation can diverge at binary floating-point rounding boundaries.
+- **Reproduction:** Enter two-decimal quantities and prices whose product lands on a half-cent after multiplication, or many cent-sensitive lines, and compare the form's `toFixed(2)` subtotal/VAT/total with the exact totals returned by the server. The client is recomputing a financial result with floats instead of displaying server/exact-decimal arithmetic.
+- **Estimated effort:** M
+
+### ACC-BUD-009
+
+- **Category:** Stuck process
+- **Severity:** Medium
+- **Location:** `spa/src/pages/accounting/credit-notes/detail.tsx:51-54,99-100`
+- **Evidence/reproduction:** Credit-note detail has no `refetch` handler and collapses both a failed request and a missing record into `Credit note not found.` A transient API failure therefore removes the operator's only detail-page recovery action and misstates the cause.
+- **Reproduction:** Make `/accounting/credit-notes/{id}` return a transient 500. The page shows the not-found text with no retry button, so the operator must leave or manually reload before finalizing or applying the credit.
+- **Estimated effort:** S
+
+### ACC-BUD-010
+
+- **Category:** Bad practice
+- **Severity:** Medium
+- **Location:** `spa/src/types/accounting.ts:116-124,258-266`; corresponding resources `api/app/Modules/Accounting/Resources/BillItemResource.php:15` and `api/app/Modules/Accounting/Resources/InvoiceItemResource.php:15`
+- **Evidence/reproduction:** `BillItem.id` and `InvoiceItem.id` are declared as `number` in the SPA types, while both API resources return `$this->hash_id`, a string. This contradicts the project-wide HashID contract and gives consumers an incorrect compile-time type for IDs used in row keys, links, and follow-up requests.
+- **Reproduction:** Treat a typed bill/invoice item response as returned by the API and assign `items[0].id` to a `string`, or pass it to an API helper requiring a string. TypeScript reports the wrong contract even though the runtime response is a hash string; numeric assumptions can also break consumers.
+- **Estimated effort:** S
+
+### ACC-BUD-011
+
+- **Category:** Stuck process
+- **Severity:** Medium
+- **Location:** `spa/src/pages/accounting/credit-notes/detail.tsx:58-70`
+- **Evidence/reproduction:** The credit-note application dialog loads open invoices or bills once with `per_page: 100`, filters them client-side, and has no search or pagination. A valid target after the first 100 records is not presented, and the apply endpoint has no alternate UI path on this page.
+- **Reproduction:** Give one customer or vendor more than 100 open documents, with the intended target after the first page. Open Apply credit and inspect the selector; the target is absent, leaving Finance unable to apply the credit to that document from the supported workflow.
+- **Estimated effort:** M
+
+### Clean areas confirmed
+
+- Journal-entry creation, update, posting, reversal, maker-checker, closed-period gating, source-reference validation, exact money arithmetic, and aggregate locking remain materially controlled by `JournalEntryService` and its state machine.
+- Accounting period close/reopen and concurrent first-row creation retain the service-level locking and duplicate-recovery controls; the re-audit found no source regression.
+- Budget create/update/submit/approve/close transactions, leaf-account validation, duplicate line uniqueness, non-negative database invariants, and exact server-side budget totals remain present.
+- Budget actuals synchronization retains the durable outbox/run record, same-minute deduplication, bounded job processing, failure rethrow/status recording, and monthly scheduler registration at `api/routes/console.php:338-343`.
+- Accounting API resources reviewed for journal entries, bills, invoices, credit notes, accounts, vendors, customers, budgets, and fiscal years expose hashed integer IDs; the new ID-contract finding is limited to two SPA type declarations.
+- Accounting and budgeting route files remain lazy-loaded and guarded by the expected module and permission layers; no bearer-token or local-storage authentication issue was found in this scope.
+- The sampled Accounting list/report pages continue to provide skeleton, retryable error, contextual empty, placeholder/stale, semantic-status, and token-based rendering states; the exceptions recorded above are the credit-note detail and budgeting surfaces specifically identified.
+
+### Final statement
+
+This is a read-only code-reading re-audit of commit `56e0d431`. No application
+code, migrations, tests, registry, scheduler configuration, or other source files
+were changed. The only change is this appended section in
+`audit/accounting-budgeting.md`.
