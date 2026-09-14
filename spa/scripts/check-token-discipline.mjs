@@ -94,7 +94,7 @@ const files = walk('src').sort();
 const violations = [];
 
 for (const file of files) {
-  const rel = relative('.', file);
+  const rel = relative('.', file).replaceAll('\\', '/');
   if (EXEMPT.some((re) => re.test(rel))) continue;
 
   const lines = readFileSync(file, 'utf8').split('\n');

@@ -86,14 +86,23 @@ function collectRequests() {
 }
 
 function laravelRoutes() {
-  const result = spawnSync(
+  const options = { cwd: repositoryDirectory, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 };
+  const dockerResult = spawnSync(
     'docker',
     ['compose', 'exec', '-T', 'api', 'php', 'artisan', 'route:list', '--json'],
-    { cwd: repositoryDirectory, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 },
+    options,
   );
+  const result = dockerResult.error
+    ? spawnSync(
+        process.env.PHP_BIN || 'php',
+        ['artisan', 'route:list', '--json'],
+        { ...options, cwd: join(repositoryDirectory, 'api') },
+      )
+    : dockerResult;
 
   if (result.status !== 0) {
-    process.stderr.write(result.stderr || result.stdout);
+    const diagnostic = result.stderr || result.stdout || result.error?.message || 'unknown route-list failure';
+    process.stderr.write(diagnostic);
     throw new Error('Unable to read Laravel routes from the running API container.');
   }
 

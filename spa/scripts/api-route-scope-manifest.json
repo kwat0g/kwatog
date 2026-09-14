@@ -30,5 +30,7 @@
   { "method": "POST", "path": "/purchasing/pr-templates", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
   { "method": "PUT", "path": "/purchasing/pr-templates/{value}", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
   { "method": "DELETE", "path": "/purchasing/pr-templates/{value}", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
-  { "method": "PATCH", "path": "/purchasing/pr-templates/{value}/restore", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." }
+  { "method": "PATCH", "path": "/purchasing/pr-templates/{value}/restore", "status": "scope_cut", "reason": "Purchase-request templates are a deferred authoring surface and are not reachable in the current release." },
+  { "method": "POST", "path": "/hr/employee-skills/{value}", "status": "method_override", "reason": "The SPA uses POST with _method=PATCH for certificate uploads; Laravel resolves it to the existing PATCH employee-skill route." },
+  { "method": "POST", "path": "/hr/employee-trainings/{value}/complete", "status": "method_override", "reason": "The SPA uses POST with _method=PATCH for certificate uploads; Laravel resolves it to the existing PATCH training-completion route." }
 ]
