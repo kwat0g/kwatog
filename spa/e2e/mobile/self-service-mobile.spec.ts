@@ -41,7 +41,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await expect(nav.getByRole('link', { name: 'DTR' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Leave' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Payslip' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Me' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Me', exact: true })).toBeVisible();
     // Some self-service tile/content
     await expect(page.getByText(/leave|payslip|dtr|profile/i).first()).toBeVisible();
   });
@@ -66,12 +66,12 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await loginAs(page, 'employee', '/self-service/me');
     const bp = new BasePage(page);
     await expect(bp.deniedPageText).not.toBeVisible();
-    await expect(page.getByText('Manuel Cruz')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Manuel Cruz', exact: true })).toBeVisible();
   });
 
   test('self-service /leave renders leave balance and file button', async ({ page }) => {
     // Mock leave types + balances
-    await page.route('**/api/v1/leaves/types', async (route) => {
+    await page.route('**/api/v1/leaves/types*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: [{ id: 'lt1', code: 'VL', name: 'Vacation Leave' }],
       })});
@@ -97,7 +97,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     // File leave button should be visible (employee has leave.create)
     await expect(selfPage.fileLeaveButton).toBeVisible();
     await selfPage.fileLeaveButton.click();
-    await page.getByLabel('Leave type').selectOption('lt1');
+    await page.getByLabel('Leave type').selectOption({ label: 'Vacation Leave' });
     // The selected leave type shows its current balance.
     await expect(page.getByText(/12\.00/)).toBeVisible();
   });
@@ -163,7 +163,7 @@ test.describe('Self-service portal — mobile (390px)', () => {
     await loginAs(page, 'employee', '/self-service/profile');
     const bp = new BasePage(page);
     await expect(bp.deniedPageText).not.toBeVisible();
-    await expect(page.getByText('Manuel Cruz')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Manuel Cruz', exact: true })).toBeVisible();
   });
 
   test('profile makes update-request failure explicit', async ({ page }) => {

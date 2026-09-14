@@ -104,7 +104,7 @@ test.describe('scheduled export creation', () => {
     // The modal must read the module's real column contract, not a local list.
     await expect(page.getByText('New scheduled export')).toBeVisible();
     await expect(page.getByText('Employee No.')).toBeVisible();
-    await expect(page.getByText('Department')).toBeVisible();
+    await expect(page.getByText('Department', { exact: true })).toBeVisible();
 
     await page.getByLabel('Schedule name').fill('Active employees — daily');
     await page.getByLabel('Recipients').fill('hr@ogami.test');
