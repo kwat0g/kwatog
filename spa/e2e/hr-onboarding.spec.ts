@@ -88,6 +88,13 @@ test('HR can complete the department-team onboarding attestation from employee d
 
   await loginAs(page, 'hr', `/hr/employees/${EMPLOYEE_ID}`);
 
+  // Register this mutation after loginAs so it wins over the generic API
+  // fallback route installed by the shared fixture.
+  await page.route(`**/api/v1/hr/employees/${EMPLOYEE_ID}/onboarding/department-team-notified`, async (route) => {
+    attestationCalled = true;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(completed) });
+  });
+
   await expect(page.getByText('Dept Team Notified')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark team notified' })).toBeVisible();
 

@@ -376,7 +376,7 @@ test.describe('Payroll Period Lifecycle', () => {
     await expect(page.getByText('Finalized', { exact: true }).first()).toBeVisible({ timeout: 5000 });
 
     // Bank file download action is present (canBankFile = true when finalized).
-    await expect(page.getByRole('button', { name: /Bank file/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Generate & download' })).toBeVisible();
 
     // Employee count stat card confirms 45 employees processed.
     const employeeStat = page.getByText('Employees', { exact: true }).first().locator('..');
