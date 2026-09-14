@@ -192,7 +192,8 @@ class NotificationCatalogTest extends TestCase
             }
 
             $source   = (string) file_get_contents($file->getPathname());
-            $relative = str_replace($appPath.'/', '', $file->getPathname());
+            $normalizedAppPath = str_replace('\\', '/', $appPath);
+            $relative = str_replace($normalizedAppPath.'/', '', str_replace('\\', '/', $file->getPathname()));
 
             if (preg_match('/->notifications\(\)\s*->\s*create\(/', $source)) {
                 $offences[] = $relative.' — use NotificationService::send()';

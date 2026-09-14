@@ -171,6 +171,8 @@ final class NotificationCatalog
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
                 ['key' => 'chain.delivery_confirmed', 'label' => 'Delivery confirmed', 'description' => 'A delivery has been confirmed and an invoice draft was created.'],
                 ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],
+                ['key' => 'customer.so_responded', 'label' => 'Customer sales order response', 'description' => 'A customer responded to a sales order confirmation request.'],
+                ['key' => 'customer.rma_created', 'label' => 'Customer return requested', 'description' => 'A customer submitted a return request that needs review.'],
             ]],
             ['title' => 'Chain 2 · Procure to Pay', 'hint' => 'Requests, purchase orders, and goods receipts', 'types' => [
                 ['key' => 'inventory.grn_received', 'label' => 'Goods receipt created', 'description' => 'Goods have been received against a purchase order.'],
@@ -183,6 +185,8 @@ final class NotificationCatalog
                 ['key' => 'purchasing.supplier_deterioration', 'label' => 'Supplier performance dropped', 'description' => 'A supplier’s rating fell sharply against its recent baseline.'],
                 ['key' => 'supplier_listing_submitted', 'label' => 'Supplier listing submitted', 'description' => 'A supplier submitted an item listing through the B2B portal and it needs purchasing review.'],
                 ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
+                ['key' => 'supplier.po_responded', 'label' => 'Supplier purchase order response', 'description' => 'A supplier responded to a purchase order confirmation request.'],
+                ['key' => 'portal.order_awaiting_review', 'label' => 'Portal order awaiting review', 'description' => 'A self-service order submission is waiting for internal review.'],
             ]],
             ['title' => 'Chain 3 · Hire to Retire', 'hint' => 'Leave, overtime, loans, and payroll', 'types' => [
                 ['key' => 'leave.submitted', 'label' => 'Leave request submitted', 'description' => 'An employee has submitted a leave request for your approval.'],
