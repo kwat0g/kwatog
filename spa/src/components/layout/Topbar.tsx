@@ -58,7 +58,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  }, []);
 
  return (
- <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-4 gap-5">
+  <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-4 gap-2 sm:gap-5 overflow-hidden">
  <Button
  variant="ghost"
  size="sm"
@@ -69,8 +69,8 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  className="text-muted hover:text-primary"
  />
 
- <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
- <BrandLogo invertOnDark alt="Ogami ERP" className="h-7" />
+  <Link to="/dashboard" className="flex min-w-0 items-center gap-2 shrink-0">
+  <BrandLogo invertOnDark alt="Ogami ERP" className="h-7 max-w-[7rem] sm:max-w-none" />
  <span className="text-sm font-medium text-primary hidden sm:inline">{contact?.legal_name ?? '—'}</span>
  </Link>
 
