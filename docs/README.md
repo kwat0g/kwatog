@@ -31,6 +31,7 @@ external-evidence gate (F-030).
 - `USER-MANUAL.md` — user-facing workflows.
 - `DEMO-SCRIPT.md` — live defense walkthrough.
 - `DEFENSE-TRACEABILITY.md` — adviser requirement-to-implementation mapping.
+- `SUPPLIER-RFQ-BIDDING-PLAN.md` - approved supplier RFQ bidding requirements and implementation plan.
 - `defense-screenshots/` — current defense evidence.
 - `atelier-baseline/` — retained before/after visual baseline.
 
