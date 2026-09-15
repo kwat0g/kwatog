@@ -95,7 +95,7 @@ class GrnService
             'qcInspection:id,inspection_number,status,stage',
             'journalEntry:id,entry_number,status',
             'receiver:id,name,role_id', 'acceptor:id,name,role_id',
-            'bills:id,bill_number,status,total_amount',
+            'bills:id,goods_receipt_note_id,bill_number,status,total_amount',
         ]);
     }
 
@@ -691,6 +691,18 @@ class GrnService
             if ($lockedGrn->status !== GrnStatus::PendingQc) {
                 throw new BusinessRuleException('Only pending_qc GRNs can be rejected.');
             }
+            $lockedGrn->loadMissing('qcInspection');
+            if ($lockedGrn->qcInspection && ! in_array(
+                $lockedGrn->qcInspection->status?->value,
+                ['passed', 'failed', 'cancelled'],
+                true,
+            )) {
+                $this->resolveInspectionService()?->cancel(
+                    $lockedGrn->qcInspection,
+                    'Logistics rejection — no quality issue found',
+                    $by,
+                );
+            }
             $this->reversePoReceipt($lockedGrn, $by);
             $lockedGrn->update([
                 'status' => GrnStatus::Rejected,
@@ -973,6 +985,11 @@ class GrnService
         User $by,
     ): array {
         return DB::transaction(function () use ($po, $items, $meta, $qcData, $by) {
+            if (in_array($qcData['disposition'] ?? null, ['use_under_concession', 'partial_accept'], true)) {
+                throw new BusinessRuleException(
+                    'QC disposition is not implemented for single-screen receiving. Use the GRN partial-accept or supplier-return workflow instead.'
+                );
+            }
             if (
                 in_array($qcData['result'] ?? null, ['passed', 'passed_with_remarks', 'failed'], true)
                 && ! $by->hasPermission('quality.inspections.manage')

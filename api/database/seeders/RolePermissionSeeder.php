@@ -175,6 +175,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.bills.three_way_override', 'name' => 'Approve 3-Way-Match Overrides'],
                 ['slug' => 'accounting.bills.update',         'name' => 'Update / Cancel Bills'],
                 ['slug' => 'accounting.bills.pay',            'name' => 'Pay Bills'],
+                ['slug' => 'accounting.bills.payment_approve', 'name' => 'Approve Bill Payments'],
                 ['slug' => 'accounting.bills.void_payment',   'name' => 'Void Bill Payments'],
                 // Customers & Invoices (AR)
                 ['slug' => 'accounting.customers.view',       'name' => 'View Customers'],
@@ -623,6 +624,7 @@ class RolePermissionSeeder extends Seeder
                         'accounting.view',
                         'accounting.coa.view',
                         'accounting.bills.view',
+                        'accounting.bills.payment_approve',
                         'accounting.invoices.view',
                         'accounting.statements.view',
                         'budgeting.view',

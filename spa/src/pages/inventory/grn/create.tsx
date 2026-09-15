@@ -45,6 +45,14 @@ interface FormErrors {
  itemErrors: Record<number, { quantity?: string; location?: string }>;
 }
 
+const RECEIVABLE_PO_STATUSES = new Set([
+  'approved',
+  'sent',
+  'acknowledged',
+  'supplier_proposed',
+  'partially_received',
+]);
+
 export default function CreateGrnPage() {
  const nav = useNavigate();
  const [search] = useSearchParams();
@@ -54,11 +62,13 @@ export default function CreateGrnPage() {
  const [confirmOpen, setConfirmOpen] = useState(false);
  const [errors, setErrors] = useState<FormErrors>({ itemErrors: {} });
 
- const { data: openPos } = useQuery({
- queryKey: ['purchasing', 'purchase-orders', 'open-for-grn'],
- queryFn: () => purchaseOrdersApi.list({ status: 'sent', per_page: 100 }),
- });
- const poList = openPos?.data ?? [];
+  const { data: openPos } = useQuery({
+  queryKey: ['purchasing', 'purchase-orders', 'open-for-grn'],
+  queryFn: () => purchaseOrdersApi.list({ per_page: 100 }),
+  });
+  const poList = (openPos?.data ?? []).filter((purchaseOrder) =>
+    RECEIVABLE_PO_STATUSES.has(purchaseOrder.status),
+  );
 
  const { data: po } = useQuery({
  queryKey: ['purchasing', 'purchase-orders', poId],

@@ -36,6 +36,17 @@ class BillPaymentResource extends JsonResource
                 'status' => $this->voidReversalJournalEntry->status?->value,
             ] : null),
             'replacement_payment_id' => $this->whenLoaded('replacementPayment', fn () => $this->replacementPayment?->hash_id),
+            'approval_records' => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($record) => [
+                'step_order' => (int) $record->step_order,
+                'role_slug' => $record->role_slug,
+                'action' => $record->action,
+                'approver' => $record->approver ? [
+                    'id' => $record->approver->hash_id,
+                    'name' => $record->approver->name,
+                ] : null,
+                'remarks' => $record->remarks,
+                'acted_at' => optional($record->acted_at)->toIso8601String(),
+            ])->values()),
             'created_at'       => optional($this->created_at)->toIso8601String(),
         ];
     }

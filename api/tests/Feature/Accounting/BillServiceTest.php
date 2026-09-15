@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
@@ -13,6 +14,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -26,7 +28,7 @@ class BillServiceTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
-        $this->seed(ChartOfAccountsSeeder::class);
+        $this->seed([ChartOfAccountsSeeder::class, WorkflowSeeder::class]);
     }
 
     private function newUser(): User
@@ -45,6 +47,16 @@ class BillServiceTest extends TestCase
             'exception_evidence' => 'Approved service completion report for this test bill.',
             'exception_approved' => true,
         ];
+    }
+
+    private function approvePayment(BillService $service, \App\Modules\Accounting\Models\Bill $bill, \App\Modules\Accounting\Models\BillPayment $payment): \App\Modules\Accounting\Models\BillPayment
+    {
+        $financeChecker = User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]);
+        $service->approvePayment($bill->fresh(), $payment->fresh(), $financeChecker);
+
+        $vp = User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]);
+
+        return $service->approvePayment($bill->fresh(), $payment->fresh(), $vp);
     }
 
     public function test_bill_creates_balanced_je_and_recording_payment_settles_balance(): void
@@ -80,15 +92,19 @@ class BillServiceTest extends TestCase
         $this->assertSame((string) $je->total_debit, (string) $je->total_credit);
         $this->assertSame('posted', $je->status->value);
 
-        // Pay half.
+        // Request half; approval posts it.
         $payment = $svc->recordPayment($bill->fresh(), [
             'cash_account_id'  => $cashId,
             'payment_date'     => '2026-04-12',
             'amount'           => '2800.00',
             'payment_method'   => PaymentMethod::BankTransfer->value,
             'reference_number' => 'BANK-001',
+            'idempotency_key'  => 'bill-payment-first',
         ], $user);
 
+        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
+        $this->assertSame('0.00', (string) $bill->fresh()->amount_paid);
+        $payment = $this->approvePayment($svc, $bill, $payment);
         $bill->refresh();
         $this->assertSame('2800.00', (string) $bill->amount_paid);
         $this->assertSame('2800.00', (string) $bill->balance);
@@ -101,7 +117,11 @@ class BillServiceTest extends TestCase
             'payment_date'     => '2026-04-15',
             'amount'           => '2800.00',
             'payment_method'   => PaymentMethod::BankTransfer->value,
+            'idempotency_key'  => 'bill-payment-second',
         ], $user);
+
+        $secondPayment = \App\Modules\Accounting\Models\BillPayment::query()->latest('id')->firstOrFail();
+        $this->approvePayment($svc, $bill, $secondPayment);
 
         $bill->refresh();
         $this->assertSame('5600.00', (string) $bill->amount_paid);
@@ -224,8 +244,11 @@ class BillServiceTest extends TestCase
             'payment_date'    => '2026-04-11',
             'amount'          => '40.00',
             'payment_method'  => PaymentMethod::Cash->value,
+            'idempotency_key' => 'bill-payment-locked',
         ], $user);
 
+        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
+        $this->approvePayment($svc, $bill, $payment);
         $row = DB::table('bills')->where('id', $bill->id)->first();
         $this->assertSame('100.00', $row->amount_paid);
         $this->assertSame('0.00', $row->balance);
@@ -261,6 +284,8 @@ class BillServiceTest extends TestCase
 
         $this->assertSame($first->id, $replay->id);
         $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+        $this->approvePayment($service, $bill, $first);
         $this->assertSame(1, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
         $this->assertSame('40.00', (string) $bill->refresh()->amount_paid);
     }

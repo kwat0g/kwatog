@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\ApprovalService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -51,6 +52,7 @@ class BillService
         private readonly PostingAccountResolver $postingAccounts,
         private readonly \App\Common\Services\DocumentSequenceService $sequences,
         private readonly \App\Common\Services\SettingsService $settings,
+        private readonly ApprovalService $approvals,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -97,6 +99,7 @@ class BillService
             'payments.journalEntry:id,entry_number,status',
             'payments.voidReversalJournalEntry:id,entry_number,status',
             'payments.voidedBy:id,name,role_id',
+            'payments.approvalRecords.approver:id,name,role_id',
             'payments.replacementPayment:id,bill_id,amount,status',
             'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // role_id required so User's $with=['role'] eager-load can resolve.
@@ -303,8 +306,12 @@ class BillService
             if (! $lockedGrn->status->isBillable()) {
                 return null; // only receipts with accepted quantity stage a bill
             }
-            if (Bill::query()->where('goods_receipt_note_id', $lockedGrn->id)->exists()) {
-                return null; // idempotent — one draft per GRN
+            $existingBill = Bill::query()
+                ->where('goods_receipt_note_id', $lockedGrn->id)
+                ->orderByDesc('id')
+                ->first();
+            if ($existingBill && $existingBill->status !== BillStatus::Draft) {
+                return null; // a posted bill is immutable; no duplicate is staged
             }
 
             $lockedGrn->loadMissing(['vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem']);
@@ -374,8 +381,7 @@ class BillService
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
-            $bill = Bill::create([
-                'bill_number' => $this->sequences->generate('bill'),
+            $billData = [
                 'vendor_id' => $vendor->id,
                 'purchase_order_id' => $po->id,
                 'goods_receipt_note_id' => $lockedGrn->id,
@@ -389,11 +395,22 @@ class BillService
                 'amount_paid' => Money::zero(),
                 'balance' => $total,
                 'status' => BillStatus::Draft,
-                'created_by' => $by->id,
                 'has_variances' => $hasVariances,
                 'three_way_match_snapshot' => $matchSnapshot,
                 'remarks' => "Auto-created from GRN {$lockedGrn->grn_number}. Review and post to record the payable.{$reviewNote}",
-            ]);
+            ];
+
+            if ($existingBill) {
+                $existingBill->forceFill($billData)->save();
+                $existingBill->items()->delete();
+                $bill = $existingBill;
+            } else {
+                $bill = Bill::create([
+                    'bill_number' => $this->sequences->generate('bill'),
+                    ...$billData,
+                    'created_by' => $by->id,
+                ]);
+            }
 
             foreach ($rows as $row) {
                 BillItem::create(array_merge($row, ['bill_id' => $bill->id]));
@@ -564,7 +581,7 @@ class BillService
                     ->where('idempotency_key', $data['idempotency_key'])
                     ->first();
                 if ($existing) {
-                    return $existing->fresh(['cashAccount', 'journalEntry']);
+                    return $existing->fresh(['cashAccount', 'journalEntry', 'approvalRecords']);
                 }
             }
             if ($lockedBill->status === BillStatus::Cancelled) {
@@ -617,46 +634,115 @@ class BillService
                 'reference_number' => $data['reference_number'] ?? null,
                 'idempotency_key' => $data['idempotency_key'] ?? null,
                 'created_by' => $by->id,
-                'status' => BillPaymentStatus::Posted,
+                'status' => BillPaymentStatus::PendingApproval,
             ]);
+            $this->approvals->submit($payment, 'bill_payment', $amount);
 
-            $apId = $this->accountId($this->accounts->ap());
-            $je = $this->journals->create([
-                'date' => $payment->payment_date->toDateString(),
-                'description' => "Payment for Bill {$lockedBill->bill_number}",
-                'reference_type' => 'bill_payment',
-                'reference_id' => $payment->id,
-                'lines' => [
-                    ['account_id' => $apId,           'debit' => $amount, 'credit' => '0.00', 'description' => 'AP settled'],
-                    ['account_id' => $cashAccountId,  'debit' => '0.00',  'credit' => $amount, 'description' => 'Cash disbursed'],
-                ],
-            ], $by);
-            $je = $this->journals->post($je, $by);
-
-            $payment->update(['journal_entry_id' => $je->id]);
-
-            // Update bill totals.
-            $newPaid = Money::add((string) $lockedBill->amount_paid, $amount);
-            $newBalance = Money::sub((string) $lockedBill->total_amount, $newPaid);
-            $newStatus = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
-
-            $lockedBill->update([
-                'amount_paid' => $newPaid,
-                'balance' => $newBalance,
-                'status' => $newStatus,
-            ]);
-
-            // 2026-08-08 — final P2P link: broadcast the chain step so the
-            // bill detail page (and any chain view) advances in real time.
-            // Partial payments move the chain to 'partial'; the settling
-            // payment completes it ('paid'). The outbox dispatcher waits for
-            // commit before publishing to the channel consumer.
-            $fresh = $lockedBill->fresh();
-            app(ChainBroadcaster::class)
-                ->broadcastFor($fresh, (string) $fresh->status?->value, $by);
-
-            return $payment->fresh(['cashAccount', 'journalEntry']);
+            return $payment->fresh(['cashAccount', 'approvalRecords']);
         });
+    }
+
+    public function approvePayment(Bill $bill, BillPayment $payment, User $by): BillPayment
+    {
+        return DB::transaction(function () use ($bill, $payment, $by): BillPayment {
+            $lockedBill = Bill::query()->lockForUpdate()->findOrFail($bill->id);
+            $lockedPayment = BillPayment::query()->lockForUpdate()->findOrFail($payment->id);
+            $this->assertPaymentBelongsToBill($lockedPayment, $lockedBill);
+            if ($lockedPayment->status !== BillPaymentStatus::PendingApproval) {
+                throw new BusinessRuleException('Only pending payment requests can be approved.');
+            }
+
+            $this->approvals->approve($lockedPayment, $by);
+            $lockedPayment->refresh();
+            if (! $this->approvals->isFullyApproved($lockedPayment)) {
+                return $lockedPayment->fresh(['cashAccount', 'approvalRecords']);
+            }
+
+            $this->assertPaymentBillIsOpen($lockedBill, (string) $lockedPayment->amount);
+            $cashAccount = Account::query()->lockForUpdate()->findOrFail($lockedPayment->cash_account_id);
+            if (! $cashAccount->is_active || $cashAccount->type !== AccountType::Asset || ! str_starts_with($cashAccount->code, '10')) {
+                throw new BusinessRuleException('Payments must use an active cash or bank asset account.');
+            }
+
+            return $this->postApprovedPayment($lockedBill, $lockedPayment, $by);
+        });
+    }
+
+    public function rejectPayment(Bill $bill, BillPayment $payment, User $by, string $remarks): BillPayment
+    {
+        return DB::transaction(function () use ($bill, $payment, $by, $remarks): BillPayment {
+            $lockedBill = Bill::query()->lockForUpdate()->findOrFail($bill->id);
+            $lockedPayment = BillPayment::query()->lockForUpdate()->findOrFail($payment->id);
+            $this->assertPaymentBelongsToBill($lockedPayment, $lockedBill);
+            if ($lockedPayment->status !== BillPaymentStatus::PendingApproval) {
+                throw new BusinessRuleException('Only pending payment requests can be rejected.');
+            }
+            if (trim($remarks) === '') {
+                throw new BusinessRuleException('A rejection reason is required.');
+            }
+
+            $this->approvals->reject($lockedPayment, $by, $remarks);
+            $lockedPayment->forceFill(['status' => BillPaymentStatus::Rejected])->save();
+
+            return $lockedPayment->fresh(['cashAccount', 'approvalRecords']);
+        });
+    }
+
+    private function assertPaymentBelongsToBill(BillPayment $payment, Bill $bill): void
+    {
+        if ((int) $payment->bill_id !== (int) $bill->id) {
+            throw new BusinessRuleException('The payment does not belong to this bill.');
+        }
+    }
+
+    private function assertPaymentBillIsOpen(Bill $bill, string $amount): void
+    {
+        if ($bill->status === BillStatus::Cancelled) {
+            throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
+        }
+        if ($bill->status === BillStatus::Paid) {
+            throw new BusinessRuleException('Bill is already fully paid.');
+        }
+        if (! in_array($bill->status, [BillStatus::Unpaid, BillStatus::Partial], true)) {
+            throw new BusinessRuleException('Payments can only be recorded against an unpaid or partially paid bill.');
+        }
+        if (! $bill->journal_entry_id) {
+            throw new BusinessRuleException('The bill must have a posted source journal before it can be paid.');
+        }
+        if (Money::gt($amount, (string) $bill->balance)) {
+            throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance {$bill->balance}.");
+        }
+    }
+
+    private function postApprovedPayment(Bill $bill, BillPayment $payment, User $by): BillPayment
+    {
+        $amount = (string) $payment->amount;
+        $apId = $this->accountId($this->accounts->ap());
+        $je = $this->journals->create([
+            'date' => $payment->payment_date->toDateString(),
+            'description' => "Payment for Bill {$bill->bill_number}",
+            'reference_type' => 'bill_payment',
+            'reference_id' => $payment->id,
+            'lines' => [
+                ['account_id' => $apId, 'debit' => $amount, 'credit' => '0.00', 'description' => 'AP settled'],
+                ['account_id' => $payment->cash_account_id, 'debit' => '0.00', 'credit' => $amount, 'description' => 'Cash disbursed'],
+            ],
+        ], $by);
+        $je = $this->journals->post($je, $by);
+        $payment->forceFill(['journal_entry_id' => $je->id, 'status' => BillPaymentStatus::Posted])->save();
+
+        $newPaid = Money::add((string) $bill->amount_paid, $amount);
+        $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
+        $bill->update([
+            'amount_paid' => $newPaid,
+            'balance' => $newBalance,
+            'status' => Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial,
+        ]);
+
+        $fresh = $bill->fresh();
+        app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
+
+        return $payment->fresh(['cashAccount', 'journalEntry', 'approvalRecords']);
     }
 
     /**
@@ -970,9 +1056,10 @@ class BillService
     }
 
     /**
-     * Build + post the bill JE (DR expense lines, DR VAT Input, CR AP) and
-     * link it. Shared by the manual create() path and the draft post path so
-     * the ledger logic can never drift between them.
+     * Build + post the bill JE and link it. Stock bills clear the GRNI credit
+     * created at receipt; service bills debit their approved expense lines.
+     * Shared by the manual create() path and the draft post path so the ledger
+     * logic can never drift between them.
      *
      * @param  array<int, array{expense_account_id:int, item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>  $items
      */
@@ -982,13 +1069,24 @@ class BillService
         $vatInputId = $this->accountId($this->accounts->vatInput());
 
         $lines = [];
-        foreach ($items as $row) {
+        if ($bill->provenance_type === 'stock' || $bill->goods_receipt_note_id !== null) {
+            $grniCode = $this->settings->requiredString('accounting.accounts.grni_code');
+            $grniId = $this->postingAccounts->configuredIdByCode($grniCode, AccountType::Liability);
             $lines[] = [
-                'account_id' => $row['expense_account_id'],
-                'debit' => $row['total'],
+                'account_id' => $grniId,
+                'debit' => (string) $bill->subtotal,
                 'credit' => '0.00',
-                'description' => $row['description'],
+                'description' => "GRNI clearing for {$bill->bill_number}",
             ];
+        } else {
+            foreach ($items as $row) {
+                $lines[] = [
+                    'account_id' => $row['expense_account_id'],
+                    'debit' => $row['total'],
+                    'credit' => '0.00',
+                    'description' => $row['description'],
+                ];
+            }
         }
         if ($isVatable && Money::gt($vat, '0')) {
             $lines[] = [

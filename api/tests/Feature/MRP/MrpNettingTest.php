@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\HR\Models\Department;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\MrpEngineService;
@@ -301,6 +302,29 @@ class MrpNettingTest extends TestCase
         $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
         // net = 20 - 8 = 12, stored rounded to 2 decimal places
         $this->assertSame('12.00', $prItem->quantity, 'PR item qty must equal net shortage (12)');
+    }
+
+    public function test_shortage_auto_pr_uses_the_planning_department_when_creator_has_no_employee(): void
+    {
+        $planningDepartment = Department::factory()->create([
+            'code' => 'PPC',
+            'name' => 'Production Planning',
+        ]);
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $this->setOnHand(qty: 0.0, reserved: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+        $pr = PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail();
+
+        $this->assertSame(
+            $planningDepartment->id,
+            $pr->department_id,
+            'Automatic MRP demand must remain submit-able even when the SO creator has no employee department.',
+        );
     }
 
     /**

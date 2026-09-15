@@ -26,6 +26,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -183,19 +184,20 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $this->assertSame('60.00', (string) $bill->vat_amount);
         $this->assertSame('560.00', (string) $bill->total_amount);
 
-        // Accepting the remainder lands the GRN on Accepted. The existing
-        // one-bill-per-GRN guard must keep it from stacking a duplicate.
+        // Accepting the remainder lands the GRN on Accepted. The existing draft
+        // bill is synchronized to the new accepted quantity instead of leaving
+        // the remaining goods unbilled or stacking a duplicate bill.
         $full = $this->grnSvc->partialAccept($partial->fresh(), [
             $line->id => '80.000',
         ], $this->user);
         $this->assertSame(GrnStatus::Accepted, $full->status);
         event(new GoodsReceiptNoteAccepted($full));
 
-        $this->assertSame(
-            1,
-            Bill::where('goods_receipt_note_id', $full->id)->count(),
-            'completing acceptance of a partially billed GRN must not stack a second bill',
-        );
+        $this->assertSame(1, Bill::where('goods_receipt_note_id', $full->id)->count());
+        $bill->refresh();
+        $this->assertSame('80.00', (string) $bill->items()->first()->quantity);
+        $this->assertSame('1000.00', (string) $bill->subtotal);
+        $this->assertSame('1120.00', (string) $bill->total_amount);
     }
 
     public function test_all_full_partial_accept_also_stages_a_bill(): void
@@ -289,6 +291,33 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $je = $posted->journalEntry;
         $this->assertSame('posted', $je->status->value);
         $this->assertSame((string) $je->total_debit, (string) $je->total_credit, 'JE must be balanced');
+
+        $lines = DB::table('journal_entry_lines as jel')
+            ->join('accounts as a', 'a.id', '=', 'jel.account_id')
+            ->where('jel.journal_entry_id', $posted->journal_entry_id)
+            ->get(['a.code', 'jel.debit', 'jel.credit']);
+
+        $this->assertSame('1000.00', (string) $lines->firstWhere('code', '2110')->debit);
+        $this->assertFalse($lines->contains('code', '5000'));
+    }
+
+    public function test_grn_show_includes_the_auto_created_bill_relation(): void
+    {
+        $grn = $this->makePendingGrn();
+        \App\Modules\Quality\Models\Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update(['status' => 'passed']);
+
+        $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
+        $shown = $this->grnSvc->show($accepted->fresh());
+
+        $this->assertTrue($shown->relationLoaded('bills'));
+        $this->assertSame(1, $shown->bills->count());
+        $this->assertSame(
+            $shown->bills->first()->bill_number,
+            Bill::where('goods_receipt_note_id', $shown->id)->value('bill_number'),
+        );
     }
 
     public function test_post_draft_rechecks_match_and_requires_an_audited_override(): void

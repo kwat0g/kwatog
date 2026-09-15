@@ -7,6 +7,7 @@ namespace Tests\Feature\B2B;
 use App\Common\Models\AuditLog;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
@@ -482,6 +483,29 @@ class SupplierPortalServiceTest extends TestCase
             ->where('vendor_id', $vendor->id)
             ->where('bill_number', 'SUP-INV-001')
             ->count());
+    }
+
+    public function test_supplier_invoice_reuses_the_existing_auto_bill_for_the_accepted_grn(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $po = $this->makePo($vendor, 'sent');
+        $poItem = $this->makePoItem($po, '2.00');
+        $grn = $this->makeAcceptedGrn($po, $vendor, $poItem, '2.00');
+        $autoBill = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
+
+        $this->assertNotNull($autoBill);
+
+        $this->actAs($user);
+        $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
+            'bill_number' => 'SUP-INV-AUTO-REUSE',
+            'date' => '2026-08-10',
+            'is_vatable' => false,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('data.id', $autoBill->hash_id);
+        $this->assertSame(1, Bill::where('goods_receipt_note_id', $grn->id)->count());
     }
 
     public function test_submit_invoice_requires_an_accepted_goods_receipt(): void

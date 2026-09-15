@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -57,8 +57,10 @@ export default function BillDetailPage() {
  const [showPay, setShowPay] = useState(false);
  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
  const [showPostConfirm, setShowPostConfirm] = useState(false);
- const [showPostOverride, setShowPostOverride] = useState(false);
- const [paymentToVoid, setPaymentToVoid] = useState<BillPayment | null>(null);
+  const [showPostOverride, setShowPostOverride] = useState(false);
+  const [paymentToVoid, setPaymentToVoid] = useState<BillPayment | null>(null);
+  const [paymentToReject, setPaymentToReject] = useState<BillPayment | null>(null);
+  const paymentIdempotencyKey = useRef<string | null>(null);
  const { data: bill, isLoading, isError, refetch } = useQuery({
   queryKey: ['accounting', 'bills', id],
   queryFn: () => billsApi.show(id),
@@ -106,22 +108,34 @@ export default function BillDetailPage() {
  },
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
  });
- const payMut = useMutation({
- mutationFn: (d: PaymentFormValues) => billsApi.recordPayment(id, {
- cash_account_id: d.cash_account_id,
- payment_date: d.payment_date,
- amount: String(d.amount),
- payment_method: d.payment_method as PaymentMethod,
- reference_number: d.reference_number || undefined,
- }),
- onSuccess: () => {
- toast.success('Payment recorded.');
- qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
- setShowPay(false);
- reset({ payment_date: new Date().toISOString().slice(0, 10), payment_method: '', cash_account_id: '', amount: undefined as unknown as number, reference_number: '' });
- },
+  const payMut = useMutation({
+  mutationFn: (d: PaymentFormValues) => billsApi.recordPayment(id, {
+    cash_account_id: d.cash_account_id,
+    payment_date: d.payment_date,
+    amount: String(d.amount),
+    payment_method: d.payment_method as PaymentMethod,
+    reference_number: d.reference_number || undefined,
+  }, paymentIdempotencyKey.current ??= `bill-payment:${id}:${crypto.randomUUID()}`),
+  onSuccess: () => {
+   toast.success('Payment submitted for approval.');
+   qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+   void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] });
+   setShowPay(false);
+   paymentIdempotencyKey.current = null;
+   reset({ payment_date: new Date().toISOString().slice(0, 10), payment_method: '', cash_account_id: '', amount: undefined as unknown as number, reference_number: '' });
+  },
  onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
- });
+  });
+  const approvePaymentMut = useMutation({
+   mutationFn: (paymentId: string) => billsApi.approvePayment(id, paymentId),
+   onSuccess: () => { toast.success('Payment approval recorded.'); qc.invalidateQueries({ queryKey: ['accounting', 'bills'] }); void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] }); },
+   onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to approve payment.'),
+  });
+  const rejectPaymentMut = useMutation({
+   mutationFn: (remarks: string) => billsApi.rejectPayment(id, paymentToReject!.id, remarks),
+   onSuccess: () => { toast.success('Payment request rejected.'); setPaymentToReject(null); qc.invalidateQueries({ queryKey: ['accounting', 'bills'] }); void qc.refetchQueries({ queryKey: ['accounting', 'bills', id] }); },
+   onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to reject payment.'),
+  });
  const voidPaymentMut = useMutation({
   mutationFn: (reason: string) => billsApi.voidPayment(id, paymentToVoid!.id, { reason }),
   onSuccess: () => {
@@ -284,7 +298,13 @@ export default function BillDetailPage() {
  <span className="font-medium">{formatPeso(p.amount)}</span>
  </div>
  <div className="flex items-center justify-between gap-2 text-muted">
-  <span>{p.payment_method_label ?? p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''} · {p.status_label ?? p.status}</span>
+   <span>{p.payment_method_label ?? p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''} · {p.status_label ?? p.status}</span>
+   {p.status === 'pending_approval' && can('accounting.bills.payment_approve') && (
+    <span className="flex gap-1">
+     <Button type="button" variant="ghost" size="sm" onClick={() => approvePaymentMut.mutate(p.id)} loading={approvePaymentMut.isPending}>Approve</Button>
+     <Button type="button" variant="ghost" size="sm" onClick={() => setPaymentToReject(p)} loading={rejectPaymentMut.isPending}>Reject</Button>
+    </span>
+   )}
   {p.status === 'posted' && can('accounting.bills.void_payment') && bill.status !== 'cancelled' && (
    <Button type="button" variant="ghost" size="sm" onClick={() => setPaymentToVoid(p)}>Void</Button>
   )}
@@ -387,8 +407,22 @@ export default function BillDetailPage() {
  pending={postMut.isPending}
  />
 
- <ReasonDialog
-  isOpen={paymentToVoid !== null}
+  <ReasonDialog
+   isOpen={paymentToReject !== null}
+   onClose={() => { if (!rejectPaymentMut.isPending) setPaymentToReject(null); }}
+   onConfirm={(reason) => rejectPaymentMut.mutate(reason)}
+   title="Reject payment request?"
+   description="The payment will not post and the bill will remain open."
+   reasonLabel="Rejection reason"
+   reasonPlaceholder="e.g. Amount does not match approved payment advice."
+   minLength={3}
+   confirmLabel="Reject payment"
+   variant="danger"
+   pending={rejectPaymentMut.isPending}
+  />
+
+  <ReasonDialog
+   isOpen={paymentToVoid !== null}
   onClose={() => { if (!voidPaymentMut.isPending) setPaymentToVoid(null); }}
   onConfirm={(reason) => voidPaymentMut.mutate(reason)}
   title={paymentToVoid ? `Void payment of ${formatPeso(paymentToVoid.amount)}?` : 'Void payment?'}

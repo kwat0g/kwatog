@@ -140,7 +140,9 @@ export default function CreateBillPage() {
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [selectedPo, purchaseOrderId]);
  const acceptedGrns = useMemo(
- () => (selectedPo?.goods_receipt_notes ?? []).filter((grn) => grn.status === 'accepted'),
+  () => (selectedPo?.goods_receipt_notes ?? []).filter((grn) =>
+    grn.status === 'accepted' || grn.status === 'partial_accepted',
+  ),
  [selectedPo],
  );
  useEffect(() => {

@@ -183,7 +183,7 @@ class GoodsReceiptNoteController
             'qc.checks'                          => ['nullable', 'array'],
             'qc.remarks'                         => ['nullable', 'string'],
             'qc.failure_reason'                  => ['nullable', 'required_if:qc.result,failed', 'string'],
-            'qc.disposition'                     => ['nullable', 'string', 'in:return_to_supplier,use_under_concession,partial_accept'],
+            'qc.disposition'                     => ['nullable', 'string', 'in:return_to_supplier'],
             'qc.is_quality_failure'              => ['nullable', 'boolean'],
         ]);
 

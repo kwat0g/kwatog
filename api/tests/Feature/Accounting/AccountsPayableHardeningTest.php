@@ -21,6 +21,7 @@ use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Tests\TestCase;
@@ -33,7 +34,7 @@ class AccountsPayableHardeningTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
-        $this->seed(ChartOfAccountsSeeder::class);
+        $this->seed([ChartOfAccountsSeeder::class, WorkflowSeeder::class]);
     }
 
     private function user(string $role = 'system_admin'): User
@@ -135,6 +136,9 @@ class AccountsPayableHardeningTest extends TestCase
             'payment_method' => PaymentMethod::BankTransfer->value,
         ], $maker);
 
+        $this->assertSame(BillPaymentStatus::PendingApproval, $payment->status);
+        $service->approvePayment($bill->fresh(), $payment->fresh(), $checker);
+        $payment = $service->approvePayment($bill->fresh(), $payment->fresh(), $this->user('vice_president'));
         $this->assertSame(BillPaymentStatus::Posted, $payment->status);
 
         try {

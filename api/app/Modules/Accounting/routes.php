@@ -87,6 +87,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         // 2026-08-08 — post an auto-created draft bill (AP + GL).
         Route::post('/{bill}/post', [BillController::class, 'postDraft'])->middleware('permission:accounting.bills.create');
         Route::post('/{bill}/payments', [BillController::class, 'recordPayment'])->middleware('permission:accounting.bills.pay');
+        Route::post('/{bill}/payments/{payment}/approve', [BillController::class, 'approvePayment'])->middleware('permission:accounting.bills.payment_approve');
+        Route::post('/{bill}/payments/{payment}/reject', [BillController::class, 'rejectPayment'])->middleware('permission:accounting.bills.payment_approve');
         Route::post('/{bill}/payments/{payment}/void', [BillController::class, 'voidPayment'])
             ->middleware('permission:accounting.bills.void_payment');
         Route::get('/{bill}/pdf', [PdfController::class,  'bill'])->middleware('permission:accounting.bills.view');

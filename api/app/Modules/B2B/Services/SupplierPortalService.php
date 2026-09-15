@@ -525,6 +525,19 @@ class SupplierPortalService
                     throw new BusinessRuleException('Supplier invoices for stock items require an accepted goods receipt.');
                 }
 
+                $existingReceiptBill = Bill::query()
+                    ->where('goods_receipt_note_id', $acceptedGrn->id)
+                    ->where('status', '<>', BillStatus::Cancelled->value)
+                    ->lockForUpdate()
+                    ->latest('id')
+                    ->first();
+                if ($existingReceiptBill) {
+                    return [
+                        'bill' => $existingReceiptBill->fresh(),
+                        'message' => 'An AP bill already exists for this receipt. The existing bill remains the single review document.',
+                    ];
+                }
+
                 // D2 — the payable follows ACCEPTED goods, not the order. The
                 // old code billed the ordered quantity × unit_price, so a
                 // partial or price-adjusted receipt produced a draft AP bill

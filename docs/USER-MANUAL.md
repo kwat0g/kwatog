@@ -155,8 +155,11 @@ posting until Purchasing resolves it from the bill detail page.
 
 ### 8.5 Posting bill & payment
 
-*Accounting → Bills → New Bill* (auto JE: DR Expense + DR VAT Input,
-CR AP). Click **Pay** to post the payment (DR AP, CR Cash).
+*Accounting → Bills → New Bill*. Stock bills clear GRNI and debit VAT Input,
+then credit AP; service bills debit the approved expense account and VAT Input.
+Click **Prepare payment** to submit a payment request. Finance2 reviews the
+Finance step and the VP gives final approval before the payment posts (DR AP,
+CR Cash/Bank). The request uses an idempotent key.
 
 ## 9. Inventory
 

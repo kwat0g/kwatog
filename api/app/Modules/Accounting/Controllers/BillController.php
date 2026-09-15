@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
+use App\Modules\Accounting\Requests\DecideBillPaymentRequest;
 use App\Modules\Accounting\Requests\StoreBillRequest;
 use App\Modules\Accounting\Requests\VoidBillPaymentRequest;
 use App\Modules\Accounting\Resources\BillPaymentResource;
@@ -121,6 +122,33 @@ class BillController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new BillPaymentResource($payment))->response()->setStatusCode(201);
+    }
+
+    public function approvePayment(DecideBillPaymentRequest $request, Bill $bill, BillPayment $payment): JsonResponse
+    {
+        try {
+            $payment = $this->service->approvePayment($bill, $payment, $request->user());
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return (new BillPaymentResource($payment))->response()->setStatusCode(200);
+    }
+
+    public function rejectPayment(DecideBillPaymentRequest $request, Bill $bill, BillPayment $payment): JsonResponse
+    {
+        try {
+            $payment = $this->service->rejectPayment(
+                $bill,
+                $payment,
+                $request->user(),
+                (string) ($request->validated()['remarks'] ?? ''),
+            );
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return (new BillPaymentResource($payment))->response()->setStatusCode(200);
     }
 
     public function voidPayment(VoidBillPaymentRequest $request, Bill $bill, BillPayment $payment): JsonResponse

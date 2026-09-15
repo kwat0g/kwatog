@@ -270,4 +270,43 @@ class GrnRejectionTest extends TestCase
         $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
         $this->assertSame(PurchaseOrderStatus::Sent, $po->fresh()->status);
     }
+
+    public function test_public_rejection_cancels_the_open_incoming_inspection(): void
+    {
+        [$po, $poItem, $item, $location] = $this->buildPurchaseOrder();
+        $grn = $this->grnSvc->create(
+            $po->fresh(),
+            $this->buildItems($poItem, $item, $location),
+            ['received_date' => now()->toDateString()],
+            $this->user,
+        );
+        $inspection = \App\Modules\Quality\Models\Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+
+        $this->grnSvc->reject($grn, 'Logistics rejection during receiving.', $this->user);
+
+        $this->assertSame('cancelled', $inspection->fresh()->status->value);
+    }
+
+    public function test_single_screen_receiving_rejects_unsupported_partial_disposition(): void
+    {
+        [$po, $poItem, $item, $location] = $this->buildPurchaseOrder();
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('not implemented');
+        $this->grnSvc->receiveWithQc(
+            po: $po,
+            items: $this->buildItems($poItem, $item, $location),
+            meta: ['received_date' => now()->toDateString()],
+            qcData: [
+                'result' => 'passed',
+                'product_id' => $this->product->id,
+                'inspector_id' => $this->user->id,
+                'disposition' => 'partial_accept',
+            ],
+            by: $this->user,
+        );
+    }
 }

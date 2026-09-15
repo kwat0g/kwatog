@@ -115,7 +115,7 @@ export default function CreatePurchaseRequestPage() {
     if (isDepartmentLocked && ownDepartmentId) {
       setValue('department_id', ownDepartmentId);
     }
-  }, [isDepartmentLocked, ownDepartmentId, setValue]);
+  }, [departments.data, isDepartmentLocked, ownDepartmentId, setValue]);
   const watched = watch('items');
   const total = watched.reduce(
     (sum, l) => sum + Number(l.quantity || 0) * Number(l.estimated_unit_price || 0),

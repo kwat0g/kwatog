@@ -6,12 +6,14 @@ namespace App\Modules\Accounting\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Common\Models\ApprovalRecord;
 use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class BillPayment extends Model
 {
@@ -61,5 +63,10 @@ class BillPayment extends Model
     public function replacementPayment(): BelongsTo
     {
         return $this->belongsTo(self::class, 'replacement_payment_id');
+    }
+
+    public function approvalRecords(): MorphMany
+    {
+        return $this->morphMany(ApprovalRecord::class, 'approvable');
     }
 }

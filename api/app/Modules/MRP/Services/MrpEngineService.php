@@ -9,8 +9,10 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
+use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\MRP\Enums\MrpPlanStatus;
@@ -72,6 +74,33 @@ class MrpEngineService
         private readonly SettingsService $settings,
     ) {}
 
+    private function resolveAutoPurchaseRequestDepartment(SalesOrder $so, ?MrpRun $run, ?int $actorId): ?int
+    {
+        $requesterId = $actorId ?? (int) $so->created_by;
+        $requesterDepartmentId = User::query()
+            ->with('employee:id,department_id')
+            ->find($requesterId)?->employee?->department_id;
+
+        if ($requesterDepartmentId !== null) {
+            return (int) $requesterDepartmentId;
+        }
+
+        $runDepartmentId = $run?->triggered_by_user_id
+            ? User::query()
+                ->with('employee:id,department_id')
+                ->find($run->triggered_by_user_id)?->employee?->department_id
+            : null;
+
+        if ($runDepartmentId !== null) {
+            return (int) $runDepartmentId;
+        }
+
+        // Automatic MRP has no human actor. PPC owns the material-planning need
+        // and provides the accountable budget when the SO creator is not an
+        // employee, such as a CRM service account.
+        return Department::query()->where('code', 'PPC')->value('id');
+    }
+
     /**
      * Run MRP for a confirmed sales order. Idempotent at the per-run level;
      * re-running supersedes the prior active plan for this SO.
@@ -90,6 +119,7 @@ class MrpEngineService
             return DB::transaction(function () use ($so, &$sharedSupply, $run, $initiatingActorId, $triggerReason) {
             $actorId = $initiatingActorId ?? $run?->triggered_by_user_id;
             $recordedBy = $actorId ?? (int) $so->created_by;
+            $purchaseRequestDepartmentId = $this->resolveAutoPurchaseRequestDepartment($so, $run, $actorId);
             $trigger = $run?->triggered_by instanceof MrpRunTrigger
                 ? $run->triggered_by->value
                 : (string) ($run?->triggered_by ?? 'direct');
@@ -364,7 +394,7 @@ class MrpEngineService
                     $pr = PurchaseRequest::create([
                         'pr_number'         => $this->sequences->generate('pr'),
                         'requested_by'      => $recordedBy,
-                        'department_id'     => null, // SO creator's dept; resolved at submit time
+                        'department_id'     => $purchaseRequestDepartmentId,
                         'mrp_plan_id'       => $plan->id,
                         'date'              => Carbon::today(),
                         'reason'            => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
@@ -380,6 +410,7 @@ class MrpEngineService
                         'date'        => Carbon::today(),
                         'reason'      => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
                         'priority'    => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
+                        'department_id' => $pr->department_id ?? $purchaseRequestDepartmentId,
                     ])->save();
                     $pr->items()->delete();
                 }

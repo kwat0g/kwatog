@@ -130,14 +130,22 @@ export interface BillPayment {
  payment_method: PaymentMethod;
  payment_method_label?: string;
  reference_number: string | null;
- status: 'posted' | 'voided';
+  status: 'pending_approval' | 'rejected' | 'posted' | 'voided';
  status_label?: string;
  cash_account?: { id: string; code: string; name: string } | null;
  journal_entry_id: string | null;
  voided_at?: string | null;
  void_reason?: string | null;
  void_reversal_journal_entry?: { id: string; entry_number: string; status: string } | null;
- replacement_payment_id?: string | null;
+  replacement_payment_id?: string | null;
+  approval_records?: Array<{
+   step_order: number;
+   role_slug: string;
+   action: string;
+   approver?: { id: string; name: string } | null;
+   remarks?: string | null;
+   acted_at?: string | null;
+  }>;
  created_at?: string;
 }
 
