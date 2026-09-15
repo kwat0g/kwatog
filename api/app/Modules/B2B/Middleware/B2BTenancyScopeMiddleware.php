@@ -13,6 +13,9 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierItemListing;
+use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
+use App\Modules\Purchasing\Models\SupplierQuote;
+use App\Modules\Purchasing\Models\RfqDocument;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -55,6 +58,9 @@ class B2BTenancyScopeMiddleware
             GoodsReceiptNote::addGlobalScope('b2b_tenancy', $scope);
             PpapSubmission::addGlobalScope('b2b_tenancy', $scope);
             SupplierItemListing::addGlobalScope('b2b_tenancy', $scope);
+            RequestForQuoteInvitation::addGlobalScope('b2b_tenancy', $scope);
+            SupplierQuote::addGlobalScope('b2b_tenancy', $scope);
+            RfqDocument::addGlobalScope('b2b_tenancy', $scope);
 
             PortalShippingDocument::addGlobalScope('b2b_tenancy', function (Builder $builder) use ($vendorId) {
                 $builder->whereHas('purchaseOrder', function ($q) use ($vendorId) {

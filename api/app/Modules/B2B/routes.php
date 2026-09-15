@@ -9,6 +9,7 @@ use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
+use App\Modules\B2B\Controllers\SupplierRfqController;
 use App\Modules\B2B\Controllers\PortalAccessController;
 use Illuminate\Support\Facades\Route;
 
@@ -64,8 +65,18 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk']);
         Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update']);
         // PPAP submissions (read-only, scoped to this supplier).
-        Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
-        });
+         Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
+         // Invite-only sealed RFQ sourcing. The controller and service perform
+         // the vendor ownership check in addition to the supplier session guard.
+         Route::get('rfqs', [SupplierRfqController::class, 'index']);
+         Route::get('rfqs/{rfq}', [SupplierRfqController::class, 'show']);
+         Route::post('rfqs/{rfq}/quotes', [SupplierRfqController::class, 'store']);
+         Route::put('rfqs/{rfq}/quotes/{quote}', [SupplierRfqController::class, 'update']);
+         Route::post('rfqs/{rfq}/quotes/{quote}/submit', [SupplierRfqController::class, 'submit']);
+         Route::post('rfqs/{rfq}/quotes/{quote}/withdraw', [SupplierRfqController::class, 'withdraw']);
+         Route::get('rfqs/{rfq}/quotes/{quote}/versions', [SupplierRfqController::class, 'versions']);
+         Route::post('rfqs/{rfq}/documents', [SupplierRfqController::class, 'uploadDocument']);
+         });
     });
 });
 

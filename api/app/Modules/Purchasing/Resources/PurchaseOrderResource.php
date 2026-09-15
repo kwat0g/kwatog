@@ -81,6 +81,10 @@ class PurchaseOrderResource extends JsonResource
                 'id'        => $this->purchaseRequest->hash_id,
                 'pr_number' => $this->purchaseRequest->pr_number,
             ] : null),
+            'rfq'                    => $this->whenLoaded('rfq', fn () => $this->rfq ? [
+                'id' => $this->rfq->hash_id, 'rfq_number' => $this->rfq->rfq_number,
+                'status' => $this->rfq->status?->value ?? (string) $this->rfq->status,
+            ] : null),
             'items'                  => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
             'goods_receipt_notes'    => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes->map(fn ($g) => [
                 'id'            => $g->hash_id,

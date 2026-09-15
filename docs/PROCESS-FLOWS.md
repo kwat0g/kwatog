@@ -515,19 +515,52 @@ draft → pending → approved → converted
                              (cancelled)
 ```
 
-When final approval is recorded, the system queues automatic PO conversion and
-persists its outcome separately from the PR status:
+When final approval is recorded, the PR enters a buyer-controlled sourcing
+handoff. The buyer can either convert directly or start a sealed RFQ; approval
+never silently creates a PO:
 
-- `pending` — the approved PR is queued for conversion.
+- `sourcing_pending` — the approved PR is waiting for the buyer's direct-PO or RFQ decision.
 - `converted` — one or more draft POs were created, grouped by supplier.
 - `manual_required` — missing supplier/price/automation attribution or a
   known conversion rule prevented automation. The PR remains `approved`, the
   reason is shown on the PR detail/list, and the existing **Convert to PO**
   action is the recovery path.
 
-The converter locks the PR row before checking status or creating POs. This is
-the idempotency boundary for concurrent queue retries and manual conversion;
-multiple POs remain valid when one PR contains lines for multiple suppliers.
+The direct converter and Start RFQ service both lock the PR row before checking
+status or creating records. An active RFQ blocks direct conversion, and an
+active purchase order blocks RFQ creation. This is the idempotency boundary;
+multiple draft POs remain valid when one RFQ awards lines to multiple suppliers.
+
+### Step 1b: Sealed Supplier RFQ
+
+**Where in the app:** `/purchasing/rfqs` and supplier portal `/portal/supplier/rfqs`
+
+1. Open an approved PR and choose **Start RFQ**.
+2. Review the immutable PR line snapshot, select qualified suppliers, and record
+   an exception reason for any non-qualified invitation.
+3. Publish the RFQ. Invited suppliers can save draft quotations, quote partial
+   quantities or no-quote individual lines, revise, withdraw, and upload private
+   quotation/quality documents until the server-side deadline.
+4. The close command seals the event automatically. Submitted prices are not
+   returned to ordinary internal viewers before closure.
+5. Authorized evaluators compare total delivered cost, lead time, compliance
+   evidence, and supplier history. The buyer awards lines explicitly with a
+   reason; the lowest compliant option is a recommendation, never an automatic
+   award.
+6. Award creates one idempotent draft PO per supplier. Every PO and PO line keeps
+   the RFQ, award, and exact supplier quote version link before continuing through
+   Finance/VP approval, dispatch, GRN, and Incoming QC.
+
+**RFQ endpoints:**
+- `POST /api/v1/purchasing/purchase-requests/{purchaseRequest}/rfqs`
+- `GET /api/v1/purchasing/rfqs`
+- `POST /api/v1/purchasing/rfqs/{rfq}/publish`
+- `GET /api/v1/purchasing/rfqs/{rfq}/comparison`
+- `POST /api/v1/purchasing/rfqs/{rfq}/award`
+- `GET /api/v1/b2b/supplier/rfqs`
+- `POST /api/v1/b2b/supplier/rfqs/{rfq}/quotes`
+
+The automatic closer is `purchasing:close-due-rfqs`, scheduled every minute.
 
 **How to test each source:**
 1. **Manual:** Create PR → Submit → Approve → Convert to PO

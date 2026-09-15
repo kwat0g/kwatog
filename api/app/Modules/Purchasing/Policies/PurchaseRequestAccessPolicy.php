@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -148,6 +149,15 @@ final class PurchaseRequestAccessPolicy
         return $user->hasPermission('purchasing.po.create') && $this->canView($user, $pr);
     }
 
+    public function canStartRfq(User $user, PurchaseRequest $pr): bool
+    {
+        return $user->hasPermission('purchasing.rfq.create')
+            && $this->canView($user, $pr)
+            && $pr->status === PurchaseRequestStatus::Approved
+            && ! $this->hasLivePurchaseOrders($pr)
+            && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists();
+    }
+
     /**
      * Approval roles held directly or through an active delegation.
      *
@@ -190,7 +200,9 @@ final class PurchaseRequestAccessPolicy
             // so the operator cannot fire a second conversion.
             'can_convert'            => $this->canConvert($user, $pr)
                 && $pr->status === PurchaseRequestStatus::Approved
-                && ! $this->hasLivePurchaseOrders($pr),
+                && ! $this->hasLivePurchaseOrders($pr)
+                && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists(),
+            'can_start_rfq'          => $this->canStartRfq($user, $pr),
             'can_print'              => $this->canView($user, $pr),
         ];
     }

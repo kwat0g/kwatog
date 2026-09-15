@@ -8,6 +8,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::command('purchasing:close-due-rfqs')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->onOneServer();
+
 Artisan::command('inspire', function (): void {
     echo Inspiring::quote().PHP_EOL;
 })->purpose('Display an inspiring quote');

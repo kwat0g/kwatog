@@ -241,6 +241,13 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
                 // Supplier Item Listings — supplier-submitted offers reviewed here.
                 ['slug' => 'purchasing.supplier_listings.review', 'name' => 'Review Supplier Item Listings'],
+                ['slug' => 'purchasing.rfq.view',       'name' => 'View Supplier RFQs'],
+                ['slug' => 'purchasing.rfq.create',     'name' => 'Create Supplier RFQs'],
+                ['slug' => 'purchasing.rfq.publish',    'name' => 'Publish Supplier RFQs'],
+                ['slug' => 'purchasing.rfq.evaluate',   'name' => 'Evaluate Supplier Quotations'],
+                ['slug' => 'purchasing.rfq.award',      'name' => 'Award Supplier RFQ Lines'],
+                ['slug' => 'purchasing.rfq.manage',     'name' => 'Manage Supplier RFQs'],
+                ['slug' => 'purchasing.rfq.quality_review', 'name' => 'Review RFQ Quality Evidence'],
                 // Undelete tier. The /restore routes were gated on these slugs
                 // but they were never seeded, so restore was 403 for everyone
                 // except system_admin (wildcard).
@@ -582,6 +589,7 @@ class RolePermissionSeeder extends Seeder
                         // approve routes 403 the only role the steps accept and
                         // every PR/PO stalls (same defect class as M036 and L-37).
                         'purchasing.view',
+                        'purchasing.rfq.view', 'purchasing.rfq.evaluate',
                         'purchasing.pr.approve',
                         'purchasing.po.approve',
                         // Separation clearance — Finance is step 4 of the
@@ -607,6 +615,7 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.view',
                         'purchasing.pr.approve',
                         'purchasing.po.approve',
+                        'purchasing.rfq.view',
                         // Final approver of the cash_advance (step 3) and
                         // company_loan (step 4) chains, and the final checker of
                         // salary_adjustment (step 2). Without these slugs the
@@ -827,6 +836,7 @@ class RolePermissionSeeder extends Seeder
                     [
                         'return_management.view',
                         'return_management.inspect',
+                        'purchasing.rfq.view', 'purchasing.rfq.quality_review',
                         'dashboard.quality.view',
                         // REC-08 — QC can quarantine/release nonconforming stock via MRB.
                         'inventory.view',

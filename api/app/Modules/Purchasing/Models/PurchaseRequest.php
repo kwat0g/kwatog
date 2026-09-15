@@ -79,6 +79,11 @@ class PurchaseRequest extends Model
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    public function rfqs(): HasMany
+    {
+        return $this->hasMany(RequestForQuote::class);
+    }
+
     /** The MRP plan that auto-generated this PR (null for manual PRs). */
     public function mrpPlan(): BelongsTo
     {

@@ -80,6 +80,7 @@ class PurchaseRequestService
             'approvalRecords.approver:id,name',
             'purchaseOrders:id,po_number,status,vendor_id,total_amount,purchase_request_id,is_auto_generated',
             'purchaseOrders.vendor:id,name',
+            'rfqs:id,rfq_number,status,purchase_request_id,closes_at,resolved_at',
             'purchaseOrders.bills:id,bill_number,total_amount,status,purchase_order_id',
             'purchaseOrders.goodsReceiptNotes:id,grn_number,status,purchase_order_id',
         ]);
@@ -431,7 +432,9 @@ class PurchaseRequestService
                 $locked->forceFill([
                     'status'               => PurchaseRequestStatus::Approved,
                     'approved_at'          => now(),
-                    'po_conversion_status' => PurchaseRequestConversionStatus::Pending,
+                    // Approval ends the PR workflow; the buyer now chooses a
+                    // direct conversion or a sealed RFQ explicitly.
+                    'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending,
                     'po_conversion_note'  => null,
                     'po_conversion_at'    => now(),
                 ])->save();

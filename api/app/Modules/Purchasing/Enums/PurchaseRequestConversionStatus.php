@@ -10,6 +10,7 @@ enum PurchaseRequestConversionStatus: string
     case Pending = 'pending';
     case ManualRequired = 'manual_required';
     case Partial = 'partial';
+    case SourcingPending = 'sourcing_pending';
     case Converted = 'converted';
 
     public function label(): string
@@ -19,6 +20,7 @@ enum PurchaseRequestConversionStatus: string
             self::Pending => 'Pending automatic conversion',
             self::ManualRequired => 'Manual conversion required',
             self::Partial => 'Partially converted',
+            self::SourcingPending => 'Sourcing decision pending',
             self::Converted => 'Converted to PO',
         };
     }

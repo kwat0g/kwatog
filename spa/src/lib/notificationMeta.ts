@@ -72,7 +72,9 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
  'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
  'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
- 'return.restocked': { icon: LuPackageCheck, group: 'system', label: 'Returns' },
+  'return.restocked': { icon: LuPackageCheck, group: 'system', label: 'Returns' },
+  'customer.so_responded': { icon: LuClipboardCheck, group: 'approvals', label: 'Sales' },
+  'customer.rma_created': { icon: LuPackageCheck, group: 'approvals', label: 'Returns' },
 
  // ── Chain 2 · Procure to Pay ─────────────────────────────────────────
  'inventory.grn_received': { icon: LuPackageCheck, group: 'system', label: 'Inventory' },
@@ -87,7 +89,9 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'purchasing.supplier_deterioration': { icon: LuTrendingDown, group: 'alerts', label: 'Purchasing' },
  'supplier_listing_submitted': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
  'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
- 'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
+  'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
+  'supplier.po_responded': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
+  'portal.order_awaiting_review': { icon: LuFileText, group: 'approvals', label: 'Portal' },
 
  // ── Chain 3 · Hire to Retire ─────────────────────────────────────────
  'leave.submitted': { icon: LuCalendar, group: 'approvals', label: 'Leave' },

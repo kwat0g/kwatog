@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Controllers\RequestForQuoteController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderResponseController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
 use App\Modules\Purchasing\Controllers\SupplierListingController;
@@ -42,6 +43,21 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     // keep it grouped with convert so the PO-creation surface is in one place.
     Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission:purchasing.po.create');
     Route::post('/purchase-requests/{purchaseRequest}/convert',  [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
+    Route::post('/purchase-requests/{purchaseRequest}/rfqs', [RequestForQuoteController::class, 'store'])->middleware('permission:purchasing.rfq.create');
+
+    /* ─── Sealed supplier RFQs ─── */
+    Route::get('/rfqs', [RequestForQuoteController::class, 'index'])->middleware('permission:purchasing.rfq.view');
+    Route::get('/rfq-documents/{document}/download', [RequestForQuoteController::class, 'downloadDocument'])->middleware('permission:purchasing.rfq.view');
+    Route::get('/rfqs/{rfq}/purchase-orders', [RequestForQuoteController::class, 'purchaseOrders'])->middleware('permission:purchasing.rfq.view');
+    Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission:purchasing.rfq.evaluate');
+    Route::post('/rfqs/{rfq}/publish', [RequestForQuoteController::class, 'publish'])->middleware('permission:purchasing.rfq.publish');
+    Route::post('/rfqs/{rfq}/extend', [RequestForQuoteController::class, 'extend'])->middleware('permission:purchasing.rfq.manage');
+    Route::post('/rfqs/{rfq}/addenda', [RequestForQuoteController::class, 'addendum'])->middleware('permission:purchasing.rfq.manage');
+    Route::post('/rfqs/{rfq}/award', [RequestForQuoteController::class, 'award'])->middleware('permission:purchasing.rfq.award');
+    Route::patch('/rfqs/{rfq}/quote-items/{quoteItem}/quality-review', [RequestForQuoteController::class, 'reviewQuality'])->middleware('permission:purchasing.rfq.quality_review');
+    Route::post('/rfqs/{rfq}/cancel', [RequestForQuoteController::class, 'cancel'])->middleware('permission:purchasing.rfq.manage');
+    Route::get('/rfqs/{rfq}', [RequestForQuoteController::class, 'show'])->middleware('permission:purchasing.rfq.view');
+    Route::put('/rfqs/{rfq}', [RequestForQuoteController::class, 'update'])->middleware('permission:purchasing.rfq.manage');
 
     /*
      * PR Templates — HIDDEN 2026-08-08 (scope cut).

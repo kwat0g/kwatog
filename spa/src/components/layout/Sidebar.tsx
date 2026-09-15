@@ -302,6 +302,13 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'purchase_requests',
       },
       {
+        to: '/purchasing/rfqs',
+        label: 'Supplier RFQs',
+        icon: LuFileText,
+        feature: 'purchasing',
+        permission: 'purchasing.rfq.view',
+      },
+      {
         to: '/purchasing/approved-suppliers',
         label: 'Approved Suppliers',
         icon: LuBadgeCheck,

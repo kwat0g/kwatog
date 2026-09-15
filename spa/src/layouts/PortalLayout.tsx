@@ -60,6 +60,7 @@ const SUPPLIER_NAV: PortalNavSection[] = [
     label: 'Orders',
     items: [
       { to: '/portal/supplier/purchase-orders', label: 'Purchase Orders', icon: OrderIcon },
+      { to: '/portal/supplier/rfqs', label: 'Supplier RFQs', icon: LuFileText },
       { to: '/portal/supplier/item-listings', label: 'Item Listings', icon: LuPackageCheck },
     ],
   },

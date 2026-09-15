@@ -109,6 +109,13 @@ class PurchaseRequestResource extends JsonResource
                     'grns'              => $grns,
                 ];
             })->all()),
+            'rfqs'                    => $this->whenLoaded('rfqs', fn () => $this->rfqs->map(fn ($rfq) => [
+                'id' => $rfq->hash_id,
+                'rfq_number' => $rfq->rfq_number,
+                'status' => $rfq->status?->value ?? (string) $rfq->status,
+                'closes_at' => optional($rfq->closes_at)->toIso8601String(),
+                'resolved_at' => optional($rfq->resolved_at)->toIso8601String(),
+            ])->values()->all()),
             'created_at'              => optional($this->created_at)->toIso8601String(),
             'updated_at'              => optional($this->updated_at)->toIso8601String(),
             'deleted_at'              => optional($this->deleted_at)?->toIso8601String(),

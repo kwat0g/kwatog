@@ -114,8 +114,8 @@ class PurchaseOrderService
     {
         return $po
             ->load([
-                'vendor', 'purchaseRequest:id,pr_number',
-                'items.item:id,code,name,unit_of_measure',
+                'vendor', 'purchaseRequest:id,pr_number', 'rfq:id,rfq_number,status',
+                'items.item:id,code,name,unit_of_measure', 'items.rfqAward', 'items.supplierQuoteVersion',
                 'approvalRecords.approver:id,name',
                 'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
                 'latestResponse.items',
@@ -171,6 +171,11 @@ class PurchaseOrderService
             if ($prId !== null && (! $sourcePr || (! $systemGenerated && $sourcePr->status !== PurchaseRequestStatus::Approved))) {
                 throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
             }
+            if ($prId !== null && ! $systemGenerated && empty($data['request_for_quote_id']) && $sourcePr?->rfqs()->whereNotIn('status', [
+                'cancelled', 'no_award',
+            ])->exists()) {
+                throw new BusinessRuleException('This purchase request is already committed to an active RFQ.');
+            }
 
             $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class)
                 ?? (int) $data['vendor_id'];
@@ -187,6 +192,7 @@ class PurchaseOrderService
                 'po_number'            => $this->sequences->generate('purchase_order'),
                 'vendor_id'            => $vendorId,
                 'purchase_request_id'  => $prId,
+                'request_for_quote_id'  => $data['request_for_quote_id'] ?? null,
                 'is_auto_generated'    => $systemGenerated,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? null,

@@ -249,7 +249,7 @@ id, item_id (FK items), work_order_id (FK work_orders), quantity (decimal 15,3),
 
 ---
 
-## PURCHASING (5 tables)
+## PURCHASING (13 tables)
 
 ### purchase_requests
 id, pr_number (string 20), requested_by (FK users), department_id (FK departments), date (date), reason (text), status (string 20: draft/pending/approved/rejected/converted), is_auto_generated (bool default false), created_at, updated_at
@@ -258,10 +258,34 @@ id, pr_number (string 20), requested_by (FK users), department_id (FK department
 id, purchase_request_id (FK purchase_requests), item_id (FK items nullable), description (string 200), quantity (decimal 10,2), unit (string 20), estimated_unit_price (decimal 15,2 nullable)
 
 ### purchase_orders
-id, po_number (string 20 unique), vendor_id (FK vendors), purchase_request_id (FK purchase_requests nullable), date (date), expected_delivery_date (date nullable), subtotal (decimal 15,2), vat_amount (decimal 15,2 default 0), total_amount (decimal 15,2), status (string 20: draft/approved/sent/partially_received/received/cancelled), approved_by (FK users nullable), approved_at (timestamp nullable), sent_to_supplier_at (timestamp nullable), remarks (text nullable), created_at, updated_at
+id, po_number (string 20 unique), vendor_id (FK vendors), purchase_request_id (FK purchase_requests nullable), request_for_quote_id (FK request_for_quotes nullable), date (date), expected_delivery_date (date nullable), subtotal (decimal 15,2), vat_amount (decimal 15,2 default 0), total_amount (decimal 15,2), status (string 20: draft/approved/sent/partially_received/received/cancelled), approved_by (FK users nullable), approved_at (timestamp nullable), sent_to_supplier_at (timestamp nullable), remarks (text nullable), created_at, updated_at
 
 ### purchase_order_items
-id, purchase_order_id (FK purchase_orders), item_id (FK items), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
+id, purchase_order_id (FK purchase_orders), item_id (FK items), purchase_request_item_id (FK purchase_request_items nullable), rfq_award_id (FK rfq_awards nullable), supplier_quote_version_id (FK supplier_quotes nullable), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
+
+### request_for_quotes
+id, rfq_number (string 20 unique), purchase_request_id (FK purchase_requests), created_by (FK users), status (string 30: draft/open/closed/under_evaluation/awarded/partially_awarded/no_award/cancelled), title, instructions, currency (PHP), issued_at, closes_at, closed_at, evaluation_started_at, resolved_at, cancellation_reason, no_award_reason, budget warning fields, timestamps
+
+### request_for_quote_items
+id, request_for_quote_id (FK request_for_quotes), purchase_request_item_id (FK purchase_request_items), item_id (FK items nullable), description, specification, quantity (decimal 15,4), unit, required_delivery_date, allow_partial_quantity, allow_substitute (false in MVP), timestamps
+
+### request_for_quote_invitations
+id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invited_by (FK users), invited_at, viewed_at, status (invited/viewed/submitted/withdrawn/awarded/not_awarded), exception_reason, notification timestamps/errors, timestamps, UNIQUE (request_for_quote_id, vendor_id)
+
+### supplier_quotes
+id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invitation_id (FK request_for_quote_invitations), portal_user_id (FK supplier_portal_users nullable), captured_by (FK users nullable), version, status (draft/submitted/superseded/withdrawn/awarded/not_awarded/disqualified), submitted_at, withdrawn_at, is_current, vat_inclusive, vat_amount, freight_amount, other_charges, total_delivered_cost, quote_valid_until, payment_terms, notes, private quotation path, timestamps, UNIQUE (request_for_quote_id, vendor_id, version)
+
+### supplier_quote_items
+id, supplier_quote_id (FK supplier_quotes), request_for_quote_item_id (FK request_for_quote_items), response_status (quoted/no_quote), offered_quantity, unit_price, line VAT/freight/other charges, line_total_delivered_cost, lead_time_days, proposed_delivery_date, MOQ, order multiple, compliance_status (pending/compliant/exception/blocking), compliance_notes, timestamps
+
+### rfq_awards
+id, request_for_quote_id (FK request_for_quotes), request_for_quote_item_id, supplier_quote_id, supplier_quote_item_id, vendor_id, awarded_quantity, awarded_unit_price, awarded_total_delivered_cost, award_reason, single_response_justification, status, awarded_by, awarded_at, timestamps
+
+### rfq_documents
+id, request_for_quote_id, supplier_quote_id nullable, vendor_id nullable, uploader identity, document_type, original_filename, MIME type, size, private file path, timestamps
+
+### rfq_addenda
+id, request_for_quote_id, published_by, sequence, title, body, material_change, published_at, timestamps, UNIQUE (request_for_quote_id, sequence)
 
 ### approved_suppliers
 id, item_id (FK items), vendor_id (FK vendors), is_preferred (bool default false), lead_time_days (int), last_price (decimal 15,2 nullable), created_at, updated_at, UNIQUE (item_id, vendor_id)

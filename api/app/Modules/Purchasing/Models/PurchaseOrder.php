@@ -32,6 +32,7 @@ class PurchaseOrder extends Model
 
     protected $fillable = [
         'po_number', 'vendor_id', 'purchase_request_id',
+        'request_for_quote_id',
         'date', 'expected_delivery_date', 'confirmed_delivery_date',
         'subtotal', 'vat_amount', 'total_amount', 'is_vatable',
         'requires_vp_approval',
@@ -67,6 +68,11 @@ class PurchaseOrder extends Model
     public function purchaseRequest(): BelongsTo
     {
         return $this->belongsTo(PurchaseRequest::class);
+    }
+
+    public function rfq(): BelongsTo
+    {
+        return $this->belongsTo(RequestForQuote::class, 'request_for_quote_id');
     }
 
     public function items(): HasMany

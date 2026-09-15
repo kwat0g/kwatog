@@ -16,6 +16,7 @@ class PurchaseOrderItem extends Model
 
     protected $fillable = [
         'purchase_order_id', 'item_id', 'purchase_request_item_id',
+        'rfq_award_id', 'supplier_quote_version_id',
         'description', 'quantity', 'unit', 'unit_price', 'total',
         'quantity_received', 'quantity_accepted',
     ];
@@ -35,6 +36,16 @@ class PurchaseOrderItem extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    public function rfqAward(): BelongsTo
+    {
+        return $this->belongsTo(RfqAward::class, 'rfq_award_id');
+    }
+
+    public function supplierQuoteVersion(): BelongsTo
+    {
+        return $this->belongsTo(SupplierQuote::class, 'supplier_quote_version_id');
     }
 
     public function getQuantityRemainingAttribute(): string

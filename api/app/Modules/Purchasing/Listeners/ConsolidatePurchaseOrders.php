@@ -11,6 +11,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
@@ -19,8 +20,10 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Series C — Task C2. When a PR's final approval lands, convert it straight
- * into purchase order(s) without a human re-typing the lines.
+ * Legacy auto-conversion listener retained for explicit conversion events and
+ * previously-created approved PRs. New approvals are marked
+ * `sourcing_pending` and stop before this listener so the buyer can choose
+ * direct PO or sealed RFQ.
  *
  * Rules (2026-08-08):
  * - Every PR line must already carry a `suggested_vendor_id` (pre-filled from
@@ -63,6 +66,13 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         // then). Also refuses anything that isn't a freshly-approved PR.
         if ($pr->status !== PurchaseRequestStatus::Approved) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_approved');
+            return;
+        }
+        // Approved PRs no longer auto-convert. The buyer chooses direct PO or
+        // Start RFQ from the PR detail, which keeps the sourcing decision
+        // visible and prevents a queued listener from bypassing competition.
+        if ($pr->po_conversion_status === PurchaseRequestConversionStatus::SourcingPending) {
+            app(ChainListenerRunService::class)->recordOutcome('skipped', 'buyer_sourcing_decision_required');
             return;
         }
         $pr->loadMissing(['items', 'requester']);

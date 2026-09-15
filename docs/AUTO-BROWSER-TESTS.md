@@ -35,6 +35,13 @@
 | Portal auth | Sanctum **bearer tokens** (separate guards) — `POST /api/v1/b2b/supplier/login`, `.../b2b/customer/login` |
 | Demo password | `password` (all seeded accounts) |
 
+To create the documented role accounts in a disposable local environment, set
+`SEED_DEMO_DATA=true` before running `php artisan migrate:fresh --seed` (or
+`php artisan db:seed`). Demo mode now automatically includes the required
+reference data; `SEED_REFERENCE_DATA` does not need to be enabled separately.
+Do not enable demo seeding in production because it creates the documented
+shared test password.
+
 ### Seeded login accounts (verified live — all returned HTTP 200)
 
 | Profile | Email | Role slug | Employee link | Perm count |

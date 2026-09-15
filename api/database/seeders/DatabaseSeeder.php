@@ -42,7 +42,13 @@ class DatabaseSeeder extends Seeder
         // fresh install receives only reference configuration and must obtain
         // employees, customers, inventory, transactions, and profiles from
         // imports or live user/API workflows.
-        if (config('app.seed_reference_data')) {
+        // Demo fixtures depend on departments, positions, inventory, vendors,
+        // and other operational reference rows. Requiring callers to remember
+        // two independent flags made `SEED_DEMO_DATA=true` produce a partial
+        // seed: DemoAccountSeeder then failed resolving departments or later
+        // demo seeders failed on missing catalog records. Demo mode remains
+        // opt-in; it simply implies the reference-data prerequisite.
+        if (config('app.seed_reference_data') || config('app.seed_demo_data')) {
             $this->call([
                 DepartmentSeeder::class,
                 PositionSeeder::class,

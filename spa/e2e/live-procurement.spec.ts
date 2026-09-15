@@ -8,6 +8,7 @@ async function login(page: Page, email: string): Promise<void> {
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 20_000 });
+  await page.locator('#main-content').waitFor({ state: 'attached', timeout: 20_000 });
 }
 
 async function newContext(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
@@ -60,7 +61,10 @@ async function createManualPr(
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Submit', exact: true }).click();
-  await page.waitForURL(/\/purchasing\/purchase-requests\/[^/]+$/, { timeout: 20_000 });
+  // Exclude the create route itself. `/create` also matches a bare `[^/]+`
+  // detail pattern, which let a failed POST continue as if a PR had been
+  // created and hid the actual API error behind a later status assertion.
+  await page.waitForURL(/\/purchasing\/purchase-requests\/(?!create$)[^/]+$/, { timeout: 20_000 });
   await expect(page.getByText('Pending', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
 
   return { context, page, url: page.url() };

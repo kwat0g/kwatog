@@ -152,6 +152,12 @@ For POs, the threshold uses the PO total, including VAT.
 
 Use a disposable demo database for destructive scenarios.
 
+Before testing with the role accounts below, set `SEED_DEMO_DATA=true` in the
+local API environment and run `php artisan migrate:fresh --seed` (or
+`php artisan db:seed`). Demo mode automatically seeds its required departments,
+positions, catalog, and other reference data. Never enable this mode in
+production.
+
 The documented clean-demo sequence is:
 
 ```bash

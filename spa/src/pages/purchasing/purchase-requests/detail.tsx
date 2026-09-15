@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { LuSend, LuThumbsUp, LuThumbsDown, LuX, LuShoppingCart, LuFileText, LuTriangleAlert, LuZap, LuSparkles } from '@/lib/icons';
@@ -37,6 +37,7 @@ const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info
 
 export default function PurchaseRequestDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
+ const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
 
@@ -118,9 +119,12 @@ export default function PurchaseRequestDetailPage() {
  {data.actions?.can_approve && <Button size="xs" variant="primary" icon={<LuThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>}
  </>
  )}
- {data.status === 'approved' && data.actions?.can_convert && (
- <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => setConvertOpen(true)}>Convert to PO</Button>
- )}
+  {data.status === 'approved' && data.actions?.can_convert && (
+  <>
+  <Button size="sm" variant="primary" icon={<LuShoppingCart size={14} />} onClick={() => setConvertOpen(true)}>Convert to PO</Button>
+  </>
+  )}
+  {data.status === 'approved' && (data.actions?.can_start_rfq ?? can('purchasing.rfq.create')) && <Button size="sm" variant="secondary" onClick={() => navigate(`/purchasing/rfqs/create?purchase_request=${data.id}`)}>Start RFQ</Button>}
  {data.actions?.can_print && <Button size="sm" variant="secondary" icon={<LuFileText size={14} />}
  onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>}
  {(data.status === 'draft' || data.status === 'pending') && data.actions?.can_cancel && (

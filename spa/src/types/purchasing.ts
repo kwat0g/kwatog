@@ -14,7 +14,47 @@ export type PurchaseRequestConversionStatus =
   | 'pending'
   | 'manual_required'
   | 'partial'
+  | 'sourcing_pending'
   | 'converted';
+
+export type RfqStatus = 'draft' | 'open' | 'closed' | 'under_evaluation' | 'awarded' | 'partially_awarded' | 'no_award' | 'cancelled';
+export type RfqInvitationStatus = 'invited' | 'viewed' | 'submitted' | 'withdrawn' | 'awarded' | 'not_awarded';
+export type SupplierQuoteStatus = 'draft' | 'submitted' | 'superseded' | 'withdrawn' | 'awarded' | 'not_awarded' | 'disqualified';
+
+export interface RfqItem {
+  id: string; description: string; specification: string | null; quantity: string; unit: string | null;
+  required_delivery_date: string | null; allow_partial_quantity: boolean; allow_substitute: boolean;
+  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
+}
+export interface SupplierQuoteItem {
+  id: string; response_status: 'quoted' | 'no_quote'; offered_quantity: string | null; unit_price: string | null;
+  line_vat_amount: string; line_freight_amount: string; line_other_charges: string; line_total_delivered_cost: string;
+  lead_time_days: number | null; proposed_delivery_date: string | null; compliance_status: string; compliance_notes: string | null;
+  rfq_item: { id: string; description: string; quantity: string; unit: string | null } | null;
+}
+export interface SupplierQuote {
+  id: string; version: number; status: SupplierQuoteStatus; submitted_at: string | null; withdrawn_at: string | null;
+  is_current: boolean; vat_inclusive: boolean; vat_amount: string; freight_amount: string; other_charges: string;
+  total_delivered_cost: string; quote_valid_until: string | null; payment_terms: string | null; notes: string | null;
+  quotation_original_filename: string | null; vendor: { id: string; name: string } | null; items: SupplierQuoteItem[];
+}
+export interface RfqInvitation {
+  id: string; status: RfqInvitationStatus; invited_at: string; viewed_at: string | null; exception_reason: string | null;
+  vendor: { id: string; name: string; email?: string | null } | null;
+}
+export interface RfqAward {
+  id: string; awarded_quantity: string; awarded_unit_price: string; awarded_total_delivered_cost: string;
+  award_reason: string; single_response_justification: string | null; status: string; awarded_at: string;
+  vendor: { id: string; name: string } | null; rfq_item: { id: string; description: string } | null; quote: { id: string; version: number } | null;
+}
+export interface RequestForQuote {
+  id: string; rfq_number: string; status: RfqStatus; status_label?: string; title: string; instructions: string | null;
+  currency: string; issued_at: string | null; closes_at: string; closed_at: string | null; evaluation_started_at: string | null; resolved_at: string | null;
+  cancellation_reason: string | null; no_award_reason: string | null; budget_warning_level: string | null; budget_warning_message: string | null;
+  purchase_request: { id: string; pr_number: string } | null; creator: { id: string; name: string } | null;
+  items?: RfqItem[]; invitations?: RfqInvitation[]; quotes?: SupplierQuote[]; awards?: RfqAward[];
+  addenda?: Array<{ id: string; sequence: number; title: string; body: string; material_change: boolean; published_at: string }>;
+}
 export type PurchaseRequestPriority = 'normal' | 'urgent' | 'critical';
 export type PurchaseOrderStatus =
   | 'draft'
@@ -127,6 +167,7 @@ export interface PurchaseRequest {
     can_reject: boolean;
     can_acknowledge_budget: boolean;
     can_convert: boolean;
+    can_start_rfq?: boolean;
     can_print: boolean;
   };
   requester: { id: string; name: string } | null;
@@ -151,6 +192,7 @@ export interface PurchaseRequest {
     } | null;
     grns?: Array<{ id: string; grn_number: string; status: string }>;
   }>;
+  rfqs?: Array<{ id: string; rfq_number: string; status: RfqStatus; closes_at: string; resolved_at: string | null }>;
 }
 
 export interface PurchaseRequestTemplate {

@@ -139,7 +139,20 @@ amber **AUTO** chip.
 
 ### 8.2 Generating a purchase order
 
-After a PR is fully approved, **Convert to PO** consolidates by supplier.
+After a PR is fully approved, choose **Convert to PO** for direct sourcing or
+**Start RFQ** to run a sealed competitive event. An RFQ snapshots the approved
+PR lines, invites selected suppliers, and keeps submitted prices hidden until
+the deadline closes. Purchasing compares delivered cost, lead time, and quality
+evidence, then awards each line explicitly with a reason. The system creates one
+draft PO per awarded supplier and preserves the RFQ → quote version → PO line
+traceability.
+
+Suppliers work from *Supplier Portal → Supplier RFQs*. They may save a draft,
+no-quote or partially quote a line, upload the formal quotation PDF and resin
+quality documents, revise, or withdraw before the deadline. Competitor prices
+and rankings are never shown.
+
+For a direct conversion, **Convert to PO** consolidates by supplier.
 PO ≥ ₱50,000 (configurable) requires VP signoff.
 
 ### 8.3 Recording a GRN

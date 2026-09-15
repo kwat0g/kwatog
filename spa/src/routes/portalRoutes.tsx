@@ -22,6 +22,9 @@ const SupplierDeliveriesPage = lazy(() => import('@/pages/portal/supplier/delive
 const SupplierStatementOfAccountPage = lazy(() => import('@/pages/portal/supplier/statement-of-account'));
 const SupplierDeliverySchedulesPage = lazy(() => import('@/pages/portal/supplier/delivery-schedules'));
 const SupplierItemListingsPage = lazy(() => import('@/pages/portal/supplier/item-listings'));
+const SupplierRfqsPage = lazy(() => import('@/pages/portal/supplier/rfqs'));
+const SupplierRfqDetailPage = lazy(() => import('@/pages/portal/supplier/rfqs/detail'));
+const SupplierRfqQuotePage = lazy(() => import('@/pages/portal/supplier/rfqs/quote'));
 const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout'));
 const CustomerPortalLoginPage = lazy(() => import('@/pages/portal/customer/login'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
@@ -57,6 +60,9 @@ export const portalRoutes = (
  <Route path="/portal/supplier/statement-of-account" element={<SupplierStatementOfAccountPage />} />
   <Route path="/portal/supplier/delivery-schedules" element={<SupplierDeliverySchedulesPage />} />
   <Route path="/portal/supplier/item-listings" element={<SupplierItemListingsPage />} />
+  <Route path="/portal/supplier/rfqs" element={<SupplierRfqsPage />} />
+  <Route path="/portal/supplier/rfqs/:id" element={<SupplierRfqDetailPage />} />
+  <Route path="/portal/supplier/rfqs/:id/quote" element={<SupplierRfqQuotePage />} />
   </Route>
 
  {/* ADV10 — B2B Customer Portal */}

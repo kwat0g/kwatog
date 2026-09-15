@@ -38,10 +38,13 @@ class ComprehensiveDemoSeeder extends Seeder
             return;
         }
 
-        // Clear previously seeded data for a clean run
-        DB::statement('SET session_replication_role = replica;');
+        // Clear previously seeded data for a clean run. The old implementation
+        // changed PostgreSQL's session_replication_role, which is a superuser-
+        // only setting and caused the normal application owner to fail before
+        // any comprehensive fixtures were seeded. TRUNCATE ... CASCADE uses
+        // table ownership instead and keeps this reset scoped to the demo data
+        // graph.
         $this->truncateAll();
-        DB::statement('SET session_replication_role = DEFAULT;');
 
         $this->seedPayroll();
         $this->seedInvoices();
@@ -77,6 +80,8 @@ class ComprehensiveDemoSeeder extends Seeder
     {
         $tables = [
             'payroll_periods', 'payrolls', 'invoices', 'invoice_items', 'collections', 'bills', 'bill_payments',
+            'rfq_documents', 'rfq_awards', 'supplier_quote_items', 'supplier_quotes',
+            'request_for_quote_invitations', 'request_for_quote_items', 'rfq_addenda', 'request_for_quotes',
             'purchase_requests', 'purchase_request_items',
             'purchase_orders', 'purchase_order_items',
             'approved_suppliers', 'goods_receipt_notes', 'grn_items',
@@ -96,8 +101,15 @@ class ComprehensiveDemoSeeder extends Seeder
             'asset_depreciations',
             'shipments',
         ];
-        foreach ($tables as $t) {
-            DB::table($t)->truncate();
+        if (DB::getDriverName() === 'pgsql') {
+            $quoted = implode(', ', array_map(static fn (string $table): string => '"'.$table.'"', $tables));
+            DB::statement('TRUNCATE TABLE '.$quoted.' RESTART IDENTITY CASCADE');
+
+            return;
+        }
+
+        foreach (array_reverse($tables) as $table) {
+            DB::table($table)->delete();
         }
     }
 

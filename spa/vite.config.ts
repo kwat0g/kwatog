@@ -12,12 +12,14 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    // Native Windows development serves the SPA on the standard localhost
+    // port; Laravel remains on 8000 and receives the API proxy traffic below.
+    port: 80,
     strictPort: true,
     // Direct proxy for local dev without docker (kept for convenience).
     proxy: {
-      '/api': { target: 'http://localhost', changeOrigin: false, secure: false },
-      '/sanctum': { target: 'http://localhost', changeOrigin: false, secure: false },
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
+      '/sanctum': { target: 'http://127.0.0.1:8000', changeOrigin: false, secure: false },
     },
     hmr: {
       // When accessed through the Nginx proxy on port 80, the browser
