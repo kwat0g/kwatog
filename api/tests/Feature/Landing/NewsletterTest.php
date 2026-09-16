@@ -25,6 +25,7 @@ class NewsletterTest extends TestCase
     {
         $response = $this->postJson('/api/v1/landing/newsletter', [
             'email' => 'subscriber@example.com',
+            'consent' => true,
         ]);
 
         $response->assertOk();
@@ -36,12 +37,27 @@ class NewsletterTest extends TestCase
         $record = NewsletterSubscriber::where('email', 'subscriber@example.com')->first();
         $this->assertNotNull($record);
         $this->assertSame('subscribed', $record->status->value);
+        $this->assertNotNull($record->consent_at, 'Acceptance of the privacy notice must be recorded.');
+    }
+
+    public function test_subscribe_requires_consent(): void
+    {
+        $this->postJson('/api/v1/landing/newsletter', [
+            'email' => 'no-consent@example.com',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('consent');
+
+        $this->assertDatabaseMissing('newsletter_subscribers', [
+            'email' => 'no-consent@example.com',
+        ]);
     }
 
     public function test_subscribe_is_idempotent(): void
     {
         $first = $this->postJson('/api/v1/landing/newsletter', [
             'email' => 'idempotent@example.com',
+            'consent' => true,
         ]);
         $first->assertOk();
 
@@ -49,6 +65,7 @@ class NewsletterTest extends TestCase
 
         $second = $this->postJson('/api/v1/landing/newsletter', [
             'email' => 'idempotent@example.com',
+            'consent' => true,
         ]);
         $second->assertOk();
 
@@ -63,6 +80,7 @@ class NewsletterTest extends TestCase
     {
         $this->postJson('/api/v1/landing/newsletter', [
             'email' => 'notanemail',
+            'consent' => true,
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('email');

@@ -28,15 +28,18 @@ class PublicApplicationRequest extends FormRequest
         $postingId = $this->route('jobPosting')?->id;
 
         return [
-            'first_name'   => ['required', 'string', 'max:100'],
-            'last_name'    => ['required', 'string', 'max:100'],
-            'email'        => [
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'email' => [
                 'required', 'email', 'max:255',
                 Rule::unique('job_applications')->where('job_posting_id', $postingId),
             ],
-            'phone'        => ['required', 'string', 'max:30'],
-            'resume'       => ['required', 'file', 'mimes:pdf,doc,docx', 'max:5120'],
+            'phone' => ['required', 'string', 'max:30'],
+            'resume' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:5120'],
             'cover_letter' => ['nullable', 'string', 'max:5000'],
+            // Acceptance of the privacy notice; the timestamp is stored by the
+            // service, not taken from the request.
+            'consent' => ['required', 'accepted'],
         ];
     }
 

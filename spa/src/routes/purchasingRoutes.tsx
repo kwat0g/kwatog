@@ -24,6 +24,7 @@ const RequestForQuotesPage = lazy(() => import('@/pages/purchasing/rfqs'));
 const CreateRfqPage = lazy(() => import('@/pages/purchasing/rfqs/create'));
 const RfqDetailPage = lazy(() => import('@/pages/purchasing/rfqs/detail'));
 const RfqComparisonPage = lazy(() => import('@/pages/purchasing/rfqs/compare'));
+const ManualRfqQuotePage = lazy(() => import('@/pages/purchasing/rfqs/manual-quote'));
 
 export const purchasingRoutes = (
   <>
@@ -57,8 +58,9 @@ export const purchasingRoutes = (
       />
       <Route path="/purchasing/rfqs" element={<PermissionGuard permission="purchasing.rfq.view"><RequestForQuotesPage /></PermissionGuard>} />
       <Route path="/purchasing/rfqs/create" element={<PermissionGuard permission="purchasing.rfq.create"><CreateRfqPage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/:id/compare" element={<PermissionGuard permission="purchasing.rfq.evaluate"><RfqComparisonPage /></PermissionGuard>} />
+      <Route path="/purchasing/rfqs/:id/compare" element={<PermissionGuard anyOf={['purchasing.rfq.evaluate', 'purchasing.rfq.quality_review']}><RfqComparisonPage /></PermissionGuard>} />
       <Route path="/purchasing/rfqs/:id/award" element={<PermissionGuard permission="purchasing.rfq.award"><RfqComparisonPage /></PermissionGuard>} />
+      <Route path="/purchasing/rfqs/:id/manual-quote" element={<PermissionGuard permission="purchasing.rfq.manage"><ManualRfqQuotePage /></PermissionGuard>} />
       <Route path="/purchasing/rfqs/:id" element={<PermissionGuard permission="purchasing.rfq.view"><RfqDetailPage /></PermissionGuard>} />
 
       <Route

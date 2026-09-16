@@ -37,16 +37,16 @@ class PublicRecruitmentTest extends TestCase
         $user = User::factory()->create(['role_id' => $hrRole->id, 'is_active' => true]);
 
         $dept = Department::factory()->create();
-        $this->posting = new JobPosting();
+        $this->posting = new JobPosting;
         $this->posting->fill([
-            'posting_number'  => 'JP-T-' . substr(uniqid(), -5),
-            'title'           => 'Molding Operator',
-            'department_id'   => $dept->id,
-            'description'     => 'Operate machines.',
-            'requirements'    => '1 year exp.',
+            'posting_number' => 'JP-T-'.substr(uniqid(), -5),
+            'title' => 'Molding Operator',
+            'department_id' => $dept->id,
+            'description' => 'Operate machines.',
+            'requirements' => '1 year exp.',
             'employment_type' => 'regular',
-            'created_by'      => $user->id,
-            'posted_at'       => now(),
+            'created_by' => $user->id,
+            'posted_at' => now(),
         ]);
         $this->posting->status = JobPostingStatus::Open;
         $this->posting->save();
@@ -73,12 +73,13 @@ class PublicRecruitmentTest extends TestCase
         Mail::fake();
 
         $response = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
-            'first_name'   => 'Juan',
-            'last_name'    => 'Dela Cruz',
-            'email'        => 'juan@example.com',
-            'phone'        => '09171234567',
-            'resume'       => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+            'first_name' => 'Juan',
+            'last_name' => 'Dela Cruz',
+            'email' => 'juan@example.com',
+            'phone' => '09171234567',
+            'resume' => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
             'cover_letter' => 'I am very interested.',
+            'consent' => true,
         ]);
 
         $response->assertStatus(201);
@@ -96,10 +97,11 @@ class PublicRecruitmentTest extends TestCase
 
         $payload = [
             'first_name' => 'Juan',
-            'last_name'  => 'Dela Cruz',
-            'email'      => ' Candidate@Example.com ',
-            'phone'      => '09171234567',
-            'resume'     => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+            'last_name' => 'Dela Cruz',
+            'email' => ' Candidate@Example.com ',
+            'phone' => '09171234567',
+            'resume' => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+            'consent' => true,
         ];
 
         $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", $payload)
@@ -129,10 +131,11 @@ class PublicRecruitmentTest extends TestCase
 
         $response = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
             'first_name' => 'Test',
-            'last_name'  => 'User',
-            'email'      => 'test@example.com',
-            'phone'      => '09170000000',
-            'resume'     => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+            'last_name' => 'User',
+            'email' => 'test@example.com',
+            'phone' => '09170000000',
+            'resume' => UploadedFile::fake()->create('resume.pdf', 1024, 'application/pdf'),
+            'consent' => true,
         ]);
 
         $response->assertStatus(422);
@@ -164,10 +167,11 @@ class PublicRecruitmentTest extends TestCase
 
         $applyResponse = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
             'first_name' => 'Maria',
-            'last_name'  => 'Santos',
-            'email'      => 'maria@example.com',
-            'phone'      => '09171111111',
-            'resume'     => UploadedFile::fake()->create('cv.pdf', 512, 'application/pdf'),
+            'last_name' => 'Santos',
+            'email' => 'maria@example.com',
+            'phone' => '09171111111',
+            'resume' => UploadedFile::fake()->create('cv.pdf', 512, 'application/pdf'),
+            'consent' => true,
         ]);
 
         $code = $applyResponse->json('tracking_code');
@@ -180,18 +184,18 @@ class PublicRecruitmentTest extends TestCase
 
     public function test_public_tracker_exposes_hired_status_and_terminal_step(): void
     {
-        $application = new JobApplication();
+        $application = new JobApplication;
         $application->fill([
-            'application_number'   => 'JA-T-' . substr(uniqid(), -5),
-            'job_posting_id'       => $this->posting->id,
-            'tracking_code'        => 'RCT-HIRED1',
-            'first_name'           => 'Hired',
-            'last_name'            => 'Candidate',
-            'email'                => 'hired@example.com',
-            'phone'                => '09170000000',
-            'resume_path'          => 'recruitment/resumes/hired.pdf',
+            'application_number' => 'JA-T-'.substr(uniqid(), -5),
+            'job_posting_id' => $this->posting->id,
+            'tracking_code' => 'RCT-HIRED1',
+            'first_name' => 'Hired',
+            'last_name' => 'Candidate',
+            'email' => 'hired@example.com',
+            'phone' => '09170000000',
+            'resume_path' => 'recruitment/resumes/hired.pdf',
             'resume_original_name' => 'hired.pdf',
-            'applied_at'           => now(),
+            'applied_at' => now(),
         ]);
         $application->stage = ApplicationStage::Hired;
         $application->save();

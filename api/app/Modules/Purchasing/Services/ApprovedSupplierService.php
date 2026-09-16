@@ -39,14 +39,15 @@ class ApprovedSupplierService
         // table shows: item code/name, vendor name, and the supplier's own part
         // number/description.
         if (! empty($filters['search'])) {
-            $term = '%'.$filters['search'].'%';
-            $q->where(function (Builder $sub) use ($term): void {
-                $sub->where('supplier_item_code', 'ilike', $term)
-                    ->orWhere('supplier_item_name', 'ilike', $term)
+            $term = SearchOperator::contains($filters['search']);
+            $op = SearchOperator::like();
+            $q->where(function (Builder $sub) use ($term, $op): void {
+                $sub->where('supplier_item_code', $op, $term)
+                    ->orWhere('supplier_item_name', $op, $term)
                     ->orWhereHas('item', fn (Builder $item) => $item
-                        ->where('code', 'ilike', $term)
-                        ->orWhere('name', 'ilike', $term))
-                    ->orWhereHas('vendor', fn (Builder $vendor) => $vendor->where('name', 'ilike', $term));
+                        ->where('code', $op, $term)
+                        ->orWhere('name', $op, $term))
+                    ->orWhereHas('vendor', fn (Builder $vendor) => $vendor->where('name', $op, $term));
             });
         }
         return $q->orderByDesc('is_preferred')->orderBy('id')

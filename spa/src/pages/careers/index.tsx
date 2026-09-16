@@ -11,6 +11,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { landingApi } from '@/api/landing';
+import { useSeo } from '@/hooks/useSeo';
 
 function formatSalary(min: string | null, max: string | null) {
  if (!min && !max) return null;
@@ -35,11 +36,17 @@ export default function CareersPage() {
  .replaceAll('{{standard}}', landingContent?.quality_policy?.standard ?? '—')
  .replaceAll('{{address}}', contact?.address ?? '—');
 
+ useSeo({
+  title: `Careers — ${contact?.legal_name ?? 'Ogami'}`,
+  description: careersIntro || undefined,
+  path: '/careers',
+ });
+
  const postings = data?.data ?? [];
  const lastPage = data?.meta?.last_page ?? 1;
 
  return (
- <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+ <div className="min-h-screen bg-canvas">
  <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
  <main className="mx-auto max-w-6xl px-5 pb-24 pt-32">

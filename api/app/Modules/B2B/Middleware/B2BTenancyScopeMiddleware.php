@@ -12,21 +12,23 @@ use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Purchasing\Models\SupplierItemListing;
 use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
-use App\Modules\Purchasing\Models\SupplierQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
+use App\Modules\Purchasing\Models\SupplierItemListing;
+use App\Modules\Purchasing\Models\SupplierQuote;
 use App\Modules\Quality\Models\PpapSubmission;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 
 class B2BTenancyScopeMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
+        $previousScopes = Model::getAllGlobalScopes();
         if (auth('customer_portal')->check()) {
             $customerId = auth('customer_portal')->user()->customer_id;
 
@@ -60,7 +62,16 @@ class B2BTenancyScopeMiddleware
             SupplierItemListing::addGlobalScope('b2b_tenancy', $scope);
             RequestForQuoteInvitation::addGlobalScope('b2b_tenancy', $scope);
             SupplierQuote::addGlobalScope('b2b_tenancy', $scope);
-            RfqDocument::addGlobalScope('b2b_tenancy', $scope);
+            RfqDocument::addGlobalScope('b2b_tenancy', function (Builder $builder) use ($vendorId): void {
+                $table = $builder->getModel()->getTable();
+                $builder->where(function (Builder $query) use ($table, $vendorId): void {
+                    $query->where($table.'.vendor_id', $vendorId)
+                        ->orWhere(function (Builder $requirements) use ($table, $vendorId): void {
+                            $requirements->whereNull($table.'.vendor_id')
+                                ->whereHas('rfq.invitations', fn ($invitation) => $invitation->where('vendor_id', $vendorId));
+                        });
+                });
+            });
 
             PortalShippingDocument::addGlobalScope('b2b_tenancy', function (Builder $builder) use ($vendorId) {
                 $builder->whereHas('purchaseOrder', function ($q) use ($vendorId) {
@@ -69,6 +80,13 @@ class B2BTenancyScopeMiddleware
             });
         }
 
-        return $next($request);
+        try {
+            return $next($request);
+        } finally {
+            // Eloquent global scopes are process-static. Without restoring the
+            // registry, a supplier request can constrain a later internal or
+            // different-tenant request in the same PHP worker.
+            Model::setAllGlobalScopes($previousScopes);
+        }
     }
 }

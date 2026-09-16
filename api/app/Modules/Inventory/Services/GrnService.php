@@ -75,7 +75,7 @@ class GrnService
             $q->whereDate('received_date', '<=', $filters['to']);
         }
         if (! empty($filters['search'])) {
-            $q->where('grn_number', 'ilike', '%'.$filters['search'].'%');
+            $q->where('grn_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         return $q->orderByDesc('received_date')->orderByDesc('id')

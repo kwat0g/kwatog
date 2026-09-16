@@ -9,6 +9,7 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Services\AttendanceDateMutabilityGuard;
@@ -122,11 +123,11 @@ class LeaveRequestService
         if (!empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $q->where(fn ($qq) => $qq
-                ->where('leave_request_no', 'ilike', "%{$term}%")
-                ->orWhereHas('employee', fn ($e) => $e->where('employee_no', 'ilike', "%{$term}%")
-                    ->orWhere('first_name', 'ilike', "%{$term}%")
-                    ->orWhere('middle_name', 'ilike', "%{$term}%")
-                    ->orWhere('last_name', 'ilike', "%{$term}%")));
+                ->where('leave_request_no', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhereHas('employee', fn ($e) => $e->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))));
         }
         if (!empty($filters['status'])) {
             if ($filters['status'] === 'pending') {

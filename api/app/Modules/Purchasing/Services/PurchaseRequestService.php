@@ -18,6 +18,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -36,6 +37,7 @@ class PurchaseRequestService
         private readonly SettingsService $settings,
         private readonly PurchaseRequestAccessPolicy $access,
         private readonly VendorSourcingService $sourcing,
+        private readonly OutboxService $outbox,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -50,18 +52,26 @@ class PurchaseRequestService
 
         TrashedFilter::apply($q, $filters);
 
-        if (! empty($filters['status']))   $q->where('status', $filters['status']);
-        if (! empty($filters['priority'])) $q->where('priority', $filters['priority']);
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
+        if (! empty($filters['priority'])) {
+            $q->where('priority', $filters['priority']);
+        }
         if (isset($filters['is_urgent']) && $filters['is_urgent'] !== '') {
             $q->where('is_urgent', filter_var($filters['is_urgent'], FILTER_VALIDATE_BOOLEAN));
         }
         if (isset($filters['is_auto_generated']) && $filters['is_auto_generated'] !== '') {
             $q->where('is_auto_generated', filter_var($filters['is_auto_generated'], FILTER_VALIDATE_BOOLEAN));
         }
-        if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('date', '<=', $filters['to']);
+        }
         if (! empty($filters['search'])) {
-            $q->where('pr_number', 'ilike', '%'.$filters['search'].'%');
+            $q->where('pr_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         $this->access->visibleTo($q, $user);
@@ -126,21 +136,22 @@ class PurchaseRequestService
             }
 
             $pr = PurchaseRequest::create([
-                'pr_number'            => $this->sequences->generate('pr'),
-                'requested_by'         => $by->id,
-                'department_id'        => $requestedDepartmentId ?? $by->employee?->department_id ?? null,
-                'template_id'          => $data['template_id'] ?? null,
-                'date'                 => $data['date'] ?? now()->toDateString(),
-                'reason'               => $data['reason'] ?? null,
-                'priority'             => $priority,
-                'is_auto_generated'    => $isAuto,
-                'auto_generated_reason'=> $data['auto_generated_reason'] ?? null,
+                'pr_number' => $this->sequences->generate('pr'),
+                'requested_by' => $by->id,
+                'department_id' => $requestedDepartmentId ?? $by->employee?->department_id ?? null,
+                'template_id' => $data['template_id'] ?? null,
+                'date' => $data['date'] ?? now()->toDateString(),
+                'reason' => $data['reason'] ?? null,
+                'priority' => $priority,
+                'is_auto_generated' => $isAuto,
+                'auto_generated_reason' => $data['auto_generated_reason'] ?? null,
                 // Priority is the public and automation-facing urgency
                 // contract. Keep the legacy flag in sync for existing UI and
                 // filters while retaining support for internal callers that
                 // explicitly set is_urgent.
-                'is_urgent'            => (bool) ($data['is_urgent'] ?? $this->isUrgentPriority($priority)),
-                'urgency_reason'       => $data['urgency_reason'] ?? null,
+                'is_urgent' => (bool) ($data['is_urgent'] ?? $this->isUrgentPriority($priority)),
+                'urgency_reason' => $data['urgency_reason'] ?? null,
+                'sourcing_method' => $data['sourcing_method'] ?? null,
             ]);
             // status is non-fillable; service-only.
             $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
@@ -177,21 +188,21 @@ class PurchaseRequestService
                 }
 
                 PurchaseRequestItem::create([
-                    'purchase_request_id'  => $pr->id,
-                    'item_id'              => $itemId,
-                    'description'          => trim((string) ($row['description'] ?? '')) !== ''
+                    'purchase_request_id' => $pr->id,
+                    'item_id' => $itemId,
+                    'description' => trim((string) ($row['description'] ?? '')) !== ''
                         ? (string) $row['description']
                         : ($item?->description !== null && trim((string) $item->description) !== ''
                             ? (string) $item->description
                             : ($item?->name ?? '')),
-                    'quantity'             => $row['quantity'],
-                    'unit'                 => trim((string) ($row['unit'] ?? '')) !== ''
+                    'quantity' => $row['quantity'],
+                    'unit' => trim((string) ($row['unit'] ?? '')) !== ''
                         ? (string) $row['unit']
                         : ($item?->unit_of_measure ?? null),
                     'estimated_unit_price' => $estimate,
-                    'purpose'              => $row['purpose'] ?? null,
+                    'purpose' => $row['purpose'] ?? null,
                     // ADV6 — store suggested vendor ID on the item for UI hint
-                    'suggested_vendor_id'  => $suggestedVendorId,
+                    'suggested_vendor_id' => $suggestedVendorId,
                 ]);
             }
 
@@ -211,6 +222,7 @@ class PurchaseRequestService
         if ($pr->status !== PurchaseRequestStatus::Draft) {
             throw new BusinessRuleException('Only draft PRs can be edited.');
         }
+
         return DB::transaction(function () use ($pr, $data, $by) {
             // Lock-then-guard, same shape as submit()/approve()/reject()/cancel().
             // The pre-transaction checks above are a fast, cheap refusal; this is
@@ -232,16 +244,19 @@ class PurchaseRequestService
             }
 
             $locked->update([
-                'reason'    => $data['reason']   ?? $locked->reason,
-                'priority'  => array_key_exists('priority', $data)
+                'reason' => $data['reason'] ?? $locked->reason,
+                'priority' => array_key_exists('priority', $data)
                     ? $this->priorityValue($data['priority'])
                     : $locked->priority,
                 ...array_key_exists('priority', $data)
                     ? ['is_urgent' => $this->isUrgentPriority($this->priorityValue($data['priority']))]
                     : [],
-                'date'      => $data['date']     ?? $locked->date,
+                'date' => $data['date'] ?? $locked->date,
                 ...array_key_exists('department_id', $data)
                     ? ['department_id' => $data['department_id']]
+                    : [],
+                ...array_key_exists('sourcing_method', $data)
+                    ? ['sourcing_method' => $data['sourcing_method']]
                     : [],
             ]);
             if (isset($data['items'])) {
@@ -263,26 +278,27 @@ class PurchaseRequestService
                         : null;
                     $item = $itemId ? Item::find($itemId) : null;
                     PurchaseRequestItem::create([
-                        'purchase_request_id'  => $locked->id,
-                        'item_id'              => $itemId,
-                        'description'          => trim((string) ($row['description'] ?? '')) !== ''
+                        'purchase_request_id' => $locked->id,
+                        'item_id' => $itemId,
+                        'description' => trim((string) ($row['description'] ?? '')) !== ''
                             ? (string) $row['description']
                             : ($item?->description !== null && trim((string) $item->description) !== ''
                                 ? (string) $item->description
                                 : ($item?->name ?? '')),
-                        'quantity'             => $row['quantity'],
-                        'unit'                 => trim((string) ($row['unit'] ?? '')) !== ''
+                        'quantity' => $row['quantity'],
+                        'unit' => trim((string) ($row['unit'] ?? '')) !== ''
                             ? (string) $row['unit']
                             : ($item?->unit_of_measure ?? null),
                         'estimated_unit_price' => ($row['estimated_unit_price'] ?? null) !== null
                             && trim((string) $row['estimated_unit_price']) !== ''
                             ? $row['estimated_unit_price']
                             : ($item ? (string) $item->standard_cost : null),
-                        'purpose'              => $row['purpose'] ?? null,
-                        'suggested_vendor_id'  => $itemId !== null ? ($preservedVendors[$itemId] ?? null) : null,
+                        'purpose' => $row['purpose'] ?? null,
+                        'suggested_vendor_id' => $itemId !== null ? ($preservedVendors[$itemId] ?? null) : null,
                     ]);
                 }
             }
+
             return $this->show($locked->fresh());
         });
     }
@@ -313,6 +329,9 @@ class PurchaseRequestService
             $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->getKey());
             if ($locked->status !== PurchaseRequestStatus::Draft) {
                 throw new BusinessRuleException('Only draft PRs can be submitted.');
+            }
+            if ($locked->sourcing_method === null) {
+                throw new BusinessRuleException('Select a sourcing method before submitting this purchase request.');
             }
             if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to submit this purchase request.');
@@ -355,7 +374,7 @@ class PurchaseRequestService
             $this->approvals->submit($locked, 'purchase_request', $total);
 
             $locked->forceFill([
-                'status'       => PurchaseRequestStatus::Pending,
+                'status' => PurchaseRequestStatus::Pending,
                 'submitted_at' => now(),
             ])->save();
 
@@ -430,13 +449,15 @@ class PurchaseRequestService
             $becameApproved = false;
             if ($this->approvals->isFullyApproved($locked)) {
                 $locked->forceFill([
-                    'status'               => PurchaseRequestStatus::Approved,
-                    'approved_at'          => now(),
+                    'status' => PurchaseRequestStatus::Approved,
+                    'approved_at' => now(),
                     // Approval ends the PR workflow; the buyer now chooses a
                     // direct conversion or a sealed RFQ explicitly.
-                    'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending,
-                    'po_conversion_note'  => null,
-                    'po_conversion_at'    => now(),
+                    'po_conversion_status' => $locked->sourcing_method === PurchaseRequestSourcingMethod::DirectPo
+                        ? PurchaseRequestConversionStatus::Pending
+                        : PurchaseRequestConversionStatus::SourcingPending,
+                    'po_conversion_note' => null,
+                    'po_conversion_at' => now(),
                 ])->save();
                 $becameApproved = true;
             }
@@ -450,6 +471,34 @@ class PurchaseRequestService
                     PurchaseRequestStatus::Approved->value,
                 );
             }
+
+            return $fresh;
+        });
+    }
+
+    public function setSourcingMethod(PurchaseRequest $pr, PurchaseRequestSourcingMethod $method, User $by): PurchaseRequest
+    {
+        return DB::transaction(function () use ($pr, $method, $by): PurchaseRequest {
+            $locked = PurchaseRequest::query()->lockForUpdate()->findOrFail($pr->id);
+            if ($locked->sourcing_method !== null && $locked->sourcing_method !== $method) {
+                throw new BusinessRuleException('The sourcing method is already selected and cannot be changed.');
+            }
+            if (! $this->access->canSetSourcingMethod($by, $locked, $method)) {
+                throw new ForbiddenActionException('You cannot select this sourcing method for the purchase request.');
+            }
+            $locked->forceFill([
+                'sourcing_method' => $method,
+                'po_conversion_status' => $locked->status === PurchaseRequestStatus::Approved && $method === PurchaseRequestSourcingMethod::DirectPo
+                    ? PurchaseRequestConversionStatus::Pending
+                    : ($locked->status === PurchaseRequestStatus::Approved ? PurchaseRequestConversionStatus::SourcingPending : $locked->po_conversion_status),
+                'po_conversion_note' => null,
+                'po_conversion_at' => $locked->status === PurchaseRequestStatus::Approved ? now() : $locked->po_conversion_at,
+            ])->save();
+            $fresh = $locked->fresh();
+            if ($fresh->status === PurchaseRequestStatus::Approved && $method === PurchaseRequestSourcingMethod::DirectPo) {
+                $this->outbox->record(new PurchaseRequestApproved($fresh), 'purchase-request:'.$fresh->id.':direct-po-selected');
+            }
+
             return $fresh;
         });
     }
@@ -476,7 +525,7 @@ class PurchaseRequestService
      * as strict as it was; it answers a different question (should the SPA render
      * the button?) where one boolean is the right shape.
      *
-     * @param 'approve'|'reject' $action
+     * @param  'approve'|'reject'  $action
      */
     private function assertMayDecide(User $by, PurchaseRequest $pr, string $action): void
     {
@@ -504,18 +553,19 @@ class PurchaseRequestService
                 $pr = PurchaseRequest::findOrFail($id);
                 $result = $this->approve($pr, $by, $remarks);
                 $results[] = [
-                    'id'      => $result->hash_id,
-                    'status'  => 'approved',
+                    'id' => $result->hash_id,
+                    'status' => 'approved',
                     'message' => null,
                 ];
             } catch (RuntimeException $e) {
                 $results[] = [
-                    'id'      => PurchaseRequest::find($id)?->hash_id ?? (string) $id,
-                    'status'  => 'skipped',
+                    'id' => PurchaseRequest::find($id)?->hash_id ?? (string) $id,
+                    'status' => 'skipped',
                     'message' => $e->getMessage(),
                 ];
             }
         }
+
         return $results;
     }
 
@@ -531,6 +581,7 @@ class PurchaseRequestService
             $this->assertMayDecide($by, $locked, 'reject');
             $this->approvals->reject($locked, $by, $reason);
             $locked->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
+
             return $locked->fresh();
         });
     }
@@ -552,6 +603,7 @@ class PurchaseRequestService
                 throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
             }
             $locked->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
+
             return $locked->fresh();
         });
     }

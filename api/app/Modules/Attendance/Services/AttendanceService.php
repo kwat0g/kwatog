@@ -6,6 +6,7 @@ namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -55,9 +56,9 @@ class AttendanceService
         if (!empty($filters['search'])) {
             $term = $filters['search'];
             $q->whereHas('employee', function ($e) use ($term) {
-                $e->where('employee_no', 'ilike', "%{$term}%")
-                  ->orWhere('first_name', 'ilike', "%{$term}%")
-                  ->orWhere('last_name', 'ilike', "%{$term}%");
+                $e->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
+                  ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                  ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

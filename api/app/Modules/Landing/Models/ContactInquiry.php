@@ -8,7 +8,6 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -41,6 +40,7 @@ class ContactInquiry extends Model
     {
         return [
             'status' => ContactInquiryStatus::class,
+            'consent_at' => 'datetime',
         ];
     }
 }

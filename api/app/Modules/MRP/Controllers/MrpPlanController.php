@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Controllers;
 
 use App\Modules\CRM\Models\SalesOrder;
-use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Resources\MrpPlanResource;
 use App\Modules\MRP\Services\MrpEngineService;
 use Illuminate\Http\JsonResponse;
@@ -52,6 +52,7 @@ class MrpPlanController
         if (! $plan) {
             return response()->json(['data' => null]);
         }
+
         return new MrpPlanResource($this->engine->show($plan));
     }
 }

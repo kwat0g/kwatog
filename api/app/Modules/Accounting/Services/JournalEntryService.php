@@ -73,8 +73,8 @@ class JournalEntryService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('entry_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhere('description', SearchOperator::like(), "%{$term}%");
+                $qq->where('entry_number', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhere('description', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

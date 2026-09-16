@@ -29,10 +29,10 @@ class ContactInquiryInboxService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term): void {
-                $qq->where('full_name', SearchOperator::like(), "%{$term}%")
-                    ->orWhere('company', SearchOperator::like(), "%{$term}%")
-                    ->orWhere('email', SearchOperator::like(), "%{$term}%")
-                    ->orWhere('inquiry_no', SearchOperator::like(), "%{$term}%");
+                $qq->where('full_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('company', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('email', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('inquiry_no', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

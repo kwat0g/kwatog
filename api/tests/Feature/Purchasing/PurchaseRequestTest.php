@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -49,7 +49,7 @@ class PurchaseRequestTest extends TestCase
     {
         return User::factory()->create([
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
-            'email'   => 'admin+' . uniqid() . '@test.local',
+            'email' => 'admin+'.uniqid().'@test.local',
         ]);
     }
 
@@ -59,7 +59,7 @@ class PurchaseRequestTest extends TestCase
 
         return User::factory()->create([
             'role_id' => $roleId,
-            'email'   => $roleSlug . '+' . uniqid() . '@test.local',
+            'email' => $roleSlug.'+'.uniqid().'@test.local',
         ]);
     }
 
@@ -68,11 +68,12 @@ class PurchaseRequestTest extends TestCase
     {
         return [
             'priority' => 'normal',
-            'items'    => [
+            'sourcing_method' => 'direct_po',
+            'items' => [
                 [
                     'description' => 'A4 Bond Paper',
-                    'quantity'    => '5',
-                    'unit'        => 'ream',
+                    'quantity' => '5',
+                    'unit' => 'ream',
                 ],
             ],
         ];
@@ -88,8 +89,8 @@ class PurchaseRequestTest extends TestCase
             ->postJson('/api/v1/purchasing/purchase-requests', $this->validPayload());
 
         $response->assertStatus(201)
-                 ->assertJsonPath('data.status', 'draft')
-                 ->assertJsonStructure(['data' => ['id', 'pr_number', 'status', 'priority']]);
+            ->assertJsonPath('data.status', 'draft')
+            ->assertJsonStructure(['data' => ['id', 'pr_number', 'status', 'priority']]);
     }
 
     public function test_unauthenticated_request_is_rejected(): void
@@ -106,11 +107,23 @@ class PurchaseRequestTest extends TestCase
         $response = $this->actingAs($admin)
             ->postJson('/api/v1/purchasing/purchase-requests', [
                 'priority' => 'normal',
-                'items'    => [],
+                'items' => [],
             ]);
 
         $response->assertUnprocessable()
-                 ->assertJsonValidationErrorFor('items');
+            ->assertJsonValidationErrorFor('items');
+    }
+
+    public function test_create_requires_an_explicit_sourcing_method(): void
+    {
+        $admin = $this->makeAdmin();
+        $payload = $this->validPayload();
+        unset($payload['sourcing_method']);
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/purchasing/purchase-requests', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrorFor('sourcing_method');
     }
 
     public function test_authenticated_user_can_submit_a_draft_pr(): void
@@ -120,7 +133,7 @@ class PurchaseRequestTest extends TestCase
         // Create a draft PR via the service (bypasses HTTP to isolate the submit test).
         /** @var PurchaseRequestService $svc */
         $svc = app(PurchaseRequestService::class);
-        $pr  = $svc->create($this->validPayload(), $admin);
+        $pr = $svc->create($this->validPayload(), $admin);
 
         $this->assertSame(PurchaseRequestStatus::Draft, $pr->status);
 
@@ -128,7 +141,22 @@ class PurchaseRequestTest extends TestCase
             ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit");
 
         $response->assertOk()
-                 ->assertJsonPath('data.status', 'pending');
+            ->assertJsonPath('data.status', 'pending');
+    }
+
+    public function test_legacy_approved_pr_requires_explicit_sourcing_choice_before_conversion(): void
+    {
+        $admin = $this->makeAdmin();
+        $pr = PurchaseRequest::factory()->create(['sourcing_method' => null]);
+        $pr->forceFill([
+            'status' => PurchaseRequestStatus::Approved,
+            'po_conversion_status' => 'sourcing_pending',
+        ])->save();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/sourcing-method", ['sourcing_method' => 'rfq'])
+            ->assertOk()
+            ->assertJsonPath('data.sourcing_method', 'rfq');
     }
 
     public function test_deleted_purchase_request_can_be_restored_through_hash_route(): void
@@ -163,8 +191,8 @@ class PurchaseRequestTest extends TestCase
 
         // Create and submit a PR so it has pending approval records.
         /** @var PurchaseRequestService $svc */
-        $svc    = app(PurchaseRequestService::class);
-        $pr     = $svc->create($this->validPayload(), $admin);
+        $svc = app(PurchaseRequestService::class);
+        $pr = $svc->create($this->validPayload(), $admin);
         $svc->submit($pr);
         $pr->refresh();
 

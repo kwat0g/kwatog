@@ -9,7 +9,6 @@ import { ListEmptyState } from '@/components/ui/ListEmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import { formatDate } from '@/lib/formatDate';
 import type { ListParams } from '@/types';
 import type { RequestForQuote } from '@/types/purchasing';
 
@@ -27,13 +26,14 @@ export default function RequestForQuotesPage() {
     { key: 'number', header: 'RFQ #', cell: (row) => <span className="font-mono">{row.rfq_number}</span> },
     { key: 'title', header: 'Sourcing event', cell: (row) => <span className="font-medium">{row.title}</span> },
     { key: 'pr', header: 'Source PR', cell: (row) => <span className="font-mono">{row.purchase_request?.pr_number ?? '—'}</span> },
-    { key: 'deadline', header: 'Deadline', cell: (row) => <span className="font-mono">{formatDate(row.closes_at)}</span> },
+    { key: 'deadline', header: 'Deadline', cell: (row) => <span className="font-mono">{new Date(row.closes_at).toLocaleString()}</span> },
     { key: 'status', header: 'Status', cell: (row) => <Chip variant={chipVariantForStatus(row.status)}>{row.status_label ?? row.status.replace(/_/g, ' ')}</Chip> },
   ];
   return <div>
     <PageHeader title="Supplier RFQs" subtitle={query.data ? `${query.data.meta.total} sourcing events` : undefined} />
+    {query.isFetching && query.data && <div className="px-5 text-xs text-muted" role="status">Refreshing RFQs…</div>}
     {query.isLoading && !query.data && <SkeletonTable columns={5} rows={6} />}
-    {query.isError && <EmptyState icon="alert-circle" title="Failed to load RFQs" action={<Button onClick={() => query.refetch()}>Retry</Button>} />}
+    {query.isError && !query.data && <EmptyState icon="alert-circle" title="Failed to load RFQs" action={<Button onClick={() => query.refetch()}>Retry</Button>} />}
     {query.data && query.data.data.length === 0 && <ListEmptyState />}
     {query.data && query.data.data.length > 0 && <div className="px-5 py-4">
       <DataTable tableKey="supplier-rfqs" data={query.data.data} columns={columns} meta={query.data.meta}

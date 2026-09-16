@@ -64,20 +64,20 @@ class SupplierPerformanceService
 
         $snapshot = DB::transaction(function () use ($vendor, $year, $month) {
             $start = Carbon::create($year, $month, 1)->startOfDay();
-            $end   = $start->copy()->endOfMonth()->endOfDay();
+            $end = $start->copy()->endOfMonth()->endOfDay();
 
-            $onTime    = $this->onTimeDeliveryRate($vendor->id, $start, $end);
+            $onTime = $this->onTimeDeliveryRate($vendor->id, $start, $end);
             $qcMetrics = $this->qualityMetrics($vendor->id, $start, $end);
-            $quality   = $qcMetrics['passRate'];
+            $quality = $qcMetrics['passRate'];
             $qcBreakdown = $qcMetrics['breakdown'];
-            $ncrRate   = $this->ncrRate($vendor->id, $start, $end);
-            $price     = $this->priceVariancePct($vendor->id, $start, $end);
-            $leadTime  = $this->leadTimeVarianceDays($vendor->id, $start, $end);
+            $ncrRate = $this->ncrRate($vendor->id, $start, $end);
+            $price = $this->priceVariancePct($vendor->id, $start, $end);
+            $leadTime = $this->leadTimeVarianceDays($vendor->id, $start, $end);
 
             // Archived purchase orders must not feed a live scorecard. Every
             // reach into purchase_orders here is a raw DB::table() query, which
             // does NOT apply PurchaseOrder's SoftDeletes global scope.
-            $poCount  = (int) DB::table('purchase_orders')
+            $poCount = (int) DB::table('purchase_orders')
                 ->where('vendor_id', $vendor->id)
                 ->whereNull('deleted_at')
                 ->whereBetween('date', [$start, $end])
@@ -88,28 +88,28 @@ class SupplierPerformanceService
                 ->count();
 
             $overall = $this->compositeScore($onTime, $quality, $ncrRate, $price, $leadTime);
-            $tier    = $this->tierFromScore($overall);
+            $tier = $this->tierFromScore($overall);
 
             $computedAt = now();
             $snapshotValues = [
-                'vendor_id'               => $vendor->id,
-                'period_year'             => $year,
-                'period_month'            => $month,
-                'on_time_delivery_rate'   => $onTime,
-                'quality_pass_rate'       => $quality,
-                'incoming_quality_rate'   => $qcBreakdown['incoming'] ?? null,
+                'vendor_id' => $vendor->id,
+                'period_year' => $year,
+                'period_month' => $month,
+                'on_time_delivery_rate' => $onTime,
+                'quality_pass_rate' => $quality,
+                'incoming_quality_rate' => $qcBreakdown['incoming'] ?? null,
                 'in_process_quality_rate' => $qcBreakdown['in_process'] ?? null,
-                'outgoing_quality_rate'   => $qcBreakdown['outgoing'] ?? null,
-                'ncr_rate'                => $ncrRate,
-                'price_variance_pct'      => $price,
+                'outgoing_quality_rate' => $qcBreakdown['outgoing'] ?? null,
+                'ncr_rate' => $ncrRate,
+                'price_variance_pct' => $price,
                 'lead_time_variance_days' => $leadTime,
-                'overall_score'           => $overall,
-                'tier'                    => $tier,
-                'po_count'                => $poCount,
-                'grn_count'               => $grnCount,
-                'computed_at'             => $computedAt,
-                'created_at'              => $computedAt,
-                'updated_at'              => $computedAt,
+                'overall_score' => $overall,
+                'tier' => $tier,
+                'po_count' => $poCount,
+                'grn_count' => $grnCount,
+                'computed_at' => $computedAt,
+                'created_at' => $computedAt,
+                'updated_at' => $computedAt,
             ];
 
             // updateOrCreate can race when two first computations both observe
@@ -149,16 +149,25 @@ class SupplierPerformanceService
      */
     private function tierFromScore(?float $score): ?string
     {
-        if ($score === null) return null;
+        if ($score === null) {
+            return null;
+        }
         $a = $this->setting('purchasing.supplier_score.tier_a_min');
         $b = $this->setting('purchasing.supplier_score.tier_b_min');
         $c = $this->setting('purchasing.supplier_score.tier_c_min');
         if (! ($a > $b && $b > $c)) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Supplier tier thresholds must be strictly descending.');
+            throw new BusinessRuleException('Supplier tier thresholds must be strictly descending.');
         }
-        if ($score >= $a) return 'A';
-        if ($score >= $b) return 'B';
-        if ($score >= $c) return 'C';
+        if ($score >= $a) {
+            return 'A';
+        }
+        if ($score >= $b) {
+            return 'B';
+        }
+        if ($score >= $c) {
+            return 'C';
+        }
+
         return 'D';
     }
 
@@ -169,14 +178,15 @@ class SupplierPerformanceService
     {
         $months ??= $this->settingInt('purchasing.supplier_score.trend_months', 1, 36);
         $cutoff = Carbon::now()->subMonths($months - 1)->startOfMonth();
+
         return SupplierPerformanceSnapshot::query()
             ->where('vendor_id', $vendor->id)
             ->where(function ($q) use ($cutoff) {
                 $q->where('period_year', '>', $cutoff->year)
-                  ->orWhere(function ($q2) use ($cutoff) {
-                      $q2->where('period_year', $cutoff->year)
-                         ->where('period_month', '>=', $cutoff->month);
-                  });
+                    ->orWhere(function ($q2) use ($cutoff) {
+                        $q2->where('period_year', $cutoff->year)
+                            ->where('period_month', '>=', $cutoff->month);
+                    });
             })
             ->orderBy('period_year')
             ->orderBy('period_month')
@@ -262,6 +272,26 @@ class SupplierPerformanceService
             ->get();
     }
 
+    /** @return Collection<int, SupplierPerformanceSnapshot> keyed by vendor id */
+    public function latestForVendors(array $vendorIds): Collection
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $vendorIds), static fn (int $id): bool => $id > 0)));
+        if ($ids === []) {
+            return collect();
+        }
+
+        return SupplierPerformanceSnapshot::query()
+            ->whereIn('vendor_id', $ids)
+            ->with('vendor:id,name')
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->get()
+            ->groupBy('vendor_id')
+            ->map(static fn (Collection $rows): SupplierPerformanceSnapshot => $rows->first())
+            ->values()
+            ->keyBy('vendor_id');
+    }
+
     /**
      * Validate the period at every service entry point before Carbon or a
      * database write can normalize an invalid month into another date.
@@ -296,12 +326,16 @@ class SupplierPerformanceService
             ->whereBetween('g.received_date', [$start, $end])
             ->get();
 
-        if ($rows->isEmpty()) return null;
+        if ($rows->isEmpty()) {
+            return null;
+        }
 
         $onTime = 0;
         $total = 0;
         foreach ($rows as $r) {
-            if ($r->expected_delivery_date === null) continue;
+            if ($r->expected_delivery_date === null) {
+                continue;
+            }
             $total++;
             if (Carbon::parse((string) $r->received_date)->lte(Carbon::parse((string) $r->expected_delivery_date))) {
                 $onTime++;
@@ -325,7 +359,7 @@ class SupplierPerformanceService
         $rows = DB::table('goods_receipt_notes as grn')
             ->join('inspections as i', function ($join) {
                 $join->on('i.entity_id', '=', 'grn.id')
-                     ->where('i.entity_type', '=', 'grn');
+                    ->where('i.entity_type', '=', 'grn');
             })
             ->select(['i.stage', 'i.status'])
             ->where('grn.vendor_id', $vendorId)
@@ -370,8 +404,9 @@ class SupplierPerformanceService
         }
 
         $accepted = $grnRows->where('status', 'accepted')->count();
+
         return [
-            'passRate'  => round(($accepted / $grnRows->count()) * 100, 2),
+            'passRate' => round(($accepted / $grnRows->count()) * 100, 2),
             'breakdown' => $breakdown,
         ];
     }
@@ -388,13 +423,15 @@ class SupplierPerformanceService
             ->whereBetween('received_date', [$start, $end])
             ->count();
 
-        if ($totalGrns === 0) return null;
+        if ($totalGrns === 0) {
+            return null;
+        }
 
         $ncrCount = (int) DB::table('non_conformance_reports as ncr')
             ->join('inspections as i', 'ncr.inspection_id', '=', 'i.id')
             ->join('goods_receipt_notes as grn', function ($join) {
                 $join->on('i.entity_id', '=', 'grn.id')
-                     ->where('i.entity_type', '=', 'grn');
+                    ->where('i.entity_type', '=', 'grn');
             })
             ->where('grn.vendor_id', $vendorId)
             ->whereBetween('grn.received_date', [$start, $end])
@@ -421,10 +458,13 @@ class SupplierPerformanceService
             ->whereBetween('po.date', [$start, $end])
             ->first();
 
-        if (! $rows || (float) ($rows->qty ?? 0) <= 0) return null;
+        if (! $rows || (float) ($rows->qty ?? 0) <= 0) {
+            return null;
+        }
 
         $shortfall = max(0, (float) $rows->qty - (float) ($rows->recv ?? 0));
         $pct = ($shortfall / (float) $rows->qty) * 100;
+
         return round($pct, 2);
     }
 
@@ -444,11 +484,15 @@ class SupplierPerformanceService
             ->whereBetween('g.received_date', [$start, $end])
             ->get();
 
-        if ($rows->isEmpty()) return null;
+        if ($rows->isEmpty()) {
+            return null;
+        }
 
         $diffs = [];
         foreach ($rows as $r) {
-            if (! $r->po_date || ! $r->expected_delivery_date) continue;
+            if (! $r->po_date || ! $r->expected_delivery_date) {
+                continue;
+            }
             // Both diffs are SIGNED offsets from the same anchor (po_date), and
             // it is their DIFFERENCE that is the variance — so the signs must
             // survive. Neither date is guaranteed to follow the PO date:
@@ -457,11 +501,13 @@ class SupplierPerformanceService
             // would fold a backdated expectation the wrong way and understate
             // lateness by twice the backdating.
             $expected = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->expected_delivery_date), false);
-            $actual   = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->received_date), false);
+            $actual = Carbon::parse((string) $r->po_date)->diffInDays(Carbon::parse((string) $r->received_date), false);
             $diffs[] = $actual - $expected;
         }
 
-        if (empty($diffs)) return null;
+        if (empty($diffs)) {
+            return null;
+        }
         $avg = array_sum($diffs) / count($diffs);
 
         // Keep the average inside the column's domain so one mis-keyed date
@@ -495,11 +541,11 @@ class SupplierPerformanceService
         }
 
         // Score each on 0–100 (higher is better).
-        $onTimeScore   = $onTime ?? 0;                                   // already 0-100
-        $qualityScore  = $quality ?? 0;                                  // already 0-100
+        $onTimeScore = $onTime ?? 0;                                   // already 0-100
+        $qualityScore = $quality ?? 0;                                  // already 0-100
         $neutral = $this->setting('purchasing.supplier_score.neutral_missing_metric');
-        $ncrScore      = $ncrRate === null ? $neutral : max(0, 100 - $ncrRate * $this->setting('purchasing.supplier_score.ncr_penalty_factor'));
-        $priceScore    = $price === null ? $neutral : max(0, 100 - $price * $this->setting('purchasing.supplier_score.price_penalty_factor'));
+        $ncrScore = $ncrRate === null ? $neutral : max(0, 100 - $ncrRate * $this->setting('purchasing.supplier_score.ncr_penalty_factor'));
+        $priceScore = $price === null ? $neutral : max(0, 100 - $price * $this->setting('purchasing.supplier_score.price_penalty_factor'));
         $leadTimeScore = $leadTime === null ? $neutral : max(0, 100 - abs($leadTime) * $this->setting('purchasing.supplier_score.lead_time_penalty_factor'));
 
         $weights = [
@@ -510,7 +556,7 @@ class SupplierPerformanceService
             $this->setting('purchasing.supplier_score.weight_lead_time'),
         ];
         if (abs(array_sum($weights) - 1.0) > 0.0001) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Supplier score weights must total 1.0.');
+            throw new BusinessRuleException('Supplier score weights must total 1.0.');
         }
         $score = ($onTimeScore * $weights[0]) + ($qualityScore * $weights[1])
                + ($ncrScore * $weights[2]) + ($priceScore * $weights[3])
@@ -523,8 +569,9 @@ class SupplierPerformanceService
     {
         $value = $this->settings->get($key);
         if (! is_numeric($value) || (float) $value < 0) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required supplier policy {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required supplier policy {$key} is missing or invalid.");
         }
+
         return (float) $value;
     }
 

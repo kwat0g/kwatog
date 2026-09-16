@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
@@ -22,18 +23,24 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Events\PurchaseOrderSent;
+use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
+use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Models\RfqQuoteReconfirmation;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Quality\Services\PpapService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PurchaseOrderService
 {
@@ -57,9 +64,11 @@ class PurchaseOrderService
                 : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class);
             if ($prId) {
                 $deptId = PurchaseRequest::find($prId)?->department_id;
+
                 return $deptId !== null ? (int) $deptId : null;
             }
         }
+
         return null;
     }
 
@@ -74,10 +83,14 @@ class PurchaseOrderService
         ])->withExists(['goodsReceiptNotes as has_accepted_receipt' => fn ($q) => $q->whereIn('status', GrnStatus::billableValues())]);
         TrashedFilter::apply($q, $filters);
 
-        if (! empty($filters['status']))   $q->where('status', $filters['status']);
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
         if (! empty($filters['vendor_id'])) {
             $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
-            if ($vid) $q->where('vendor_id', $vid);
+            if ($vid) {
+                $q->where('vendor_id', $vid);
+            }
         }
         if (isset($filters['requires_vp_approval']) && $filters['requires_vp_approval'] !== '') {
             $q->where('requires_vp_approval', filter_var($filters['requires_vp_approval'], FILTER_VALIDATE_BOOLEAN));
@@ -91,10 +104,14 @@ class PurchaseOrderService
                 [now()->toDateString()],
             )->whereIn('status', PurchaseOrderStatus::open());
         }
-        if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('date', '<=', $filters['to']);
+        }
         if (! empty($filters['search'])) {
-            $q->where('po_number', 'ilike', '%'.$filters['search'].'%');
+            $q->where('po_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         // Row-level filtering. Admin and Purchasing approvers see everything.
@@ -114,7 +131,7 @@ class PurchaseOrderService
     {
         return $po
             ->load([
-                'vendor', 'purchaseRequest:id,pr_number', 'rfq:id,rfq_number,status',
+                'vendor', 'purchaseRequest:id,pr_number', 'rfq:id,rfq_number,status', 'rfqQuoteReconfirmation',
                 'items.item:id,code,name,unit_of_measure', 'items.rfqAward', 'items.supplierQuoteVersion',
                 'approvalRecords.approver:id,name',
                 'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
@@ -182,28 +199,42 @@ class PurchaseOrderService
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? [], $sourcePr);
-            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $rfqCommercial = is_array($data['rfq_commercial'] ?? null) ? $data['rfq_commercial'] : null;
+            if ($rfqCommercial !== null) {
+                $subtotal = Money::add(
+                    $subtotal,
+                    (string) ($rfqCommercial['freight_amount'] ?? '0'),
+                    (string) ($rfqCommercial['other_charges'] ?? '0'),
+                );
+                $isVatable = false;
+            }
+            $vat = $rfqCommercial !== null
+                ? (string) ($rfqCommercial['vat_amount'] ?? '0')
+                : ($isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero());
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
             $deptId = $this->resolveDepartmentId($data);
 
             $po = PurchaseOrder::create([
-                'po_number'            => $this->sequences->generate('purchase_order'),
-                'vendor_id'            => $vendorId,
-                'purchase_request_id'  => $prId,
-                'request_for_quote_id'  => $data['request_for_quote_id'] ?? null,
-                'is_auto_generated'    => $systemGenerated,
-                'date'                 => $data['date'] ?? now()->toDateString(),
+                'po_number' => $this->sequences->generate('purchase_order'),
+                'vendor_id' => $vendorId,
+                'purchase_request_id' => $prId,
+                'request_for_quote_id' => $data['request_for_quote_id'] ?? null,
+                'is_auto_generated' => $systemGenerated,
+                'date' => $data['date'] ?? now()->toDateString(),
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? null,
-                'subtotal'             => $subtotal,
-                'vat_amount'           => $vat,
-                'total_amount'         => $total,
-                'is_vatable'           => $isVatable,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'is_vatable' => $isVatable,
+                'rfq_vat_amount' => $rfqCommercial['vat_amount'] ?? null,
+                'rfq_freight_amount' => $rfqCommercial['freight_amount'] ?? null,
+                'rfq_other_charges' => $rfqCommercial['other_charges'] ?? null,
                 'requires_vp_approval' => (float) $total >= $threshold,
-                'created_by'           => $by->id,
-                'remarks'              => $data['remarks'] ?? null,
-                'incoterm'             => $data['incoterm'] ?? null,
+                'created_by' => $by->id,
+                'remarks' => $data['remarks'] ?? null,
+                'incoterm' => $data['incoterm'] ?? null,
             ]);
             // status is non-fillable; service-only.
             $po->forceFill(['status' => PurchaseOrderStatus::Draft])->save();
@@ -267,6 +298,9 @@ class PurchaseOrderService
             if ($lockedPr->status !== PurchaseRequestStatus::Approved) {
                 throw new BusinessRuleException('Only approved PRs can be converted to POs.');
             }
+            if (! $systemGenerated && $lockedPr->sourcing_method !== PurchaseRequestSourcingMethod::DirectPo) {
+                throw new BusinessRuleException('This purchase request is not marked for direct PO sourcing.');
+            }
 
             // Lines already on a live PO are done. A partial retry must not
             // re-create them, so build the covered set from the live POs.
@@ -325,21 +359,21 @@ class PurchaseOrderService
                         throw new BusinessRuleException('PR line "'.($line->description ?? 'unnamed').'" has no authoritative unit price.');
                     }
                     $itemPayload[] = [
-                        'item_id'                  => $line->item_id,
+                        'item_id' => $line->item_id,
                         'purchase_request_item_id' => $line->id,
-                        'description'              => $line->description,
-                        'quantity'                 => (string) $line->quantity,
-                        'unit'                     => $line->unit,
-                        'unit_price'               => (string) $unitPrice,
+                        'description' => $line->description,
+                        'quantity' => (string) $line->quantity,
+                        'unit' => $line->unit,
+                        'unit_price' => (string) $unitPrice,
                     ];
                 }
                 $po = $this->create([
-                    'vendor_id'           => $vendorId,
-                    'date'                => now()->toDateString(),
+                    'vendor_id' => $vendorId,
+                    'date' => now()->toDateString(),
                     'expected_delivery_date' => $expectedDeliveryDate,
-                    'is_vatable'          => $this->taxPolicy->isVatRegistered(),
-                    'remarks'             => "Auto-converted from PR {$lockedPr->pr_number}",
-                    'items'               => $itemPayload,
+                    'is_vatable' => $this->taxPolicy->isVatRegistered(),
+                    'remarks' => "Auto-converted from PR {$lockedPr->pr_number}",
+                    'items' => $itemPayload,
                     'purchase_request_id' => $lockedPr->id,
                 ], $by, $systemGenerated);
                 $created[] = $po;
@@ -373,7 +407,7 @@ class PurchaseOrderService
      * not started. Idempotent, so it doubles as the reopen path when a PO is
      * cancelled/rejected/deleted.
      */
-    private function syncConversionStatus(PurchaseRequest $pr): void
+    public function syncConversionStatus(PurchaseRequest $pr): void
     {
         if (in_array($pr->status, [
             PurchaseRequestStatus::Draft,
@@ -441,6 +475,9 @@ class PurchaseOrderService
             if ($locked->status !== PurchaseOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft POs can be edited.');
             }
+            if ($locked->request_for_quote_id !== null) {
+                throw new BusinessRuleException('RFQ-generated purchase orders are commercially immutable. Resolve the RFQ before changing the award.');
+            }
             if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to edit this purchase order.');
             }
@@ -452,12 +489,12 @@ class PurchaseOrderService
             $lineData = is_array($data['items'] ?? null)
                 ? $data['items']
                 : $locked->items()->get()->map(static fn (PurchaseOrderItem $line): array => [
-                    'item_id'                  => $line->item_id,
+                    'item_id' => $line->item_id,
                     'purchase_request_item_id' => $line->purchase_request_item_id,
-                    'description'              => $line->description,
-                    'quantity'                 => (string) $line->quantity,
-                    'unit'                     => $line->unit,
-                    'unit_price'               => (string) $line->unit_price,
+                    'description' => $line->description,
+                    'quantity' => (string) $line->quantity,
+                    'unit' => $line->unit,
+                    'unit_price' => (string) $line->unit_price,
                 ])->all();
             [$lines, $subtotal] = $this->normalizeLines($lineData, $sourcePr);
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
@@ -465,15 +502,15 @@ class PurchaseOrderService
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
             $locked->update([
-                'date'                 => $data['date'] ?? $locked->date,
+                'date' => $data['date'] ?? $locked->date,
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? $locked->expected_delivery_date,
-                'subtotal'             => $subtotal,
-                'vat_amount'           => $vat,
-                'total_amount'         => $total,
-                'is_vatable'           => $isVatable,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'is_vatable' => $isVatable,
                 'requires_vp_approval' => (float) $total >= $threshold,
-                'remarks'              => $data['remarks'] ?? $locked->remarks,
-                'incoterm'             => array_key_exists('incoterm', $data)
+                'remarks' => $data['remarks'] ?? $locked->remarks,
+                'incoterm' => array_key_exists('incoterm', $data)
                     ? $data['incoterm']
                     : $locked->incoterm?->value,
             ]);
@@ -504,6 +541,15 @@ class PurchaseOrderService
 
     public function submit(PurchaseOrder $po): PurchaseOrder
     {
+        $reconfirmation = $this->createExpiredQuoteReconfirmation($po);
+        if ($reconfirmation !== null) {
+            app(OutboxService::class)->record(
+                new RfqLifecycleEvent((int) $reconfirmation->purchaseOrder->rfq->id, (string) $reconfirmation->purchaseOrder->rfq->hash_id, 'quote_reconfirmation_required', (int) $reconfirmation->purchase_order_id),
+                'rfq-reconfirmation:'.$reconfirmation->id,
+            );
+            throw new BusinessRuleException('The winning supplier quotation expired. Supplier reconfirmation is required before PO submission.');
+        }
+
         return DB::transaction(function () use ($po) {
             // Lock and re-read before creating approval records so an update
             // cannot change the lines/amount between the state check and
@@ -517,7 +563,56 @@ class PurchaseOrderService
 
             $this->approvals->submit($locked, 'purchase_order', (string) $locked->total_amount);
             $locked->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
-            return $locked->fresh();
+            $fresh = $locked->fresh();
+            app(OutboxService::class)->recordForChain(
+                new PurchaseOrderSubmitted($fresh),
+                $fresh,
+                'p2p',
+                'purchase_order',
+                PurchaseOrderStatus::PendingApproval->value,
+            );
+
+            return $fresh;
+        });
+    }
+
+    private function createExpiredQuoteReconfirmation(PurchaseOrder $po): ?RfqQuoteReconfirmation
+    {
+        return DB::transaction(function () use ($po): ?RfqQuoteReconfirmation {
+            $locked = PurchaseOrder::query()->lockForUpdate()->with(['rfq', 'items.supplierQuoteVersion'])->findOrFail($po->id);
+            if ($locked->status !== PurchaseOrderStatus::Draft) {
+                return null;
+            }
+            if ($locked->request_for_quote_id === null) {
+                return null;
+            }
+            $expired = $locked->items->first(fn (PurchaseOrderItem $item): bool => $item->supplierQuoteVersion?->quote_valid_until?->isBefore(today()) ?? false);
+            if ($expired === null) {
+                return null;
+            }
+            $existing = $locked->rfqQuoteReconfirmation()->lockForUpdate()->first();
+            if ($existing?->status === RfqQuoteReconfirmation::CONFIRMED) {
+                return null;
+            }
+            if ($existing) {
+                return $existing->load(['purchaseOrder.rfq']);
+            }
+            $quote = $expired->supplierQuoteVersion;
+
+            $reconfirmation = RfqQuoteReconfirmation::create([
+                'purchase_order_id' => $locked->id,
+                'supplier_quote_id' => $quote->id,
+                'terms_snapshot' => [
+                    'quantity' => (string) $expired->quantity,
+                    'unit_price' => (string) $expired->unit_price,
+                    'total' => (string) $expired->total,
+                    'quote_valid_until' => $quote->quote_valid_until?->toDateString(),
+                ],
+                'requested_at' => now(),
+            ]);
+            $reconfirmation->forceFill(['status' => RfqQuoteReconfirmation::PENDING])->save();
+
+            return $reconfirmation->load(['purchaseOrder.rfq']);
         });
     }
 
@@ -554,8 +649,8 @@ class PurchaseOrderService
         // Block approval if any line item's vendor has a registered-but-unapproved
         // PPAP. Items never put under PPAP control pass through.
         if ($this->settings->requiredBool('quality.ppap_gate_enabled')
-            && class_exists(\App\Modules\Quality\Services\PpapService::class)) {
-            $ppap = app(\App\Modules\Quality\Services\PpapService::class);
+            && class_exists(PpapService::class)) {
+            $ppap = app(PpapService::class);
             foreach ($po->items()->with('item:id,code,name')->get() as $line) {
                 if ($line->item_id && ! $ppap->vendorHasActivePpap((int) $po->vendor_id, (int) $line->item_id)) {
                     // Name the item, never its primary key. This message reaches the
@@ -582,7 +677,7 @@ class PurchaseOrderService
             $becameApproved = false;
             if ($this->approvals->isFullyApproved($locked)) {
                 $locked->forceFill([
-                    'status'      => PurchaseOrderStatus::Approved,
+                    'status' => PurchaseOrderStatus::Approved,
                     'approved_by' => $by->id,
                     'approved_at' => now(),
                 ])->save();
@@ -604,8 +699,10 @@ class PurchaseOrderService
             // Series C — Task C4. Stage chain progress with the approval
             // transaction; publication remains post-commit via the outbox.
             $this->broadcastChain($fresh, $by);
+
             return $fresh;
         });
+
         return $result;
     }
 
@@ -634,6 +731,7 @@ class PurchaseOrderService
             if ($existing !== null) {
                 // Never demote a qualified link; just refresh the price.
                 $existing->update(['last_price' => $line->unit_price, 'last_price_at' => now()]);
+
                 continue;
             }
 
@@ -664,7 +762,7 @@ class PurchaseOrderService
     private function assertVendorSod(PurchaseOrder $po, User $by): void
     {
         // Gracefully skip when the schema does not record who created a vendor.
-        if (! \Illuminate\Support\Facades\Schema::hasColumn('vendors', 'created_by')) {
+        if (! Schema::hasColumn('vendors', 'created_by')) {
             return;
         }
 
@@ -715,8 +813,10 @@ class PurchaseOrderService
                 PurchaseOrderStatus::Cancelled->value,
             );
             $this->broadcastChain($fresh, $by);
+
             return $fresh;
         });
+
         return $result;
     }
 
@@ -847,8 +947,10 @@ class PurchaseOrderService
                 PurchaseOrderStatus::Cancelled->value,
             );
             $this->broadcastChain($fresh, null);
+
             return $fresh;
         });
+
         return $fresh;
     }
 
@@ -873,7 +975,7 @@ class PurchaseOrderService
     /** Series C — Task C4. Stage durable chain progress for the owning write. */
     private function broadcastChain(PurchaseOrder $po, ?User $actor): void
     {
-        app(\App\Common\Services\ChainBroadcaster::class)
+        app(ChainBroadcaster::class)
             ->broadcastFor($po, $po->status?->value ?? '', $actor ?? auth()->user());
     }
 
@@ -917,6 +1019,7 @@ class PurchaseOrderService
             }
 
             $locked->restore();
+
             return $locked->fresh();
         });
     }
@@ -969,7 +1072,7 @@ class PurchaseOrderService
      * notifies, which is right because no retry can supply the missing value.
      * ValidationException would have escaped the split again.
      *
-     * @param array<int, array> $rows
+     * @param  array<int, array>  $rows
      * @return array{0: array<int, array>, 1: string}
      */
     private function normalizeLines(array $rows, ?PurchaseRequest $sourcePr = null): array
@@ -987,7 +1090,7 @@ class PurchaseOrderService
             if (! array_key_exists('unit_price', $r) || trim((string) $r['unit_price']) === '') {
                 throw new BusinessRuleException('Each PO line must include an authoritative unit price.');
             }
-            $qty   = (string) $r['quantity'];
+            $qty = (string) $r['quantity'];
             $price = (string) $r['unit_price'];
             if (Money::lte($qty, '0') || Money::lte($price, '0')) {
                 throw new BusinessRuleException('Quantity must be > 0 and unit price must be > 0.');
@@ -1007,18 +1110,28 @@ class PurchaseOrderService
                 }
             }
 
-            $total = Money::mul($qty, $price);
+            $total = Money::add(
+                Money::mul($qty, $price),
+                (string) ($r['rfq_line_freight_amount'] ?? '0'),
+                (string) ($r['rfq_line_other_charges'] ?? '0'),
+            );
             $lines[] = [
-                'item_id'                  => $itemId,
+                'item_id' => $itemId,
                 'purchase_request_item_id' => $sourceLineId,
-                'description'              => $r['description'],
-                'quantity'                 => $qty,
-                'unit'                     => $r['unit'] ?? null,
-                'unit_price'               => $price,
-                'total'                    => $total,
+                'description' => $r['description'],
+                'quantity' => $qty,
+                'unit' => $r['unit'] ?? null,
+                'unit_price' => $price,
+                'rfq_award_id' => $r['rfq_award_id'] ?? null,
+                'supplier_quote_version_id' => $r['supplier_quote_version_id'] ?? null,
+                'rfq_line_vat_amount' => array_key_exists('rfq_line_vat_amount', $r) ? (string) $r['rfq_line_vat_amount'] : null,
+                'rfq_line_freight_amount' => array_key_exists('rfq_line_freight_amount', $r) ? (string) $r['rfq_line_freight_amount'] : null,
+                'rfq_line_other_charges' => array_key_exists('rfq_line_other_charges', $r) ? (string) $r['rfq_line_other_charges'] : null,
+                'total' => $total,
             ];
             $subtotal = Money::add($subtotal, $total);
         }
+
         return [$lines, $subtotal];
     }
 }

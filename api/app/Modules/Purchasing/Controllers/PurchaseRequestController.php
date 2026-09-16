@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
-use App\Common\Support\HashIdFilter;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalRecord;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use App\Modules\Purchasing\Requests\ConvertPrToPoRequest;
 use App\Modules\Purchasing\Requests\RejectPurchaseRequestRequest;
+use App\Modules\Purchasing\Requests\SetPurchaseRequestSourcingMethodRequest;
 use App\Modules\Purchasing\Requests\StorePurchaseRequestRequest;
 use App\Modules\Purchasing\Requests\UpdatePurchaseRequestRequest;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
@@ -19,14 +24,11 @@ use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\PurchaseRequestPdfService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Purchasing\Services\VendorSourcingService;
-use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
-use App\Common\Services\SettingsService;
-use App\Common\Exceptions\BusinessRuleException;
 
 class PurchaseRequestController
 {
@@ -42,6 +44,7 @@ class PurchaseRequestController
     public function printPdf(Request $request, PurchaseRequest $purchaseRequest): Response
     {
         abort_unless($this->access->canView($request->user(), $purchaseRequest), 403, 'You do not have permission to view this purchase request.');
+
         return $this->pdf->render($purchaseRequest);
     }
 
@@ -66,18 +69,24 @@ class PurchaseRequestController
             ),
             'approval_sla_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
             'default_priority' => (string) $this->settings->get('purchasing.purchase_request.default_priority', ''),
+            'sourcing_methods' => array_map(static fn (PurchaseRequestSourcingMethod $method): array => [
+                'value' => $method->value,
+                'label' => $method->label(),
+            ], PurchaseRequestSourcingMethod::cases()),
         ]]);
     }
 
     public function show(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         abort_unless($this->access->canView($request->user(), $purchaseRequest), 403, 'You do not have permission to view this purchase request.');
+
         return new PurchaseRequestResource($this->service->show($purchaseRequest));
     }
 
     public function store(StorePurchaseRequestRequest $request): JsonResponse
     {
         $pr = $this->service->create($request->validated(), $request->user());
+
         return (new PurchaseRequestResource($pr))->response()->setStatusCode(201);
     }
 
@@ -88,13 +97,33 @@ class PurchaseRequestController
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
+
         return new PurchaseRequestResource($pr);
+    }
+
+    public function setSourcingMethod(SetPurchaseRequestSourcingMethodRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    {
+        try {
+            $pr = $this->service->setSourcingMethod(
+                $purchaseRequest,
+                PurchaseRequestSourcingMethod::from((string) $request->validated('sourcing_method')),
+                $request->user(),
+            );
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function destroy(PurchaseRequest $purchaseRequest): JsonResponse
     {
-        try { $this->service->delete($purchaseRequest, request()->user()); }
-        catch (BusinessRuleException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+        try {
+            $this->service->delete($purchaseRequest, request()->user());
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         return response()->json(null, 204);
     }
 
@@ -102,41 +131,62 @@ class PurchaseRequestController
     {
         abort_unless($this->access->canManageDraft($request->user(), $purchaseRequest), 403, 'You do not have permission to restore this purchase request.');
         $purchaseRequest->restore();
+
         return response()->json(['message' => 'Purchase request restored.']);
     }
 
     public function submit(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->submit($purchaseRequest, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $pr = $this->service->submit($purchaseRequest, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function acknowledgeBudget(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->acknowledgeBudget($purchaseRequest, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $pr = $this->service->acknowledgeBudget($purchaseRequest, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function approve(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->approve($purchaseRequest, $request->user(), $request->input('remarks')); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $pr = $this->service->approve($purchaseRequest, $request->user(), $request->input('remarks'));
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function reject(RejectPurchaseRequestRequest $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->reject($purchaseRequest, $request->user(), $request->validated()['reason']); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $pr = $this->service->reject($purchaseRequest, $request->user(), $request->validated()['reason']);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
     public function cancel(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
-        try { $pr = $this->service->cancel($purchaseRequest, $request->user()); }
-        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        try {
+            $pr = $this->service->cancel($purchaseRequest, $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
@@ -148,8 +198,8 @@ class PurchaseRequestController
     public function bulkApprove(Request $request): JsonResponse
     {
         $validated = Validator::make($request->all(), [
-            'ids'     => 'required|array|min:1',
-            'ids.*'   => 'string',
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'string',
             'remarks' => 'nullable|string|max:500',
         ])->validate();
 
@@ -204,7 +254,12 @@ class PurchaseRequestController
      */
     public function sourcing(Request $request, PurchaseRequest $purchaseRequest, VendorSourcingService $sourcing): JsonResponse
     {
-        abort_unless($this->access->canConvert($request->user(), $purchaseRequest), 403, 'You do not have permission to source this purchase request.');
+        abort_unless(
+            $this->access->canConvert($request->user(), $purchaseRequest)
+                || $this->access->canStartRfq($request->user(), $purchaseRequest),
+            403,
+            'You do not have permission to source this purchase request.',
+        );
 
         return response()->json(['data' => [
             'lines' => $sourcing->sourcingLines($purchaseRequest),
@@ -225,6 +280,7 @@ class PurchaseRequestController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json([
             'data' => PurchaseOrderResource::collection(collect($pos))->resolve(),
         ], 201);

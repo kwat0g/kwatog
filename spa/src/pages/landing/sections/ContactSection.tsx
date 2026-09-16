@@ -15,6 +15,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -43,6 +44,9 @@ const inquirySchema = z.object({
     .string()
     .min(1, 'Message is required')
     .max(2000, 'Message is too long (2000 characters max)'),
+  consent: z.literal(true, {
+    errorMap: () => ({ message: 'Please accept the privacy notice to continue.' }),
+  }),
 });
 
 type InquiryForm = z.infer<typeof inquirySchema>;
@@ -255,6 +259,26 @@ export function ContactSection() {
                     {...register('message')}
                     error={errors.message?.message}
                   />
+
+                  <label className="mt-1 flex items-start gap-2.5 text-xs leading-relaxed text-secondary">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-default accent-accent"
+                      {...register('consent')}
+                    />
+                    <span>
+                      I agree to the{' '}
+                      <Link to="/privacy" className="text-accent underline underline-offset-2">
+                        Privacy Policy
+                      </Link>
+                      . We use your details only to respond to this enquiry.
+                    </span>
+                  </label>
+                  {errors.consent && (
+                    <p role="alert" className="text-xs text-danger-fg">
+                      {errors.consent.message}
+                    </p>
+                  )}
 
                   <Button
                     ref={submitRef}

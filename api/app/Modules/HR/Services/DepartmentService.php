@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
-use App\Modules\HR\Enums\EmployeeStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -22,30 +24,38 @@ class DepartmentService
             ->withCount(['positions', 'employees']);
 
         TrashedFilter::apply($query, $filters);
-        if (!empty($filters['search'])) {
+        if (! empty($filters['search'])) {
             $term = $filters['search'];
             $query->where(function ($q) use ($term) {
-                $q->where('name', 'ilike', "%{$term}%")
-                  ->orWhere('code', 'ilike', "%{$term}%");
+                $q->where('name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('code', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
         if (array_key_exists('is_active', $filters) && $filters['is_active'] !== '') {
             $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
-        if (!empty($filters['parent_id'])) {
-            $parentId = \App\Common\Support\HashIdFilter::decode(
+        if (! empty($filters['parent_id'])) {
+            $parentId = HashIdFilter::decode(
                 $filters['parent_id'], Department::class,
             );
-            if ($parentId) $query->where('parent_id', $parentId);
+            if ($parentId) {
+                $query->where('parent_id', $parentId);
+            }
         }
 
         $sort = $filters['sort'] ?? 'name';
-        $dir = $filters['direction'] ?? 'asc';
+        // orderBy() throws on anything that is not asc/desc; normalise the
+        // direction instead of trusting the query string (500 on `?direction=x`).
+        $dir = strtolower((string) ($filters['direction'] ?? 'asc'));
+        if (! in_array($dir, ['asc', 'desc'], true)) {
+            $dir = 'asc';
+        }
         if (in_array($sort, ['name', 'code', 'is_active'], true)) {
             $query->orderBy($sort, $dir);
         }
 
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
+
         return $query->paginate($perPage);
     }
 
@@ -85,6 +95,7 @@ class DepartmentService
             $locked = Department::query()->lockForUpdate()->findOrFail($department->id);
             $this->validateHierarchy($locked, $data);
             $locked->update($data);
+
             return $locked->fresh(['parent', 'headEmployee'])
                 ->loadCount(['positions', 'employees']);
         });

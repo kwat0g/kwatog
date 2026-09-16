@@ -8,7 +8,7 @@
  * customer/supplier partner portals as a separate external-access group.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe).
@@ -31,6 +31,7 @@ import { useLandingMotion } from './motion';
 import { SkeletonLandingPage } from '@/components/ui/Skeleton';
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { landingApi, type LandingContact, type LandingContent } from '@/api/landing';
+import { useSeo } from '@/hooks/useSeo';
 
 /**
  * Spread `inert` (+ aria-hidden) onto a wrapper when `active`, so background
@@ -69,36 +70,26 @@ function LandingPageContent({ contact, content }: { contact: LandingContact; con
   const [menuOpen, setMenuOpen] = useState(false);
   useLandingMotion(rootRef);
 
-  useEffect(() => {
-    const prev = document.title;
+  const seoTitle = useMemo(() => {
     const company = contact?.legal_name ?? '';
     const suffix = content?.section_copy?.page_title_suffix ?? '';
-    const title = [company, suffix].filter(Boolean).join(' — ');
-    if (title) document.title = title;
-    return () => {
-      document.title = prev;
-    };
+    return [company, suffix].filter(Boolean).join(' — ');
   }, [contact?.legal_name, content?.section_copy?.page_title_suffix]);
 
-  useEffect(() => {
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (!meta) return;
-    const previous = meta.content;
+  const seoDescription = useMemo(() => {
     const company = contact?.legal_name ?? '';
     const partners = content?.oem_partners?.join(', ') ?? '';
     const standard = content?.quality_policy?.standard ?? '';
     const address = contact?.address ?? '';
 
-    const description = (content?.section_copy?.hero_description ?? '')
+    return (content?.section_copy?.hero_description ?? '')
       ?.replaceAll('{{company}}', company)
       ?.replaceAll('{{partners}}', partners)
       ?.replaceAll('{{standard}}', standard)
       ?.replaceAll('{{address}}', address);
-    if (description) meta.content = description;
-    return () => {
-      meta.content = previous;
-    };
   }, [contact?.address, contact?.legal_name, content]);
+
+  useSeo({ title: seoTitle, description: seoDescription, path: '/' });
 
   return (
     <div

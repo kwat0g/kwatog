@@ -1,6 +1,6 @@
 # Supplier RFQ Bidding Plan
 
-> Status: approved product direction, implementation plan pending execution
+> Status: implemented and hardened; remaining changes are incremental operational improvements
 >
 > Scope owner: Purchasing / Procure to Pay
 >

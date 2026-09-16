@@ -38,8 +38,8 @@ class ProductService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('part_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhere('name', SearchOperator::like(), "%{$term}%");
+                $qq->where('part_number', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

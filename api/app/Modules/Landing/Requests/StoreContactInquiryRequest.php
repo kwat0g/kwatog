@@ -25,10 +25,13 @@ class StoreContactInquiryRequest extends FormRequest
             'full_name' => ['required', 'string', 'max:150'],
             // Optional: job seekers and general enquiries have no company, and
             // requiring one only teaches people to type a placeholder.
-            'company'   => ['nullable', 'string', 'max:150'],
-            'email'     => ['required', 'string', 'email', 'max:150'],
-            'phone'     => ['nullable', 'string', 'max:40'],
-            'message'   => ['required', 'string', 'max:2000'],
+            'company' => ['nullable', 'string', 'max:150'],
+            'email' => ['required', 'string', 'email', 'max:150'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'message' => ['required', 'string', 'max:2000'],
+            // Evidence of acceptance of the privacy notice; the timestamp is
+            // stored by the service, not taken from the request.
+            'consent' => ['required', 'accepted'],
         ];
     }
 }

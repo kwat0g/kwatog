@@ -219,7 +219,13 @@ export default function PurchaseOrderDetailPage() {
  </div>
  }
  />
- <div className="px-5 py-4 space-y-4">
+  <div className="px-5 py-4 space-y-4">
+  {data.rfq_reconfirmation?.status === 'pending' && (
+  <div className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
+  <div className="font-medium">Supplier reconfirmation required before approval</div>
+  <div className="text-muted">The winning RFQ quotation expired. The supplier must confirm the original terms in the supplier portal before this PO can be submitted.</div>
+  </div>
+  )}
  {data.budget_warning_level && (
  <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
  <div>

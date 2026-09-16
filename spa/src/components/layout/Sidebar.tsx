@@ -721,6 +721,22 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     };
   }, [mobileOpen]);
 
+  const mobileDrawerRef = useRef<HTMLElement>(null);
+
+  // Move focus into the drawer on open and close it on Escape.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    mobileDrawerRef.current?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMobileOpen(false);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [mobileOpen, setMobileOpen]);
+
   // Polish Task S2 — dynamic badge counts for every gated nav item.
   const { getBadge } = useBadges();
 
@@ -870,9 +886,17 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         <div className="fixed inset-0 z-50 md:hidden">
           <div
             className="absolute inset-0 bg-black/40 animate-fade-in"
+            aria-hidden
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-72 bg-canvas border-r border-default overflow-y-auto animate-slide-right">
+          <aside
+            ref={mobileDrawerRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className="absolute inset-y-0 left-0 w-72 bg-canvas border-r border-default overflow-y-auto animate-slide-right focus:outline-none"
+          >
             <div className="h-12 flex items-center justify-between px-3 border-b border-default">
               <span className="text-sm font-medium text-primary">Menu</span>
               <Button

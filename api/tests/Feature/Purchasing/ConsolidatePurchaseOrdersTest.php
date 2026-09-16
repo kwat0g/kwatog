@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -43,17 +44,17 @@ class ConsolidatePurchaseOrdersTest extends TestCase
     {
         $requester = User::factory()->create();
         $pr = PurchaseRequest::factory()->create([
-            'requested_by'   => $requester->id,
-            'department_id'  => null,
+            'requested_by' => $requester->id,
+            'department_id' => null,
         ]);
         $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
 
         foreach ($lines as $line) {
             PurchaseRequestItem::create(array_merge([
                 'purchase_request_id' => $pr->id,
-                'quantity'            => '10',
-                'unit'                => 'pcs',
-                'description'         => 'Auto-PO line',
+                'quantity' => '10',
+                'unit' => 'pcs',
+                'description' => 'Auto-PO line',
             ], $line));
         }
 
@@ -70,8 +71,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendorA = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendorA->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => '250.00',
         ]]);
 
@@ -91,6 +92,26 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
     }
 
+    public function test_rfq_sourcing_choice_prevents_auto_conversion(): void
+    {
+        $vendor = $this->vendor();
+        $item = Item::factory()->create();
+        $pr = $this->makePr([[
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
+            'estimated_unit_price' => '250.00',
+        ]]);
+        $pr->forceFill([
+            'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
+            'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending,
+        ])->save();
+
+        event(new PurchaseRequestApproved($pr));
+
+        $this->assertDatabaseCount('purchase_orders', 0);
+        $this->assertSame(PurchaseRequestConversionStatus::SourcingPending, $pr->fresh()->po_conversion_status);
+    }
+
     public function test_lines_are_grouped_by_vendor_into_separate_pos(): void
     {
         $vendorA = $this->vendor();
@@ -99,13 +120,13 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $itemB = Item::factory()->create();
         $pr = $this->makePr([
             [
-                'item_id'              => $itemA->id,
-                'suggested_vendor_id'  => $vendorA->id,
+                'item_id' => $itemA->id,
+                'suggested_vendor_id' => $vendorA->id,
                 'estimated_unit_price' => '100.00',
             ],
             [
-                'item_id'              => $itemB->id,
-                'suggested_vendor_id'  => $vendorB->id,
+                'item_id' => $itemB->id,
+                'suggested_vendor_id' => $vendorB->id,
                 'estimated_unit_price' => '200.00',
             ],
         ]);
@@ -122,8 +143,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendor = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendor->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
             'estimated_unit_price' => '0.01',
         ]]);
 
@@ -141,13 +162,13 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $itemB = Item::factory()->create();
         $pr = $this->makePr([
             [
-                'item_id'              => $itemA->id,
-                'suggested_vendor_id'  => $vendorA->id,
+                'item_id' => $itemA->id,
+                'suggested_vendor_id' => $vendorA->id,
                 'estimated_unit_price' => '100.00',
             ],
             [
-                'item_id'              => $itemB->id,
-                'suggested_vendor_id'  => null,
+                'item_id' => $itemB->id,
+                'suggested_vendor_id' => null,
                 'estimated_unit_price' => '200.00',
             ],
         ]);
@@ -168,7 +189,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendorA = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'             => $item->id,
+            'item_id' => $item->id,
             'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => null,
         ]]);
@@ -187,8 +208,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendor = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendor->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
             'estimated_unit_price' => '0.00',
         ]]);
 
@@ -206,8 +227,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendorA = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendorA->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => '250.00',
         ]]);
 
@@ -223,8 +244,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendorA = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendorA->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => '250.00',
         ]]);
         // Simulate a manual conversion that already happened while an event
@@ -232,21 +253,21 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         // approved (e.g. legacy data), so only the exists() guard can stop it.
         PurchaseOrderItem::create([
             'purchase_order_id' => PurchaseOrder::create([
-                'po_number'           => 'PO-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
-                'vendor_id'           => $vendorA->id,
+                'po_number' => 'PO-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
+                'vendor_id' => $vendorA->id,
                 'purchase_request_id' => $pr->id,
-                'date'                => now()->toDateString(),
-                'subtotal'            => '2500.00',
-                'vat_amount'          => '0.00',
-                'total_amount'        => '2500.00',
-                'is_vatable'          => false,
+                'date' => now()->toDateString(),
+                'subtotal' => '2500.00',
+                'vat_amount' => '0.00',
+                'total_amount' => '2500.00',
+                'is_vatable' => false,
             ])->id,
-            'item_id'     => $item->id,
+            'item_id' => $item->id,
             'description' => 'Already converted',
-            'quantity'    => '10.00',
-            'unit'        => 'pcs',
-            'unit_price'  => '250.00',
-            'total'       => '2500.00',
+            'quantity' => '10.00',
+            'unit' => 'pcs',
+            'unit_price' => '250.00',
+            'total' => '2500.00',
         ]);
 
         event(new PurchaseRequestApproved($pr));
@@ -259,34 +280,34 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendor = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendor->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
             'estimated_unit_price' => '250.00',
         ]]);
         $line = $pr->items()->firstOrFail();
 
         $po = PurchaseOrder::create([
-            'po_number'           => 'PO-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
-            'vendor_id'           => $vendor->id,
+            'po_number' => 'PO-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
+            'vendor_id' => $vendor->id,
             'purchase_request_id' => $pr->id,
-            'date'                => now()->toDateString(),
-            'subtotal'            => '2500.00',
-            'vat_amount'          => '0.00',
-            'total_amount'        => '2500.00',
-            'is_vatable'          => false,
+            'date' => now()->toDateString(),
+            'subtotal' => '2500.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '2500.00',
+            'is_vatable' => false,
         ]);
         PurchaseOrderItem::create([
-            'purchase_order_id'        => $po->id,
+            'purchase_order_id' => $po->id,
             'purchase_request_item_id' => $line->id,
-            'item_id'                  => $item->id,
-            'description'              => 'Already converted',
-            'quantity'                 => '10.00',
-            'unit'                     => 'pcs',
-            'unit_price'               => '250.00',
-            'total'                    => '2500.00',
+            'item_id' => $item->id,
+            'description' => 'Already converted',
+            'quantity' => '10.00',
+            'unit' => 'pcs',
+            'unit_price' => '250.00',
+            'total' => '2500.00',
         ]);
 
-        $result = app(\App\Modules\Purchasing\Services\PurchaseOrderService::class)
+        $result = app(PurchaseOrderService::class)
             ->convertFromPr($pr, [$line->id => $vendor->id], User::factory()->create());
 
         $this->assertCount(1, $result);
@@ -299,8 +320,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendor = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendor->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
             'estimated_unit_price' => '250.00',
         ]]);
         $stale = $pr->fresh();
@@ -331,8 +352,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $vendor = $this->vendor();
         $item = Item::factory()->create();
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendor->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
             'estimated_unit_price' => '250.00',
         ]]);
         $pr->requester()->firstOrFail()->delete();
@@ -360,7 +381,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         // No requester: the requester user no longer exists.
         $requester = User::factory()->create();
         $pr = PurchaseRequest::factory()->create([
-            'requested_by'  => $requester->id,
+            'requested_by' => $requester->id,
             'department_id' => null,
         ]);
         $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
@@ -369,13 +390,13 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         // actor fallback kicks in.
         $requester->delete();
         PurchaseRequestItem::create([
-            'purchase_request_id'  => $pr->id,
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendorA->id,
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => '250.00',
-            'quantity'             => '10',
-            'unit'                 => 'pcs',
-            'description'          => 'Auto-PO line',
+            'quantity' => '10',
+            'unit' => 'pcs',
+            'description' => 'Auto-PO line',
         ]);
 
         event(new PurchaseRequestApproved($pr));
@@ -396,24 +417,24 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         // One user per PR workflow step (2026-09-10 chain): finance → VP.
         $approvers = [
             'finance_officer' => User::factory()->create(['role_id' => Role::where('slug', 'finance_officer')->value('id')]),
-            'vice_president'  => User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]),
+            'vice_president' => User::factory()->create(['role_id' => Role::where('slug', 'vice_president')->value('id')]),
         ];
         $vendorA = $this->vendor();
         $item = Item::factory()->create();
 
         $pr = PurchaseRequest::factory()->create([
-            'requested_by'  => $requester->id,
+            'requested_by' => $requester->id,
             'department_id' => null,
         ]);
         // Factory default is draft — submit() requires draft, then flips to pending.
         PurchaseRequestItem::create([
-            'purchase_request_id'  => $pr->id,
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => $vendorA->id,
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendorA->id,
             'estimated_unit_price' => '250.00',
-            'quantity'             => '10',
-            'unit'                 => 'pcs',
-            'description'          => 'Auto-PO line',
+            'quantity' => '10',
+            'unit' => 'pcs',
+            'description' => 'Auto-PO line',
         ]);
         $pr->load('items');
 
@@ -457,8 +478,8 @@ class ConsolidatePurchaseOrdersTest extends TestCase
         $item = Item::factory()->create();
         // No suggested vendor → the whole PR is skipped for auto-conversion.
         $pr = $this->makePr([[
-            'item_id'              => $item->id,
-            'suggested_vendor_id'  => null,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => null,
             'estimated_unit_price' => '200.00',
         ]]);
 

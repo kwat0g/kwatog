@@ -25,11 +25,13 @@ class JobApplication extends Model
         'resume_path',
         'resume_original_name',
         'cover_letter',
+        'consent_at',
         'applied_at',
     ];
 
     protected $casts = [
-        'stage'      => ApplicationStage::class,
+        'stage' => ApplicationStage::class,
+        'consent_at' => 'datetime',
         'applied_at' => 'datetime',
     ];
 

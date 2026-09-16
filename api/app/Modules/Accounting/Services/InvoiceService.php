@@ -66,8 +66,8 @@ class InvoiceService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('invoice_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhereHas('customer', fn ($cc) => $cc->where('name', SearchOperator::like(), "%{$term}%"));
+                $qq->where('invoice_number', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhereHas('customer', fn ($cc) => $cc->where('name', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 

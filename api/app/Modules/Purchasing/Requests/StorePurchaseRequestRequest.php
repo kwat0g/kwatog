@@ -8,6 +8,7 @@ use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Models\PurchaseRequestTemplate;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -38,6 +39,7 @@ class StorePurchaseRequestRequest extends FormRequest
             'date' => ['nullable', 'date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'priority' => ['nullable', Rule::in(PurchaseRequestPriority::values())],
+            'sourcing_method' => ['required', Rule::enum(PurchaseRequestSourcingMethod::class)],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['nullable', 'integer', 'exists:items,id'],
             'items.*.description' => ['required', 'string', 'min:2', 'max:200'],

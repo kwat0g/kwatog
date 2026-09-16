@@ -24,12 +24,15 @@ class ContactInquiryService
     ) {}
 
     /**
-     * @param array{full_name: string, company?: string|null, email: string, phone?: string|null, message: string} $data
+     * @param  array{full_name: string, company?: string|null, email: string, phone?: string|null, message: string}  $data
      */
     public function create(array $data, Request $request): ContactInquiry
     {
+        // `consent` is a request-only flag; the persisted evidence is consent_at.
+        unset($data['consent']);
+
         $inquiry = DB::transaction(function () use ($data, $request): ContactInquiry {
-            $inquiry = new ContactInquiry();
+            $inquiry = new ContactInquiry;
             $inquiry->fill([
                 ...$data,
                 'ip_address' => $request->ip(),
@@ -39,6 +42,8 @@ class ContactInquiryService
             ]);
             $inquiry->inquiry_no = $this->sequences->generate('contact_inquiry');
             $inquiry->status = ContactInquiryStatus::New;
+            // Acceptance of the privacy notice — server clock, never the client's.
+            $inquiry->consent_at = now();
             $inquiry->save();
 
             return $inquiry;

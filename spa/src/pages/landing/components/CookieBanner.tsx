@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import { focusRingLanding } from '@/lib/focus';
@@ -36,7 +37,12 @@ export function CookieBanner() {
     >
       <div className="flex items-start gap-4">
         <p className="flex-1 text-[13px] leading-relaxed text-secondary">
-          We use cookies to understand how visitors use our site and to improve your experience.
+          We use only essential cookies to run this site and remember your choice. We don&apos;t use
+          advertising or analytics cookies. See our{' '}
+          <Link to="/cookies" className="text-accent underline underline-offset-2">
+            Cookie Policy
+          </Link>
+          .
         </p>
         <button
           type="button"

@@ -21,17 +21,36 @@ class StoreRequestForQuoteRequest extends FormRequest
         $specifications = [];
         foreach ((array) $this->input('specifications', []) as $key => $value) {
             $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
-            if ($id) $specifications[$id] = $value;
+            if ($id) {
+                $specifications[$id] = $value;
+            }
         }
         $partial = [];
         foreach ((array) $this->input('allow_partial_quantity', []) as $key => $value) {
             $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
-            if ($id) $partial[$id] = $value;
+            if ($id) {
+                $partial[$id] = $value;
+            }
         }
-        $this->merge(['invitations' => $invitations, 'specifications' => $specifications, 'allow_partial_quantity' => $partial]);
+        $requiredDates = [];
+        foreach ((array) $this->input('required_delivery_dates', []) as $key => $value) {
+            $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
+            if ($id) {
+                $requiredDates[$id] = $value;
+            }
+        }
+        $this->merge([
+            'invitations' => $invitations,
+            'specifications' => $specifications,
+            'allow_partial_quantity' => $partial,
+            'required_delivery_dates' => $requiredDates,
+        ]);
     }
 
-    public function authorize(): bool { return $this->user()?->hasPermission('purchasing.rfq.create') ?? false; }
+    public function authorize(): bool
+    {
+        return $this->user()?->hasPermission('purchasing.rfq.create') ?? false;
+    }
 
     public function rules(): array
     {
@@ -40,10 +59,12 @@ class StoreRequestForQuoteRequest extends FormRequest
             'instructions' => ['nullable', 'string', 'max:10000'],
             'closes_at' => ['required', 'date', 'after:now'],
             'invitations' => ['required', 'array', 'min:1'],
-            'invitations.*.vendor_id' => ['required', 'integer', 'exists:vendors,id'],
+            'invitations.*.vendor_id' => ['required', 'integer', 'distinct', 'exists:vendors,id'],
             'invitations.*.exception_reason' => ['nullable', 'string', 'max:2000'],
             'specifications' => ['nullable', 'array'],
             'allow_partial_quantity' => ['nullable', 'array'],
+            'required_delivery_dates' => ['nullable', 'array'],
+            'required_delivery_dates.*' => ['nullable', 'date', 'after:today'],
         ];
     }
 }

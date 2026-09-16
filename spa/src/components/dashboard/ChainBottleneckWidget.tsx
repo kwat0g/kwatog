@@ -113,12 +113,14 @@ export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', h
  <Chip variant={g.count >= 5 ? 'danger' : 'warning'}>
  <span className="font-mono tabular-nums">{g.count}</span>
  </Chip>
+ {destinationFor(g.rows[0]) !== '#' && (
  <Link
  to={destinationFor(g.rows[0])}
  className="text-xs text-accent hover:underline"
  >
  View
  </Link>
+ )}
  </div>
  </li>
  ))}
@@ -198,6 +200,8 @@ function destinationFor(row: ChainBottleneckRow | undefined): string {
  case 'delivery': return `/supply-chain/deliveries/${row.entity_id}`;
  case 'invoice': return `/accounting/invoices/${row.entity_id}`;
  case 'purchase_request': return `/purchasing/purchase-requests/${row.entity_id}`;
+ case 'purchase_order': return `/purchasing/purchase-orders/${row.entity_id}`;
+ case 'grn': return `/inventory/grn/${row.entity_id}`;
  case 'bill': return `/accounting/bills/${row.entity_id}`;
  case 'stock_movement': return `/inventory/stock-levels?view=movements&movement_id=${row.entity_id}`;
  case 'return_request': return `/return-management/${row.entity_id}`;

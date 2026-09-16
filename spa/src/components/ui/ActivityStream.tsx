@@ -30,9 +30,9 @@ export function ActivityStream({ items, className }: ActivityStreamProps) {
  <div className={cn("w-1.5 h-1.5 rounded-full", dotColorMap[item.dot])} />
  </div>
  <div>
- <div className="text-[11px] text-primary" dangerouslySetInnerHTML={typeof item.text === 'string' ? { __html: item.text } : undefined}>
- {typeof item.text !== 'string' ? item.text : undefined}
- </div>
+  <div className="text-[11px] text-primary">
+  {item.text}
+  </div>
  <div className="text-[10px] font-mono text-muted mt-0.5">{item.time}</div>
  </div>
  </div>

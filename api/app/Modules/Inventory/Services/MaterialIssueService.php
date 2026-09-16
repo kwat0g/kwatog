@@ -36,7 +36,7 @@ class MaterialIssueService
         if (! empty($filters['from'])) $q->whereDate('issued_date', '>=', $filters['from']);
         if (! empty($filters['to']))   $q->whereDate('issued_date', '<=', $filters['to']);
         if (! empty($filters['search'])) {
-            $q->where('slip_number', 'ilike', '%'.$filters['search'].'%');
+            $q->where('slip_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
         return $q->orderByDesc('issued_date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));

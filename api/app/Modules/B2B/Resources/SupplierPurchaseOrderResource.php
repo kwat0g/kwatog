@@ -35,20 +35,20 @@ class SupplierPurchaseOrderResource extends JsonResource
         $active = ['sent', 'acknowledged', 'supplier_proposed', 'partially_received'];
 
         return [
-            'id'                     => $this->hash_id,
-            'po_number'              => $this->po_number,
-            'date'                   => optional($this->date)->toDateString(),
+            'id' => $this->hash_id,
+            'po_number' => $this->po_number,
+            'date' => optional($this->date)->toDateString(),
             'expected_delivery_date' => optional($this->expected_delivery_date)->toDateString(),
-            'confirmed_delivery_date'=> optional($this->confirmed_delivery_date)->toDateString(),
-            'total_amount'           => (string) $this->total_amount,
-            'status'                 => (string) $this->status?->value,
-            'status_label'           => $this->status?->label() ?? (string) $this->status,
-            'incoterm'               => $this->incoterm?->value,
-            'sent_to_supplier_at'    => optional($this->sent_to_supplier_at)->toIso8601String(),
-            'latest_response'        => $this->latestResponseBlock(),
+            'confirmed_delivery_date' => optional($this->confirmed_delivery_date)->toDateString(),
+            'total_amount' => (string) $this->total_amount,
+            'status' => (string) $this->status?->value,
+            'status_label' => $this->status?->label() ?? (string) $this->status,
+            'incoterm' => $this->incoterm?->value,
+            'sent_to_supplier_at' => optional($this->sent_to_supplier_at)->toIso8601String(),
+            'latest_response' => $this->latestResponseBlock(),
             // The API owns action availability. The SPA must not infer a
             // mutation policy from a stale status label or from hidden fields.
-            'capabilities'           => [
+            'capabilities' => [
                 // Acknowledge only a PO OGAMI has actually sent.
                 'can_acknowledge' => $status === 'sent',
                 // Reply (accept/propose/decline) to any PO that is still open
@@ -61,8 +61,15 @@ class SupplierPurchaseOrderResource extends JsonResource
                 'can_submit_invoice' => $in(['sent', 'acknowledged', 'supplier_proposed', 'partially_received', 'received'])
                     && $hasAcceptedReceipt,
                 'can_schedule_delivery' => $in($active),
+                'can_reconfirm_rfq' => $this->rfqQuoteReconfirmation?->status === 'pending',
             ],
-            'shipment'               => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? [
+            'rfq_reconfirmation' => $this->whenLoaded('rfqQuoteReconfirmation', fn () => $this->rfqQuoteReconfirmation ? [
+                'id' => $this->rfqQuoteReconfirmation->hash_id,
+                'status' => $this->rfqQuoteReconfirmation->status,
+                'requested_at' => optional($this->rfqQuoteReconfirmation->requested_at)->toIso8601String(),
+                'quote_valid_until' => $this->rfqQuoteReconfirmation->terms_snapshot['quote_valid_until'] ?? null,
+            ] : null),
+            'shipment' => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? [
                 'id' => $this->supplierShipment->hash_id,
                 'shipped_date' => optional($this->supplierShipment->shipped_date)->toDateString(),
                 'carrier' => $this->supplierShipment->carrier,
@@ -71,29 +78,29 @@ class SupplierPurchaseOrderResource extends JsonResource
                 'notes' => $this->supplierShipment->notes,
                 'updated_at' => optional($this->supplierShipment->updated_at)->toIso8601String(),
             ] : null),
-            'items'                  => $this->whenLoaded('items', fn () => $this->items->map(static fn ($item): array => [
-                'id'               => $item->hash_id,
-                'part_number'      => $item->item?->code ?? '—',
-                'name'             => $item->item?->name ?? $item->description,
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(static fn ($item): array => [
+                'id' => $item->hash_id,
+                'part_number' => $item->item?->code ?? '—',
+                'name' => $item->item?->name ?? $item->description,
                 'quantity_ordered' => (string) $item->quantity,
-                'quantity_received'=> (string) $item->quantity_received,
-                'unit_price'       => (string) $item->unit_price,
-                'total_price'      => (string) $item->total,
+                'quantity_received' => (string) $item->quantity_received,
+                'unit_price' => (string) $item->unit_price,
+                'total_price' => (string) $item->total,
             ])->values()->all()),
-            'goods_receipt_notes'    => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes->map(static fn ($grn): array => [
-                'id'            => $grn->hash_id,
-                'grn_number'    => $grn->grn_number,
+            'goods_receipt_notes' => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes->map(static fn ($grn): array => [
+                'id' => $grn->hash_id,
+                'grn_number' => $grn->grn_number,
                 'received_date' => optional($grn->received_date)->toDateString(),
             ])->values()->all()),
-            'bills'                  => $this->whenLoaded('bills', fn () => $this->bills->map(static fn ($bill): array => [
-                'id'           => $bill->hash_id,
-                'bill_number'  => $bill->bill_number,
+            'bills' => $this->whenLoaded('bills', fn () => $this->bills->map(static fn ($bill): array => [
+                'id' => $bill->hash_id,
+                'bill_number' => $bill->bill_number,
                 'total_amount' => (string) $bill->total_amount,
-                'paid_amount'  => (string) $bill->amount_paid,
-                'balance'      => (string) $bill->balance,
-                'status'       => (string) $bill->status?->value,
+                'paid_amount' => (string) $bill->amount_paid,
+                'balance' => (string) $bill->balance,
+                'status' => (string) $bill->status?->value,
                 'status_label' => $bill->status?->label() ?? (string) $bill->status,
-                'due_date'     => optional($bill->due_date)->toDateString(),
+                'due_date' => optional($bill->due_date)->toDateString(),
             ])->values()->all()),
         ];
     }
@@ -114,25 +121,24 @@ class SupplierPurchaseOrderResource extends JsonResource
         $response = $this->latestResponse;
 
         return [
-            'id'                     => $response->hash_id,
-            'type'                   => $response->response_type?->value ?? (string) $response->response_type,
-            'status'                 => $response->status?->value ?? (string) $response->status,
+            'id' => $response->hash_id,
+            'type' => $response->response_type?->value ?? (string) $response->response_type,
+            'status' => $response->status?->value ?? (string) $response->status,
             'proposed_delivery_date' => optional($response->proposed_delivery_date)->toDateString(),
-            'notes'                  => $response->notes,
-            'responded_at'           => optional($response->responded_at)->toIso8601String(),
-            'resolved_at'            => optional($response->resolved_at)->toIso8601String(),
-            'resolution_notes'       => $response->resolution_notes,
-            'items'                  => $response->relationLoaded('items')
+            'notes' => $response->notes,
+            'responded_at' => optional($response->responded_at)->toIso8601String(),
+            'resolved_at' => optional($response->resolved_at)->toIso8601String(),
+            'resolution_notes' => $response->resolution_notes,
+            'items' => $response->relationLoaded('items')
                 ? $response->items->map(static fn ($item): array => [
                     'purchase_order_item_id' => $item->purchase_order_item_id !== null
                         ? app('hashids')->encode((int) $item->purchase_order_item_id)
                         : null,
-                    'proposed_quantity'      => $item->proposed_quantity !== null ? (string) $item->proposed_quantity : null,
-                    'proposed_unit_price'    => $item->proposed_unit_price !== null ? (string) $item->proposed_unit_price : null,
-                    'reason'                 => $item->reason,
+                    'proposed_quantity' => $item->proposed_quantity !== null ? (string) $item->proposed_quantity : null,
+                    'proposed_unit_price' => $item->proposed_unit_price !== null ? (string) $item->proposed_unit_price : null,
+                    'reason' => $item->reason,
                 ])->values()->all()
                 : [],
         ];
     }
-
 }

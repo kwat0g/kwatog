@@ -52,7 +52,7 @@ final class NotificationCatalog
     /**
      * Append default types that the configured catalog does not contain.
      *
-     * @param array<int, mixed> $configured
+     * @param  array<int, mixed>  $configured
      * @return array<int, array{title:string,hint:string,types:array<int,array{key:string,label:string,description:string}>}>
      */
     private static function mergeMissingDefaults(array $configured): array
@@ -89,8 +89,8 @@ final class NotificationCatalog
                 continue;
             }
 
-            $configured[]                 = ['title' => $group['title'], 'hint' => $group['hint'], 'types' => $missing];
-            $byTitle[$group['title']]     = array_key_last($configured);
+            $configured[] = ['title' => $group['title'], 'hint' => $group['hint'], 'types' => $missing];
+            $byTitle[$group['title']] = array_key_last($configured);
         }
 
         return array_values($configured);
@@ -101,7 +101,7 @@ final class NotificationCatalog
      * nested catalog is editable JSON. Keep a malformed admin snapshot from
      * taking down the preferences endpoint or the SPA table.
      *
-     * @param array<int, mixed> $configured
+     * @param  array<int, mixed>  $configured
      * @return array<int, array{title:string,hint:string,types:array<int,array{key:string,label:string,description:string}>}>
      */
     private static function normaliseConfiguredGroups(array $configured): array
@@ -140,7 +140,7 @@ final class NotificationCatalog
     }
 
     /**
-     * @param array<int, mixed> $groups
+     * @param  array<int, mixed>  $groups
      * @return array<int, string>
      */
     private static function flattenKeys(array $groups): array
@@ -187,6 +187,18 @@ final class NotificationCatalog
                 ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
                 ['key' => 'supplier.po_responded', 'label' => 'Supplier purchase order response', 'description' => 'A supplier responded to a purchase order confirmation request.'],
                 ['key' => 'portal.order_awaiting_review', 'label' => 'Portal order awaiting review', 'description' => 'A self-service order submission is waiting for internal review.'],
+                ['key' => 'purchasing.rfq_published', 'label' => 'RFQ published', 'description' => 'A supplier RFQ was published to invited suppliers.'],
+                ['key' => 'purchasing.rfq_extended', 'label' => 'RFQ deadline extended', 'description' => 'A supplier RFQ deadline was extended.'],
+                ['key' => 'purchasing.rfq_addendum', 'label' => 'RFQ addendum published', 'description' => 'A clarification or material RFQ change was published.'],
+                ['key' => 'purchasing.rfq_closed', 'label' => 'RFQ closed', 'description' => 'A supplier RFQ closed and is ready for evaluation.'],
+                ['key' => 'purchasing.rfq_awarded', 'label' => 'RFQ awarded', 'description' => 'An RFQ award generated draft purchase orders.'],
+                ['key' => 'purchasing.rfq_no_award', 'label' => 'RFQ no award', 'description' => 'An RFQ closed without a supplier award.'],
+                ['key' => 'purchasing.rfq_cancelled', 'label' => 'RFQ cancelled', 'description' => 'A supplier RFQ was cancelled.'],
+                ['key' => 'purchasing.rfq_quote_submitted', 'label' => 'RFQ quote submitted', 'description' => 'A supplier submitted a quotation for an RFQ.'],
+                ['key' => 'purchasing.rfq_quote_withdrawn', 'label' => 'RFQ quote withdrawn', 'description' => 'A supplier withdrew an RFQ quotation.'],
+                ['key' => 'purchasing.rfq_quote_reconfirmation', 'label' => 'RFQ quote reconfirmation', 'description' => 'A winning quotation expired before PO approval and needs supplier reconfirmation.'],
+                ['key' => 'purchasing.rfq_updated', 'label' => 'RFQ updated', 'description' => 'A supplier RFQ was updated.'],
+                ['key' => 'purchasing.po_pending_approval', 'label' => 'PO pending approval', 'description' => 'A submitted purchase order is waiting for the next approval role.'],
             ]],
             ['title' => 'Chain 3 · Hire to Retire', 'hint' => 'Leave, overtime, loans, and payroll', 'types' => [
                 ['key' => 'leave.submitted', 'label' => 'Leave request submitted', 'description' => 'An employee has submitted a leave request for your approval.'],

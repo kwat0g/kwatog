@@ -63,6 +63,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Test PR for approval workflow',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 [
                     'description'          => 'Test item A',
@@ -126,6 +127,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Big ticket PR',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 ['description' => 'Resin', 'quantity' => 10, 'unit' => 'kg', 'estimated_unit_price' => '5000.00'],
             ],
@@ -219,6 +221,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Mold replacement',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 ['description' => 'Mold set', 'quantity' => 1, 'unit' => 'pcs', 'estimated_unit_price' => '60000.00'],
             ],
@@ -272,6 +275,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Test PR for rejection',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 ['description' => 'Mold set', 'quantity' => 1, 'unit' => 'pcs', 'estimated_unit_price' => '60000.00'],
             ],
@@ -315,6 +319,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Out-of-order guard',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 ['description' => 'Mold set', 'quantity' => 1, 'unit' => 'pcs', 'estimated_unit_price' => '60000.00'],
             ],
@@ -337,6 +342,7 @@ class ApprovalWorkflowTest extends TestCase
             'date'     => '2026-06-01',
             'reason'   => 'Small PR',
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items'    => [
                 ['description' => 'Packaging', 'quantity' => 10, 'unit' => 'pcs', 'estimated_unit_price' => '5.00'],
             ],

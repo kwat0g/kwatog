@@ -81,8 +81,8 @@ class BillService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('bill_number', SearchOperator::like(), "%{$term}%")
-                    ->orWhereHas('vendor', fn ($vv) => $vv->where('name', SearchOperator::like(), "%{$term}%"));
+                $qq->where('bill_number', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhereHas('vendor', fn ($vv) => $vv->where('name', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 

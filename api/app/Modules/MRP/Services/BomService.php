@@ -50,8 +50,8 @@ class BomService
         if (! empty($filters['search'])) {
             $term = (string) $filters['search'];
             $q->whereHas('product', fn ($product) => $product
-                ->where('part_number', SearchOperator::like(), "%{$term}%")
-                ->orWhere('name', SearchOperator::like(), "%{$term}%"));
+                ->where('part_number', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term)));
         }
 
         return $q->orderByDesc('is_active')

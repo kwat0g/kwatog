@@ -183,10 +183,11 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
         <div className="bg-surface border border-accent/40 rounded-md p-4 space-y-3 relative transition-colors duration-fast">
           <button
             type="button"
+            aria-label="Close"
             onClick={() => setSelectedMachine(null)}
             className="absolute top-3 right-3 text-muted hover:text-primary p-1 rounded-md hover:bg-elevated"
           >
-            <LuX className="w-4 h-4" />
+            <LuX className="w-4 h-4" aria-hidden />
           </button>
 
           <div className="flex items-center gap-3">

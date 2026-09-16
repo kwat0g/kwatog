@@ -25,6 +25,7 @@ import { advancedRoutes } from '@/routes/advancedRoutes';
 import { selfServiceRoutes } from '@/routes/selfServiceRoutes';
 import { portalRoutes } from '@/routes/portalRoutes';
 import { careersRoutes } from '@/routes/careersRoutes';
+import { legalRoutes } from '@/routes/legalRoutes';
 import { driverRoutes } from '@/routes/driverRoutes';
 import { factoryRoutes } from '@/routes/factoryRoutes';
 import { maintenanceMobileRoutes } from '@/routes/maintenanceMobileRoutes';
@@ -40,6 +41,7 @@ export default function App() {
  {/* Public landing page */}
  {landingRoutes}
  {careersRoutes}
+ {legalRoutes}
 
  {/* Auth routes (no AuthGuard) */}
  {authRoutes}

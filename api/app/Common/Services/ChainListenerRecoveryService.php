@@ -10,6 +10,7 @@ use App\Common\Models\AuditLog;
 use App\Common\Models\ChainListenerRun;
 use App\Common\Models\OutboxMessage;
 use App\Common\Support\OutboxDispatchContext;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -343,7 +344,7 @@ class ChainListenerRecoveryService
 
         $search = trim((string) $request->query('search', ''));
         if ($search !== '') {
-            $like = '%'.$search.'%';
+            $like = SearchOperator::contains($search);
             $query->where(function (Builder $searchQuery) use ($like): void {
                 $searchQuery
                     ->where('event_type', 'like', $like)

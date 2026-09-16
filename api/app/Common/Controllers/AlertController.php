@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Controllers;
 
+use App\Common\Support\SearchOperator;
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Models\Alert;
@@ -30,7 +31,7 @@ class AlertController
             $query->whereIn('type', $filters['type']);
         }
         if (! empty($filters['entity_type'])) {
-            $query->where('entity_type', 'like', '%'.$filters['entity_type'].'%');
+            $query->where('entity_type', SearchOperator::like(), SearchOperator::contains($filters['entity_type']));
         }
         if (array_key_exists('is_dismissed', $filters)) {
             $val = filter_var($filters['is_dismissed'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -49,8 +50,8 @@ class AlertController
         if (! empty($filters['search'])) {
             $s = $filters['search'];
             $query->where(fn ($q) => $q
-                ->where('title', 'ilike', "%{$s}%")
-                ->orWhere('message', 'ilike', "%{$s}%"));
+                ->where('title', SearchOperator::like(), SearchOperator::contains($s))
+                ->orWhere('message', SearchOperator::like(), SearchOperator::contains($s)));
         }
 
         $perPage = (int) ($filters['per_page'] ?? 25);

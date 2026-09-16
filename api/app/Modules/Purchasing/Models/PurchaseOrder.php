@@ -9,25 +9,27 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\SupplyChain\Enums\Incoterm;
+use Database\Factories\PurchaseOrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow, SoftDeletes;
+    use HasApprovalWorkflow, HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\PurchaseOrderFactory
+    protected static function newFactory(): PurchaseOrderFactory
     {
-        return \Database\Factories\PurchaseOrderFactory::new();
+        return PurchaseOrderFactory::new();
     }
 
     protected $fillable = [
@@ -35,6 +37,7 @@ class PurchaseOrder extends Model
         'request_for_quote_id',
         'date', 'expected_delivery_date', 'confirmed_delivery_date',
         'subtotal', 'vat_amount', 'total_amount', 'is_vatable',
+        'rfq_vat_amount', 'rfq_freight_amount', 'rfq_other_charges',
         'requires_vp_approval',
         'created_by', 'remarks', 'incoterm',
         'is_auto_generated',
@@ -43,21 +46,24 @@ class PurchaseOrder extends Model
     ];
 
     protected $casts = [
-        'date'                     => 'date',
-        'expected_delivery_date'   => 'date',
-        'confirmed_delivery_date'  => 'date',
+        'date' => 'date',
+        'expected_delivery_date' => 'date',
+        'confirmed_delivery_date' => 'date',
         'budget_acknowledged_at' => 'datetime',
-        'subtotal'               => 'decimal:2',
-        'vat_amount'             => 'decimal:2',
-        'total_amount'           => 'decimal:2',
-        'is_vatable'             => 'boolean',
-        'status'                 => PurchaseOrderStatus::class,
-        'requires_vp_approval'   => 'boolean',
-        'current_approval_step'  => 'integer',
-        'approved_at'            => 'datetime',
-        'sent_to_supplier_at'    => 'datetime',
-        'is_auto_generated'      => 'boolean',
-        'incoterm'               => Incoterm::class,
+        'subtotal' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
+        'total_amount' => 'decimal:2',
+        'rfq_vat_amount' => 'decimal:2',
+        'rfq_freight_amount' => 'decimal:2',
+        'rfq_other_charges' => 'decimal:2',
+        'is_vatable' => 'boolean',
+        'status' => PurchaseOrderStatus::class,
+        'requires_vp_approval' => 'boolean',
+        'current_approval_step' => 'integer',
+        'approved_at' => 'datetime',
+        'sent_to_supplier_at' => 'datetime',
+        'is_auto_generated' => 'boolean',
+        'incoterm' => Incoterm::class,
     ];
 
     public function vendor(): BelongsTo
@@ -73,6 +79,11 @@ class PurchaseOrder extends Model
     public function rfq(): BelongsTo
     {
         return $this->belongsTo(RequestForQuote::class, 'request_for_quote_id');
+    }
+
+    public function rfqQuoteReconfirmation(): HasOne
+    {
+        return $this->hasOne(RfqQuoteReconfirmation::class);
     }
 
     public function items(): HasMany
@@ -100,17 +111,17 @@ class PurchaseOrder extends Model
      * key, so a re-submission (newer id) is the row consumers should read —
      * superseded replies stay reachable through `responses()`.
      */
-    public function latestResponse(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function latestResponse(): HasOne
     {
         return $this->hasOne(PurchaseOrderResponse::class)->latestOfMany();
     }
 
-    public function supplierDispatch(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function supplierDispatch(): HasOne
     {
         return $this->hasOne(SupplierOrderDispatch::class);
     }
 
-    public function supplierShipment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function supplierShipment(): HasOne
     {
         return $this->hasOne(SupplierShipment::class);
     }
@@ -140,9 +151,12 @@ class PurchaseOrder extends Model
 
     public function getQuantityReceivedPercentAttribute(): float
     {
-        $totalOrdered  = (float) $this->items()->sum('quantity');
+        $totalOrdered = (float) $this->items()->sum('quantity');
         $totalReceived = (float) $this->items()->sum('quantity_received');
-        if ($totalOrdered <= 0) return 0.0;
+        if ($totalOrdered <= 0) {
+            return 0.0;
+        }
+
         return round(($totalReceived / $totalOrdered) * 100, 2);
     }
 
@@ -150,6 +164,7 @@ class PurchaseOrder extends Model
     {
         $ordered = (float) $this->items()->sum('quantity');
         $accepted = (float) $this->items()->sum('quantity_accepted');
+
         return $ordered > 0 ? round(($accepted / $ordered) * 100, 2) : 0.0;
     }
 }

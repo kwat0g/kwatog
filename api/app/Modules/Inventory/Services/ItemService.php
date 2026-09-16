@@ -44,8 +44,8 @@ class ItemService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('code', SearchOperator::like(), "%{$term}%")
-                    ->orWhere('name', SearchOperator::like(), "%{$term}%");
+                $qq->where('code', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

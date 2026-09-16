@@ -35,6 +35,7 @@ class ContactInquiryTest extends TestCase
             'email' => 'juan@toyota.com.ph',
             'phone' => '+63 917 555 0101',
             'message' => 'We would like to discuss an ongoing order for wiper bushings.',
+            'consent' => true,
         ], $overrides);
     }
 
@@ -58,6 +59,7 @@ class ContactInquiryTest extends TestCase
         $this->assertNotNull($record);
         $this->assertSame(ContactInquiryStatus::New, $record->status);
         $this->assertMatchesRegularExpression('/^INQ-\d{6}-\d{4}$/', $record->inquiry_no);
+        $this->assertNotNull($record->consent_at, 'Acceptance of the privacy notice must be recorded.');
 
         Notification::assertSentOnDemand(ContactInquiryReceivedNotification::class);
     }
@@ -102,6 +104,17 @@ class ContactInquiryTest extends TestCase
         $this->postJson('/api/v1/landing/contact-inquiry', $this->validPayload([
             'message' => str_repeat('a', 2001),
         ]))->assertStatus(422)->assertJsonValidationErrorFor('message');
+    }
+
+    public function test_consent_is_required_and_not_stored_from_client_input(): void
+    {
+        Notification::fake();
+
+        $this->postJson('/api/v1/landing/contact-inquiry', $this->validPayload(['consent' => false]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('consent');
+
+        $this->assertDatabaseMissing('contact_inquiries', ['email' => 'juan@toyota.com.ph']);
     }
 
     public function test_submit_endpoint_is_throttled(): void
@@ -180,7 +193,7 @@ class ContactInquiryTest extends TestCase
             ->assertJsonValidationErrorFor('per_page');
 
         $this->actingAs($admin)
-            ->getJson('/api/v1/crm/inquiries?search=' . str_repeat('a', 121))
+            ->getJson('/api/v1/crm/inquiries?search='.str_repeat('a', 121))
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('search');
     }

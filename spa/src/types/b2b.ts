@@ -58,7 +58,8 @@ export interface PortalPoCapabilities {
  can_update_shipment: boolean;
  can_upload_document: boolean;
  can_submit_invoice: boolean;
- can_schedule_delivery: boolean;
+  can_schedule_delivery: boolean;
+  can_reconfirm_rfq: boolean;
 }
 
 /** Body for POST /b2b/supplier/purchase-orders/{po}/respond. */
@@ -103,7 +104,7 @@ export interface PortalPoDetail extends PortalPoSummary {
  grn_number: string;
  received_date: string | null;
  }>;
- bills: Array<{
+  bills: Array<{
  id: string;
  bill_number: string;
  total_amount: string;
@@ -112,7 +113,8 @@ export interface PortalPoDetail extends PortalPoSummary {
  status: string;
  status_label?: string;
  due_date: string | null;
- }>;
+  }>;
+  rfq_reconfirmation?: { id: string; status: string; requested_at: string | null; quote_valid_until: string | null } | null;
 }
 
 export interface SupplierDeliverySummary {

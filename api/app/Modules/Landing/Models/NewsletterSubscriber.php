@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Landing\Models;
 
-use App\Modules\Landing\Enums\NewsletterStatus;
 use App\Common\Traits\HasHashId;
+use App\Modules\Landing\Enums\NewsletterStatus;
 use Illuminate\Database\Eloquent\Model;
 
 class NewsletterSubscriber extends Model
@@ -21,7 +21,8 @@ class NewsletterSubscriber extends Model
     protected function casts(): array
     {
         return [
-            'status'          => NewsletterStatus::class,
+            'status' => NewsletterStatus::class,
+            'consent_at' => 'datetime',
             'unsubscribed_at' => 'datetime',
         ];
     }

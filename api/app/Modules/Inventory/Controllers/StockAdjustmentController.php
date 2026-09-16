@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
@@ -72,9 +73,9 @@ class StockAdjustmentController
         if (!empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $q->where(fn ($qq) => $qq
-                ->where('reason', 'ilike', "%{$term}%")
-                ->orWhereHas('item', fn ($i) => $i->where('code', 'ilike', "%{$term}%")
-                    ->orWhere('name', 'ilike', "%{$term}%")));
+                ->where('reason', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhereHas('item', fn ($i) => $i->where('code', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term))));
         }
 
         return StockAdjustmentResource::collection(

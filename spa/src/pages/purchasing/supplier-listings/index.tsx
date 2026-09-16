@@ -274,6 +274,7 @@ export default function SupplierListingsReviewPage() {
                 </p>
               )}
               <textarea
+                aria-label="Reason for rejection"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 className="w-full h-24 px-3 py-2 rounded-md border border-default bg-canvas text-sm resize-none"

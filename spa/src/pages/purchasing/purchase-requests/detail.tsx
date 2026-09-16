@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -23,7 +23,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
 import { buildP2pChain } from '@/lib/chains';
-import type { PurchaseRequestStatus } from '@/types/purchasing';
+import type { PurchaseRequestSourcingMethod, PurchaseRequestStatus } from '@/types/purchasing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 import { useOptimisticStatusAction } from '@/hooks/useOptimisticStatusAction';
@@ -44,7 +44,8 @@ export default function PurchaseRequestDetailPage() {
  const [convertOpen, setConvertOpen] = useState(false);
  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
  const [rejectOpen, setRejectOpen] = useState(false);
- const [postBillId, setPostBillId] = useState<string | null>(null);
+  const [postBillId, setPostBillId] = useState<string | null>(null);
+  const [sourcingMethod, setSourcingMethod] = useState<PurchaseRequestSourcingMethod | ''>('');
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['purchasing', 'purchase-requests', id],
@@ -52,7 +53,10 @@ export default function PurchaseRequestDetailPage() {
  enabled: !!id,
  });
 
- const detailKey = ['purchasing', 'purchase-requests', id];
+  const detailKey = ['purchasing', 'purchase-requests', id];
+  useEffect(() => {
+   if (data?.sourcing_method && !sourcingMethod) setSourcingMethod(data.sourcing_method);
+  }, [data?.sourcing_method, sourcingMethod]);
 
 
  const submit = useOptimisticStatusAction({
@@ -60,7 +64,12 @@ export default function PurchaseRequestDetailPage() {
       mutationFn: () => purchaseRequestsApi.submit(id),
       nextStatus: 'pending',
       successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null),
-    });
+  });
+  const saveSourcingMethod = useMutation({
+   mutationFn: () => purchaseRequestsApi.setSourcingMethod(id, sourcingMethod as PurchaseRequestSourcingMethod),
+   onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] }); toast.success('Sourcing method saved.'); },
+   onError: (e) => toast.error(errMsg(e, 'Failed to save sourcing method.')),
+  });
  const approve = useOptimisticStatusAction({
       detailKey,
       mutationFn: () => purchaseRequestsApi.approve(id),
@@ -133,7 +142,17 @@ export default function PurchaseRequestDetailPage() {
  </div>
  }
  />
- <div className="px-5 py-4 space-y-4">
+  <div className="px-5 py-4 space-y-4">
+  {data.sourcing_method === null && data.actions?.can_set_sourcing_method && (
+  <Panel title="Choose sourcing method">
+   <p className="text-sm text-muted mb-3">This decision is required before submission. There is no default: choose whether the approved request should create a direct PO or enter competitive RFQ sourcing.</p>
+   <div className="grid sm:grid-cols-2 gap-3">
+    <label className="flex gap-3 rounded-md border border-default p-3 cursor-pointer"><input type="radio" name="sourcing_method" value="direct_po" checked={sourcingMethod === 'direct_po'} onChange={() => setSourcingMethod('direct_po')} /><span><strong className="block">Direct PO</strong><span className="text-xs text-muted">Create draft PO automatically after final PR approval when supplier and price data are complete.</span></span></label>
+    <label className="flex gap-3 rounded-md border border-default p-3 cursor-pointer"><input type="radio" name="sourcing_method" value="rfq" checked={sourcingMethod === 'rfq'} onChange={() => setSourcingMethod('rfq')} /><span><strong className="block">Competitive RFQ</strong><span className="text-xs text-muted">Hold the approved request for a sealed supplier bidding event.</span></span></label>
+   </div>
+   <Button className="mt-3" variant="primary" disabled={!sourcingMethod} onClick={() => saveSourcingMethod.mutate()} loading={saveSourcingMethod.isPending}>Save sourcing method</Button>
+  </Panel>
+  )}
   {data.status === 'approved' && data.po_conversion_status === 'manual_required' && (
   <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
   <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />

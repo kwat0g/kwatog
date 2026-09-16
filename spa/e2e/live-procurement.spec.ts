@@ -39,6 +39,7 @@ async function createManualPr(
   await expect(page.getByRole('heading', { name: 'New purchase request' })).toBeVisible();
 
   await page.getByLabel('Priority').selectOption(input.priority ?? 'normal');
+  await page.getByLabel('Sourcing method').selectOption('direct_po');
   await selectDepartment(page);
   await page.getByLabel('Reason').fill(`Live E2E: ${input.description}`);
   await page.getByLabel('Quantity').fill(input.quantity);
@@ -144,7 +145,7 @@ async function createCatalogPrToSentPo(browser: Browser): Promise<{ poUrl: strin
   }
 
   const purchasing = await newContext(browser);
-  let poUrl = '';
+  let poUrl: string;
   try {
     await login(purchasing.page, 'purchasing@ogami.test');
     await purchasing.page.goto(created.url);
@@ -285,6 +286,7 @@ test.describe('Live procurement runbook', () => {
   });
 
   test('Sales Order confirmation creates an MRP plan and auto-PR handoff', async ({ browser }) => {
+    test.setTimeout(180_000);
     const sales = await newContext(browser);
     let soNumber = '';
     try {
@@ -345,6 +347,8 @@ test.describe('Live procurement runbook', () => {
 
       await purchasing.page.goto(`/purchasing/purchase-requests/${autoPr!.id}`);
       await expect(purchasing.page.getByText('AUTO', { exact: true })).toBeVisible();
+      await purchasing.page.getByRole('radio', { name: /Direct PO/ }).check();
+      await purchasing.page.getByRole('button', { name: 'Save sourcing method', exact: true }).click();
       await purchasing.page.getByRole('button', { name: 'Submit', exact: true }).click();
       const dialog = purchasing.page.getByRole('dialog');
       await dialog.getByRole('button', { name: 'Submit', exact: true }).click();
@@ -426,7 +430,7 @@ test.describe('Live procurement runbook', () => {
 
   test('generated finance-only customer return can be rejected by Department Head', async ({ browser }) => {
     const creator = await newContext(browser);
-    let rmaUrl = '';
+    let rmaUrl: string;
     try {
       await login(creator.page, 'crm@ogami.test');
       await creator.page.goto('/return-management/new');
@@ -471,7 +475,7 @@ test.describe('Live procurement runbook', () => {
     test.setTimeout(240_000);
     const { poId, poNumber, vendorName } = await createCatalogPrToSentPo(browser);
     const warehouse = await newContext(browser);
-    let billUrl = '';
+    let billUrl: string;
     try {
       await login(warehouse.page, 'warehouse@ogami.test');
       await warehouse.page.goto('/inventory/grn');
@@ -612,7 +616,7 @@ test.describe('Live procurement runbook', () => {
     }
 
     const returnCreator = await newContext(browser);
-    let rmaUrl = '';
+    let rmaUrl: string;
     try {
       await login(returnCreator.page, 'purchasing@ogami.test');
       await returnCreator.page.goto('/return-management/new');

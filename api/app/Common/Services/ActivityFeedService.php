@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use App\Common\Models\ActivityEvent;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -137,7 +138,7 @@ class ActivityFeedService
         }
         if (! empty($filters['search'])) {
             $s = (string) $filters['search'];
-            $q->where('summary', 'ilike', "%{$s}%");
+            $q->where('summary', SearchOperator::like(), SearchOperator::contains($s));
         }
 
         $perPage = min(100, max(10, (int) ($filters['per_page'] ?? 50)));

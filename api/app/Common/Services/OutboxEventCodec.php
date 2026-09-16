@@ -48,7 +48,9 @@ use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Events\PurchaseOrderSent;
+use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
@@ -86,8 +88,10 @@ class OutboxEventCodec
         MachineStatusChanged::class,
         MachineBreakdownDetected::class,
         PurchaseRequestApproved::class,
+        RfqLifecycleEvent::class,
         PurchaseOrderApproved::class,
         PurchaseOrderSent::class,
+        PurchaseOrderSubmitted::class,
         PurchaseOrderCancelled::class,
         GoodsReceiptNoteCreated::class,
         GoodsReceiptNoteAccepted::class,

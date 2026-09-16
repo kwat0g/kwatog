@@ -100,10 +100,14 @@ export const supplierPortalApi = {
  },
 
  /** Accept, counter-propose or decline a PO. Returns the updated supplier PO. */
- respondToPurchaseOrder: async (id: string, payload: RespondToPurchaseOrderPayload) => {
+  respondToPurchaseOrder: async (id: string, payload: RespondToPurchaseOrderPayload) => {
  const { data } = await portalClient.post<{ data: PortalPoDetail }>(`/b2b/supplier/purchase-orders/${id}/respond`, payload);
  return data.data;
- },
+  },
+  confirmRfqReconfirmation: async (poId: string, reconfirmationId: string) => {
+  const { data } = await portalClient.post(`/b2b/supplier/purchase-orders/${poId}/rfq-reconfirmation/${reconfirmationId}/confirm`);
+  return data.data;
+  },
 
  // ── Shipments ──────────────────────────────────────
  updateShipment: async (poId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {

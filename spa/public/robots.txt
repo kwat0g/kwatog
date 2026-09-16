@@ -1,0 +1,8 @@
+# Only the public marketing landing and the careers board are indexable.
+# The authenticated ERP must never appear in search results.
+User-agent: *
+Allow: /$
+Allow: /careers$
+Allow: /careers/
+Disallow: /careers/track
+Disallow: /

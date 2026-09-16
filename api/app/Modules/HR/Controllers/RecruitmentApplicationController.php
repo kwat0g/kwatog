@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
@@ -55,10 +56,10 @@ class RecruitmentApplicationController
         if (! empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $query->where(fn ($q) => $q
-                ->where('application_number', 'like', "%{$term}%")
-                ->orWhere('first_name', 'like', "%{$term}%")
-                ->orWhere('last_name', 'like', "%{$term}%")
-                ->orWhere('email', 'like', "%{$term}%"));
+                ->where('application_number', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhere('email', SearchOperator::like(), SearchOperator::contains($term)));
         }
 
         $sort = $filters['sort'] ?? 'applied_at';

@@ -6,6 +6,7 @@ namespace App\Modules\ReturnManagement\Controllers;
 
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashId;
+use App\Common\Support\SearchOperator;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
@@ -342,7 +343,7 @@ class ReturnRequestController extends Controller
 
         // Search by RMA number
         if ($search = $request->query('search')) {
-            $q->where('rma_number', 'like', "%{$search}%");
+            $q->where('rma_number', SearchOperator::like(), SearchOperator::contains($search));
         }
 
         $sortField = $request->query('sort', 'created_at');

@@ -46,10 +46,10 @@ class PriceAgreementService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term): void {
                 $qq->whereHas('product', function ($product) use ($term): void {
-                    $product->where('part_number', SearchOperator::like(), "%{$term}%")
-                        ->orWhere('name', SearchOperator::like(), "%{$term}%");
+                    $product->where('part_number', SearchOperator::like(), SearchOperator::contains($term))
+                        ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
                 })->orWhereHas('customer', function ($customer) use ($term): void {
-                    $customer->where('name', SearchOperator::like(), "%{$term}%");
+                    $customer->where('name', SearchOperator::like(), SearchOperator::contains($term));
                 });
             });
         }

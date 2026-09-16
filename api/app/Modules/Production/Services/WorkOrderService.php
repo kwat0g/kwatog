@@ -118,8 +118,8 @@ class WorkOrderService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('wo_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhereHas('product', fn ($p) => $p->where('part_number', SearchOperator::like(), "%{$term}%"));
+                $qq->where('wo_number', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhereHas('product', fn ($p) => $p->where('part_number', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 

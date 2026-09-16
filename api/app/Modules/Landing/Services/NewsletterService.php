@@ -19,12 +19,13 @@ class NewsletterService
                 'email' => $email,
                 'status' => NewsletterStatus::Subscribed->value,
                 'ip_address' => $request->ip(),
+                'consent_at' => $now,
                 'unsubscribed_at' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]],
             ['email'],
-            ['status', 'ip_address', 'unsubscribed_at', 'updated_at'],
+            ['status', 'ip_address', 'consent_at', 'unsubscribed_at', 'updated_at'],
         );
     }
 }

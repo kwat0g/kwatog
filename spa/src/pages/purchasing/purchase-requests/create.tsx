@@ -22,7 +22,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import type { PurchaseRequestPriority } from '@/types/purchasing';
+import type { PurchaseRequestPriority, PurchaseRequestSourcingMethod } from '@/types/purchasing';
 import { formatPeso } from '@/lib/formatNumber';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
@@ -46,6 +46,7 @@ const lineSchema = z.object({
 
 const schema = z.object({
   priority: z.string().min(1, 'Priority is required.'),
+  sourcing_method: z.string().min(1, 'Choose Direct PO or Competitive RFQ.'),
   department_id: z.string().optional().or(z.literal('')),
   reason: z.string().max(1000).optional().or(z.literal('')),
   items: z.array(lineSchema).min(1, 'Add at least one line.'),
@@ -82,6 +83,7 @@ export default function CreatePurchaseRequestPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
+      sourcing_method: '',
       // A department head raises for their own department, so it is locked and
       // pre-selected. The auth store can hydrate after first paint, so an
       // effect below re-applies it once the user (and their department) load.
@@ -148,7 +150,8 @@ export default function CreatePurchaseRequestPage() {
       purchaseRequestsApi
         .create({
           reason: values.reason?.trim() || undefined,
-          priority: values.priority as PurchaseRequestPriority,
+            priority: values.priority as PurchaseRequestPriority,
+            sourcing_method: values.sourcing_method as PurchaseRequestSourcingMethod,
           department_id:
             (isDepartmentLocked ? ownDepartmentId : values.department_id || null) ?? undefined,
           items: values.items.map((l) => ({
@@ -216,6 +219,16 @@ export default function CreatePurchaseRequestPage() {
                   {priority.label}
                 </option>
               ))}
+            </Select>
+            <Select
+              label="Sourcing method"
+              required
+              {...register('sourcing_method')}
+              error={errors.sourcing_method?.message}
+            >
+              <option value="">— Select sourcing method —</option>
+              <option value="direct_po">Direct PO</option>
+              <option value="rfq">Competitive RFQ</option>
             </Select>
             <Select
               label="Department"

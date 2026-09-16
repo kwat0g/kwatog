@@ -23,7 +23,7 @@ class PurchaseRequestTemplateService
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
         if (! empty($filters['search'])) {
-            $q->where('name', 'ilike', '%'.$filters['search'].'%');
+            $q->where('name', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         return $q->orderBy('name')

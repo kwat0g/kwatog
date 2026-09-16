@@ -25,8 +25,8 @@ class RoleService
 
         if (! empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {
-                $q->where('name', 'ilike', '%'.$filters['search'].'%')
-                  ->orWhere('slug', 'ilike', '%'.$filters['search'].'%');
+                $q->where('name', SearchOperator::like(), SearchOperator::contains($filters['search']))
+                    ->orWhere('slug', SearchOperator::like(), SearchOperator::contains($filters['search']));
             });
         }
 
@@ -35,7 +35,12 @@ class RoleService
         }
 
         $sort = $filters['sort'] ?? 'name';
-        $direction = $filters['direction'] ?? 'asc';
+        // orderBy() throws on anything that is not asc/desc; normalise the
+        // direction instead of trusting the query string (500 on `?direction=x`).
+        $direction = strtolower((string) ($filters['direction'] ?? 'asc'));
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
         if (in_array($sort, ['name', 'slug', 'created_at'], true)) {
             $query->orderBy($sort, $direction);
         }
@@ -79,7 +84,9 @@ class RoleService
      */
     private function lastModifiedFor(array $roleIds): array
     {
-        if (empty($roleIds)) return [];
+        if (empty($roleIds)) {
+            return [];
+        }
 
         $morph = (new Role)->getMorphClass();
 
@@ -105,12 +112,15 @@ class RoleService
         $map = [];
         foreach ($rows as $r) {
             $rid = (int) $r->model_id;
-            if (isset($map[$rid])) continue; // guard against ties (same MAX timestamp, multiple rows)
+            if (isset($map[$rid])) {
+                continue;
+            } // guard against ties (same MAX timestamp, multiple rows)
             $map[$rid] = [
                 'by' => $r->actor_name ?? null,
                 'at' => $r->created_at ? Carbon::parse((string) $r->created_at)->toIso8601String() : null,
             ];
         }
+
         return $map;
     }
 
@@ -135,7 +145,9 @@ class RoleService
         $byB = $b->permissions->keyBy('slug');
 
         $allSlugs = array_unique(array_merge($byA->keys()->all(), $byB->keys()->all()));
-        $common = []; $onlyA = []; $onlyB = [];
+        $common = [];
+        $onlyA = [];
+        $onlyB = [];
         $modules = [];
         foreach ($allSlugs as $slug) {
             $row = $byA->get($slug) ?? $byB->get($slug);
@@ -161,20 +173,20 @@ class RoleService
         ksort($modules);
 
         $card = fn (Role $r) => [
-            'id'                => $r->hash_id,
-            'name'              => $r->name,
-            'slug'              => $r->slug,
-            'is_system'         => (bool) $r->is_system,
+            'id' => $r->hash_id,
+            'name' => $r->name,
+            'slug' => $r->slug,
+            'is_system' => (bool) $r->is_system,
             'permissions_count' => $r->permissions->count(),
         ];
 
         return [
-            'role_a'    => $card($a),
-            'role_b'    => $card($b),
-            'common'    => $common,
+            'role_a' => $card($a),
+            'role_b' => $card($b),
+            'common' => $common,
             'only_in_a' => $onlyA,
             'only_in_b' => $onlyB,
-            'modules'   => $modules,
+            'modules' => $modules,
         ];
     }
 
@@ -182,10 +194,10 @@ class RoleService
     {
         return DB::transaction(function () use ($data): Role {
             $role = Role::create([
-                'name'        => $data['name'],
-                'slug'        => $data['slug'],
+                'name' => $data['name'],
+                'slug' => $data['slug'],
                 'description' => $data['description'] ?? null,
-                'is_system'   => false, // R1: only seeders can create system roles
+                'is_system' => false, // R1: only seeders can create system roles
             ]);
 
             $this->audit->record($role, 'created', null, $this->roleSnapshot($role));
@@ -248,10 +260,10 @@ class RoleService
     {
         return DB::transaction(function () use ($source, $data) {
             $clone = Role::create([
-                'name'        => $data['name'],
-                'slug'        => $data['slug'],
+                'name' => $data['name'],
+                'slug' => $data['slug'],
                 'description' => $data['description'] ?? "Cloned from {$source->name}",
-                'is_system'   => false,
+                'is_system' => false,
             ]);
 
             $permissionIds = $source->permissions()->pluck('permissions.id')->all();
@@ -264,8 +276,8 @@ class RoleService
                 ...$this->roleSnapshot($clone),
                 ...[
                     'cloned_from_role_id' => $source->id,
-                    'cloned_from_slug'    => $source->slug,
-                    'permissions_copied'  => count($permissionIds),
+                    'cloned_from_slug' => $source->slug,
+                    'permissions_copied' => count($permissionIds),
                 ],
             ]);
 
@@ -298,14 +310,14 @@ class RoleService
             abort_if(count($ids) !== count($requested), 422, 'One or more permissions do not exist.');
             $locked->permissions()->sync($ids);
 
-            $added   = array_values(array_diff($requested, $existing));
+            $added = array_values(array_diff($requested, $existing));
             $removed = array_values(array_diff($existing, $requested));
 
             // Audit the diff so reviewers can answer "who granted X to role Y".
             $this->audit->record($locked, 'permissions_synced', ['permissions' => $existing], [
-                    'permissions' => $requested,
-                    'added'       => $added,
-                    'removed'     => $removed,
+                'permissions' => $requested,
+                'added' => $added,
+                'removed' => $removed,
             ]);
 
             // H-9 — Bust the role-permission cache key directly. One forget
@@ -328,10 +340,10 @@ class RoleService
             ->get()
             ->groupBy('module')
             ->map(fn ($perms) => $perms->map(fn ($p) => [
-                'id'          => $p->hash_id,
-                'slug'        => $p->slug,
-                'name'        => $p->name,
-                'module'      => $p->module,
+                'id' => $p->hash_id,
+                'slug' => $p->slug,
+                'name' => $p->name,
+                'module' => $p->module,
                 'description' => $p->description,
             ])->all())
             ->all();

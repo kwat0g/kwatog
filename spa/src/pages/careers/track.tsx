@@ -9,8 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { TrackingInfo } from '@/types/recruitment';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { useSeo } from '@/hooks/useSeo';
 
 export default function ApplicationTrackPage() {
+  useSeo({ title: 'Track Your Application — Careers', path: '/careers/track' });
+
   const [code, setCode] = useState('');
   const [info, setInfo] = useState<TrackingInfo | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -49,10 +52,7 @@ export default function ApplicationTrackPage() {
   const isHired = info?.status === 'Hired';
 
   return (
-    <div
-      className="min-h-screen bg-canvas"
-      style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}
-    >
+    <div className="min-h-screen bg-canvas">
       <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
       <main className="mx-auto max-w-2xl px-5 pb-24 pt-32">

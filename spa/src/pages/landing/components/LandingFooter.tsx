@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LuArrowRight, LuCircleCheck } from '@/lib/icons';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { landingApi } from '@/api/landing';
@@ -27,6 +27,12 @@ const footerLinkCls = cn(
   focusRingLanding,
 );
 
+const LEGAL_LINKS = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms & Conditions', href: '/terms' },
+  { label: 'Cookie Policy', href: '/cookies' },
+];
+
 export function LandingFooter() {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
@@ -41,16 +47,36 @@ export function LandingFooter() {
 
   const year = new Date().getFullYear();
   const [email, setEmail] = useState('');
+  const [consent, setConsent] = useState(false);
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  // Section anchors (e.g. #contact) and route links only resolve as-is on the
+  // landing page. On the careers pages the footer is shared, so anchors must be
+  // rewritten to `/#…` and route changes done client-side (no full reload).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLanding = location.pathname === '/';
+
+  const followLink = (e: React.MouseEvent, href: string) => {
+    if (href.startsWith('#')) {
+      if (isLanding) return;
+      e.preventDefault();
+      navigate('/' + href);
+      return;
+    }
+    e.preventDefault();
+    navigate(href);
+  };
 
   const subscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || newsletterStatus === 'submitting') return;
+    if (!email || !consent || newsletterStatus === 'submitting') return;
     setNewsletterStatus('submitting');
     try {
       await landingApi.subscribeNewsletter(email);
       setNewsletterStatus('success');
       setEmail('');
+      setConsent(false);
     } catch {
       setNewsletterStatus('error');
     }
@@ -87,14 +113,15 @@ export function LandingFooter() {
 
           {/* Explore */}
           <nav aria-label="Footer explore" data-reveal data-reveal-delay="0.07">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Explore
-            </h3>
+            </h2>
             <ul className="mt-4 space-y-2.5">
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <a
-                    href={link.href}
+                    href={link.href.startsWith('#') && !isLanding ? '/' + link.href : link.href}
+                    onClick={(e) => followLink(e, link.href)}
                     className={cn(footerLinkCls, 'text-[13px]')}
                   >
                     {link.label}
@@ -106,15 +133,15 @@ export function LandingFooter() {
 
           {/* Company */}
           <nav aria-label="Footer company" data-reveal data-reveal-delay="0.14">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Company
-            </h3>
+            </h2>
             <ul className="mt-4 space-y-2.5">
               {companyLinks.map((link) => (
                 <li key={link.label}>
                   <a
-                    href={link.href}
-                    onClick={(e) => link.href === '#' && e.preventDefault()}
+                    href={link.href.startsWith('#') && !isLanding ? '/' + link.href : link.href}
+                    onClick={(e) => followLink(e, link.href)}
                     className={cn(footerLinkCls, 'text-[13px]')}
                   >
                     {link.label}
@@ -126,9 +153,9 @@ export function LandingFooter() {
 
           {/* Quality & Certifications */}
           <nav aria-label="Footer quality" data-reveal data-reveal-delay="0.21">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Quality
-            </h3>
+            </h2>
             <ul className="mt-4 space-y-2.5">
               <li>
                 <button
@@ -160,9 +187,9 @@ export function LandingFooter() {
 
           {/* Newsletter + Contact */}
           <div data-reveal data-reveal-delay="0.28">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Molding insights
-            </h3>
+            </h2>
             <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-secondary">
               {(content?.section_copy?.newsletter_description ?? '—').replace('{{company}}', contact?.legal_name ?? '—')}
             </p>
@@ -191,22 +218,37 @@ export function LandingFooter() {
                   />
                   <button
                     type="submit"
-                    disabled={newsletterStatus === 'submitting'}
+                    disabled={newsletterStatus === 'submitting' || !consent}
                     aria-label="Subscribe"
                     className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-default bg-surface text-accent transition-colors hover:bg-elevated hover:border-accent/40 disabled:opacity-60 cursor-pointer', focusRingLanding)}
                   >
                     <LuArrowRight size={16} />
                   </button>
                 </div>
+                <label className="flex items-start gap-2 text-[11px] leading-relaxed text-text-subtle">
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm border-default accent-accent"
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <Link to="/privacy" className="text-accent underline underline-offset-2">
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
                 {newsletterStatus === 'error' && (
                   <p role="alert" className="text-[11px] text-danger">Could not subscribe. Please try again.</p>
                 )}
               </form>
             )}
 
-            <h3 className="mt-8 font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
+            <h2 className="mt-8 font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Get in touch
-            </h3>
+            </h2>
             <ul className="mt-4 space-y-2.5">
               <li>
                 <a
@@ -253,7 +295,24 @@ export function LandingFooter() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-default pt-6 sm:flex-row sm:items-center">
+        {/* Legal links are rendered directly (not CMS-seeded) so they can never
+            disappear from the footer regardless of landing content settings. */}
+        <nav aria-label="Legal" className="mt-14 border-t border-default pt-6">
+          <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            {LEGAL_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link
+                  to={link.href}
+                  className={cn(footerLinkCls, 'text-[12px]')}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="mt-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <p className="font-mono text-[11px] text-text-subtle">
             © {year}{legalName ? ` ${legalName}.` : ''} {legalName ? 'All rights reserved.' : ''}
           </p>

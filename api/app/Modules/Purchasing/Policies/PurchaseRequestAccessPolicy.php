@@ -9,6 +9,8 @@ use App\Common\Models\ApprovalRecord;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -36,7 +38,7 @@ final class PurchaseRequestAccessPolicy
     private const DEPARTMENTAL_STEP_ROLE = 'department_head';
 
     /**
-     * @param Builder<PurchaseRequest> $query
+     * @param  Builder<PurchaseRequest>  $query
      * @return Builder<PurchaseRequest>
      */
     public function visibleTo(Builder $query, ?User $user): Builder
@@ -146,7 +148,9 @@ final class PurchaseRequestAccessPolicy
 
     public function canConvert(User $user, PurchaseRequest $pr): bool
     {
-        return $user->hasPermission('purchasing.po.create') && $this->canView($user, $pr);
+        return $user->hasPermission('purchasing.po.create')
+            && $this->canView($user, $pr)
+            && $pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo;
     }
 
     public function canStartRfq(User $user, PurchaseRequest $pr): bool
@@ -154,6 +158,26 @@ final class PurchaseRequestAccessPolicy
         return $user->hasPermission('purchasing.rfq.create')
             && $this->canView($user, $pr)
             && $pr->status === PurchaseRequestStatus::Approved
+            && $pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
+            && ! $this->hasLivePurchaseOrders($pr)
+            && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists();
+    }
+
+    public function canSetSourcingMethod(User $user, PurchaseRequest $pr, PurchaseRequestSourcingMethod $method): bool
+    {
+        $hasMethodPermission = $method === PurchaseRequestSourcingMethod::Rfq
+            ? $user->hasPermission('purchasing.rfq.create')
+            : $user->hasPermission('purchasing.po.create');
+        if (! $hasMethodPermission || ! $this->canView($user, $pr)) {
+            return false;
+        }
+        if ($pr->status === PurchaseRequestStatus::Draft) {
+            return $this->canManageDraft($user, $pr);
+        }
+
+        return $pr->status === PurchaseRequestStatus::Approved
+            && $pr->sourcing_method === null
+            && $pr->po_conversion_status === PurchaseRequestConversionStatus::SourcingPending
             && ! $this->hasLivePurchaseOrders($pr)
             && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists();
     }
@@ -184,13 +208,13 @@ final class PurchaseRequestAccessPolicy
         $canManageDraft = $this->canManageDraft($user, $pr);
 
         return [
-            'can_view'               => $this->canView($user, $pr),
-            'can_update'             => $canManageDraft,
-            'can_delete'             => $canManageDraft,
-            'can_submit'             => $canManageDraft,
-            'can_cancel'             => $this->canCancel($user, $pr),
-            'can_approve'            => $this->canApprove($user, $pr),
-            'can_reject'             => $this->canReject($user, $pr),
+            'can_view' => $this->canView($user, $pr),
+            'can_update' => $canManageDraft,
+            'can_delete' => $canManageDraft,
+            'can_submit' => $canManageDraft,
+            'can_cancel' => $this->canCancel($user, $pr),
+            'can_approve' => $this->canApprove($user, $pr),
+            'can_reject' => $this->canReject($user, $pr),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $pr),
             // canConvert() is the permission gate the convert endpoint uses and
             // is deliberately replay-tolerant: re-posting an already-converted
@@ -198,12 +222,14 @@ final class PurchaseRequestAccessPolicy
             // any live PO exists (including rows created before the manual
             // create path marked its source PR converted) the affordance clears
             // so the operator cannot fire a second conversion.
-            'can_convert'            => $this->canConvert($user, $pr)
+            'can_convert' => $this->canConvert($user, $pr)
                 && $pr->status === PurchaseRequestStatus::Approved
                 && ! $this->hasLivePurchaseOrders($pr)
                 && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists(),
-            'can_start_rfq'          => $this->canStartRfq($user, $pr),
-            'can_print'              => $this->canView($user, $pr),
+            'can_start_rfq' => $this->canStartRfq($user, $pr),
+            'can_set_sourcing_method' => $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::DirectPo)
+                || $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::Rfq),
+            'can_print' => $this->canView($user, $pr),
         ];
     }
 

@@ -140,6 +140,12 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
       }),
     });
   });
+  await page.route('**/api/v1/landing/contact', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ legal_name: 'Philippine Ogami Corporation', address: null }) });
+  });
+  await page.route('**/api/v1/broadcasting/auth', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ auth: 'mock' }) });
+  });
   await page.route('**/api/v1/dashboard/layout', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
   });

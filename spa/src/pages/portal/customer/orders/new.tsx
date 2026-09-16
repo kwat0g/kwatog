@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
+import { useDebounce } from '@/hooks/useDebounce';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -27,13 +28,16 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function CustomerPlaceOrderPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  // One catalog lookup per settled query, not per keystroke — the raw value
+  // stays on the input so typing never waits on the network.
+  const debouncedSearch = useDebounce(search, 300);
   const [orderDate, setOrderDate] = useState(today());
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
 
   const { data: catalog, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'catalog', search],
-    queryFn: () => customerPortalApi.listCatalog({ search: search || undefined }),
+    queryKey: ['portal', 'customer', 'catalog', debouncedSearch],
+    queryFn: () => customerPortalApi.listCatalog({ search: debouncedSearch || undefined }),
     placeholderData: (prev) => prev,
   });
 

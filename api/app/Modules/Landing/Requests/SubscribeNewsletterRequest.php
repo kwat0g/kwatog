@@ -17,6 +17,7 @@ class SubscribeNewsletterRequest extends FormRequest
     {
         return [
             'email' => ['required', 'string', 'email', 'max:150'],
+            'consent' => ['required', 'accepted'],
         ];
     }
 }

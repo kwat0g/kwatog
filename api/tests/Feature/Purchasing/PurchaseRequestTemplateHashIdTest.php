@@ -57,6 +57,7 @@ class PurchaseRequestTemplateHashIdTest extends TestCase
             ->postJson('/api/v1/purchasing/purchase-requests', [
                 'template_id' => $template->hash_id,
                 'department_id' => $otherDepartment->hash_id,
+                'sourcing_method' => 'direct_po',
                 'items' => $template->items,
             ])
             ->assertCreated();

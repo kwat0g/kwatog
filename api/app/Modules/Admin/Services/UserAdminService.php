@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\AuditLog;
 use App\Common\Services\TemporaryPasswordGenerator;
+use App\Common\Support\SearchOperator;
 use App\Modules\Admin\Models\LoginHistory;
 use App\Modules\Admin\Support\CreatedUser;
 use App\Modules\Auth\Models\PasswordHistory;
@@ -93,8 +94,8 @@ class UserAdminService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $query->where(function ($q) use ($term) {
-                $q->where('name', 'ilike', "%{$term}%")
-                    ->orWhere('email', 'ilike', "%{$term}%");
+                $q->where('name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('email', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

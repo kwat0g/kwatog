@@ -19,18 +19,19 @@ class PurchaseRequestFactory extends Factory
     public function definition(): array
     {
         return [
-            'pr_number'              => 'PR-' . now()->format('Ym') . '-' . fake()->unique()->numerify('####'),
-            'requested_by'           => User::factory(),
-            'department_id'          => Department::factory(),
-            'mrp_plan_id'            => null,
-            'template_id'            => null,
-            'date'                   => fake()->date(),
-            'reason'                 => fake()->sentence(),
-            'priority'               => 'normal',
-            'is_auto_generated'      => false,
-            'auto_generated_reason'  => null,
-            'is_urgent'              => false,
-            'urgency_reason'         => null,
+            'pr_number' => 'PR-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
+            'requested_by' => User::factory(),
+            'department_id' => Department::factory(),
+            'mrp_plan_id' => null,
+            'template_id' => null,
+            'date' => fake()->date(),
+            'reason' => fake()->sentence(),
+            'priority' => 'normal',
+            'is_auto_generated' => false,
+            'auto_generated_reason' => null,
+            'is_urgent' => false,
+            'urgency_reason' => null,
+            'sourcing_method' => 'direct_po',
         ];
     }
 
@@ -43,10 +44,10 @@ class PurchaseRequestFactory extends Factory
         return $this->afterMaking(function (PurchaseRequest $pr) {
             if (! $pr->status) {
                 $pr->forceFill([
-                    'status'                => 'draft',
+                    'status' => 'draft',
                     'current_approval_step' => 0,
-                    'submitted_at'          => null,
-                    'approved_at'           => null,
+                    'submitted_at' => null,
+                    'approved_at' => null,
                 ]);
             }
         });

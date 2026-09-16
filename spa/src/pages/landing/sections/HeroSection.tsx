@@ -180,7 +180,7 @@ export function HeroSection() {
           <div data-hero="cta" className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
             <a
               ref={quoteRef}
-              href={heroCta?.quote_href ?? '#'}
+              href={heroCta?.quote_href ?? '#contact'}
               className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-accent px-8 py-4 font-sans text-[15px] font-semibold text-accent-fg transition-all duration-300 hover:scale-105 hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <span className="relative z-10 flex items-center gap-2">
@@ -193,7 +193,7 @@ export function HeroSection() {
             </a>
             <a
               ref={exploreRef}
-              href={heroCta?.explore_href ?? '#'}
+              href={heroCta?.explore_href ?? '#capabilities'}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-strong px-8 py-4 font-sans text-[15px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               {heroCta?.explore_label ?? '—'}

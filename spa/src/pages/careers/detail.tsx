@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { useSeo } from '@/hooks/useSeo';
 
 const applySchema = z.object({
  first_name: z.string().min(1, 'First name is required').max(100),
@@ -30,6 +31,8 @@ export default function JobPostingDetailPage() {
  const [resume, setResume] = useState<File | null>(null);
  const [trackingCode, setTrackingCode] = useState<string | null>(null);
  const [resumeError, setResumeError] = useState<string | null>(null);
+ const [consent, setConsent] = useState(false);
+ const [consentError, setConsentError] = useState<string | null>(null);
  const [menuOpen, setMenuOpen] = useState(false);
  const fileRef = useRef<HTMLInputElement>(null);
 
@@ -68,21 +71,33 @@ export default function JobPostingDetailPage() {
  setResumeError('Please upload your resume (PDF, DOC, or DOCX).');
  return;
  }
+ if (!consent) {
+ setConsentError('Please accept the privacy notice to submit your application.');
+ return;
+ }
  setResumeError(null);
+ setConsentError(null);
  const fd = new FormData();
  fd.append('first_name', data.first_name);
  fd.append('last_name', data.last_name);
  fd.append('email', data.email);
  fd.append('phone', data.phone);
  if (data.cover_letter) fd.append('cover_letter', data.cover_letter);
+ fd.append('consent', '1');
  fd.append('resume', resume);
  mutation.mutate(fd);
  };
 
  const posting = data;
 
+ useSeo({
+  title: posting ? `${posting.title} — Careers` : undefined,
+  description: posting?.description?.slice(0, 160),
+  path: id ? `/careers/${id}` : undefined,
+ });
+
  return (
- <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+ <div className="min-h-screen bg-canvas">
  <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
  <main className="mx-auto max-w-3xl px-5 pb-24 pt-32">
@@ -93,8 +108,13 @@ export default function JobPostingDetailPage() {
  <LuArrowLeft size={14} /> Back to all positions
  </Link>
 
+ {/* Always exactly one h1 so loading/error/empty states keep a valid hierarchy. */}
+ <h1 className={'text-2xl font-medium tracking-tight text-primary' + (posting ? '' : ' sr-only')}>
+ {posting ? posting.title : 'Job opportunity'}
+ </h1>
+
  {isLoading && (
- <div className="space-y-4">
+ <div className="mt-4 space-y-4">
  <div className="h-8 w-2/3 animate-pulse rounded bg-elevated" />
  <div className="h-4 w-1/3 animate-pulse rounded bg-elevated" />
  <div className="h-32 animate-pulse rounded bg-surface" />
@@ -110,7 +130,6 @@ export default function JobPostingDetailPage() {
 
  {posting && (
  <>
- <h1 className="text-2xl font-medium tracking-tight text-primary">{posting.title}</h1>
  <div className="mt-3 flex flex-wrap gap-4 text-sm text-secondary">
  <span className="flex items-center gap-1.5">
  <LuMapPin size={14} /> {posting.department.name}
@@ -236,6 +255,28 @@ export default function JobPostingDetailPage() {
  <label htmlFor="cover-letter" className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
  <Textarea id="cover-letter" {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
  </div>
+
+ <label className="flex items-start gap-2.5 text-xs leading-relaxed text-secondary">
+ <input
+ type="checkbox"
+ checked={consent}
+ onChange={(e) => {
+ setConsent(e.target.checked);
+ if (e.target.checked) setConsentError(null);
+ }}
+ className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-default accent-accent"
+ />
+ <span>
+ I agree to the{' '}
+ <Link to="/privacy" className="text-accent underline underline-offset-2">
+ Privacy Policy
+ </Link>
+ . We use your application only to assess your candidacy.
+ </span>
+ </label>
+ {consentError && (
+ <p role="alert" className="text-xs text-danger-fg">{consentError}</p>
+ )}
 
  <Button type="submit" disabled={mutation.isPending} className="w-full">
  {mutation.isPending ? 'Submitting...' : 'Submit Application'}

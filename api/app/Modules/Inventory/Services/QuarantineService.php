@@ -71,7 +71,7 @@ class QuarantineService
             $q->where('item_id', HashIdFilter::decode($filters['item_id'], Item::class) ?? 0);
         }
         if (($search = trim((string) ($filters['search'] ?? ''))) !== '') {
-            $like = '%'.$search.'%';
+            $like = SearchOperator::contains($search);
             $q->where(function ($query) use ($like) {
                 $query->where('mrb_number', SearchOperator::like(), $like)
                     ->orWhereHas('item', fn ($item) => $item
@@ -119,7 +119,7 @@ class QuarantineService
 
         $item = Item::query()->findOrFail($itemId);
         $like = trim((string) $search);
-        $pattern = $like === '' ? null : '%'.$like.'%';
+        $pattern = $like === '' ? null : SearchOperator::contains($like);
         $limit = min(max($perPage, 1), 100);
 
         $inspections = Inspection::query()

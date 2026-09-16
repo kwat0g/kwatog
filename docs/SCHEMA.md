@@ -249,19 +249,19 @@ id, item_id (FK items), work_order_id (FK work_orders), quantity (decimal 15,3),
 
 ---
 
-## PURCHASING (13 tables)
+## PURCHASING (15 tables)
 
 ### purchase_requests
-id, pr_number (string 20), requested_by (FK users), department_id (FK departments), date (date), reason (text), status (string 20: draft/pending/approved/rejected/converted), is_auto_generated (bool default false), created_at, updated_at
+id, pr_number (string 20), requested_by (FK users), department_id (FK departments), date (date), reason (text), status (string 20: draft/pending/approved/rejected/converted), sourcing_method (direct_po/rfq nullable until explicitly selected), is_auto_generated (bool default false), created_at, updated_at
 
 ### purchase_request_items
 id, purchase_request_id (FK purchase_requests), item_id (FK items nullable), description (string 200), quantity (decimal 10,2), unit (string 20), estimated_unit_price (decimal 15,2 nullable)
 
 ### purchase_orders
-id, po_number (string 20 unique), vendor_id (FK vendors), purchase_request_id (FK purchase_requests nullable), request_for_quote_id (FK request_for_quotes nullable), date (date), expected_delivery_date (date nullable), subtotal (decimal 15,2), vat_amount (decimal 15,2 default 0), total_amount (decimal 15,2), status (string 20: draft/approved/sent/partially_received/received/cancelled), approved_by (FK users nullable), approved_at (timestamp nullable), sent_to_supplier_at (timestamp nullable), remarks (text nullable), created_at, updated_at
+id, po_number (string 20 unique), vendor_id (FK vendors), purchase_request_id (FK purchase_requests nullable), request_for_quote_id (FK request_for_quotes nullable), date (date), expected_delivery_date (date nullable), subtotal (decimal 15,2), vat_amount (decimal 15,2 default 0), total_amount (decimal 15,2), RFQ commercial VAT/freight/other charge snapshots (nullable decimal 15,2), status (string 20: draft/approved/sent/partially_received/received/cancelled), approved_by (FK users nullable), approved_at (timestamp nullable), sent_to_supplier_at (timestamp nullable), remarks (text nullable), created_at, updated_at
 
 ### purchase_order_items
-id, purchase_order_id (FK purchase_orders), item_id (FK items), purchase_request_item_id (FK purchase_request_items nullable), rfq_award_id (FK rfq_awards nullable), supplier_quote_version_id (FK supplier_quotes nullable), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
+id, purchase_order_id (FK purchase_orders), item_id (FK items), purchase_request_item_id (FK purchase_request_items nullable), rfq_award_id (FK rfq_awards nullable), supplier_quote_version_id (FK supplier_quotes nullable), RFQ line VAT/freight/other charge snapshots (nullable decimal 15,2), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
 
 ### request_for_quotes
 id, rfq_number (string 20 unique), purchase_request_id (FK purchase_requests), created_by (FK users), status (string 30: draft/open/closed/under_evaluation/awarded/partially_awarded/no_award/cancelled), title, instructions, currency (PHP), issued_at, closes_at, closed_at, evaluation_started_at, resolved_at, cancellation_reason, no_award_reason, budget warning fields, timestamps
@@ -286,6 +286,9 @@ id, request_for_quote_id, supplier_quote_id nullable, vendor_id nullable, upload
 
 ### rfq_addenda
 id, request_for_quote_id, published_by, sequence, title, body, material_change, published_at, timestamps, UNIQUE (request_for_quote_id, sequence)
+
+### rfq_quote_reconfirmations
+id, purchase_order_id (FK purchase_orders unique), supplier_quote_id (FK supplier_quotes), supplier_portal_user_id (FK supplier_portal_users nullable), status (pending/confirmed/rejected), terms_snapshot (json), reason, requested_at, confirmed_at, timestamps
 
 ### approved_suppliers
 id, item_id (FK items), vendor_id (FK vendors), is_preferred (bool default false), lead_time_days (int), last_price (decimal 15,2 nullable), created_at, updated_at, UNIQUE (item_id, vendor_id)

@@ -10,8 +10,8 @@ use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Common\Services\SystemActorService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
@@ -21,9 +21,8 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Legacy auto-conversion listener retained for explicit conversion events and
- * previously-created approved PRs. New approvals are marked
- * `sourcing_pending` and stop before this listener so the buyer can choose
- * direct PO or sealed RFQ.
+ * previously-created approved PRs. New approvals with an explicit `direct_po`
+ * choice continue here; RFQ and unset choices stop before conversion.
  *
  * Rules (2026-08-08):
  * - Every PR line must already carry a `suggested_vendor_id` (pre-filled from
@@ -58,6 +57,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         $pr = $event->purchaseRequest->fresh();
         if (! $pr) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'purchase_request_missing');
+
             return;
         }
 
@@ -66,13 +66,15 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         // then). Also refuses anything that isn't a freshly-approved PR.
         if ($pr->status !== PurchaseRequestStatus::Approved) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_approved');
+
             return;
         }
-        // Approved PRs no longer auto-convert. The buyer chooses direct PO or
-        // Start RFQ from the PR detail, which keeps the sourcing decision
-        // visible and prevents a queued listener from bypassing competition.
-        if ($pr->po_conversion_status === PurchaseRequestConversionStatus::SourcingPending) {
+        // Only an explicit Direct PO selection may enter the automatic path.
+        // RFQ and legacy null decisions stay visible to Purchasing instead of
+        // silently defaulting to a direct order.
+        if ($pr->sourcing_method !== PurchaseRequestSourcingMethod::DirectPo) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'buyer_sourcing_decision_required');
+
             return;
         }
         $pr->loadMissing(['items', 'requester']);
@@ -87,6 +89,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         if ($hasLivePo) {
             Log::info('ConsolidatePurchaseOrders: PR already has a live PO, skipping', ['pr_id' => $pr->id]);
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'purchase_order_already_exists');
+
             return;
         }
 
@@ -95,11 +98,13 @@ class ConsolidatePurchaseOrders implements ShouldQueue
         // makes the queued event a no-op.
         if (! $pr->markPoConversionPending()) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'conversion_claim_lost');
+
             return;
         }
         $pr = $pr->fresh();
         if (! $pr) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'purchase_request_missing_after_claim');
+
             return;
         }
         $pr->loadMissing(['items', 'requester']);
@@ -119,6 +124,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 $pr,
                 'No line item could be sourced automatically — assign vendors/prices and convert manually.',
             );
+
             return;
         }
 
@@ -128,6 +134,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
             Log::warning('ConsolidatePurchaseOrders: no actor to attribute the auto-PO to, manual conversion required', [
                 'pr_id' => $pr->id,
             ]);
+
             return;
         }
 
@@ -221,6 +228,7 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 'purchase_request_manual_conversion_required',
                 $reason,
             );
+
             return;
         }
 
@@ -242,12 +250,12 @@ class ConsolidatePurchaseOrders implements ShouldQueue
                 ->where('is_active', true)
                 ->get();
             $this->notifications->send($audience, 'chain.pr_auto_convert_skipped', [
-                'title'       => "PR {$pr->pr_number} needs manual conversion",
-                'message'     => "Auto-PO was skipped: {$reason}",
-                'link_to'     => "/purchasing/purchase-requests/{$pr->hash_id}",
+                'title' => "PR {$pr->pr_number} needs manual conversion",
+                'message' => "Auto-PO was skipped: {$reason}",
+                'link_to' => "/purchasing/purchase-requests/{$pr->hash_id}",
                 'entity_type' => 'purchase_request',
-                'entity_id'   => $pr->hash_id,
-                'pr_number'   => $pr->pr_number,
+                'entity_id' => $pr->hash_id,
+                'pr_number' => $pr->pr_number,
             ]);
         } catch (\Throwable $e) {
             Log::warning('ConsolidatePurchaseOrders::notifySkipped failed', ['error' => $e->getMessage()]);

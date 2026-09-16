@@ -5,9 +5,9 @@ declare(strict_types=1);
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
-use App\Modules\Purchasing\Controllers\RequestForQuoteController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderResponseController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
+use App\Modules\Purchasing\Controllers\RequestForQuoteController;
 use App\Modules\Purchasing\Controllers\SupplierListingController;
 use App\Modules\Purchasing\Controllers\SupplierPerformanceController;
 use App\Modules\Purchasing\Controllers\ThreeWayMatchController;
@@ -18,9 +18,8 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     /* ─── ADV5 — Procurement Chain overview ─── */
     Route::get('/chain', [ProcurementChainController::class, 'index'])->middleware('permission:purchasing.view');
 
-
     /* ─── Purchase Requests ─── */
-    Route::get('/purchase-requests',       [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/purchase-requests', [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
     Route::get('/purchase-requests/options', [PurchaseRequestController::class, 'options'])->middleware('permission:purchasing.view');
     // Static routes (no {purchaseRequest} param) must come BEFORE the wildcard.
     Route::get('/purchase-requests/pending-count', [PurchaseRequestController::class, 'pendingCount'])->middleware('permission:purchasing.pr.approve');
@@ -28,28 +27,31 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->middleware('permission:purchasing.view');
     // Sprint P9 — printable PR with 4-tier approval signature block.
     Route::get('/purchase-requests/{purchaseRequest}/pdf', [PurchaseRequestController::class, 'printPdf'])->middleware('permission:purchasing.view');
-    Route::post('/purchase-requests',      [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
+    Route::post('/purchase-requests', [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/sourcing-method', [PurchaseRequestController::class, 'setSourcingMethod'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.create');
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
     Route::patch('/purchase-requests/{purchaseRequest}/restore', [PurchaseRequestController::class, 'restore'])->middleware('permission:purchasing.pr.manage')->withTrashed();
 
-    Route::patch('/purchase-requests/{purchaseRequest}/submit',  [PurchaseRequestController::class, 'submit'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/submit', [PurchaseRequestController::class, 'submit'])->middleware('permission:purchasing.pr.create');
     Route::patch('/purchase-requests/{purchaseRequest}/acknowledge-budget', [PurchaseRequestController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve'])->middleware('permission:purchasing.pr.approve');
-    Route::patch('/purchase-requests/{purchaseRequest}/reject',  [PurchaseRequestController::class, 'reject'])->middleware('permission:purchasing.pr.approve');
-    Route::patch('/purchase-requests/{purchaseRequest}/cancel',  [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/reject', [PurchaseRequestController::class, 'reject'])->middleware('permission:purchasing.pr.approve');
+    Route::patch('/purchase-requests/{purchaseRequest}/cancel', [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchasing.pr.create');
     // Sourcing suggestions for the convert modal. Declared before the wildcard
     // {purchaseRequest} show/update routes is not required (extra segment), but
     // keep it grouped with convert so the PO-creation surface is in one place.
-    Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission:purchasing.po.create');
-    Route::post('/purchase-requests/{purchaseRequest}/convert',  [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
+     Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.create');
+    Route::post('/purchase-requests/{purchaseRequest}/convert', [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
     Route::post('/purchase-requests/{purchaseRequest}/rfqs', [RequestForQuoteController::class, 'store'])->middleware('permission:purchasing.rfq.create');
 
     /* ─── Sealed supplier RFQs ─── */
     Route::get('/rfqs', [RequestForQuoteController::class, 'index'])->middleware('permission:purchasing.rfq.view');
     Route::get('/rfq-documents/{document}/download', [RequestForQuoteController::class, 'downloadDocument'])->middleware('permission:purchasing.rfq.view');
     Route::get('/rfqs/{rfq}/purchase-orders', [RequestForQuoteController::class, 'purchaseOrders'])->middleware('permission:purchasing.rfq.view');
-    Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission:purchasing.rfq.evaluate');
+    Route::post('/rfqs/{rfq}/documents', [RequestForQuoteController::class, 'uploadDocument'])->middleware('permission:purchasing.rfq.manage');
+    Route::post('/rfqs/{rfq}/quotes/manual', [RequestForQuoteController::class, 'manualQuote'])->middleware('permission:purchasing.rfq.manage');
+    Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission_any:purchasing.rfq.evaluate,purchasing.rfq.quality_review');
     Route::post('/rfqs/{rfq}/publish', [RequestForQuoteController::class, 'publish'])->middleware('permission:purchasing.rfq.publish');
     Route::post('/rfqs/{rfq}/extend', [RequestForQuoteController::class, 'extend'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/addenda', [RequestForQuoteController::class, 'addendum'])->middleware('permission:purchasing.rfq.manage');
@@ -77,7 +79,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Purchase Orders ─── */
     Route::get('/purchase-orders/options', [PurchaseOrderController::class, 'options'])->middleware('permission:purchasing.view');
-    Route::get('/purchase-orders',       [PurchaseOrderController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('permission:purchasing.view');
     // Supplier-response negotiation. Literal `purchase-order-responses/…`
     // segments are declared before any `{purchaseOrder}` wildcard so they can
     // never be param-bound to a PO hash id.
@@ -85,24 +87,24 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/purchase-order-responses/{response}/accept', [PurchaseOrderResponseController::class, 'accept'])->middleware('permission:purchasing.po.approve');
     Route::patch('/purchase-order-responses/{response}/reject', [PurchaseOrderResponseController::class, 'reject'])->middleware('permission:purchasing.po.approve');
     Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchasing.view');
-    Route::post('/purchase-orders',      [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
+    Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/restore', [PurchaseOrderController::class, 'restore'])->middleware('permission:purchasing.po.manage')->withTrashed();
-    Route::patch('/purchase-orders/{purchaseOrder}/submit',  [PurchaseOrderController::class, 'submit'])->middleware('permission:purchasing.po.create');
+    Route::patch('/purchase-orders/{purchaseOrder}/submit', [PurchaseOrderController::class, 'submit'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/acknowledge-budget', [PurchaseOrderController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchasing.po.approve');
-    Route::patch('/purchase-orders/{purchaseOrder}/reject',  [PurchaseOrderController::class, 'reject'])->middleware('permission:purchasing.po.approve');
-    Route::patch('/purchase-orders/{purchaseOrder}/send',    [PurchaseOrderController::class, 'send'])->middleware('permission:purchasing.po.send');
-    Route::patch('/purchase-orders/{purchaseOrder}/cancel',  [PurchaseOrderController::class, 'cancel'])->middleware('permission:purchasing.po.create');
-    Route::patch('/purchase-orders/{purchaseOrder}/close',   [PurchaseOrderController::class, 'close'])->middleware('permission:purchasing.po.create');
-    Route::get('/purchase-orders/{purchaseOrder}/pdf',       [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchasing.view');
+    Route::patch('/purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject'])->middleware('permission:purchasing.po.approve');
+    Route::patch('/purchase-orders/{purchaseOrder}/send', [PurchaseOrderController::class, 'send'])->middleware('permission:purchasing.po.send');
+    Route::patch('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware('permission:purchasing.po.create');
+    Route::patch('/purchase-orders/{purchaseOrder}/close', [PurchaseOrderController::class, 'close'])->middleware('permission:purchasing.po.create');
+    Route::get('/purchase-orders/{purchaseOrder}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchasing.view');
 
     /* ─── Approved Suppliers ─── */
-    Route::get('/approved-suppliers',       [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/approved-suppliers', [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.view');
     // Static segment declared before any {approvedSupplier} binding.
     Route::get('/approved-suppliers/options', [ApprovedSupplierController::class, 'options'])->middleware('permission:purchasing.view');
-    Route::post('/approved-suppliers',      [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
+    Route::post('/approved-suppliers', [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
     Route::patch('/approved-suppliers/{approvedSupplier}/restore', [ApprovedSupplierController::class, 'restore'])
@@ -115,10 +117,10 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/{supplierItemListing}/approve', [SupplierListingController::class, 'approve'])->middleware('permission:purchasing.supplier_listings.review');
-    Route::patch('/supplier-listings/{supplierItemListing}/reject',  [SupplierListingController::class, 'reject'])->middleware('permission:purchasing.supplier_listings.review');
+    Route::patch('/supplier-listings/{supplierItemListing}/reject', [SupplierListingController::class, 'reject'])->middleware('permission:purchasing.supplier_listings.review');
 
     /* ─── 3-way match ─── */
-    Route::get('/three-way-match/{bill}',   [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');
+    Route::get('/three-way-match/{bill}', [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');
 
     /* ─── Series F / Task F4 — Supplier performance dashboard ─── */
     // T3.3.B — Cross-vendor ranking. Declared BEFORE {vendor} routes so the

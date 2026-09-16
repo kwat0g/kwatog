@@ -6,26 +6,27 @@ namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
+use App\Common\Services\SystemUserResolver;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
-use App\Common\Services\SettingsService;
-use App\Common\Services\TaxPolicyService;
+use App\Common\Support\SearchOperator;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
-use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Enums\SupplierAgingBucket;
+use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\B2B\Models\SupplierShipment;
 use App\Modules\B2B\Models\SupplierShipmentUpdate;
-use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
-use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
-use App\Modules\B2B\Enums\SupplierAgingBucket;
-use App\Modules\B2B\Models\PortalShippingDocument;
-use App\Common\Services\SystemUserResolver;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseOrderResponse;
@@ -142,7 +143,7 @@ class SupplierPortalService
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->whereIn('status', $visiblePoStatuses)
-            ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
+            ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items', 'rfqQuoteReconfirmation'])
             ->withExists(['goodsReceiptNotes as has_accepted_receipt' => fn ($q) => $q->whereIn('status', GrnStatus::billableValues())])
             ->orderByDesc('created_at')->limit(5)->get();
 
@@ -166,10 +167,13 @@ class SupplierPortalService
     public function purchaseOrders(int $vendorId, array $filters): LengthAwarePaginator
     {
         $query = PurchaseOrder::where('vendor_id', $vendorId)
-            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
+            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items', 'rfqQuoteReconfirmation'])
             ->withCount('goodsReceiptNotes')
             ->withExists(['goodsReceiptNotes as has_accepted_receipt' => fn ($q) => $q->whereIn('status', GrnStatus::billableValues())])
-            ->whereIn('status', $this->supplierVisiblePoStatusValues());
+            ->where(function ($query): void {
+                $query->whereIn('status', $this->supplierVisiblePoStatusValues())
+                    ->orWhereHas('rfqQuoteReconfirmation', fn ($reconfirmation) => $reconfirmation->where('status', 'pending'));
+            });
 
         if (! empty($filters['status'])) {
             $status = PurchaseOrderStatus::tryFrom((string) $filters['status']);
@@ -180,7 +184,7 @@ class SupplierPortalService
             }
         }
         if (! empty($filters['search'])) {
-            $query->where('po_number', 'like', "%{$filters['search']}%");
+            $query->where('po_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         $sortField = $filters['sort'] ?? 'created_at';
@@ -198,7 +202,8 @@ class SupplierPortalService
     public function purchaseOrderDetail(int $vendorId, PurchaseOrder $purchaseOrder): PurchaseOrder
     {
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
-        abort_if(! in_array($purchaseOrder->status, self::SUPPLIER_VISIBLE_PO_STATUSES, true), 404);
+        abort_if(! in_array($purchaseOrder->status, self::SUPPLIER_VISIBLE_PO_STATUSES, true)
+            && ! $purchaseOrder->rfqQuoteReconfirmation()->where('status', 'pending')->exists(), 404);
 
         $purchaseOrder->load([
             'vendor:id,name,contact_person,email,phone,address',
@@ -226,6 +231,7 @@ class SupplierPortalService
                 ->orderBy('id'),
             'purchaseRequest:id,pr_number',
             'supplierShipment',
+            'rfqQuoteReconfirmation',
         ]);
 
         // The `status_label` this used to setAttribute() here is already derived
@@ -549,11 +555,11 @@ class SupplierPortalService
 
                     return [
                         'expense_account_id' => $defaultAccountHashId,
-                        'item_id'            => $grnLine->item?->hash_id,
-                        'description'        => $poItem?->description ?? $grnLine->item?->name ?? 'Received goods',
-                        'quantity'           => (string) $grnLine->quantity_accepted,
-                        'unit'               => $poItem?->unit,
-                        'unit_price'         => (string) $grnLine->unit_cost,
+                        'item_id' => $grnLine->item?->hash_id,
+                        'description' => $poItem?->description ?? $grnLine->item?->name ?? 'Received goods',
+                        'quantity' => (string) $grnLine->quantity_accepted,
+                        'unit' => $poItem?->unit,
+                        'unit_price' => (string) $grnLine->unit_cost,
                     ];
                 })->toArray();
 
@@ -609,7 +615,7 @@ class SupplierPortalService
 
                 return [
                     'bill' => $bill,
-                'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
+                    'message' => 'Invoice submitted successfully. A draft bill is waiting for Accounts Payable review.',
                 ];
             });
         } catch (\Throwable $e) {
@@ -643,7 +649,7 @@ class SupplierPortalService
             // Never infer an account from a display name: chart-of-accounts
             // labels are deployment data and may vary by tenant or locale.
             // The configured code is the authoritative mapping.
-            throw new \App\Common\Exceptions\BusinessRuleException('Configured supplier-portal expense account was not found. Please contact the administrator.');
+            throw new BusinessRuleException('Configured supplier-portal expense account was not found. Please contact the administrator.');
         }
 
         return $account->hash_id;

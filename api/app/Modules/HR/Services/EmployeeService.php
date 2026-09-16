@@ -9,6 +9,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Support\DepartmentScope;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentChangeType;
@@ -64,10 +65,10 @@ class EmployeeService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $query->where(function ($q) use ($term) {
-                $q->where('employee_no', 'ilike', "%{$term}%")
-                    ->orWhere('first_name', 'ilike', "%{$term}%")
-                    ->orWhere('middle_name', 'ilike', "%{$term}%")
-                    ->orWhere('last_name', 'ilike', "%{$term}%");
+                $q->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
         if (! empty($filters['department_id'])) {

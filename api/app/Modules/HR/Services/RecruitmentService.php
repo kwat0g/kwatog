@@ -29,6 +29,7 @@ use App\Modules\HR\Support\RecruitmentPostingStateMachine;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -160,6 +161,8 @@ class RecruitmentService
                     'resume_path' => $path,
                     'resume_original_name' => $resume->getClientOriginalName(),
                     'cover_letter' => $data['cover_letter'] ?? null,
+                    // Evidence of acceptance of the privacy notice, server clock.
+                    'consent_at' => now(),
                     'applied_at' => now(),
                 ]);
                 $application->stage = ApplicationStage::New;
@@ -642,9 +645,9 @@ class RecruitmentService
      * Store only workflow evidence. Candidate PII and note bodies stay in their
      * source tables and are governed by those tables' retention controls.
      *
-     * @param array<string, mixed>|null $before
-     * @param array<string, mixed>|null $after
-     * @param array<string, mixed> $metadata
+     * @param  array<string, mixed>|null  $before
+     * @param  array<string, mixed>|null  $after
+     * @param  array<string, mixed>  $metadata
      */
     private function recordApplicationEvent(
         JobApplication $application,
@@ -709,8 +712,8 @@ class RecruitmentService
         ]);
     }
 
-    /** @return \Illuminate\Support\Collection<int, User> */
-    private function hrUsers(): \Illuminate\Support\Collection
+    /** @return Collection<int, User> */
+    private function hrUsers(): Collection
     {
         return RecruitmentNotificationRecipients::resolve($this->settings);
     }

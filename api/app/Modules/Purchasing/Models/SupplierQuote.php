@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SupplierQuote extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'request_for_quote_id', 'vendor_id', 'invitation_id', 'portal_user_id', 'captured_by',
@@ -40,13 +40,45 @@ class SupplierQuote extends Model
         'quote_valid_until' => 'date',
     ];
 
-    public function rfq(): BelongsTo { return $this->belongsTo(RequestForQuote::class, 'request_for_quote_id'); }
-    public function vendor(): BelongsTo { return $this->belongsTo(Vendor::class); }
-    public function invitation(): BelongsTo { return $this->belongsTo(RequestForQuoteInvitation::class, 'invitation_id'); }
-    public function portalUser(): BelongsTo { return $this->belongsTo(SupplierPortalUser::class, 'portal_user_id'); }
-    public function capturer(): BelongsTo { return $this->belongsTo(User::class, 'captured_by'); }
-    public function items(): HasMany { return $this->hasMany(SupplierQuoteItem::class); }
-    public function awards(): HasMany { return $this->hasMany(RfqAward::class); }
+    public function rfq(): BelongsTo
+    {
+        return $this->belongsTo(RequestForQuote::class, 'request_for_quote_id');
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    public function invitation(): BelongsTo
+    {
+        return $this->belongsTo(RequestForQuoteInvitation::class, 'invitation_id');
+    }
+
+    public function portalUser(): BelongsTo
+    {
+        return $this->belongsTo(SupplierPortalUser::class, 'portal_user_id');
+    }
+
+    public function capturer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'captured_by');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(SupplierQuoteItem::class);
+    }
+
+    public function awards(): HasMany
+    {
+        return $this->hasMany(RfqAward::class);
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(RfqDocument::class, 'supplier_quote_id');
+    }
 
     public function scopeCurrent(Builder $query): Builder
     {

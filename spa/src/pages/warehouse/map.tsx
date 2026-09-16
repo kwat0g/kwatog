@@ -22,7 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
   empty: 'bg-surface text-muted border border-subtle',
   ok: 'bg-success-bg/10 text-success-fg border border-success/20',
   low: 'bg-warning-bg/10 text-warning-fg border border-warning/20',
-  full: 'bg-accent/10 text-accent-fg border border-accent/20',
+  full: 'bg-accent/10 text-accent border border-accent/20',
   blocked: 'bg-danger-bg/10 text-danger-fg border border-danger/20 line-through',
 };
 

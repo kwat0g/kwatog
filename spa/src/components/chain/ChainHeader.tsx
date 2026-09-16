@@ -33,9 +33,8 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  <div
  className={cn(
  'flex flex-col items-center min-w-[88px] px-1 py-0.5 rounded-md transition-colors duration-fast relative',
- isInteractive && 'hover:bg-subtle cursor-pointer',
- isInteractive && focusRing,
- )}
+  isInteractive && 'hover:bg-subtle cursor-pointer',
+  )}
  >
  <span
  className={cn(
@@ -79,16 +78,16 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  let content = stepNode;
  if (step.href) {
  content = (
- <Link to={step.href} className="group focus:outline-none">
- {stepNode}
- </Link>
+  <Link to={step.href} className={cn('group rounded-md', focusRing)}>
+  {stepNode}
+  </Link>
  );
  } else if (step.onClick) {
  content = (
  <button
  type="button"
  onClick={() => step.onClick?.(step)}
- className="group focus:outline-none text-left"
+  className={cn('group rounded-md text-left', focusRing)}
  >
  {stepNode}
  </button>

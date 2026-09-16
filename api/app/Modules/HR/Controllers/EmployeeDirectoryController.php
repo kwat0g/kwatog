@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,9 +34,9 @@ class EmployeeDirectoryController
         if ($request->filled('search')) {
             $s = (string) $request->query('search');
             $q->where(function ($qq) use ($s) {
-                $qq->where('first_name', 'ilike', "%{$s}%")
-                   ->orWhere('last_name', 'ilike', "%{$s}%")
-                   ->orWhere('employee_no', 'ilike', "%{$s}%");
+                $qq->where('first_name', SearchOperator::like(), SearchOperator::contains($s))
+                   ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($s))
+                   ->orWhere('employee_no', SearchOperator::like(), SearchOperator::contains($s));
             });
         }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\Skill;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -21,7 +22,7 @@ class SkillService
                 fn(Builder $q) => $q->where('is_active', true),
             )
             ->when($filters['category'] ?? null, fn(Builder $q, $v) => $q->where('category', $v))
-            ->when($filters['q'] ?? null, fn(Builder $q, $v) => $q->where('name', 'ILIKE', "%{$v}%"))
+            ->when($filters['q'] ?? null, fn(Builder $q, $v) => $q->where('name', SearchOperator::like(), SearchOperator::contains($v)))
             ->orderBy('name')
             ->paginate((int) ($filters['per_page'] ?? 25));
     }

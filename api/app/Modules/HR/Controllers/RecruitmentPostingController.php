@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\ApplicationStage;
@@ -55,8 +56,8 @@ class RecruitmentPostingController
         if (! empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $query->where(fn ($q) => $q
-                ->where('title', 'like', "%{$term}%")
-                ->orWhere('posting_number', 'like', "%{$term}%"));
+                ->where('title', SearchOperator::like(), SearchOperator::contains($term))
+                ->orWhere('posting_number', SearchOperator::like(), SearchOperator::contains($term)));
         }
 
         $sort = $filters['sort'] ?? 'created_at';

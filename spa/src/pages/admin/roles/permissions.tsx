@@ -430,10 +430,11 @@ export default function RolePermissionsPage() {
                     </span>
                     <button
                       type="button"
+                      aria-label="Close"
                       onClick={() => setShowDiffDrawer(false)}
                       className="text-muted hover:text-primary cursor-pointer p-1"
                     >
-                      <LuX size={14} />
+                      <LuX size={14} aria-hidden />
                     </button>
                   </div>
                 }

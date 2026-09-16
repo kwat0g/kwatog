@@ -37,8 +37,8 @@ class VendorService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('name', SearchOperator::like(), "%{$term}%")
-                   ->orWhere('contact_person', SearchOperator::like(), "%{$term}%");
+                $qq->where('name', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhere('contact_person', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 

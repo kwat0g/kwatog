@@ -34,3 +34,15 @@ coverage/
 # Development-only material is not needed by production PHP images.
 api/tests/
 docs/
+api/binding_audit.php
+api/call_audit.php
+api/database_audit.php
+api/import_audit.php
+api/model_audit.php
+api/perm_audit.php
+api/route_audit.php
+api/smoke_detail.php
+api/smoke_get.php
+api/smoke_params.php
+api/verify404.php
+api/write_audit.php

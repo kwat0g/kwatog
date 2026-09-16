@@ -13,8 +13,12 @@ class RequestForQuoteResource extends JsonResource
     public function toArray(Request $request): array
     {
         $status = $this->status?->value ?? (string) $this->status;
+        $canEvaluate = $request->user()?->hasPermission('purchasing.rfq.evaluate')
+            || $request->user()?->hasPermission('purchasing.rfq.manage');
+        $canQualityReview = $request->user()?->hasPermission('purchasing.rfq.quality_review');
         $sealed = in_array($status, [RfqStatus::Draft->value, RfqStatus::Open->value], true)
-            || ! $request->user()?->hasPermission('purchasing.rfq.evaluate');
+            || (! $canEvaluate && ! $canQualityReview);
+
         return [
             'id' => $this->hash_id, 'rfq_number' => $this->rfq_number, 'status' => $status,
             'status_label' => $this->status?->label() ?? $status, 'title' => $this->title,
@@ -37,8 +41,12 @@ class RequestForQuoteResource extends JsonResource
                 : [],
             'quotes' => $this->whenLoaded('quotes', fn () => $sealed ? [] : $this->quotes->map(fn ($quote) => SupplierQuoteResource::make($quote))->values()->all()),
             'awards' => RfqAwardResource::collection($this->whenLoaded('awards')),
-            'documents' => $request->user()?->hasPermission('purchasing.rfq.evaluate') || $request->user()?->hasPermission('purchasing.rfq.quality_review')
-                ? RfqDocumentResource::collection($this->whenLoaded('documents'))
+            'documents' => $this->relationLoaded('documents')
+                ? RfqDocumentResource::collection(($this->relationLoaded('documents') ? $this->documents : collect())->filter(
+                    fn ($document) => $document->document_type === 'requirement_document'
+                        || ($canEvaluate)
+                        || ($canQualityReview && $document->document_type !== 'quotation_pdf'),
+                )->values())
                 : [],
             'addenda' => RfqAddendumResource::collection($this->whenLoaded('addenda')),
         ];

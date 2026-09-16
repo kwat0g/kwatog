@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Resources;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 
 class PurchaseRequestResource extends JsonResource
 {
@@ -20,109 +20,111 @@ class PurchaseRequestResource extends JsonResource
             ], true);
 
         return [
-            'id'                      => $this->hash_id,
-            'pr_number'               => $this->pr_number,
-            'date'                    => optional($this->date)->toDateString(),
-            'reason'                  => $this->reason,
-            'priority'                => (string) $this->priority?->value,
-            'priority_label'         => $this->priority?->label(),
-            'status'                  => (string) $this->status?->value,
-            'status_label'            => $this->status?->label(),
-            'po_conversion_status'    => (string) $this->po_conversion_status?->value,
+            'id' => $this->hash_id,
+            'pr_number' => $this->pr_number,
+            'date' => optional($this->date)->toDateString(),
+            'reason' => $this->reason,
+            'priority' => (string) $this->priority?->value,
+            'priority_label' => $this->priority?->label(),
+            'status' => (string) $this->status?->value,
+            'status_label' => $this->status?->label(),
+            'po_conversion_status' => (string) $this->po_conversion_status?->value,
             'po_conversion_status_label' => $this->po_conversion_status?->label(),
-            'po_conversion_note'     => $this->po_conversion_note,
-            'po_conversion_at'       => optional($this->po_conversion_at)->toIso8601String(),
-            'is_auto_generated'       => (bool) $this->is_auto_generated,
-            'auto_generated_reason'   => $this->auto_generated_reason,
-            'is_urgent'               => $isUrgent,
-            'urgency_reason'          => $this->urgency_reason,
-            'current_approval_step'   => (int) $this->current_approval_step,
-            'has_overdue_approval'    => $this->relationLoaded('approvalRecords')
+            'sourcing_method' => $this->sourcing_method?->value,
+            'sourcing_method_label' => $this->sourcing_method?->label(),
+            'po_conversion_note' => $this->po_conversion_note,
+            'po_conversion_at' => optional($this->po_conversion_at)->toIso8601String(),
+            'is_auto_generated' => (bool) $this->is_auto_generated,
+            'auto_generated_reason' => $this->auto_generated_reason,
+            'is_urgent' => $isUrgent,
+            'urgency_reason' => $this->urgency_reason,
+            'current_approval_step' => (int) $this->current_approval_step,
+            'has_overdue_approval' => $this->relationLoaded('approvalRecords')
                 ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
                 : false,
-            'submitted_at'            => optional($this->submitted_at)->toIso8601String(),
-            'approved_at'             => optional($this->approved_at)->toIso8601String(),
-            'budget_warning_level'    => $this->budget_warning_level,
-            'budget_warning_message'  => $this->budget_warning_message,
-            'budget_acknowledged_at'  => optional($this->budget_acknowledged_at)->toIso8601String(),
-            'total_estimated_amount'  => $this->totalEstimatedAmount(),
-            'requester'               => $this->whenLoaded('requester', fn () => $this->requester ? [
-                'id'   => $this->requester->hash_id,
+            'submitted_at' => optional($this->submitted_at)->toIso8601String(),
+            'approved_at' => optional($this->approved_at)->toIso8601String(),
+            'budget_warning_level' => $this->budget_warning_level,
+            'budget_warning_message' => $this->budget_warning_message,
+            'budget_acknowledged_at' => optional($this->budget_acknowledged_at)->toIso8601String(),
+            'total_estimated_amount' => $this->totalEstimatedAmount(),
+            'requester' => $this->whenLoaded('requester', fn () => $this->requester ? [
+                'id' => $this->requester->hash_id,
                 'name' => $this->requester->name,
             ] : null),
-            'department'              => $this->whenLoaded('department', fn () => $this->department ? [
-                'id'   => $this->department->hash_id,
+            'department' => $this->whenLoaded('department', fn () => $this->department ? [
+                'id' => $this->department->hash_id,
                 'name' => $this->department->name,
                 'code' => $this->department->code,
             ] : null),
-            'template'                => $this->whenLoaded('template', fn () => $this->template ? [
+            'template' => $this->whenLoaded('template', fn () => $this->template ? [
                 // The model uses HasHashId, so use its accessor — every other id
                 // in this resource does, and encoding by hand here made the
                 // client type it as a number (spa/src/types/purchasing.ts).
-                'id'   => $this->template->hash_id,
+                'id' => $this->template->hash_id,
                 'name' => $this->template->name,
             ] : null),
-            'items'                   => PurchaseRequestItemResource::collection($this->whenLoaded('items')),
-            'approval_records'        => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
-                'step_order'    => (int) $r->step_order,
-                'role_slug'     => $r->role_slug,
-                'action'        => $r->action,
-                'remarks'       => $r->remarks,
-                'acted_at'      => optional($r->acted_at)->toIso8601String(),
-                'approver'      => $r->relationLoaded('approver') && $r->approver ? [
-                    'id'   => $r->approver->hash_id,
+            'items' => PurchaseRequestItemResource::collection($this->whenLoaded('items')),
+            'approval_records' => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
+                'step_order' => (int) $r->step_order,
+                'role_slug' => $r->role_slug,
+                'action' => $r->action,
+                'remarks' => $r->remarks,
+                'acted_at' => optional($r->acted_at)->toIso8601String(),
+                'approver' => $r->relationLoaded('approver') && $r->approver ? [
+                    'id' => $r->approver->hash_id,
                     'name' => $r->approver->name,
                 ] : null,
-                'is_overdue'    => (bool) $r->is_overdue,
+                'is_overdue' => (bool) $r->is_overdue,
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
-            'purchase_orders'         => $this->whenLoaded('purchaseOrders', fn () => $this->purchaseOrders->map(function ($po): array {
+            'purchase_orders' => $this->whenLoaded('purchaseOrders', fn () => $this->purchaseOrders->map(function ($po): array {
                 $bill = $po->relationLoaded('bills') ? $po->bills->first() : null;
                 $grns = $po->relationLoaded('goodsReceiptNotes')
                     ? $po->goodsReceiptNotes->map(fn ($g) => [
-                        'id'         => $g->hash_id,
+                        'id' => $g->hash_id,
                         'grn_number' => $g->grn_number,
-                        'status'     => (string) $g->status?->value,
+                        'status' => (string) $g->status?->value,
                     ])->values()->all()
                     : [];
 
                 return [
-                    'id'                => $po->hash_id,
-                    'po_number'         => $po->po_number,
-                    'status'            => (string) $po->status?->value,
-                    'status_label'      => $po->status?->label(),
-                    'vendor'            => $po->vendor ? ['id' => $po->vendor->hash_id, 'name' => $po->vendor->name] : null,
-                    'total_amount'      => (string) $po->total_amount,
+                    'id' => $po->hash_id,
+                    'po_number' => $po->po_number,
+                    'status' => (string) $po->status?->value,
+                    'status_label' => $po->status?->label(),
+                    'vendor' => $po->vendor ? ['id' => $po->vendor->hash_id, 'name' => $po->vendor->name] : null,
+                    'total_amount' => (string) $po->total_amount,
                     'is_auto_generated' => (bool) $po->is_auto_generated,
                     // 2026-08-08 — auto-bill chain visibility from the PR: expose
                     // the first bill staged for this PO so the PR page can show
                     // the draft supplier bill + Post action (PR → PO → GRN → Bill).
-                    'bill'              => $bill ? [
-                        'id'           => $bill->hash_id,
-                        'bill_number'  => $bill->bill_number,
-                        'status'       => (string) $bill->status?->value,
+                    'bill' => $bill ? [
+                        'id' => $bill->hash_id,
+                        'bill_number' => $bill->bill_number,
+                        'status' => (string) $bill->status?->value,
                         'status_label' => $bill->status?->label() ?? (string) $bill->status,
                         'total_amount' => (string) $bill->total_amount,
                     ] : null,
                     // 2026-08-08 — full-chain stepper: GRNs on this PO so the
                     // PR page can render the compact PR → PO → GRN → Bill → Paid chain.
-                    'grns'              => $grns,
+                    'grns' => $grns,
                 ];
             })->all()),
-            'rfqs'                    => $this->whenLoaded('rfqs', fn () => $this->rfqs->map(fn ($rfq) => [
+            'rfqs' => $this->whenLoaded('rfqs', fn () => $this->rfqs->map(fn ($rfq) => [
                 'id' => $rfq->hash_id,
                 'rfq_number' => $rfq->rfq_number,
                 'status' => $rfq->status?->value ?? (string) $rfq->status,
                 'closes_at' => optional($rfq->closes_at)->toIso8601String(),
                 'resolved_at' => optional($rfq->resolved_at)->toIso8601String(),
             ])->values()->all()),
-            'created_at'              => optional($this->created_at)->toIso8601String(),
-            'updated_at'              => optional($this->updated_at)->toIso8601String(),
-            'deleted_at'              => optional($this->deleted_at)?->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
             // Action decisions are needed on row-detail/action responses. Do
             // not run delegation/pending-step checks once per row on the
             // paginated list response.
-            'actions'                 => $request->route('purchaseRequest') !== null && $request->user()
+            'actions' => $request->route('purchaseRequest') !== null && $request->user()
                 ? app(PurchaseRequestAccessPolicy::class)->actionsFor($request->user(), $this->resource)
                 : null,
         ];

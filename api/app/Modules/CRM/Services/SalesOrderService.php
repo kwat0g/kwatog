@@ -322,8 +322,8 @@ class SalesOrderService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('so_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhereHas('customer', fn ($c) => $c->where('name', SearchOperator::like(), "%{$term}%"));
+                $qq->where('so_number', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhereHas('customer', fn ($c) => $c->where('name', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 

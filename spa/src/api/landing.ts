@@ -6,6 +6,7 @@ export interface ContactInquiryPayload {
  email: string;
  phone?: string;
  message: string;
+ consent: boolean;
 }
 export interface ContactInquiryResponse { message: string }
 export interface LandingContact {
@@ -93,7 +94,7 @@ export const landingApi = {
  },
  subscribeNewsletter: async (email: string): Promise<{ message: string }> => {
  await getCsrfCookie();
- const { data } = await client.post<{ message: string }>('/landing/newsletter', { email });
+ const { data } = await client.post<{ message: string }>('/landing/newsletter', { email, consent: true });
  return data;
  },
  downloadQualityPolicy: async (): Promise<Blob> => {

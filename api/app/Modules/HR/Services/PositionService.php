@@ -6,6 +6,7 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\Position;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class PositionService
 
         if (!empty($filters['search'])) {
             $term = $filters['search'];
-            $query->where('title', 'ilike', "%{$term}%");
+            $query->where('title', SearchOperator::like(), SearchOperator::contains($term));
         }
         if (!empty($filters['department_id'])) {
             $deptId = \App\Common\Support\HashIdFilter::decode(

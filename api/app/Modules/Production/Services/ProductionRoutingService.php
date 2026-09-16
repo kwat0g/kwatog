@@ -6,6 +6,7 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
+use App\Common\Support\SearchOperator;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Enums\MoldStatus;
@@ -64,8 +65,8 @@ class ProductionRoutingService
             $term = trim((string) $filters['search']);
             if ($term !== '') {
                 $q->whereHas('product', fn ($product) => $product
-                    ->where('part_number', 'ilike', "%{$term}%")
-                    ->orWhere('name', 'ilike', "%{$term}%"));
+                    ->where('part_number', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term)));
             }
         }
 

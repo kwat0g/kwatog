@@ -118,9 +118,10 @@ export default function ImportsPage() {
  )}
 
  <div>
- <label className="block text-xs font-medium text-primary mb-1">CSV file</label>
- <input
- type="file"
+  <label htmlFor="import-csv-file" className="block text-xs font-medium text-primary mb-1">CSV file</label>
+  <input
+  id="import-csv-file"
+  type="file"
  accept=".csv,text/csv"
  onChange={(e) => { setFile(e.target.files?.[0] ?? null); resetResults(); }}
  className="block w-full text-xs text-muted file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-default file:text-xs file:bg-elevated file:text-primary hover:file:bg-strong"

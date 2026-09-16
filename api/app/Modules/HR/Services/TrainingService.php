@@ -6,6 +6,7 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\TrashedFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Training;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,7 +29,7 @@ class TrainingService
             // TrainingController::index() forwards the raw query bag, so the SPA's
             // hash string would hit a bigint column (Postgres 22P02 → 500).
             ->when($filters['department_id'] ?? null, fn(Builder $q, $v) => $q->where('department_id', HashIdFilter::decode($v, Department::class) ?? 0))
-            ->when($filters['q'] ?? null, fn(Builder $q, $v) => $q->where('name', 'ILIKE', "%{$v}%"))
+            ->when($filters['q'] ?? null, fn(Builder $q, $v) => $q->where('name', SearchOperator::like(), SearchOperator::contains($v)))
             ->orderBy('name');
 
         return $query->paginate((int) ($filters['per_page'] ?? 25));

@@ -11,6 +11,7 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Models\WorkflowDefinition;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
@@ -80,10 +81,10 @@ class LoanService
         if (!empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('loan_no', 'ilike', "%{$term}%")
-                   ->orWhereHas('employee', fn ($e) => $e->where('first_name', 'ilike', "%{$term}%")
-                       ->orWhere('last_name', 'ilike', "%{$term}%")
-                       ->orWhere('employee_no', 'ilike', "%{$term}%"));
+                $qq->where('loan_no', SearchOperator::like(), SearchOperator::contains($term))
+                   ->orWhereHas('employee', fn ($e) => $e->where('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                       ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))
+                       ->orWhere('employee_no', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 

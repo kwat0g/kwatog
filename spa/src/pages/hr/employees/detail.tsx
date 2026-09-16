@@ -1063,8 +1063,9 @@ function AssignTrainingModal({ employeeId, onClose }: { employeeId: string; onCl
     <Modal isOpen onClose={onClose} title="Assign training">
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
         <div>
-          <label className="text-xs text-muted font-medium mb-1 block">Training</label>
+          <label htmlFor="assign-training-id" className="text-xs text-muted font-medium mb-1 block">Training</label>
           <select
+            id="assign-training-id"
             {...register('training_id', { required: 'Required' })}
             className="w-full h-9 px-3 rounded-md border border-default bg-canvas text-sm"
           >
@@ -1263,8 +1264,9 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
     <Modal isOpen onClose={onClose} title="Assign skill">
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
         <div>
-          <label className="text-xs text-muted font-medium mb-1 block">Skill</label>
+          <label htmlFor="assign-skill-id" className="text-xs text-muted font-medium mb-1 block">Skill</label>
           <select
+            id="assign-skill-id"
             {...register('skill_id', { required: 'Required' })}
             className="w-full h-9 px-3 rounded-md border border-default bg-canvas text-sm"
           >
@@ -1282,8 +1284,9 @@ function AssignSkillModal({ employeeId, onClose }: { employeeId: string; onClose
           )}
         </div>
         <div>
-          <label className="text-xs text-muted font-medium mb-1 block">Proficiency</label>
+          <label htmlFor="assign-proficiency-id" className="text-xs text-muted font-medium mb-1 block">Proficiency</label>
           <select
+            id="assign-proficiency-id"
             {...register('proficiency_level', { required: 'Required' })}
             className="w-full h-9 px-3 rounded-md border border-default bg-canvas text-sm"
           >

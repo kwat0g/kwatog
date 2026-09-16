@@ -42,7 +42,7 @@ class PpapService
             if ($iid) $q->where('item_id', $iid);
         }
         if (! empty($filters['search'])) {
-            $q->where('ppap_number', 'ilike', '%'.$filters['search'].'%');
+            $q->where('ppap_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         return $q->latest('id')->paginate(min((int) ($filters['per_page'] ?? 25), 100));

@@ -134,25 +134,62 @@ test.describe('RFQ bidding role workflow', () => {
     await expect(page.getByRole('button', { name: 'Compare quotations', exact: true })).toBeVisible();
   });
 
-  test('Finance Officer can compare sealed quotations and award a selected line', async ({ page }) => {
+  test('Purchasing Officer can compare sealed quotations and award a selected line', async ({ page }) => {
     await mockRfqApi(page);
-    await loginAs(page, 'finance', '/purchasing/rfqs/rfq_demo_01/compare');
+    await loginAs(page, 'purchasing', '/purchasing/rfqs/rfq_demo_01/compare');
     await expect(page.getByText('Quotation comparison', { exact: true })).toBeVisible();
     await expect(page.getByText('Alpha Polymers', { exact: false }).first()).toBeVisible();
     await expect(page.getByText('Beta Materials', { exact: false }).first()).toBeVisible();
-    await page.getByRole('radio').first().check();
+    await page.getByRole('checkbox').first().check();
     await page.getByLabel('Award reason').fill('Lowest compliant delivered cost with earlier delivery.');
     await page.getByRole('button', { name: 'Award selected lines', exact: true }).click();
     await expect(page).toHaveURL(/\/purchasing\/rfqs\/rfq_demo_01$/);
   });
 
-  test('QC Inspector can view RFQ requirements but cannot open commercial comparison', async ({ page }) => {
+  test('Finance Officer can compare sealed quotations but cannot award', async ({ page }) => {
+    await mockRfqApi(page);
+    await loginAs(page, 'finance', '/purchasing/rfqs/rfq_demo_01/compare');
+    await expect(page.getByText('Quotation comparison', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Award selected lines', exact: true })).toHaveCount(0);
+    await expect(page.getByText('Finance may review the sealed quotations.', { exact: false })).toBeVisible();
+  });
+
+  test('Purchasing Officer can split one RFQ line across two suppliers', async ({ page }) => {
+    await mockRfqApi(page);
+    await loginAs(page, 'purchasing', '/purchasing/rfqs/rfq_demo_01/compare');
+    await page.getByRole('checkbox').nth(0).check();
+    await page.getByRole('checkbox').nth(1).check();
+    const quantities = page.getByLabel(/Award quantity from/);
+    await expect(quantities).toHaveCount(2);
+    await quantities.nth(0).fill('250');
+    await quantities.nth(1).fill('250');
+    await page.getByRole('button', { name: 'Award selected lines', exact: true }).click();
+    await expect(page).toHaveURL(/\/purchasing\/rfqs\/rfq_demo_01$/);
+  });
+
+  test('QC Inspector can record a blocking quality exception without seeing price', async ({ page }) => {
+    await mockRfqApi(page);
+    await page.route('**/api/v1/purchasing/rfqs/rfq_demo_01/quote-items/quote_line_a/quality-review', async (route) => {
+      expect(route.request().method()).toBe('PATCH');
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { id: 'quote_line_a', compliance_status: 'blocking', compliance_notes: 'Resin certificate is missing.' } }) });
+    });
+    await loginAs(page, 'qc', '/purchasing/rfqs/rfq_demo_01/compare');
+    await expect(page.getByText('Commercial fields redacted', { exact: true })).toBeVisible();
+    await expect(page.getByText('60.00', { exact: false })).toHaveCount(0);
+    await page.getByLabel('Quality status for Polypropylene Resin Natural').first().selectOption('blocking');
+    await page.getByLabel('Evidence notes').first().fill('Resin certificate is missing.');
+    await page.getByRole('button', { name: 'Save review', exact: true }).first().click();
+    await expect(page.getByText('Quality review saved.', { exact: true })).toBeVisible();
+  });
+
+  test('QC Inspector can view RFQ requirements and redacted quality evidence', async ({ page }) => {
     await mockRfqApi(page);
     await loginAs(page, 'qc', '/purchasing/rfqs/rfq_demo_01');
     await expect(page.getByText('Polypropylene Resin Natural', { exact: false }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Compare quotations', exact: true })).toHaveCount(0);
     await page.goto('/purchasing/rfqs/rfq_demo_01/compare');
-    await expect(page.getByText('Page not found', { exact: true })).toBeVisible();
+    await expect(page.getByText('Commercial fields redacted', { exact: true })).toBeVisible();
+    await expect(page.getByText('60.00', { exact: false })).toHaveCount(0);
   });
 
   test('Purchasing Officer creates an RFQ draft through the four-step wizard', async ({ page }) => {
@@ -207,6 +244,7 @@ test.describe('RFQ bidding role workflow', () => {
     await page.getByLabel('Unit price').fill('60.00');
     await page.getByLabel('Lead time days').fill('7');
     await page.getByLabel('Formal quotation PDF').setInputFiles({ name: 'quote.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 demo') });
+    await page.getByLabel('Certificate of analysis').setInputFiles({ name: 'coa.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 coa') });
     await page.getByRole('button', { name: 'Submit sealed quotation', exact: true }).click();
     await expect(page).toHaveURL(/\/portal\/supplier\/rfqs\/rfq_demo_01$/);
   });

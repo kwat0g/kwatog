@@ -206,6 +206,9 @@ final class PurchaseOrderAccessPolicy
     {
         $canView = $this->canView($user, $po);
         $canManageDraft = $this->canManageDraft($user, $po);
+        $reconfirmationRequired = $po->relationLoaded('rfqQuoteReconfirmation')
+            ? $po->rfqQuoteReconfirmation?->status === 'pending'
+            : $po->rfqQuoteReconfirmation()->where('status', 'pending')->exists();
 
         $isPendingApproval = $po->status === PurchaseOrderStatus::PendingApproval;
         $selfSubmitted = (int) $po->created_by === (int) $user->id;
@@ -223,17 +226,18 @@ final class PurchaseOrderAccessPolicy
                 ->exists();
 
         return [
-            'can_view'               => $canView,
-            'can_update'             => $canManageDraft,
-            'can_delete'             => $canManageDraft,
-            'can_submit'             => $canManageDraft,
-            'can_approve'            => $holdsCurrentStep,
-            'can_reject'             => $holdsCurrentStep,
-            'can_send'               => $this->canSend($user, $po),
-            'can_cancel'             => $this->canCancel($user, $po),
-            'can_close'              => $this->canClose($user, $po),
+            'can_view' => $canView,
+            'can_update' => $canManageDraft,
+            'can_delete' => $canManageDraft,
+            'can_submit' => $canManageDraft && ! $reconfirmationRequired,
+            'can_approve' => $holdsCurrentStep,
+            'can_reject' => $holdsCurrentStep,
+            'can_send' => $this->canSend($user, $po),
+            'can_cancel' => $this->canCancel($user, $po),
+            'can_close' => $this->canClose($user, $po),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $po),
-            'can_print'              => $canView,
+            'can_print' => $canView,
+            'reconfirmation_required' => $reconfirmationRequired,
         ];
     }
 }

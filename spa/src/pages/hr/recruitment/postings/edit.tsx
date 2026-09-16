@@ -250,13 +250,14 @@ export default function PostingEditPage() {
  className="flex items-center justify-between rounded-md border border-default bg-elevated px-3 py-2 text-sm"
  >
  <span>{tag}</span>
- <button
- type="button"
- onClick={() => removeTag(i)}
- className={cn('ml-2 text-muted hover:text-danger-fg transition-colors shrink-0 cursor-pointer rounded', focusRing)}
- >
- <LuX size={14} />
- </button>
+  <button
+  type="button"
+  onClick={() => removeTag(i)}
+  aria-label={`Remove tag ${tag}`}
+  className={cn('ml-2 text-muted hover:text-danger-fg transition-colors shrink-0 cursor-pointer rounded', focusRing)}
+  >
+  <LuX size={14} aria-hidden />
+  </button>
  </li>
  ))}
  </ul>

@@ -6,6 +6,7 @@ namespace App\Modules\Maintenance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Models\MachineConditionReading;
@@ -239,7 +240,7 @@ class PredictiveMaintenanceService
             ->where('maintainable_id', $machineId)
             ->where('type', MaintenanceWorkOrderType::Corrective->value)
             ->whereIn('status', ['open', 'assigned', 'in_progress'])
-            ->where('description', 'like', "%{$keyword}%")
+            ->where('description', SearchOperator::like(), SearchOperator::contains($keyword))
             ->exists();
     }
 

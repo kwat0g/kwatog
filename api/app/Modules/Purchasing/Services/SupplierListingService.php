@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\NotificationService;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
@@ -57,10 +58,10 @@ class SupplierListingService
         if (! empty($filters['search'])) {
             $search = $filters['search'];
             $q->where(function ($w) use ($search) {
-                $w->whereHas('vendor', fn ($v) => $v->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('item', fn ($i) => $i->where('code', 'ilike', "%{$search}%")
-                        ->orWhere('name', 'ilike', "%{$search}%"))
-                    ->orWhere('supplier_item_code', 'ilike', "%{$search}%");
+                $w->whereHas('vendor', fn ($v) => $v->where('name', SearchOperator::like(), SearchOperator::contains($search)))
+                    ->orWhereHas('item', fn ($i) => $i->where('code', SearchOperator::like(), SearchOperator::contains($search))
+                        ->orWhere('name', SearchOperator::like(), SearchOperator::contains($search)))
+                    ->orWhere('supplier_item_code', SearchOperator::like(), SearchOperator::contains($search));
             });
         }
 
@@ -211,8 +212,8 @@ class SupplierListingService
         if (! empty($filters['search'])) {
             $search = (string) $filters['search'];
             $q->where(function ($w) use ($search) {
-                $w->where('code', 'ilike', "%{$search}%")
-                    ->orWhere('name', 'ilike', "%{$search}%");
+                $w->where('code', SearchOperator::like(), SearchOperator::contains($search))
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($search));
             });
         }
 

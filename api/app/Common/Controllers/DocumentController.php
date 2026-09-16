@@ -9,6 +9,7 @@ use App\Common\Resources\DocumentResource;
 use App\Common\Services\DocumentVaultService;
 use App\Common\Support\DepartmentScope;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Services\PayrollPublicationPolicy;
@@ -45,7 +46,7 @@ class DocumentController
             $query->where('document_type', $type);
         }
         if ($entity = $request->query('entity_type')) {
-            $query->where('entity_type', 'like', '%'.$entity.'%');
+            $query->where('entity_type', SearchOperator::like(), SearchOperator::contains($entity));
         }
         if ($from = $request->query('from')) {
             $query->where('generated_at', '>=', $from);

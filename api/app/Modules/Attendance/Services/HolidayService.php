@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Support\TrashedFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Models\Holiday;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -18,7 +19,7 @@ class HolidayService
     {
         $q = Holiday::query();
         TrashedFilter::apply($q, $filters);
-        if (!empty($filters['search'])) $q->where('name', 'ilike', "%{$filters['search']}%");
+        if (!empty($filters['search'])) $q->where('name', SearchOperator::like(), SearchOperator::contains($filters['search']));
         if (!empty($filters['type'])) $q->where('type', $filters['type']);
         if (!empty($filters['year'])) {
             $q->whereYear('date', (int) $filters['year']);

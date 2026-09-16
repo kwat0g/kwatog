@@ -9,6 +9,8 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\SupplierListingStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
@@ -172,5 +174,38 @@ class VendorSourcingTest extends TestCase
         $this->assertSame('25.00', $line['suggested_unit_price']);
         $this->assertSame($vendor->hash_id, $line['candidates'][0]['id']);
         $this->assertTrue($line['candidates'][0]['qualified']);
+    }
+
+    public function test_rfq_sourcing_endpoint_is_available_to_an_rfq_pr(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+        $admin = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $item = Item::factory()->create();
+        $vendor = Vendor::factory()->create();
+        $this->approvedSupplier($item, $vendor, true, '25.00');
+
+        $pr = PurchaseRequest::factory()->create([
+            'requested_by' => $admin->id,
+            'department_id' => null,
+            'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
+        ]);
+        $pr->forceFill([
+            'status' => PurchaseRequestStatus::Approved->value,
+            'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending->value,
+        ])->save();
+        PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'description' => 'RFQ source me',
+            'quantity' => '3',
+            'unit' => 'pcs',
+            'estimated_unit_price' => '26.00',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/purchasing/purchase-requests/'.$pr->hash_id.'/sourcing')
+            ->assertOk();
     }
 }

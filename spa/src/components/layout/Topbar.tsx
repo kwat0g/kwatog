@@ -57,8 +57,13 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  return () => document.removeEventListener('keydown', onKey);
  }, []);
 
+ // overflow-x-clip, NOT overflow-hidden: hidden forces overflow-y to auto,
+ // which clips the NotificationBell / ProfileDropdown dropdowns to the 48px
+ // bar (they'd render only their first row). `clip` keeps the vertical axis
+ // visible while still containing the horizontal overflow the mobile shell
+ // hardening needed.
  return (
-  <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-4 gap-2 sm:gap-5 overflow-hidden">
+  <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-4 gap-2 sm:gap-5 overflow-x-clip">
  <Button
  variant="ghost"
  size="sm"

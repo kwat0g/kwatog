@@ -5,6 +5,7 @@ import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { itemsApi } from '@/api/inventory/items';
 import toast from 'react-hot-toast';
 import { LuArrowLeft, LuPlus, LuTrash2, LuPlay, LuCircleCheck, LuTriangleAlert } from '@/lib/icons';
+import { useDebounce } from '@/hooks/useDebounce';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -87,14 +88,17 @@ export default function MobileWorkOrderDetail() {
 
   // ── Spare part recording ───────────────────────────────
   const [partSearch, setPartSearch] = useState('');
+  // Shop-floor tablets on wifi: debounce the spare-part lookup so typing
+  // doesn't fire a request per character.
+  const debouncedPartSearch = useDebounce(partSearch, 300);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [partQty, setPartQty] = useState('');
   const [partLocationId, setPartLocationId] = useState('');
 
   const { data: itemsData } = useQuery({
-    queryKey: ['inventory', 'items', 'spare_parts', partSearch],
-    queryFn: () => itemsApi.list({ item_type: 'spare_part', search: partSearch, per_page: 20 }),
-    enabled: showPartSheet && partSearch.length >= 2,
+    queryKey: ['inventory', 'items', 'spare_parts', debouncedPartSearch],
+    queryFn: () => itemsApi.list({ item_type: 'spare_part', search: debouncedPartSearch, per_page: 20 }),
+    enabled: showPartSheet && debouncedPartSearch.length >= 2,
   });
 
   // Fetch stock levels for selected item to pick location

@@ -6,11 +6,13 @@ use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
+use App\Modules\B2B\Controllers\PortalAccessController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
 use App\Modules\B2B\Controllers\SupplierRfqController;
-use App\Modules\B2B\Controllers\PortalAccessController;
+use App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware;
+use App\Modules\B2B\Middleware\CheckPortalPasswordExpiry;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -31,7 +33,7 @@ Route::prefix('b2b/supplier')->group(function () {
     Route::post('reset-password', [SupplierAuthController::class, 'resetPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
 
     // Authenticated
-    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
+    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [SupplierAuthController::class, 'me']);
         // The supplier portal is a session guard, so the internal
         // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
@@ -39,44 +41,46 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [SupplierAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
-        Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
-        Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
-        Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
-        Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
-        Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo']);
-        Route::post('purchase-orders/{purchaseOrder}/respond', [SupplierPortalController::class, 'respondToPo']);
-        Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment']);
-        Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments']);
-        Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
-        Route::get('purchase-orders/shipping-documents/options', [SupplierPortalController::class, 'shippingDocumentOptions']);
-        Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierPortalController::class, 'submitInvoice']);
-        Route::get('shipping-documents/{id}/download', [SupplierPortalController::class, 'downloadShippingDocument']);
-        Route::get('invoices', [SupplierPortalController::class, 'invoices']);
-        Route::get('invoices/{invoice}', [SupplierPortalController::class, 'invoiceDetail']);
-        Route::get('invoices/{invoice}/pdf', [SupplierPortalController::class, 'invoicePdf']);
-        Route::get('deliveries', [SupplierPortalController::class, 'deliveries']);
-        Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
-        Route::get('delivery-schedules', [SupplierPortalController::class, 'deliverySchedules']);
-        Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule']);
-        // Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing.
-        Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
-        Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
-        Route::post('item-listings', [SupplierListingPortalController::class, 'store']);
-        Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk']);
-        Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update']);
-        // PPAP submissions (read-only, scoped to this supplier).
-         Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
-         // Invite-only sealed RFQ sourcing. The controller and service perform
-         // the vendor ownership check in addition to the supplier session guard.
-         Route::get('rfqs', [SupplierRfqController::class, 'index']);
-         Route::get('rfqs/{rfq}', [SupplierRfqController::class, 'show']);
-         Route::post('rfqs/{rfq}/quotes', [SupplierRfqController::class, 'store']);
-         Route::put('rfqs/{rfq}/quotes/{quote}', [SupplierRfqController::class, 'update']);
-         Route::post('rfqs/{rfq}/quotes/{quote}/submit', [SupplierRfqController::class, 'submit']);
-         Route::post('rfqs/{rfq}/quotes/{quote}/withdraw', [SupplierRfqController::class, 'withdraw']);
-         Route::get('rfqs/{rfq}/quotes/{quote}/versions', [SupplierRfqController::class, 'versions']);
-         Route::post('rfqs/{rfq}/documents', [SupplierRfqController::class, 'uploadDocument']);
-         });
+            Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
+            Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
+            Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
+            Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
+            Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo']);
+            Route::post('purchase-orders/{purchaseOrder}/respond', [SupplierPortalController::class, 'respondToPo']);
+            Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment']);
+            Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments']);
+            Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
+            Route::get('purchase-orders/shipping-documents/options', [SupplierPortalController::class, 'shippingDocumentOptions']);
+            Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierPortalController::class, 'submitInvoice']);
+            Route::get('shipping-documents/{id}/download', [SupplierPortalController::class, 'downloadShippingDocument']);
+            Route::get('invoices', [SupplierPortalController::class, 'invoices']);
+            Route::get('invoices/{invoice}', [SupplierPortalController::class, 'invoiceDetail']);
+            Route::get('invoices/{invoice}/pdf', [SupplierPortalController::class, 'invoicePdf']);
+            Route::get('deliveries', [SupplierPortalController::class, 'deliveries']);
+            Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
+            Route::get('delivery-schedules', [SupplierPortalController::class, 'deliverySchedules']);
+            Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule']);
+            // Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing.
+            Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
+            Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
+            Route::post('item-listings', [SupplierListingPortalController::class, 'store']);
+            Route::post('item-listings/bulk', [SupplierListingPortalController::class, 'storeBulk']);
+            Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update']);
+            // PPAP submissions (read-only, scoped to this supplier).
+            Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
+            // Invite-only sealed RFQ sourcing. The controller and service perform
+            // the vendor ownership check in addition to the supplier session guard.
+            Route::get('rfqs', [SupplierRfqController::class, 'index']);
+            Route::get('rfqs/{rfq}', [SupplierRfqController::class, 'show']);
+            Route::post('rfqs/{rfq}/quotes', [SupplierRfqController::class, 'store']);
+            Route::put('rfqs/{rfq}/quotes/{quote}', [SupplierRfqController::class, 'update']);
+            Route::post('rfqs/{rfq}/quotes/{quote}/submit', [SupplierRfqController::class, 'submit']);
+            Route::post('rfqs/{rfq}/quotes/{quote}/withdraw', [SupplierRfqController::class, 'withdraw']);
+            Route::get('rfqs/{rfq}/quotes/{quote}/versions', [SupplierRfqController::class, 'versions']);
+            Route::post('rfqs/{rfq}/documents', [SupplierRfqController::class, 'uploadDocument']);
+            Route::get('rfqs/{rfq}/documents/{document}/download', [SupplierRfqController::class, 'downloadDocument']);
+            Route::post('purchase-orders/{purchaseOrder}/rfq-reconfirmation/{reconfirmation}/confirm', [SupplierRfqController::class, 'confirmReconfirmation']);
+        });
     });
 });
 
@@ -134,7 +138,7 @@ Route::prefix('b2b/customer')->group(function () {
     Route::post('reset-password', [CustomerAuthController::class, 'resetPassword'])->middleware(['throttle:auth', 'feature:b2b_portals']);
 
     // Authenticated
-    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\CheckPortalPasswordExpiry::class, \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
+    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', CheckPortalPasswordExpiry::class, B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [CustomerAuthController::class, 'me']);
         // The customer portal is a session guard, so the internal
         // /business-policies endpoint (auth:sanctum) cannot serve it. Portal
@@ -142,37 +146,37 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('business-policies', BusinessPolicyController::class);
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->middleware('throttle:sensitive');
         Route::middleware('portal.password.changed')->group(function (): void {
-        Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
-        Route::get('catalog', [CustomerPortalController::class, 'catalog']);
-        Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
-        Route::post('orders', [CustomerPortalController::class, 'storeOrder']);
-        Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
-        Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
-        // Sales-order negotiation — customer accepts / proposes changes / declines.
-        Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder']);
-        Route::get('invoices', [CustomerPortalController::class, 'invoices']);
-        Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
-        Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
-        Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
-        Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
-        Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
-        Route::post('deliveries/{delivery}/confirm', [CustomerPortalController::class, 'confirmDelivery']);
-        Route::get('complaints', [CustomerPortalController::class, 'complaints']);
-        Route::get('complaints/options', [CustomerPortalController::class, 'complaintOptions']);
-        Route::post('complaints', [CustomerPortalController::class, 'createComplaint']);
-        Route::get('complaints/{complaint}/8d-report', [CustomerPortalController::class, 'complaint8dReport']);
-        Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);
-        Route::get('delivery-schedules', [CustomerPortalController::class, 'deliverySchedules']);
-        Route::post('delivery-schedules', [CustomerPortalController::class, 'storeDeliverySchedule']);
+            Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
+            Route::get('catalog', [CustomerPortalController::class, 'catalog']);
+            Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
+            Route::post('orders', [CustomerPortalController::class, 'storeOrder']);
+            Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
+            Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
+            // Sales-order negotiation — customer accepts / proposes changes / declines.
+            Route::post('orders/{salesOrder}/respond', [CustomerPortalController::class, 'respondToSalesOrder']);
+            Route::get('invoices', [CustomerPortalController::class, 'invoices']);
+            Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
+            Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
+            Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
+            Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
+            Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
+            Route::post('deliveries/{delivery}/confirm', [CustomerPortalController::class, 'confirmDelivery']);
+            Route::get('complaints', [CustomerPortalController::class, 'complaints']);
+            Route::get('complaints/options', [CustomerPortalController::class, 'complaintOptions']);
+            Route::post('complaints', [CustomerPortalController::class, 'createComplaint']);
+            Route::get('complaints/{complaint}/8d-report', [CustomerPortalController::class, 'complaint8dReport']);
+            Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);
+            Route::get('delivery-schedules', [CustomerPortalController::class, 'deliverySchedules']);
+            Route::post('delivery-schedules', [CustomerPortalController::class, 'storeDeliverySchedule']);
 
-        // Customer self-service returns (RMA). Both portals features must be on
-        // for the endpoints to exist, matching the internal module gate.
-        Route::middleware('feature:return_management')->group(function (): void {
-            Route::get('return-requests/source-options', [CustomerPortalController::class, 'returnSourceOptions']);
-            Route::get('return-requests', [CustomerPortalController::class, 'returnRequests']);
-            Route::get('return-requests/{returnRequest}', [CustomerPortalController::class, 'returnRequestShow']);
-            Route::post('return-requests', [CustomerPortalController::class, 'storeReturnRequest']);
-        });
+            // Customer self-service returns (RMA). Both portals features must be on
+            // for the endpoints to exist, matching the internal module gate.
+            Route::middleware('feature:return_management')->group(function (): void {
+                Route::get('return-requests/source-options', [CustomerPortalController::class, 'returnSourceOptions']);
+                Route::get('return-requests', [CustomerPortalController::class, 'returnRequests']);
+                Route::get('return-requests/{returnRequest}', [CustomerPortalController::class, 'returnRequestShow']);
+                Route::post('return-requests', [CustomerPortalController::class, 'storeReturnRequest']);
+            });
         });
     });
 });

@@ -7,6 +7,7 @@ namespace App\Modules\Attendance\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
@@ -161,10 +162,10 @@ class OvertimeService
         if (!empty($filters['search'])) {
             $term = trim((string) $filters['search']);
             $q->where(fn ($qq) => $qq
-                ->whereHas('employee', fn ($e) => $e->where('employee_no', 'ilike', "%{$term}%")
-                    ->orWhere('first_name', 'ilike', "%{$term}%")
-                    ->orWhere('middle_name', 'ilike', "%{$term}%")
-                    ->orWhere('last_name', 'ilike', "%{$term}%")));
+                ->whereHas('employee', fn ($e) => $e->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('middle_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))));
         }
         if (!empty($filters['status'])) $q->where('status', $filters['status']);
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);

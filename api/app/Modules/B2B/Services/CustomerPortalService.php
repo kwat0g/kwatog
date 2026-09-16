@@ -301,7 +301,7 @@ class CustomerPortalService
             $query->where('status', $filters['status']);
         }
         if (! empty($filters['search'])) {
-            $query->where('so_number', 'like', "%{$filters['search']}%");
+            $query->where('so_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
         }
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);

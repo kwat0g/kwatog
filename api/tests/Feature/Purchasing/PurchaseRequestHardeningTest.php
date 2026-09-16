@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
-use App\Common\Models\ApprovalRecord;
-use App\Common\Models\WorkflowDefinition;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalRecord;
+use App\Common\Models\WorkflowDefinition;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -338,11 +338,12 @@ class PurchaseRequestHardeningTest extends TestCase
         $this->assertSame($department->id, $pr->department_id);
     }
 
-    /** @return array{priority:string,items:array<int,array<string,string>>} */
+    /** @return array{priority:string,sourcing_method:string,items:array<int,array<string,string>>} */
     private function payload(): array
     {
         return [
             'priority' => 'normal',
+            'sourcing_method' => 'direct_po',
             'items' => [[
                 'description' => 'Test item',
                 'quantity' => '1.00',

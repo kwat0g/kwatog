@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Support\Money;
 use App\Common\Traits\HasApprovalWorkflow;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
-use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\MRP\Models\MrpPlan;
-use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use Database\Factories\PurchaseRequestFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,11 +26,11 @@ use Illuminate\Support\Facades\DB;
 
 class PurchaseRequest extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow, SoftDeletes;
+    use HasApprovalWorkflow, HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
-    protected static function newFactory(): \Database\Factories\PurchaseRequestFactory
+    protected static function newFactory(): PurchaseRequestFactory
     {
-        return \Database\Factories\PurchaseRequestFactory::new();
+        return PurchaseRequestFactory::new();
     }
 
     protected $fillable = [
@@ -38,20 +40,22 @@ class PurchaseRequest extends Model
         'is_urgent', 'urgency_reason',
         'budget_warning_level', 'budget_warning_message',
         'budget_acknowledged_by', 'budget_acknowledged_at',
+        'sourcing_method',
     ];
 
     protected $casts = [
-        'date'                  => 'date',
-        'submitted_at'          => 'datetime',
-        'approved_at'           => 'datetime',
+        'date' => 'date',
+        'submitted_at' => 'datetime',
+        'approved_at' => 'datetime',
         'budget_acknowledged_at' => 'datetime',
-        'is_auto_generated'     => 'boolean',
-        'is_urgent'             => 'boolean',
+        'is_auto_generated' => 'boolean',
+        'is_urgent' => 'boolean',
         'current_approval_step' => 'integer',
-        'priority'              => PurchaseRequestPriority::class,
-        'po_conversion_status'  => PurchaseRequestConversionStatus::class,
-        'po_conversion_at'      => 'datetime',
-        'status'                => PurchaseRequestStatus::class,
+        'priority' => PurchaseRequestPriority::class,
+        'po_conversion_status' => PurchaseRequestConversionStatus::class,
+        'sourcing_method' => PurchaseRequestSourcingMethod::class,
+        'po_conversion_at' => 'datetime',
+        'status' => PurchaseRequestStatus::class,
     ];
 
     public function requester(): BelongsTo
@@ -150,7 +154,7 @@ class PurchaseRequest extends Model
      * condition that is expected to be fixed manually.
      *
      * @return bool true when the durable outcome changed and a notification
-     * should be emitted.
+     *              should be emitted.
      */
     public function markPoConversionManualRequired(string $note): bool
     {
