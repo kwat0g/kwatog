@@ -145,10 +145,10 @@ export default function PurchaseRequestDetailPage() {
   <div className="px-5 py-4 space-y-4">
   {data.sourcing_method === null && data.actions?.can_set_sourcing_method && (
   <Panel title="Choose sourcing method">
-   <p className="text-sm text-muted mb-3">This decision is required before submission. There is no default: choose whether the approved request should create a direct PO or enter competitive RFQ sourcing.</p>
+    <p className="text-sm text-muted mb-3">{data.is_auto_generated ? 'Choose whether this Sales Order/MRP shortage should create a direct PO or enter competitive RFQ sourcing.' : 'Internal purchase requests use the Direct PO path.'}</p>
    <div className="grid sm:grid-cols-2 gap-3">
     <label className="flex gap-3 rounded-md border border-default p-3 cursor-pointer"><input type="radio" name="sourcing_method" value="direct_po" checked={sourcingMethod === 'direct_po'} onChange={() => setSourcingMethod('direct_po')} /><span><strong className="block">Direct PO</strong><span className="text-xs text-muted">Create draft PO automatically after final PR approval when supplier and price data are complete.</span></span></label>
-    <label className="flex gap-3 rounded-md border border-default p-3 cursor-pointer"><input type="radio" name="sourcing_method" value="rfq" checked={sourcingMethod === 'rfq'} onChange={() => setSourcingMethod('rfq')} /><span><strong className="block">Competitive RFQ</strong><span className="text-xs text-muted">Hold the approved request for a sealed supplier bidding event.</span></span></label>
+     {data.is_auto_generated && <label className="flex gap-3 rounded-md border border-default p-3 cursor-pointer"><input type="radio" name="sourcing_method" value="rfq" checked={sourcingMethod === 'rfq'} onChange={() => setSourcingMethod('rfq')} /><span><strong className="block">Competitive RFQ</strong><span className="text-xs text-muted">Hold the approved request for a sealed supplier bidding event.</span></span></label>}
    </div>
    <Button className="mt-3" variant="primary" disabled={!sourcingMethod} onClick={() => saveSourcingMethod.mutate()} loading={saveSourcingMethod.isPending}>Save sourcing method</Button>
   </Panel>

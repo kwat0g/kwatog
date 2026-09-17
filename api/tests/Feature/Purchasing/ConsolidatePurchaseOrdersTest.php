@@ -102,6 +102,7 @@ class ConsolidatePurchaseOrdersTest extends TestCase
             'estimated_unit_price' => '250.00',
         ]]);
         $pr->forceFill([
+            'is_auto_generated' => true,
             'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
             'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending,
         ])->save();

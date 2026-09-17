@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
@@ -22,11 +23,15 @@ class ApprovedSupplierService
         TrashedFilter::apply($q, $filters);
         if (! empty($filters['item_id'])) {
             $iid = HashIdFilter::decode($filters['item_id'], Item::class);
-            if ($iid) $q->where('item_id', $iid);
+            if ($iid) {
+                $q->where('item_id', $iid);
+            }
         }
         if (! empty($filters['vendor_id'])) {
             $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
-            if ($vid) $q->where('vendor_id', $vid);
+            if ($vid) {
+                $q->where('vendor_id', $vid);
+            }
         }
         if (isset($filters['is_preferred']) && $filters['is_preferred'] !== '') {
             $q->where('is_preferred', filter_var($filters['is_preferred'], FILTER_VALIDATE_BOOLEAN));
@@ -50,6 +55,7 @@ class ApprovedSupplierService
                     ->orWhereHas('vendor', fn (Builder $vendor) => $vendor->where('name', $op, $term));
             });
         }
+
         return $q->orderByDesc('is_preferred')->orderBy('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -98,15 +104,16 @@ class ApprovedSupplierService
             $row = ApprovedSupplier::firstOrCreate(
                 ['item_id' => $itemId, 'vendor_id' => $vendorId],
                 [
-                    'is_preferred'   => $data['is_preferred'] ?? false,
+                    'is_preferred' => $data['is_preferred'] ?? false,
                     'qualification_status' => ApprovedSupplier::QUALIFICATION_APPROVED,
                     'lead_time_days' => $data['lead_time_days'] ?? null,
-                    'last_price'     => $data['last_price'] ?? null,
+                    'last_price' => $data['last_price'] ?? null,
                 ]
             );
             if (! empty($data['is_preferred'])) {
                 $this->setPreferred($row);
             }
+
             return $row->fresh();
         });
     }
@@ -116,13 +123,14 @@ class ApprovedSupplierService
         return DB::transaction(function () use ($row, $data) {
             $row->update([
                 'lead_time_days' => $data['lead_time_days'] ?? $row->lead_time_days,
-                'last_price'     => $data['last_price']     ?? $row->last_price,
+                'last_price' => $data['last_price'] ?? $row->last_price,
             ]);
             if (isset($data['is_preferred']) && $data['is_preferred']) {
                 $this->setPreferred($row);
             } elseif (isset($data['is_preferred']) && ! $data['is_preferred']) {
                 $row->update(['is_preferred' => false]);
             }
+
             return $row->fresh();
         });
     }
@@ -148,6 +156,7 @@ class ApprovedSupplierService
             }
 
             $row->restore();
+
             return $row->fresh(['item', 'vendor']);
         });
     }

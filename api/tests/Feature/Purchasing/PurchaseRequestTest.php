@@ -126,6 +126,18 @@ class PurchaseRequestTest extends TestCase
             ->assertJsonValidationErrorFor('sourcing_method');
     }
 
+    public function test_manual_purchase_request_cannot_choose_rfq_sourcing(): void
+    {
+        $admin = $this->makeAdmin();
+        $payload = $this->validPayload();
+        $payload['sourcing_method'] = 'rfq';
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/purchasing/purchase-requests', $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrorFor('sourcing_method');
+    }
+
     public function test_authenticated_user_can_submit_a_draft_pr(): void
     {
         $admin = $this->makeAdmin();
@@ -147,7 +159,7 @@ class PurchaseRequestTest extends TestCase
     public function test_legacy_approved_pr_requires_explicit_sourcing_choice_before_conversion(): void
     {
         $admin = $this->makeAdmin();
-        $pr = PurchaseRequest::factory()->create(['sourcing_method' => null]);
+        $pr = PurchaseRequest::factory()->create(['is_auto_generated' => true, 'sourcing_method' => null]);
         $pr->forceFill([
             'status' => PurchaseRequestStatus::Approved,
             'po_conversion_status' => 'sourcing_pending',

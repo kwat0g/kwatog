@@ -134,13 +134,13 @@ available as per-employee A5 PDFs (2 per A4, watermarked CONFIDENTIAL).
 ### 8.1 Creating a purchase request
 
 *Sidebar → Purchasing → Requests → New Request*. Add items with quantities.
-Choose a required **Sourcing method**: **Direct PO** creates draft purchase
-orders automatically after final PR approval when supplier and price data are
-complete; **Competitive RFQ** holds the approved PR for a sealed supplier
-bidding event. There is no default selection, so the PR cannot be submitted
-until the requester chooses one.
-Auto-generated PRs (from the low-stock listener) appear with an
-amber **AUTO** chip.
+Manually raised internal PRs use **Direct PO** sourcing. Direct sourcing creates
+draft purchase orders automatically after final PR approval when supplier and
+price data are complete.
+
+Auto-generated PRs from a Sales Order/MRP material shortage appear with an amber
+**AUTO** chip. Those requests may use **Direct PO** or **Competitive RFQ**;
+RFQ holds the approved request for a sealed supplier bidding event.
 
 ### 8.2 Generating a purchase order
 

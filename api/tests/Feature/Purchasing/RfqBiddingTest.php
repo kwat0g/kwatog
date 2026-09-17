@@ -337,7 +337,10 @@ final class RfqBiddingTest extends TestCase
     {
         $requester = $this->roleUser('purchasing_officer');
         $item = Item::factory()->create(['unit_of_measure' => 'kg']);
-        $pr = PurchaseRequest::factory()->create(['requested_by' => $requester->id]);
+        $pr = PurchaseRequest::factory()->create([
+            'requested_by' => $requester->id,
+            'is_auto_generated' => true,
+        ]);
         $pr->forceFill([
             'status' => PurchaseRequestStatus::Approved,
             'po_conversion_status' => PurchaseRequestConversionStatus::NotStarted,

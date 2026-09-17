@@ -189,6 +189,7 @@ class VendorSourcingTest extends TestCase
         $pr = PurchaseRequest::factory()->create([
             'requested_by' => $admin->id,
             'department_id' => null,
+            'is_auto_generated' => true,
             'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
         ]);
         $pr->forceFill([

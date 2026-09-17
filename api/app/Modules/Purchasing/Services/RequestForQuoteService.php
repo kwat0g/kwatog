@@ -8,10 +8,11 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteStatus;
 use App\Modules\Purchasing\Events\RfqLifecycleEvent;
@@ -87,7 +88,7 @@ class RequestForQuoteService
             if ($locked->status !== PurchaseRequestStatus::Approved) {
                 throw new BusinessRuleException('Only approved purchase requests can start an RFQ.');
             }
-            if ($locked->sourcing_method !== PurchaseRequestSourcingMethod::Rfq) {
+            if (! $locked->is_auto_generated || $locked->sourcing_method !== PurchaseRequestSourcingMethod::Rfq) {
                 throw new BusinessRuleException('This purchase request is not marked for competitive RFQ sourcing.');
             }
             if ($locked->purchaseOrders()->where('status', '!=', 'cancelled')->exists()) {

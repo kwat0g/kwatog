@@ -39,7 +39,9 @@ class StorePurchaseRequestRequest extends FormRequest
             'date' => ['nullable', 'date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'priority' => ['nullable', Rule::in(PurchaseRequestPriority::values())],
-            'sourcing_method' => ['required', Rule::enum(PurchaseRequestSourcingMethod::class)],
+            // Manual/internal PRs use the direct procurement path. RFQ is
+            // reserved for MRP/Sales Order auto-generated shortages.
+            'sourcing_method' => ['required', Rule::in([PurchaseRequestSourcingMethod::DirectPo->value])],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['nullable', 'integer', 'exists:items,id'],
             'items.*.description' => ['required', 'string', 'min:2', 'max:200'],
@@ -54,6 +56,7 @@ class StorePurchaseRequestRequest extends FormRequest
     {
         return [
             'items.required' => 'A purchase request must have at least one line.',
+            'sourcing_method.in' => 'Internal purchase requests use Direct PO sourcing.',
         ];
     }
 }

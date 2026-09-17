@@ -12,6 +12,7 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
@@ -102,6 +103,11 @@ class PurchaseRequestService
      */
     public function create(array $data, User $by): PurchaseRequest
     {
+        $isAuto = (bool) ($data['is_auto_generated'] ?? false);
+        if (! $isAuto && $this->isRfqMethod($data['sourcing_method'] ?? null)) {
+            throw new BusinessRuleException('Internal purchase requests use Direct PO sourcing.');
+        }
+
         return DB::transaction(function () use ($data, $by) {
             $isAuto = (bool) ($data['is_auto_generated'] ?? false);
             $priority = $this->priorityValue(
@@ -151,7 +157,9 @@ class PurchaseRequestService
                 // explicitly set is_urgent.
                 'is_urgent' => (bool) ($data['is_urgent'] ?? $this->isUrgentPriority($priority)),
                 'urgency_reason' => $data['urgency_reason'] ?? null,
-                'sourcing_method' => $data['sourcing_method'] ?? null,
+                'sourcing_method' => $isAuto
+                    ? ($data['sourcing_method'] ?? null)
+                    : PurchaseRequestSourcingMethod::DirectPo,
             ]);
             // status is non-fillable; service-only.
             $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
@@ -241,6 +249,9 @@ class PurchaseRequestService
             if ($by !== null && array_key_exists('department_id', $data)
                 && ! $this->access->canAssignDepartment($by, $locked, $data['department_id'] !== null ? (int) $data['department_id'] : null)) {
                 throw new ForbiddenActionException('You cannot assign this purchase request to that department.');
+            }
+            if (! $locked->is_auto_generated && $this->isRfqMethod($data['sourcing_method'] ?? null)) {
+                throw new BusinessRuleException('Internal purchase requests use Direct PO sourcing.');
             }
 
             $locked->update([
@@ -632,6 +643,12 @@ class PurchaseRequestService
             }
             $locked->delete();
         });
+    }
+
+    private function isRfqMethod(mixed $method): bool
+    {
+        return $method === PurchaseRequestSourcingMethod::Rfq
+            || $method === PurchaseRequestSourcingMethod::Rfq->value;
     }
 
     private function priorityValue(mixed $priority): string

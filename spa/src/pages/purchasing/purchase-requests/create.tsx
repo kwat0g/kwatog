@@ -83,7 +83,7 @@ export default function CreatePurchaseRequestPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       priority: '',
-      sourcing_method: '',
+      sourcing_method: 'direct_po',
       // A department head raises for their own department, so it is locked and
       // pre-selected. The auth store can hydrate after first paint, so an
       // effect below re-applies it once the user (and their department) load.
@@ -226,9 +226,7 @@ export default function CreatePurchaseRequestPage() {
               {...register('sourcing_method')}
               error={errors.sourcing_method?.message}
             >
-              <option value="">— Select sourcing method —</option>
-              <option value="direct_po">Direct PO</option>
-              <option value="rfq">Competitive RFQ</option>
+              <option value="direct_po">Direct PO (internal request)</option>
             </Select>
             <Select
               label="Department"

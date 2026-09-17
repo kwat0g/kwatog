@@ -83,7 +83,7 @@ These may be considered later, but they must not enter the MVP by implication.
 | Supplier route family | Existing supplier portal under `/b2b/supplier/rfqs` |
 | RFQ source | One approved PR per RFQ |
 | RFQ entry point | Start RFQ action on approved PR detail |
-| PR conversion | Buyer chooses direct PO or Start RFQ after approval |
+| PR conversion | Manual PRs use Direct PO; Sales Order/MRP auto PRs may use Direct PO or Start RFQ |
 | RFQ preparation | Four-step draft wizard |
 | Supplier selection | System suggests; buyer explicitly selects |
 | Supplier eligibility | Qualified suppliers by default; exception with reason |

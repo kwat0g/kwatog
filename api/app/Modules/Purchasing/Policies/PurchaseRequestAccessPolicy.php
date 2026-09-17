@@ -157,6 +157,7 @@ final class PurchaseRequestAccessPolicy
     {
         return $user->hasPermission('purchasing.rfq.create')
             && $this->canView($user, $pr)
+            && $pr->is_auto_generated
             && $pr->status === PurchaseRequestStatus::Approved
             && $pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
             && ! $this->hasLivePurchaseOrders($pr)
@@ -165,6 +166,9 @@ final class PurchaseRequestAccessPolicy
 
     public function canSetSourcingMethod(User $user, PurchaseRequest $pr, PurchaseRequestSourcingMethod $method): bool
     {
+        if ($method === PurchaseRequestSourcingMethod::Rfq && ! $pr->is_auto_generated) {
+            return false;
+        }
         $hasMethodPermission = $method === PurchaseRequestSourcingMethod::Rfq
             ? $user->hasPermission('purchasing.rfq.create')
             : $user->hasPermission('purchasing.po.create');
