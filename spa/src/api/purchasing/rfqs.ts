@@ -52,8 +52,8 @@ export const rfqsApi = {
   award: (id: string, awards: Array<{ request_for_quote_item_id: string; supplier_quote_item_id: string; awarded_quantity: string; award_reason: string; single_response_justification?: string }>) => client.post<{ data: RequestForQuote; purchase_orders: PurchaseOrder[] }>(`/purchasing/rfqs/${id}/award`, { awards }).then((r) => r.data),
   cancel: (id: string, reason: string) => client.post<RequestForQuote>(`/purchasing/rfqs/${id}/cancel`, { reason }).then((r) => r.data),
   purchaseOrders: (id: string) => client.get<PurchaseOrder[] | { data: PurchaseOrder[] }>(`/purchasing/rfqs/${id}/purchase-orders`).then((r) => Array.isArray(r.data) ? r.data : r.data.data),
-  uploadDocument: (id: string, form: FormData) => client.post(`/purchasing/rfqs/${id}/documents`, form).then((r) => r.data.data),
-  manualQuote: (id: string, data: ManualRfqQuoteData) => client.post<{ data: SupplierQuote }>(`/purchasing/rfqs/${id}/quotes/manual`, data).then((r) => r.data.data),
+  uploadDocument: (id: string, form: FormData) => client.post(`/purchasing/rfqs/${id}/documents`, form).then((r) => r.data),
+  manualQuote: (id: string, data: ManualRfqQuoteData) => client.post<SupplierQuote>(`/purchasing/rfqs/${id}/quotes/manual`, data).then((r) => r.data),
 };
 
 export const supplierRfqsApi = {

@@ -37,12 +37,12 @@ export default function CreateRfqPage() {
   if (!prId) return <Panel title="Start RFQ"><p className="text-muted">Open an approved purchase request and choose Start RFQ.</p></Panel>;
   if (pr.isLoading) return <div className="p-5 text-muted">Loading purchase request…</div>;
   if (!pr.data) return <Panel title="Purchase request unavailable"><p className="text-muted">The source purchase request could not be loaded.</p></Panel>;
-  const candidates = sourcing.data?.lines.flatMap((line) => line.candidates.map((candidate) => ({ ...candidate, lineId: line.id }))) ?? [];
-  const unique = Array.from(candidates.reduce((map, candidate) => {
-    const existing = map.get(candidate.id);
-    map.set(candidate.id, existing ? { ...existing, qualified: existing.qualified && candidate.qualified } : candidate);
-    return map;
-  }, new Map<string, (typeof candidates)[number]>()).values());
+   const sourcingLines = sourcing.data?.lines ?? [];
+   const candidates = sourcingLines.flatMap((line) => line.candidates);
+   const unique = Array.from(new Map(candidates.map((candidate) => [candidate.id, candidate])).values()).map((candidate) => ({
+     ...candidate,
+     qualified: sourcingLines.every((line) => line.candidates.some((lineCandidate) => lineCandidate.id === candidate.id && lineCandidate.qualified)),
+   }));
   const canAdvance = () => {
     if (step === 1) return title.trim().length > 0 && deadline !== '';
     if (step === 2) return Object.values(selected).some(Boolean) && Object.values(selected).filter(Boolean).every((vendorId) => {

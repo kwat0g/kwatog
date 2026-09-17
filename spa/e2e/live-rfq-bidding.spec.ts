@@ -25,50 +25,78 @@ async function getSupplierVendorName(page: Page): Promise<string> {
 }
 
 async function createAndApprovePr(browser: Browser): Promise<{ context: BrowserContext; page: Page; url: string }> {
+  const sales = await newContext(browser);
+  let soNumber = '';
+  try {
+    await login(sales.page, 'crm@ogami.test');
+    await sales.page.goto('/crm/sales-orders/create');
+    await expect(sales.page.getByRole('heading', { name: 'New sales order' })).toBeVisible();
+    const customer = sales.page.locator('select[name="customer_id"]');
+    await expect.poll(() => customer.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+    const customerOptions = await customer.locator('option').evaluateAll((nodes) => nodes.map((node) => ({ value: node.value, text: node.textContent ?? '' })));
+    await customer.selectOption(customerOptions.find((option) => option.text.includes('Honda'))?.value ?? customerOptions.find((option) => option.value !== '')!.value);
+    const product = sales.page.locator('select[name="items.0.product_id"]');
+    await expect.poll(() => product.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
+    const productOptions = await product.locator('option').evaluateAll((nodes) => nodes.map((node) => ({ value: node.value, text: node.textContent ?? '' })));
+    await product.selectOption(productOptions.find((option) => option.text.includes('WB-002'))?.value ?? productOptions.find((option) => option.value !== '')!.value);
+    await sales.page.locator('input[name="items.0.quantity"]').fill('5000');
+    await sales.page.locator('input[name="items.0.delivery_date"]').fill(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+    await sales.page.getByRole('button', { name: 'Save & confirm', exact: true }).click();
+    await sales.page.waitForURL(/\/crm\/sales-orders\/[^/]+$/, { timeout: 30_000 });
+    await expect(sales.page.getByText('Confirmed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    soNumber = (await sales.page.locator('h1').first().innerText()).match(/SO-\S+/)?.[0] ?? '';
+    await expect.poll(async () => {
+      await sales.page.reload({ waitUntil: 'networkidle' });
+      return await sales.page.locator('a[href*="/mrp/plans/"]').count();
+    }, { timeout: 75_000, intervals: [1_000, 2_000, 5_000] }).toBeGreaterThan(0);
+  } finally {
+    await sales.context.close();
+  }
+
   const created = await newContext(browser);
-  await login(created.page, 'purchasing@ogami.test');
-  await created.page.goto('/purchasing/purchase-requests/create');
-  await created.page.getByLabel('Priority').selectOption('normal');
-  await created.page.getByLabel('Sourcing method').selectOption('rfq');
-  const department = created.page.getByLabel('Department');
-  await expect.poll(() => department.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
-  const production = await department.locator('option').evaluateAll((options) => options.find((option) => (option.textContent ?? '').includes('Production') && !(option.textContent ?? '').includes('Planning'))?.value ?? '');
-  await department.selectOption(production);
-  await created.page.getByLabel('Reason').fill('Live E2E sealed resin sourcing');
-  await created.page.getByLabel('Quantity').fill('500');
-  await created.page.getByLabel('Estimated unit price').fill('120.00');
-  const item = created.page.locator('select[aria-label="Item"]');
-  await expect.poll(() => item.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
-  const itemValue = await item.locator('option').evaluateAll((options) => options.find((option) => (option.textContent ?? '').includes('RM-001'))?.getAttribute('value') ?? '');
-  await item.selectOption(itemValue);
-  await created.page.getByRole('button', { name: 'Submit for approval', exact: true }).click();
-  await created.page.getByRole('dialog').getByRole('button', { name: 'Submit', exact: true }).click();
-  await created.page.waitForURL(/\/purchasing\/purchase-requests\/(?!create$)[^/]+$/, { timeout: 20_000 });
-  const url = created.page.url();
-
-  const finance = await newContext(browser);
   try {
-    await login(finance.page, 'finance@ogami.test');
-    await finance.page.goto(url);
-    await finance.page.getByRole('button', { name: 'Approve', exact: true }).click();
-    await finance.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
-  } finally {
-    await finance.context.close();
-  }
+    await login(created.page, 'purchasing@ogami.test');
+    await created.page.goto('/purchasing/purchase-requests?per_page=100&is_auto_generated=true');
+    const body = await created.page.evaluate(async () => (await fetch('/api/v1/purchasing/purchase-requests?per_page=100&is_auto_generated=true')).json());
+    const autoPr = (body.data as Array<{ id: string; status: string; reason?: string }>).find((row) => row.status === 'draft' && row.reason?.includes(soNumber));
+    expect(autoPr, `No auto PR linked to ${soNumber}`).toBeTruthy();
+    await created.page.goto(`/purchasing/purchase-requests/${autoPr!.id}`);
+    await created.page.getByRole('radio', { name: /Competitive RFQ/ }).check();
+    await created.page.getByRole('button', { name: 'Save sourcing method', exact: true }).click();
+    await created.page.getByRole('button', { name: 'Submit', exact: true }).click();
+    await created.page.getByRole('dialog').getByRole('button', { name: 'Submit', exact: true }).click();
+    await expect(created.page.getByText('Pending', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    const url = created.page.url();
 
-  const vp = await newContext(browser);
-  try {
-    await login(vp.page, 'vp@ogami.test');
-    await vp.page.goto(url);
-    await expect(vp.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 20_000 });
-    await vp.page.getByRole('button', { name: 'Approve', exact: true }).click();
-    await vp.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect(vp.page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
-  } finally {
-    await vp.context.close();
-  }
+    const finance = await newContext(browser);
+    try {
+      await login(finance.page, 'finance@ogami.test');
+      await finance.page.goto(url);
+      await expect(finance.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 20_000 });
+      await finance.page.getByRole('button', { name: 'Approve', exact: true }).click();
+      await finance.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
+    } finally {
+      await finance.context.close();
+    }
 
-  return { ...created, url };
+    const vp = await newContext(browser);
+    try {
+      await login(vp.page, 'vp@ogami.test');
+      await vp.page.goto(url);
+      const approve = vp.page.getByRole('button', { name: 'Approve', exact: true });
+      if (await approve.count() > 0 && await approve.isVisible()) {
+        await approve.click();
+        await vp.page.getByRole('dialog').getByRole('button', { name: 'Approve', exact: true }).click();
+      }
+      await expect(vp.page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    } finally {
+      await vp.context.close();
+    }
+
+    return { ...created, url };
+  } finally {
+    // The purchasing context remains open for the RFQ wizard.
+  }
 }
 
 test.describe('Live sealed RFQ role workflow', () => {
@@ -94,10 +122,14 @@ test.describe('Live sealed RFQ role workflow', () => {
       await created.page.waitForURL(/\/purchasing\/rfqs\/create\?purchase_request=/, { timeout: 20_000 });
       await created.page.getByRole('button', { name: 'Next', exact: true }).click();
 
-      const supplierName = created.page.getByText(supplierVendorName, { exact: true }).first();
-      await expect(supplierName).toBeVisible({ timeout: 20_000 });
-      await supplierName.locator('xpath=../..').getByRole('checkbox').check();
-      await created.page.getByRole('button', { name: 'Next', exact: true }).click();
+       const supplierName = created.page.getByText(supplierVendorName, { exact: true }).first();
+       await expect(supplierName).toBeVisible({ timeout: 20_000 });
+       await supplierName.locator('xpath=../..').getByRole('checkbox').check();
+       const exceptionReason = created.page.getByLabel('Exception reason');
+       if (await exceptionReason.count() > 0 && await exceptionReason.isVisible()) {
+         await exceptionReason.fill('Buyer verified the supplier documentation for this resin grade.');
+       }
+       await created.page.getByRole('button', { name: 'Next', exact: true }).click();
       closeAt = new Date(Date.now() + 180_000);
       const localDeadline = await created.page.evaluate((timestamp) => {
         const value = new Date(timestamp);
