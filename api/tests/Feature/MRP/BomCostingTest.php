@@ -15,6 +15,7 @@ use App\Modules\MRP\Services\BomService;
 use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\RoutingOperation;
 use App\Modules\Production\Services\ProductionRoutingService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -95,6 +96,134 @@ class BomCostingTest extends TestCase
 
         $this->expectException(BusinessRuleException::class);
         $this->service->create($product->id, [$row, $row]);
+    }
+
+    public function test_inactive_manufactured_components_are_material_leaves_for_both_paths(): void
+    {
+        $finishedGood = Product::factory()->create();
+        $subassembly = Product::factory()->create([
+            'part_number' => 'SA-INACTIVE-'.strtoupper(substr(uniqid(), -5)),
+        ]);
+        $subassemblyItem = Item::factory()->create([
+            'code' => $subassembly->part_number,
+            'standard_cost' => '99.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+        $rawMaterial = Item::factory()->create([
+            'standard_cost' => '3.0000',
+            'unit_of_measure' => 'pcs',
+        ]);
+
+        $this->service->create($subassembly->id, [[
+            'item_id' => $rawMaterial->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+        ]]);
+        $bom = $this->service->create($finishedGood->id, [[
+            'item_id' => $subassemblyItem->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+        ]]);
+
+        $subassembly->update(['is_active' => false]);
+
+        $exploded = $this->service->explode($finishedGood->id, 1.0);
+        $recosted = $this->service->ensureFreshForPlanning($bom);
+
+        $this->assertSame($subassembly->part_number, $exploded->first()['item_code']);
+        $this->assertSame('2.000', $exploded->first()['gross_quantity']);
+        $this->assertSame('standard_cost', $recosted->items->first()->cost_source);
+        $this->assertSame('99.0000', (string) $recosted->items->first()->unit_cost);
+        $this->assertSame('198.00', (string) $recosted->material_cost);
+    }
+
+    public function test_bom_authoring_rejects_a_transitive_cycle_before_costing(): void
+    {
+        $productA = Product::factory()->create([
+            'part_number' => 'CYCLE-A-'.strtoupper(substr(uniqid(), -5)),
+        ]);
+        $productB = Product::factory()->create([
+            'part_number' => 'CYCLE-B-'.strtoupper(substr(uniqid(), -5)),
+        ]);
+        $itemA = Item::factory()->create([
+            'code' => $productA->part_number,
+            'unit_of_measure' => 'pcs',
+        ]);
+        $itemB = Item::factory()->create([
+            'code' => $productB->part_number,
+            'unit_of_measure' => 'pcs',
+        ]);
+
+        // B -> A is valid while A has no BOM. Adding A -> B would close the cycle.
+        $this->service->create($productB->id, [[
+            'item_id' => $itemA->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+        ]]);
+
+        $this->expectExceptionMessage('Circular bill of materials detected in the BOM definition');
+        $this->service->create($productA->id, [[
+            'item_id' => $itemB->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+        ]]);
+    }
+
+    public function test_database_rejects_duplicate_components_outside_the_service(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create();
+        $bom = Bom::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+        ]);
+
+        BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]);
+
+        $this->expectException(QueryException::class);
+        BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $material->id,
+            'quantity_per_unit' => '2.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]);
+    }
+
+    public function test_bom_item_mutations_have_timestamps_and_audit_rows(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create();
+        $bom = Bom::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+        ]);
+        $line = BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+        ]);
+
+        $this->assertNotNull($line->created_at);
+        $this->assertNotNull($line->updated_at);
+
+        $line->update(['quantity_per_unit' => '1.2500']);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => BomItem::class,
+            'model_id' => $line->id,
+            'action' => 'updated',
+        ]);
     }
 
     public function test_bom_rejects_missing_alternate_uom_conversion(): void

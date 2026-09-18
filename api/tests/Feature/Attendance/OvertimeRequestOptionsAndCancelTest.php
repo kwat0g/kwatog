@@ -39,13 +39,15 @@ class OvertimeRequestOptionsAndCancelTest extends TestCase
 
     private function makeOt(Employee $emp, string $status = OvertimeStatus::Pending->value): OvertimeRequest
     {
-        return OvertimeRequest::create([
+        $ot = OvertimeRequest::make([
             'employee_id'     => $emp->id,
             'date'            => now()->subDay()->toDateString(),
             'hours_requested' => 2,
             'reason'          => 'Options & cancel test',
-            'status'          => $status,
         ]);
+        $ot->status = $status;
+        $ot->save();
+        return $ot;
     }
 
     public function test_options_endpoint_returns_hour_windows_and_multiplier(): void

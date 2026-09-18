@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
@@ -12,11 +13,13 @@ use App\Modules\Production\Models\ProductionLog;
 use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Services\InspectionService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use App\Common\Exceptions\BusinessRuleException;
 
 /**
  * Sprint P10 — Task 11. WO Operation lifecycle service.
@@ -35,6 +38,8 @@ use App\Common\Exceptions\BusinessRuleException;
  */
 class WoOperationService
 {
+    public function __construct(private readonly InspectionService $inspections) {}
+
     /**
      * Generate WO operations from the product's active routing.
      *
@@ -54,21 +59,35 @@ class WoOperationService
                 return;
             }
 
+            $plannedWindows = $this->plannedWindows($wo, $routing->operations);
             foreach ($routing->operations as $routingOp) {
-                WoOperation::query()->firstOrCreate(
+                $operation = WoOperation::query()->firstOrCreate(
                     [
-                        'work_order_id'        => $wo->id,
+                        'work_order_id' => $wo->id,
                         'routing_operation_id' => $routingOp->id,
                     ],
                     [
-                        'sequence'      => $routingOp->sequence,
-                        'operation_name'=> $routingOp->operation_name,
-                        'machine_id'    => $routingOp->machine_id,
-                        'mold_id'       => $routingOp->mold_id,
-                        'qty_planned'   => $wo->quantity_target,
-                        'status'        => WoOperationStatus::Pending,
+                        'sequence' => $routingOp->sequence,
+                        'operation_name' => $routingOp->operation_name,
+                        'machine_id' => $routingOp->machine_id,
+                        'mold_id' => $routingOp->mold_id,
+                        'qty_planned' => $wo->quantity_target,
+                        'status' => WoOperationStatus::Pending,
+                        'planned_start' => $plannedWindows[$routingOp->id]['start'] ?? null,
+                        'planned_end' => $plannedWindows[$routingOp->id]['end'] ?? null,
                     ],
                 );
+
+                // Never rewrite an operation that has started, but repair
+                // legacy pending rows that were generated before scheduling
+                // windows were populated.
+                if ($operation->status === WoOperationStatus::Pending
+                    && isset($plannedWindows[$routingOp->id])) {
+                    $operation->update([
+                        'planned_start' => $plannedWindows[$routingOp->id]['start'],
+                        'planned_end' => $plannedWindows[$routingOp->id]['end'],
+                    ]);
+                }
             }
         });
     }
@@ -90,7 +109,7 @@ class WoOperationService
             $this->assertParentInProgress($locked);
 
             $locked->update([
-                'status'      => WoOperationStatus::Setup,
+                'status' => WoOperationStatus::Setup,
                 'setup_start' => Carbon::now(),
                 'operator_id' => $operator->id,
             ]);
@@ -141,7 +160,7 @@ class WoOperationService
             $this->assertPreviousCompleted($locked);
 
             $locked->update([
-                'status'      => WoOperationStatus::InProgress,
+                'status' => WoOperationStatus::InProgress,
                 'actual_start' => Carbon::now(),
                 'operator_id' => $operator->id,
             ]);
@@ -187,7 +206,7 @@ class WoOperationService
             $this->assertParentInProgress($locked);
 
             $locked->update([
-                'status'      => WoOperationStatus::InProgress,
+                'status' => WoOperationStatus::InProgress,
                 'operator_id' => $operator->id,
             ]);
 
@@ -214,7 +233,7 @@ class WoOperationService
 
             $updates = [
                 'qty_completed' => bcadd((string) $locked->qty_completed, (string) $qty, 4),
-                'qty_scrapped'  => bcadd((string) $locked->qty_scrapped, (string) $scrap, 4),
+                'qty_scrapped' => bcadd((string) $locked->qty_scrapped, (string) $scrap, 4),
             ];
 
             if ($scrapReason !== null) {
@@ -236,8 +255,8 @@ class WoOperationService
      *
      * Transition: InProgress → Completed
      *
-     * If the routing operation has qc_required = true, a QC trigger
-     * is logged (actual event integration comes in a later task).
+     * If the routing operation has qc_required = true, an idempotent in-process
+     * inspection is created or reused before the operation completes.
      */
     public function completeOperation(WoOperation $op): void
     {
@@ -247,22 +266,34 @@ class WoOperationService
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'complete');
             $this->assertParentInProgress($locked);
+            $this->assertFinalOperationReconciled($locked);
+
+            $workOrder = $locked->load('workOrder.creator')->workOrder;
+            if ($locked->routingOperation?->qc_required) {
+                $creator = $workOrder->creator;
+                if (! $creator) {
+                    throw new BusinessRuleException(
+                        "Work order {$workOrder->wo_number} has no creator to attribute the required in-process QC inspection."
+                    );
+                }
+
+                $this->inspections->create([
+                    'stage' => InspectionStage::InProcess->value,
+                    'product_id' => (int) $workOrder->product_id,
+                    'batch_quantity' => max(1, (int) ($locked->qty_completed ?: $workOrder->quantity_target)),
+                    'entity_type' => InspectionEntityType::WorkOrder->value,
+                    'entity_id' => $workOrder->id,
+                    'notes' => "Required by operation {$locked->operation_name} completion.",
+                ], $creator);
+            }
 
             $locked->update([
-                'status'     => WoOperationStatus::Completed,
+                'status' => WoOperationStatus::Completed,
                 'actual_end' => Carbon::now(),
             ]);
 
             $this->log($locked, null, ProductionLogEvent::EndProduction);
 
-            // QC trigger — routing operation may require quality check after completion.
-            if ($locked->routingOperation && $locked->routingOperation->qc_required) {
-                Log::info('WoOperation QC trigger: operation requires quality check', [
-                    'wo_operation_id' => $locked->id,
-                    'work_order_id'   => $locked->work_order_id,
-                    'operation_name'  => $locked->operation_name,
-                ]);
-            }
         });
     }
 
@@ -287,7 +318,7 @@ class WoOperationService
             $this->assertParentInProgress($locked);
             $locked->update([
                 'status' => WoOperationStatus::Skipped,
-                'notes'  => $reason,
+                'notes' => $reason,
             ]);
 
             $this->log($locked, $operator, ProductionLogEvent::Skip, notes: $reason);
@@ -330,9 +361,8 @@ class WoOperationService
     /**
      * Assert that the operation is in one of the allowed statuses.
      *
-     * @param  WoOperation            $op
-     * @param  WoOperationStatus[]    $allowed
-     * @param  string                 $action   Human-readable action name for the error
+     * @param  WoOperationStatus[]  $allowed
+     * @param  string  $action  Human-readable action name for the error
      *
      * @throws BusinessRuleException
      */
@@ -388,6 +418,72 @@ class WoOperationService
     }
 
     /**
+     * Final operation quantities are an operation ledger, while finished-good
+     * output is the canonical WO ledger. Refuse to complete the final step when
+     * those ledgers diverge instead of silently reporting two production totals.
+     */
+    private function assertFinalOperationReconciled(WoOperation $op): void
+    {
+        $hasLaterOperation = WoOperation::query()
+            ->where('work_order_id', $op->work_order_id)
+            ->where('sequence', '>', $op->sequence)
+            ->where('status', '!=', WoOperationStatus::Skipped->value)
+            ->exists();
+        if ($hasLaterOperation) {
+            return;
+        }
+
+        $totals = WorkOrderOutput::query()
+            ->where('work_order_id', $op->work_order_id)
+            ->selectRaw('COALESCE(SUM(good_count), 0) AS good, COALESCE(SUM(reject_count), 0) AS reject')
+            ->first();
+
+        if (bccomp((string) $op->qty_completed, (string) ($totals->good ?? 0), 4) !== 0
+            || bccomp((string) $op->qty_scrapped, (string) ($totals->reject ?? 0), 4) !== 0) {
+            throw new BusinessRuleException(
+                'The final operation output does not reconcile with the work-order output ledger. Record or correct the canonical output before completing the operation.'
+            );
+        }
+    }
+
+    /** @return array<int, array{start: Carbon, end: Carbon}> */
+    private function plannedWindows(WorkOrder $wo, Collection $operations): array
+    {
+        if (! $wo->planned_start || ! $wo->planned_end) {
+            return [];
+        }
+
+        $start = $wo->planned_start instanceof Carbon
+            ? $wo->planned_start->copy()
+            : Carbon::parse($wo->planned_start);
+        $end = $wo->planned_end instanceof Carbon
+            ? $wo->planned_end->copy()
+            : Carbon::parse($wo->planned_end);
+        $windowMinutes = max(0, $start->diffInMinutes($end));
+        $weights = $operations->mapWithKeys(function ($operation): array {
+            $weight = (float) $operation->setup_time_minutes + (float) $operation->cycle_time_minutes;
+
+            return [$operation->id => max(0.0001, $weight)];
+        });
+        $totalWeight = (float) $weights->sum();
+        $cursor = $start->copy();
+        $windows = [];
+
+        foreach ($operations as $operation) {
+            $duration = $operation === $operations->last()
+                ? $end->diffInMinutes($cursor)
+                : (int) round($windowMinutes * ((float) $weights[$operation->id] / $totalWeight));
+            $operationEnd = $operation === $operations->last()
+                ? $end->copy()
+                : $cursor->copy()->addMinutes(max(0, $duration));
+            $windows[$operation->id] = ['start' => $cursor->copy(), 'end' => $operationEnd];
+            $cursor = $operationEnd;
+        }
+
+        return $windows;
+    }
+
+    /**
      * Create a production log entry.
      */
     private function log(
@@ -400,12 +496,12 @@ class WoOperationService
     ): void {
         ProductionLog::create([
             'wo_operation_id' => $op->id,
-            'operator_id'     => $operator?->id ?? $op->operator_id,
-            'event_type'      => $event,
-            'qty_value'       => $qtyValue,
+            'operator_id' => $operator?->id ?? $op->operator_id,
+            'event_type' => $event,
+            'qty_value' => $qtyValue,
             'downtime_reason' => $downtimeReason,
-            'notes'           => $notes,
-            'recorded_at'     => Carbon::now(),
+            'notes' => $notes,
+            'recorded_at' => Carbon::now(),
         ]);
     }
 }

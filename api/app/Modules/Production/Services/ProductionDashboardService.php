@@ -15,6 +15,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderDefect;
 use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -22,11 +23,13 @@ use Illuminate\Support\Str;
  * Sprint 6 — Task 58. Plant-manager dashboard payload.
  *
  * Composes existing services (no new business logic). Cached for 30s in
- * Redis (or array driver in tests) and invalidated implicitly by TTL.
+ * Redis (or array driver in tests). Writers invalidate the key after commit;
+ * the TTL remains a recovery fallback.
  */
 class ProductionDashboardService
 {
     private const CACHE_KEY = 'dashboard:production';
+
     private const CACHE_TTL_SECONDS = 30;
 
     public function __construct(
@@ -34,23 +37,29 @@ class ProductionDashboardService
         private readonly SettingsService $settings,
     ) {}
 
+    public static function forgetCache(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+    }
+
     public function payload(): array
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL_SECONDS, function () {
             $today = Carbon::today();
             $start = $today->copy();
-            $end   = $today->copy()->endOfDay();
+            $end = $today->copy()->endOfDay();
             $defectHistoryDays = $this->settings->requiredInt('production.dashboard.defect_history_days', 1);
+            $oeeRows = $this->oee->calculateForAllMachines($start, $end);
 
             return [
-                'kpis'                   => $this->kpis($start, $end),
-                'chain_stage_breakdown'  => $this->chainStageBreakdown(),
-                'machine_utilization'    => $this->oee->calculateForAllMachines($start, $end),
-                'display_policy'         => $this->displayPolicy(),
-                'alerts'                 => $this->alerts(),
-                'defect_history_days'    => $defectHistoryDays,
-                'defect_pareto'          => $this->defectPareto($start->copy()->subDays($defectHistoryDays), $end),
-                'generated_at'           => Carbon::now()->toIso8601String(),
+                'kpis' => $this->kpis($start, $end, $oeeRows),
+                'chain_stage_breakdown' => $this->chainStageBreakdown(),
+                'machine_utilization' => $oeeRows,
+                'display_policy' => $this->displayPolicy(),
+                'alerts' => $this->alerts(),
+                'defect_history_days' => $defectHistoryDays,
+                'defect_pareto' => $this->defectPareto($start->copy()->subDays($defectHistoryDays), $end),
+                'generated_at' => Carbon::now()->toIso8601String(),
             ];
         });
     }
@@ -63,10 +72,11 @@ class ProductionDashboardService
         ];
     }
 
-    private function kpis(Carbon $from, Carbon $to): array
+    /** @param Collection<int, array<string, mixed>> $oeeRows */
+    private function kpis(Carbon $from, Carbon $to, Collection $oeeRows): array
     {
         $todayOutputs = WorkOrderOutput::whereBetween('recorded_at', [$from, $to])->get();
-        $todayGood   = (int) $todayOutputs->sum('good_count');
+        $todayGood = (int) $todayOutputs->sum('good_count');
         $todayReject = (int) $todayOutputs->sum('reject_count');
 
         $machineStatusCounts = Machine::query()
@@ -76,8 +86,8 @@ class ProductionDashboardService
             ->all();
 
         $totalMachines = array_sum($machineStatusCounts);
-        $running   = (int) ($machineStatusCounts[MachineStatus::Running->value]   ?? 0);
-        $idle      = (int) ($machineStatusCounts[MachineStatus::Idle->value]      ?? 0);
+        $running = (int) ($machineStatusCounts[MachineStatus::Running->value] ?? 0);
+        $idle = (int) ($machineStatusCounts[MachineStatus::Idle->value] ?? 0);
         $breakdown = (int) ($machineStatusCounts[MachineStatus::Breakdown->value] ?? 0);
 
         $activeWos = WorkOrder::whereIn('status', [
@@ -85,22 +95,20 @@ class ProductionDashboardService
             WorkOrderStatus::Paused->value,
         ])->count();
 
-        // Average OEE today across active machines.
-        $oeeRows = $this->oee->calculateForAllMachines($from, $to);
         // No machine activity is an unknown OEE, not a measured 0% result.
         $measuredOee = $oeeRows->filter(static fn (array $row): bool => $row['oee'] !== null);
         $avgOee = $measuredOee->isEmpty() ? null : round((float) $measuredOee->avg('oee'), 4);
 
         return [
             'today_output_total' => $todayGood + $todayReject,
-            'today_output_good'  => $todayGood,
-            'today_output_reject'=> $todayReject,
+            'today_output_good' => $todayGood,
+            'today_output_reject' => $todayReject,
             'active_work_orders' => $activeWos,
-            'machines_total'     => $totalMachines,
-            'machines_running'   => $running,
-            'machines_idle'      => $idle,
+            'machines_total' => $totalMachines,
+            'machines_running' => $running,
+            'machines_idle' => $idle,
             'machines_breakdown' => $breakdown,
-            'avg_oee_today'      => $avgOee,
+            'avg_oee_today' => $avgOee,
         ];
     }
 
@@ -124,20 +132,20 @@ class ProductionDashboardService
         $total = max(1, $sos->count());
 
         $stages = [
-            'Order Entered'    => 0,
-            'MRP Planned'      => 0,
-            'In Production'    => 0,
-            'QC Pending'       => 0,
-            'Ready to Ship'    => 0,
+            'Order Entered' => 0,
+            'MRP Planned' => 0,
+            'In Production' => 0,
+            'QC Pending' => 0,
+            'Ready to Ship' => 0,
             'Delivered Unpaid' => 0,
-            'At Risk'          => 0,
+            'At Risk' => 0,
         ];
 
         foreach ($sos as $so) {
             $key = match (true) {
-                $so->status === SalesOrderStatus::Draft         => 'Order Entered',
-                $so->status === SalesOrderStatus::Confirmed     => $so->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
-                $so->status === SalesOrderStatus::InProduction  => 'In Production',
+                $so->status === SalesOrderStatus::Draft => 'Order Entered',
+                $so->status === SalesOrderStatus::Confirmed => $so->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
+                $so->status === SalesOrderStatus::InProduction => 'In Production',
                 $so->status === SalesOrderStatus::PartiallyDelivered => 'Ready to Ship',
                 // The query above excludes every terminal status. Keep this
                 // mapping exhaustive so an unknown status cannot be silently
@@ -148,20 +156,20 @@ class ProductionDashboardService
         }
 
         $colors = [
-            'Order Entered'    => 'success',
-            'MRP Planned'      => 'success',
-            'In Production'    => 'info',
-            'QC Pending'       => 'info',
-            'Ready to Ship'    => 'success',
+            'Order Entered' => 'success',
+            'MRP Planned' => 'success',
+            'In Production' => 'info',
+            'QC Pending' => 'info',
+            'Ready to Ship' => 'success',
             'Delivered Unpaid' => 'warning',
-            'At Risk'          => 'danger',
+            'At Risk' => 'danger',
         ];
 
         return collect($stages)->map(fn ($count, $label) => [
-            'label'   => $label,
-            'count'   => $count,
+            'label' => $label,
+            'count' => $count,
             'percent' => round(($count / $total) * 100, 1),
-            'color'   => $colors[$label] ?? 'neutral',
+            'color' => $colors[$label] ?? 'neutral',
         ])->values()->all();
     }
 
@@ -174,11 +182,11 @@ class ProductionDashboardService
             ->get()
             ->each(function ($m) use (&$alerts) {
                 $alerts[] = [
-                    'type'     => 'breakdown',
+                    'type' => 'breakdown',
                     'type_label' => Str::headline('breakdown'),
                     'severity' => 'danger',
-                    'message'  => "{$m->machine_code} is in breakdown.",
-                    'link'     => "/mrp/machines/{$m->hash_id}",
+                    'message' => "{$m->machine_code} is in breakdown.",
+                    'link' => "/mrp/machines/{$m->hash_id}",
                 ];
             });
 
@@ -190,17 +198,17 @@ class ProductionDashboardService
             ->each(function ($mold) use (&$alerts) {
                 $pct = $mold->shot_percentage;
                 $alerts[] = [
-                    'type'     => 'mold_limit',
+                    'type' => 'mold_limit',
                     'type_label' => Str::headline('mold_limit'),
                     'severity' => $pct >= 100 ? 'danger' : 'warning',
-                    'message'  => sprintf(
+                    'message' => sprintf(
                         '%s at %.1f%% of maintenance threshold (%d / %d shots).',
                         $mold->mold_code,
                         $pct,
                         (int) $mold->current_shot_count,
                         (int) $mold->max_shots_before_maintenance,
                     ),
-                    'link'     => "/mrp/molds/{$mold->hash_id}",
+                    'link' => "/mrp/molds/{$mold->hash_id}",
                 ];
             });
 
@@ -210,11 +218,11 @@ class ProductionDashboardService
             ->get()
             ->each(function ($wo) use (&$alerts) {
                 $alerts[] = [
-                    'type'     => 'wo_paused',
+                    'type' => 'wo_paused',
                     'type_label' => Str::headline('wo_paused'),
                     'severity' => 'warning',
-                    'message'  => "{$wo->wo_number} is paused" . ($wo->pause_reason ? " — {$wo->pause_reason}" : ''),
-                    'link'     => "/production/work-orders/{$wo->hash_id}",
+                    'message' => "{$wo->wo_number} is paused".($wo->pause_reason ? " — {$wo->pause_reason}" : ''),
+                    'link' => "/production/work-orders/{$wo->hash_id}",
                 ];
             });
 
@@ -234,13 +242,15 @@ class ProductionDashboardService
             ->get();
 
         $sum = (int) $rows->sum('total');
-        if ($sum === 0) return [];
+        if ($sum === 0) {
+            return [];
+        }
 
         return $rows->map(fn ($r) => [
             'defect_code' => $r->defect_code,
             'defect_name' => $r->defect_name,
-            'count'       => (int) $r->total,
-            'percent'     => round(((int) $r->total / $sum) * 100, 1),
+            'count' => (int) $r->total,
+            'percent' => round(((int) $r->total / $sum) * 100, 1),
         ])->all();
     }
 }

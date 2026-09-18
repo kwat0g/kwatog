@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Production\Enums\ProductionLogEvent;
 use App\Modules\Production\Enums\WoOperationStatus;
@@ -43,14 +44,14 @@ class WoOperationOutputRaceTest extends TestCase
         ]);
 
         return WoOperation::create([
-            'work_order_id'   => $workOrder->id,
-            'sequence'        => 1,
-            'operation_name'  => 'Injection',
-            'status'          => WoOperationStatus::InProgress->value,
-            'qty_planned'     => '100.0000',
-            'qty_completed'   => '0.0000',
-            'qty_scrapped'    => '0.0000',
-            'downtime_minutes'=> 0,
+            'work_order_id' => $workOrder->id,
+            'sequence' => 1,
+            'operation_name' => 'Injection',
+            'status' => WoOperationStatus::InProgress->value,
+            'qty_planned' => '100.0000',
+            'qty_completed' => '0.0000',
+            'qty_scrapped' => '0.0000',
+            'downtime_minutes' => 0,
         ]);
     }
 
@@ -91,6 +92,17 @@ class WoOperationOutputRaceTest extends TestCase
         $this->svc->completeOperation($operatorB);
     }
 
+    public function test_final_operation_cannot_complete_with_unreconciled_output_totals(): void
+    {
+        $op = $this->inProgressOperation();
+        $op->update(['qty_completed' => '5.0000']);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('does not reconcile');
+
+        $this->svc->completeOperation($op->fresh());
+    }
+
     public function test_operation_commands_require_an_in_progress_parent(): void
     {
         $workOrder = WorkOrder::factory()->create([
@@ -104,7 +116,7 @@ class WoOperationOutputRaceTest extends TestCase
             'qty_planned' => '100.0000',
         ]);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('parent work order');
 
         $this->svc->startSetup($op, Employee::factory()->create());

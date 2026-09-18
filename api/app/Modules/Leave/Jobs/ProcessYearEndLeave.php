@@ -176,6 +176,7 @@ class ProcessYearEndLeave implements ShouldQueue
                     'processed_by'    => $this->runBy->id,
                     'employees_count' => $typeEmployees,
                     'days_converted'  => round($typeConverted, 1),
+                    'days_carried'    => round($typeCarried, 1),
                     'days_forfeited'  => round($typeForfeited, 1),
                 ]);
 

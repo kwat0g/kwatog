@@ -57,12 +57,14 @@ class OvertimeBulkApproveTest extends TestCase
 
     private function makeOt(Employee $emp, OvertimeStatus $status): OvertimeRequest
     {
-        return OvertimeRequest::create([
+        $ot = OvertimeRequest::make([
             'employee_id'     => $emp->id,
             'date'            => now()->toDateString(),
             'hours_requested' => 2,
             'reason'          => 'Test',
-            'status'          => $status->value,
         ]);
+        $ot->status = $status;
+        $ot->save();
+        return $ot;
     }
 }

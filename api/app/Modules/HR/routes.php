@@ -262,6 +262,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/payslips/{id}/download', [SelfServiceController::class, 'payslip']);
         Route::get('/loans', [SelfServiceController::class, 'loans']);
         Route::post('/loans', [SelfServiceController::class, 'applyLoan']);
+        Route::delete('/loans/{id}/cancel', [SelfServiceController::class, 'cancelLoan']);
         Route::get('/profile', [SelfServiceController::class, 'profile']);
         Route::post('/profile/request-update', [SelfServiceController::class, 'requestProfileUpdate']);
         Route::get('/profile/update-requests', [SelfServiceController::class, 'profileUpdateRequests']);

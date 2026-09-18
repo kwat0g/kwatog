@@ -14,6 +14,7 @@ use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Services\AttendanceDateMutabilityGuard;
+use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
@@ -51,6 +52,7 @@ class LeaveRequestService
         private readonly LeaveBalanceService $balances,
         private readonly ApprovalService $approvals,
         private readonly AttendanceDateMutabilityGuard $attendanceMutability,
+        private readonly HolidayService $holidays,
     ) {}
 
     /**
@@ -200,12 +202,13 @@ class LeaveRequestService
                     }
                 }
 
+                $holidayDates = $this->holidays->datesBetween($start, $end);
                 $days = $halfDayPeriod !== null
-                    ? 0.5
-                    : $this->businessDaysInclusive($start, $end);
+                    ? (isset($holidayDates[$start->toDateString()]) ? 0.0 : 0.5)
+                    : $this->businessDaysInclusive($start, $end, $holidayDates);
                 if ($days <= 0.0) {
                     throw new BusinessRuleException(
-                        'A full-day leave range must include at least one business day (Monday–Saturday).',
+                        'A leave range must include at least one working day (excluding Sundays and public holidays).',
                     );
                 }
                 $year = $start->year;
@@ -485,11 +488,13 @@ class LeaveRequestService
         });
     }
 
-    private function businessDaysInclusive(CarbonImmutable $start, CarbonImmutable $end): float
+    /** @param array<string, true> $holidayDates */
+    private function businessDaysInclusive(CarbonImmutable $start, CarbonImmutable $end, array $holidayDates = []): float
     {
         $count = 0;
         for ($d = $start; $d->lte($end); $d = $d->addDay()) {
-            if ($d->dayOfWeek !== \Carbon\Carbon::SUNDAY) {
+            if ($d->dayOfWeek !== \Carbon\Carbon::SUNDAY
+                && ! isset($holidayDates[$d->toDateString()])) {
                 $count++;
             }
         }

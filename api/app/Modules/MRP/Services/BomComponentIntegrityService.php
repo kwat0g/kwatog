@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Services;
 
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Exceptions\BomComponentIntegrityException;
+use App\Modules\MRP\Exceptions\BomStructureException;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 
@@ -17,6 +18,8 @@ use App\Modules\MRP\Models\BomItem;
  */
 final class BomComponentIntegrityService
 {
+    public function __construct(private readonly BomManufacturedComponentResolver $manufacturedComponents) {}
+
     public function assertValid(Bom $bom): void
     {
         $lines = BomItem::query()
@@ -62,6 +65,35 @@ final class BomComponentIntegrityService
                 throw new BomComponentIntegrityException(
                     "BOM component {$item->code} is inactive and must be reactivated or replaced."
                 );
+            }
+        }
+    }
+
+    /** Reject circular active BOM graphs while a new version is being authored. */
+    public function assertAcyclic(Bom $bom): void
+    {
+        $this->manufacturedComponents->reset();
+        $this->assertAcyclicFrom($bom, []);
+    }
+
+    /** @param list<int> $path */
+    private function assertAcyclicFrom(Bom $bom, array $path): void
+    {
+        $productId = (int) $bom->product_id;
+        if (in_array($productId, $path, true)) {
+            throw new BomStructureException(
+                'Circular bill of materials detected in the BOM definition for product '.$productId.'.'
+            );
+        }
+
+        $this->assertValid($bom);
+        $bom->loadMissing('items.item');
+        $nextPath = [...$path, $productId];
+
+        foreach ($bom->items as $line) {
+            $nested = $this->manufacturedComponents->forItem($line->item);
+            if ($nested !== null) {
+                $this->assertAcyclicFrom($nested, $nextPath);
             }
         }
     }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\User;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Models\Machine;
@@ -13,6 +16,7 @@ use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -59,6 +63,80 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
         ]);
     }
 
+    public function test_breakdown_creates_one_linked_corrective_maintenance_work_order(): void
+    {
+        Queue::fake();
+        User::factory()->withRole('system_admin')->create();
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
+
+        $machine = Machine::factory()->create(['status' => MachineStatus::Running->value]);
+        $workOrder = WorkOrder::factory()->create([
+            'machine_id' => $machine->id,
+            'status' => WorkOrderStatus::InProgress->value,
+        ]);
+        $machine->update([
+            'status' => MachineStatus::Breakdown->value,
+            'current_work_order_id' => $workOrder->id,
+        ]);
+
+        $event = new MachineStatusChanged(
+            $machine->fresh(),
+            MachineStatus::Running->value,
+            MachineStatus::Breakdown->value,
+            'Hydraulic failure',
+        );
+        app(HandleMachineBreakdown::class)->handle($event);
+        app(HandleMachineBreakdown::class)->handle($event);
+
+        $maintenanceWorkOrder = MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $machine->id)
+            ->firstOrFail();
+
+        $this->assertSame(1, MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $machine->id)
+            ->where('type', 'corrective')
+            ->where('status', 'open')
+            ->count());
+        $this->assertSame($maintenanceWorkOrder->id, MachineDowntime::query()
+            ->where('machine_id', $machine->id)
+            ->where('work_order_id', $workOrder->id)
+            ->value('maintenance_order_id'));
+    }
+
+    public function test_breakdown_without_a_running_work_order_records_downtime_and_maintenance_work_order(): void
+    {
+        Queue::fake();
+        User::factory()->withRole('system_admin')->create();
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
+
+        $machine = Machine::factory()->create([
+            'status' => MachineStatus::Breakdown->value,
+            'current_work_order_id' => null,
+        ]);
+
+        app(HandleMachineBreakdown::class)->handle(new MachineStatusChanged(
+            $machine->fresh(),
+            MachineStatus::Running->value,
+            MachineStatus::Breakdown->value,
+            'Idle machine hydraulic failure',
+        ));
+
+        $downtime = MachineDowntime::query()
+            ->where('machine_id', $machine->id)
+            ->where('category', MachineDowntimeCategory::Breakdown->value)
+            ->firstOrFail();
+        $this->assertNull($downtime->work_order_id);
+        $this->assertNotNull($downtime->maintenance_order_id);
+        $this->assertDatabaseHas('maintenance_work_orders', [
+            'id' => $downtime->maintenance_order_id,
+            'maintainable_type' => 'machine',
+            'maintainable_id' => $machine->id,
+            'type' => 'corrective',
+        ]);
+    }
+
     public function test_stale_breakdown_event_does_not_pause_after_machine_restoration(): void
     {
         Queue::fake();
@@ -84,6 +162,30 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
         $this->assertDatabaseCount('machine_downtimes', 0);
         $this->assertDatabaseMissing('event_outbox', [
             'event_type' => MachineBreakdownDetected::class,
+        ]);
+    }
+
+    public function test_breakdown_pause_uses_the_machine_status_event_flow(): void
+    {
+        Queue::fake();
+
+        $machine = Machine::factory()->create(['status' => MachineStatus::Running->value]);
+        $workOrder = WorkOrder::factory()->create([
+            'machine_id' => $machine->id,
+            'status' => WorkOrderStatus::InProgress->value,
+        ]);
+        $machine->update(['current_work_order_id' => $workOrder->id]);
+
+        app(WorkOrderService::class)->pause(
+            $workOrder,
+            'Operator reported a hydraulic failure',
+            MachineDowntimeCategory::Breakdown,
+        );
+
+        $this->assertSame(MachineStatus::Breakdown, $machine->fresh()->status);
+        $this->assertSame(WorkOrderStatus::Paused, $workOrder->fresh()->status);
+        $this->assertDatabaseHas('event_outbox', [
+            'event_type' => MachineStatusChanged::class,
         ]);
     }
 

@@ -12,9 +12,9 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
-use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\Production\Models\ProductRouting;
 use App\Modules\Production\Models\RoutingOperation;
 use App\Modules\Production\Models\WoOperation;
@@ -23,6 +23,7 @@ use App\Modules\Production\Services\ProductionRoutingService;
 use App\Modules\Production\Services\WoOperationService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -73,17 +74,17 @@ class ProductionRoutingTest extends TestCase
     private function mold(Product $product, string $status = 'available'): Mold
     {
         return Mold::create([
-            'mold_code'                    => 'MD-' . substr(uniqid(), -5),
-            'name'                         => 'Routing Test Mold',
-            'product_id'                   => $product->id,
-            'cavity_count'                 => 2,
-            'cycle_time_seconds'           => 30,
-            'output_rate_per_hour'          => 120,
-            'setup_time_minutes'           => 15,
-            'current_shot_count'           => 0,
+            'mold_code' => 'MD-'.substr(uniqid(), -5),
+            'name' => 'Routing Test Mold',
+            'product_id' => $product->id,
+            'cavity_count' => 2,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 120,
+            'setup_time_minutes' => 15,
+            'current_shot_count' => 0,
             'max_shots_before_maintenance' => 100000,
-            'lifetime_max_shots'           => 1000000,
-            'status'                       => $status,
+            'lifetime_max_shots' => 1000000,
+            'status' => $status,
         ]);
     }
 
@@ -91,18 +92,18 @@ class ProductionRoutingTest extends TestCase
     private function operation(array $overrides = []): array
     {
         return array_merge([
-            'sequence'               => 10,
-            'operation_name'         => 'Injection',
-            'work_center'            => 'IM-01',
-            'machine_id'             => null,
-            'mold_id'                => null,
-            'setup_time_minutes'     => '15.00',
-            'cycle_time_minutes'     => '1.50',
-            'labor_rate_per_hour'    => '120.0000',
-            'machine_rate_per_hour'  => '250.0000',
+            'sequence' => 10,
+            'operation_name' => 'Injection',
+            'work_center' => 'IM-01',
+            'machine_id' => null,
+            'mold_id' => null,
+            'setup_time_minutes' => '15.00',
+            'cycle_time_minutes' => '1.50',
+            'labor_rate_per_hour' => '120.0000',
+            'machine_rate_per_hour' => '250.0000',
             'overhead_rate_per_hour' => '80.0000',
-            'description'            => 'Run at 210C.',
-            'qc_required'            => false,
+            'description' => 'Run at 210C.',
+            'qc_required' => false,
         ], $overrides);
     }
 
@@ -111,7 +112,7 @@ class ProductionRoutingTest extends TestCase
     {
         return [
             'product_id' => $product->id,
-            'notes'      => 'Baseline process plan.',
+            'notes' => 'Baseline process plan.',
             'operations' => $operations === [] ? [$this->operation()] : $operations,
         ];
     }
@@ -119,8 +120,8 @@ class ProductionRoutingTest extends TestCase
     private function actor(string ...$permissionSlugs): User
     {
         $role = Role::create([
-            'name' => 'M052 ' . uniqid(),
-            'slug' => 'm052-' . substr(uniqid(), -8),
+            'name' => 'M052 '.uniqid(),
+            'slug' => 'm052-'.substr(uniqid(), -8),
         ]);
         $ids = [];
         foreach ($permissionSlugs as $slug) {
@@ -168,14 +169,14 @@ class ProductionRoutingTest extends TestCase
 
         $this->assertDatabaseHas('audit_logs', [
             'model_type' => ProductRouting::class,
-            'model_id'   => $v2->id,
-            'action'     => 'created',
+            'model_id' => $v2->id,
+            'action' => 'created',
         ]);
         // The displaced version is the half a mass `update()` would have lost.
         $this->assertDatabaseHas('audit_logs', [
             'model_type' => ProductRouting::class,
-            'model_id'   => $v1->id,
-            'action'     => 'updated',
+            'model_id' => $v1->id,
+            'action' => 'updated',
         ]);
         $this->assertTrue(AuditLog::query()
             ->where('model_type', RoutingOperation::class)
@@ -187,13 +188,13 @@ class ProductionRoutingTest extends TestCase
         $product = $this->product();
         $this->service->create($this->payload($product));
         $superseded = ProductRouting::create([
-            'product_id'       => $product->id,
-            'version'          => 99,
-            'is_active'        => false,
+            'product_id' => $product->id,
+            'version' => 99,
+            'is_active' => false,
             'total_cycle_time' => '1.50',
         ]);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
         DB::table('product_routings')->where('id', $superseded->id)->update(['is_active' => true]);
     }
 
@@ -209,6 +210,9 @@ class ProductionRoutingTest extends TestCase
         $woOp = WoOperation::query()->where('work_order_id', $wo->id)->firstOrFail();
         $citedOperationId = $woOp->routing_operation_id;
         $this->assertNotNull($citedOperationId);
+        $this->assertNotNull($woOp->planned_start);
+        $this->assertNotNull($woOp->planned_end);
+        $this->assertTrue($woOp->planned_start->lt($woOp->planned_end));
 
         $v2 = $this->service->update($v1, $this->payload($product, [
             $this->operation(['operation_name' => 'Injection (revised)', 'cycle_time_minutes' => '2.25']),
@@ -218,7 +222,7 @@ class ProductionRoutingTest extends TestCase
         $this->assertNotSame($v1->id, $v2->id, 'An edit must not mutate the version in service.');
         $this->assertSame($citedOperationId, $woOp->fresh()->routing_operation_id);
         $this->assertDatabaseHas('routing_operations', [
-            'id'             => $citedOperationId,
+            'id' => $citedOperationId,
             'operation_name' => 'Injection',
         ]);
         $this->assertSame('1.50', (string) RoutingOperation::findOrFail($citedOperationId)->cycle_time_minutes);
@@ -398,7 +402,7 @@ class ProductionRoutingTest extends TestCase
         $salesOrder->forceFill(['status' => 'confirmed'])->save();
         SalesOrderItem::factory()->create([
             'sales_order_id' => $salesOrder->id,
-            'product_id'     => $product->id,
+            'product_id' => $product->id,
         ]);
 
         $routing = $this->service->create($this->payload($product));
@@ -406,8 +410,8 @@ class ProductionRoutingTest extends TestCase
         // The key is versioned by the routing's change timestamp so repeated
         // edits with the same reason are not swallowed by the unique dedupe key.
         $this->assertTrue(
-            \Illuminate\Support\Facades\DB::table('event_outbox')
-                ->where('dedupe_key', 'like', 'mrp:replan:routing:' . $routing->id . ':routing_created:%')
+            DB::table('event_outbox')
+                ->where('dedupe_key', 'like', 'mrp:replan:routing:'.$routing->id.':routing_created:%')
                 ->where('event_type', MrpReplanRequested::class)
                 ->exists(),
             'Expected a durable, versioned MRP replan for the published routing.',
@@ -528,7 +532,7 @@ class ProductionRoutingTest extends TestCase
         $created = $this->actingAs($ppc)
             ->postJson('/api/v1/production/routings', [
                 'product_id' => $product->hash_id,
-                'notes'      => 'Authored by PPC.',
+                'notes' => 'Authored by PPC.',
                 'operations' => [$this->operation()],
             ])
             ->assertCreated()

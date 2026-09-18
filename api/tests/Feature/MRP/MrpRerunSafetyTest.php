@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\MRP;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -13,9 +14,12 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\MRP\Events\MrpPlanGenerated;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Models\MrpRun;
+use App\Modules\MRP\Services\MrpEngineService;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -39,7 +43,9 @@ class MrpRerunSafetyTest extends TestCase
     use RefreshDatabase;
 
     private Product $product;
+
     private Item $material;
+
     private WarehouseLocation $location;
 
     protected function setUp(): void
@@ -49,7 +55,7 @@ class MrpRerunSafetyTest extends TestCase
 
         // Suppress MrpPlanGenerated broadcast; it fires after-commit and
         // tries to notify WebSocket channels that don't exist in test env.
-        Event::fake([\App\Modules\MRP\Events\MrpPlanGenerated::class]);
+        Event::fake([MrpPlanGenerated::class]);
 
         $settings = app(SettingsService::class);
         $settings->set('mrp.safety_buffer_days', 2, 'mrp');
@@ -58,18 +64,18 @@ class MrpRerunSafetyTest extends TestCase
         $settings->set('mrp.work_order.normal_priority', 50, 'mrp');
 
         $this->product = Product::create([
-            'part_number'     => 'TEST-001',
-            'name'            => 'Test Product',
+            'part_number' => 'TEST-001',
+            'name' => 'Test Product',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => 10.00,
-            'is_active'       => true,
+            'standard_cost' => 10.00,
+            'is_active' => true,
         ]);
 
         $this->material = Item::factory()->create([
-            'code'            => 'RM-TEST-001',
+            'code' => 'RM-TEST-001',
             'unit_of_measure' => 'pcs',
-            'lead_time_days'  => 7,
-            'standard_cost'   => 5.00,
+            'lead_time_days' => 7,
+            'standard_cost' => 5.00,
         ]);
 
         $this->location = WarehouseLocation::factory()->create();
@@ -79,17 +85,17 @@ class MrpRerunSafetyTest extends TestCase
     {
         $bom = Bom::create([
             'product_id' => $this->product->id,
-            'version'    => 1,
-            'is_active'  => true,
+            'version' => 1,
+            'is_active' => true,
         ]);
 
         BomItem::create([
-            'bom_id'            => $bom->id,
-            'item_id'           => $this->material->id,
+            'bom_id' => $bom->id,
+            'item_id' => $this->material->id,
             'quantity_per_unit' => $qtyPerUnit,
-            'unit'              => 'pcs',
-            'waste_factor'      => $wasteFactor,
-            'sort_order'        => 0,
+            'unit' => 'pcs',
+            'waste_factor' => $wasteFactor,
+            'sort_order' => 0,
         ]);
 
         return $bom;
@@ -101,24 +107,24 @@ class MrpRerunSafetyTest extends TestCase
         $user = User::factory()->create();
 
         $so = SalesOrder::create([
-            'so_number'          => 'SO-'.now()->format('Ym').'-'.rand(1000, 9999),
-            'customer_id'        => $this->createCustomer(),
-            'date'               => now()->format('Y-m-d'),
-            'subtotal'           => $lineQty * 10,
-            'vat_amount'         => 0,
-            'total_amount'       => $lineQty * 10,
-            'status'             => 'confirmed',
+            'so_number' => 'SO-'.now()->format('Ym').'-'.rand(1000, 9999),
+            'customer_id' => $this->createCustomer(),
+            'date' => now()->format('Y-m-d'),
+            'subtotal' => $lineQty * 10,
+            'vat_amount' => 0,
+            'total_amount' => $lineQty * 10,
+            'status' => 'confirmed',
             'payment_terms_days' => 30,
-            'created_by'         => $user->id,
+            'created_by' => $user->id,
         ]);
 
         SalesOrderItem::create([
-            'sales_order_id'  => $so->id,
-            'product_id'      => $this->product->id,
-            'quantity'        => $lineQty,
-            'unit_price'      => 10.00,
-            'total'           => $lineQty * 10,
-            'delivery_date'   => Carbon::today()->addDays($daysAhead)->format('Y-m-d'),
+            'sales_order_id' => $so->id,
+            'product_id' => $this->product->id,
+            'quantity' => $lineQty,
+            'unit_price' => 10.00,
+            'total' => $lineQty * 10,
+            'delivery_date' => Carbon::today()->addDays($daysAhead)->format('Y-m-d'),
         ]);
 
         return $so;
@@ -127,23 +133,23 @@ class MrpRerunSafetyTest extends TestCase
     private function createCustomer(): int
     {
         return DB::table('customers')->insertGetId([
-            'name'               => 'Test Customer',
-            'is_active'          => true,
+            'name' => 'Test Customer',
+            'is_active' => true,
             'payment_terms_days' => 30,
-            'created_at'         => now(),
-            'updated_at'         => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
     private function setOnHand(float $qty, float $reserved = 0.0): StockLevel
     {
         return StockLevel::create([
-            'item_id'           => $this->material->id,
-            'location_id'       => $this->location->id,
-            'quantity'          => $qty,
+            'item_id' => $this->material->id,
+            'location_id' => $this->location->id,
+            'quantity' => $qty,
             'reserved_quantity' => $reserved,
             'weighted_avg_cost' => 5.00,
-            'lock_version'      => 0,
+            'lock_version' => 0,
         ]);
     }
 
@@ -229,5 +235,73 @@ class MrpRerunSafetyTest extends TestCase
             ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
             ->count(),
             'The progressed auto-PR remains the only auto-generated request for the SO.');
+    }
+
+    public function test_no_shortage_retires_the_draft_pr_with_audit_and_does_not_count_it_as_updated(): void
+    {
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $this->actingAs($this->ppcActor(), 'sanctum');
+        $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+
+        $pr = PurchaseRequest::where('is_auto_generated', true)
+            ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
+            ->firstOrFail();
+
+        $this->setOnHand(100.0);
+        $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+
+        $this->assertSame(PurchaseRequestStatus::Cancelled, $pr->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => PurchaseRequest::class,
+            'model_id' => $pr->id,
+            'action' => 'updated',
+        ]);
+
+        $latestRun = MrpRun::where('triggered_by', 'manual')->latest('id')->firstOrFail();
+        $this->assertSame(0, (int) $latestRun->prs_updated);
+    }
+
+    public function test_bom_gap_retires_planned_work_orders_with_audit(): void
+    {
+        $bom = $this->createBom();
+        $this->setOnHand(100.0);
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $this->actingAs($this->ppcActor(), 'sanctum');
+        $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+        $workOrder = WorkOrder::where('sales_order_id', $so->id)->firstOrFail();
+
+        $bom->forceFill(['is_active' => false])->save();
+        $this->postJson('/api/v1/mrp/runs')->assertAccepted();
+
+        $this->assertSame('cancelled', $workOrder->fresh()->status->value);
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => WorkOrder::class,
+            'model_id' => $workOrder->id,
+            'action' => 'updated',
+        ]);
+    }
+
+    public function test_per_sales_order_planning_refuses_a_run_already_reaped(): void
+    {
+        $run = MrpRun::create([
+            'run_at' => now(),
+            'started_at' => now()->subHours(3),
+            'heartbeat_at' => now()->subHours(3),
+            'triggered_by' => 'automatic',
+            'status' => 'failed',
+        ]);
+        $supply = [];
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('MRP run was reaped');
+
+        app(MrpEngineService::class)->runForSalesOrder(
+            new SalesOrder,
+            $supply,
+            $run,
+        );
     }
 }

@@ -11,6 +11,7 @@ use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
 use App\Modules\MRP\Models\Machine;
+use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -23,11 +24,11 @@ class MachineService
      * @var array<string, list<string>>
      */
     private const ALLOWED = [
-        'idle'        => ['running', 'maintenance', 'breakdown', 'offline'],
-        'running'     => ['idle', 'breakdown', 'maintenance'],
-        'breakdown'   => ['maintenance', 'idle'],
+        'idle' => ['running', 'maintenance', 'breakdown', 'offline'],
+        'running' => ['idle', 'breakdown', 'maintenance'],
+        'breakdown' => ['maintenance', 'idle'],
         'maintenance' => ['idle'],
-        'offline'     => ['idle'],
+        'offline' => ['idle'],
     ];
 
     /** @return array<string, list<string>> */
@@ -49,7 +50,7 @@ class MachineService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('machine_code', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 
@@ -76,6 +77,7 @@ class MachineService
     {
         return DB::transaction(function () use ($m, $data) {
             $m->update($data);
+
             return $m->fresh();
         });
     }
@@ -87,7 +89,7 @@ class MachineService
 
     public function transitionStatus(Machine $m, MachineStatus $to, ?string $reason = null): Machine
     {
-        return DB::transaction(function () use ($m, $to, $reason) {
+        $changed = DB::transaction(function () use ($m, $to, $reason) {
             // Route model binding may have happened before another request
             // changed the machine. Re-read and lock the row before validating
             // the transition so scheduler/resource changes cannot race this
@@ -111,5 +113,9 @@ class MachineService
 
             return $changed;
         });
+
+        ProductionDashboardService::forgetCache();
+
+        return $changed;
     }
 }

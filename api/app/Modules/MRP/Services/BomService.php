@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\MRP\Exceptions\BomStructureException;
-use App\Modules\MRP\Exceptions\MissingBomException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
@@ -16,12 +14,14 @@ use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\Uom;
-use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Events\MrpReplanRequested;
+use App\Modules\MRP\Exceptions\BomStructureException;
+use App\Modules\MRP\Exceptions\MissingBomException;
+use App\Modules\MRP\Models\Bom;
+use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Closure;
 use RuntimeException;
 
 class BomService
@@ -30,6 +30,7 @@ class BomService
         private readonly SettingsService $settings,
         private readonly BomCostingService $costing,
         private readonly BomComponentIntegrityService $integrity,
+        private readonly BomManufacturedComponentResolver $manufacturedComponents,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -42,7 +43,9 @@ class BomService
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
-            if ($pid) $q->where('product_id', $pid);
+            if ($pid) {
+                $q->where('product_id', $pid);
+            }
         }
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
@@ -87,26 +90,27 @@ class BomService
             $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
             if ($previous && $previous->is_active) {
-                $previous->update(['is_active' => false]);
+                $previous->forceFill(['is_active' => false])->save();
             }
 
             $bom = Bom::create([
-                'product_id'      => $productId,
+                'product_id' => $productId,
                 'cost_batch_size' => $costBatchSize,
-                'version'         => $previous ? $previous->version + 1 : 1,
-                'is_active'       => true,
+                'version' => $previous ? $previous->version + 1 : 1,
+                'is_active' => true,
             ]);
 
             foreach (array_values($itemRows) as $idx => $row) {
                 $bom->items()->create([
-                    'item_id'           => (int) $row['item_id'],
+                    'item_id' => (int) $row['item_id'],
                     'quantity_per_unit' => $row['quantity_per_unit'],
-                    'unit'              => $row['unit'],
-                    'waste_factor'      => $row['waste_factor'] ?? 0,
-                    'sort_order'        => $row['sort_order'] ?? $idx,
+                    'unit' => $row['unit'],
+                    'waste_factor' => $row['waste_factor'] ?? 0,
+                    'sort_order' => $row['sort_order'] ?? $idx,
                 ]);
             }
 
+            $this->integrity->assertAcyclic($bom->fresh());
             $created = $this->show($this->costing->recalculate($bom->fresh()));
             $this->requestAutomaticReplan($created, 'bom_changed');
 
@@ -148,6 +152,7 @@ class BomService
             }
 
             $row->restore();
+
             return $this->show($row->fresh());
         });
     }
@@ -180,7 +185,7 @@ class BomService
 
         app(OutboxService::class)->record(
             new MrpReplanRequested($salesOrderIds, $reason, auth()->id()),
-            'mrp:replan:bom:' . $bom->id,
+            'mrp:replan:bom:'.$bom->id,
         );
     }
 
@@ -258,6 +263,7 @@ class BomService
      */
     public function explode(int $productId, float $finishedQuantity): Collection
     {
+        $this->manufacturedComponents->reset();
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
             throw new MissingBomException($this->describeMissingBom($productId));
@@ -269,9 +275,9 @@ class BomService
         $this->explodeInto($bom, $finishedQuantity, $accumulator, [$productId], 0);
 
         return collect(array_values($accumulator))->map(fn (array $row) => [
-            'item_id'        => $row['item_id'],
-            'item_code'      => $row['item_code'],
-            'item_name'      => $row['item_name'],
+            'item_id' => $row['item_id'],
+            'item_code' => $row['item_code'],
+            'item_name' => $row['item_name'],
             'gross_quantity' => number_format($row['qty'], 3, '.', ''),
         ]);
     }
@@ -299,9 +305,9 @@ class BomService
         $this->integrity->assertValid($bom);
 
         return $bom->items->map(fn ($row) => [
-            'item_id'        => (int) $row->item_id,
-            'item_code'      => (string) $row->item?->code,
-            'item_name'      => (string) $row->item?->name,
+            'item_id' => (int) $row->item_id,
+            'item_code' => (string) $row->item?->code,
+            'item_name' => (string) $row->item?->name,
             'gross_quantity' => number_format($this->grossQuantityForLine($row, $finishedQuantity), 3, '.', ''),
             'standard_unit_cost' => (string) ($row->unit_cost ?? $row->item?->standard_cost ?? '0.00'),
             'standard_cost' => Money::round2(bcmul(
@@ -313,24 +319,6 @@ class BomService
     }
 
     /**
-     * Return the manufactured-subassembly tree required for a product.
-     * Each node is pegged to its immediate parent so MRP can create durable
-     * parent_wo_id links without flattening the production hierarchy.
-     *
-     * @return list<array{product_id:int, item_id:int, item_code:string, quantity:string, children:list<array> }>
-     */
-    public function productionTree(int $productId, float $finishedQuantity): array
-    {
-        $bom = $this->activeForProduct($productId);
-        if (! $bom) {
-            throw new MissingBomException($this->describeMissingBom($productId));
-        }
-        $this->integrity->assertValid($bom);
-
-        return $this->productionTreeInto($bom, $finishedQuantity, [$productId], 0);
-    }
-
-    /**
      * Explode a product while allowing MRP to net available manufactured
      * subassemblies before calculating downstream raw-material demand.
      *
@@ -338,11 +326,12 @@ class BomService
      * subassembly line after stock allocation. Raw-material requirements below
      * that line are then exploded only for that net-to-make quantity.
      *
-     * @param Closure(int, int, float): float $quantityToManufacture
+     * @param  Closure(int, int, float): float  $quantityToManufacture
      * @return array{materials: Collection, subassemblies: list<array>}
      */
     public function productionPlan(int $productId, float $finishedQuantity, Closure $quantityToManufacture): array
     {
+        $this->manufacturedComponents->reset();
         $bom = $this->activeForProduct($productId);
         if (! $bom) {
             throw new MissingBomException($this->describeMissingBom($productId));
@@ -363,9 +352,9 @@ class BomService
 
         return [
             'materials' => collect(array_values($accumulator))->map(fn (array $row) => [
-                'item_id'        => $row['item_id'],
-                'item_code'      => $row['item_code'],
-                'item_name'      => $row['item_name'],
+                'item_id' => $row['item_id'],
+                'item_code' => $row['item_code'],
+                'item_name' => $row['item_name'],
                 'gross_quantity' => number_format($row['qty'], 3, '.', ''),
             ]),
             'subassemblies' => $subassemblies,
@@ -379,8 +368,8 @@ class BomService
      * BOM recurses; otherwise it is treated as a raw-material leaf and added to
      * $accumulator.
      *
-     * @param array<int, array{item_id:int,item_code:string,item_name:string,qty:float}> $accumulator (by reference)
-     * @param list<int> $productPath chain of product ids currently being expanded (cycle detection)
+     * @param  array<int, array{item_id:int,item_code:string,item_name:string,qty:float}>  $accumulator  (by reference)
+     * @param  list<int>  $productPath  chain of product ids currently being expanded (cycle detection)
      */
     private function explodeInto(Bom $bom, float $multiplier, array &$accumulator, array $productPath, int $depth): void
     {
@@ -389,7 +378,7 @@ class BomService
         if ($depth > $maxDepth) {
             throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
-                . $maxDepth . ' — check for a circular bill of materials.'
+                .$maxDepth.' — check for a circular bill of materials.'
             );
         }
 
@@ -405,7 +394,7 @@ class BomService
                 if (in_array($subBom->product_id, $productPath, true)) {
                     throw new BomStructureException(
                         'Circular bill of materials detected while exploding product '
-                        . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
+                        .$subBom->product_id.' (item '.($row->item?->code ?? '?').').'
                     );
                 }
                 $this->explodeInto(
@@ -415,6 +404,7 @@ class BomService
                     array_merge($productPath, [$subBom->product_id]),
                     $depth + 1,
                 );
+
                 continue;
             }
 
@@ -422,10 +412,10 @@ class BomService
             $iid = (int) $row->item_id;
             if (! isset($accumulator[$iid])) {
                 $accumulator[$iid] = [
-                    'item_id'   => $iid,
+                    'item_id' => $iid,
                     'item_code' => (string) $row->item?->code,
                     'item_name' => (string) $row->item?->name,
-                    'qty'       => 0.0,
+                    'qty' => 0.0,
                 ];
             }
             $accumulator[$iid]['qty'] += $grossFloat;
@@ -433,56 +423,9 @@ class BomService
     }
 
     /**
-     * @param array<int> $productPath
-     * @return list<array{product_id:int, item_id:int, item_code:string, quantity:string, children:list<array> }>
-     */
-    private function productionTreeInto(Bom $bom, float $multiplier, array $productPath, int $depth): array
-    {
-        $this->integrity->assertValid($bom);
-        $maxDepth = $this->maxExplodeDepth();
-        if ($depth > $maxDepth) {
-            throw new BomStructureException(
-                'BOM explosion exceeded the maximum nesting depth of '
-                . $maxDepth . ' — check for a circular bill of materials.'
-            );
-        }
-
-        $nodes = [];
-        foreach ($bom->items as $row) {
-            $grossFloat = $this->grossQuantityForLine($row, $multiplier);
-            $subBom = $this->subAssemblyBomFor($row->item?->code);
-            if ($subBom === null) {
-                continue;
-            }
-
-            if (in_array($subBom->product_id, $productPath, true)) {
-                throw new BomStructureException(
-                    'Circular bill of materials detected while exploding product '
-                    . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
-                );
-            }
-
-            $nodes[] = [
-                'product_id' => (int) $subBom->product_id,
-                'item_id'    => (int) $row->item_id,
-                'item_code'  => (string) $row->item?->code,
-                'quantity'   => number_format($grossFloat, 3, '.', ''),
-                'children'   => $this->productionTreeInto(
-                    $subBom,
-                    $grossFloat,
-                    array_merge($productPath, [$subBom->product_id]),
-                    $depth + 1,
-                ),
-            ];
-        }
-
-        return $nodes;
-    }
-
-    /**
-     * @param array<int, array{item_id:int,item_code:string,item_name:string,qty:float}> $accumulator
-     * @param list<array> $subassemblies
-     * @param array<int> $productPath
+     * @param  array<int, array{item_id:int,item_code:string,item_name:string,qty:float}>  $accumulator
+     * @param  list<array>  $subassemblies
+     * @param  array<int>  $productPath
      */
     private function productionPlanInto(
         Bom $bom,
@@ -498,7 +441,7 @@ class BomService
         if ($depth > $maxDepth) {
             throw new BomStructureException(
                 'BOM explosion exceeded the maximum nesting depth of '
-                . $maxDepth . ' — check for a circular bill of materials.'
+                .$maxDepth.' — check for a circular bill of materials.'
             );
         }
 
@@ -510,20 +453,21 @@ class BomService
                 $iid = (int) $row->item_id;
                 if (! isset($accumulator[$iid])) {
                     $accumulator[$iid] = [
-                        'item_id'   => $iid,
+                        'item_id' => $iid,
                         'item_code' => (string) $row->item?->code,
                         'item_name' => (string) $row->item?->name,
-                        'qty'       => 0.0,
+                        'qty' => 0.0,
                     ];
                 }
                 $accumulator[$iid]['qty'] += $grossFloat;
+
                 continue;
             }
 
             if (in_array($subBom->product_id, $productPath, true)) {
                 throw new BomStructureException(
                     'Circular bill of materials detected while exploding product '
-                    . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
+                    .$subBom->product_id.' (item '.($row->item?->code ?? '?').').'
                 );
             }
 
@@ -549,12 +493,12 @@ class BomService
             }
 
             $subassemblies[] = [
-                'product_id'     => (int) $subBom->product_id,
-                'item_id'        => (int) $row->item_id,
-                'item_code'      => (string) $row->item?->code,
+                'product_id' => (int) $subBom->product_id,
+                'item_id' => (int) $row->item_id,
+                'item_code' => (string) $row->item?->code,
                 'gross_quantity' => number_format($grossFloat, 3, '.', ''),
-                'quantity'       => number_format($toManufacture, 3, '.', ''),
-                'children'       => $children,
+                'quantity' => number_format($toManufacture, 3, '.', ''),
+                'children' => $children,
             ];
         }
     }
@@ -577,35 +521,9 @@ class BomService
         return (float) $grossString;
     }
 
-    /**
-     * OGAMI-015 — resolve the active BOM for a sub-assembly identified by the
-     * component item code. Returns null when no manufactured product matches
-     * the code or the matched product has no active BOM (i.e. a pure raw
-     * material). Results memoised per request to avoid repeated lookups when
-     * the same sub-assembly appears across many lines.
-     *
-     * @var array<string, Bom|null>
-     */
-    private array $subAssemblyCache = [];
-
     private function subAssemblyBomFor(?string $itemCode): ?Bom
     {
-        if ($itemCode === null || $itemCode === '') {
-            return null;
-        }
-        if (array_key_exists($itemCode, $this->subAssemblyCache)) {
-            return $this->subAssemblyCache[$itemCode];
-        }
-
-        $product = Product::where('part_number', $itemCode)->first();
-        $bom = $product
-            ? Bom::with(['items.item:id,code,name,unit_of_measure,item_type'])
-                ->where('product_id', $product->id)
-                ->active()
-                ->first()
-            : null;
-
-        return $this->subAssemblyCache[$itemCode] = $bom;
+        return $this->manufacturedComponents->forCode($itemCode);
     }
 
     /**

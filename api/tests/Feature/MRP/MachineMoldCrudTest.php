@@ -10,7 +10,6 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
-use App\Modules\MRP\Models\MoldHistory;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -47,6 +46,7 @@ class MachineMoldCrudTest extends TestCase
         $role->permissions()->syncWithoutDetaching(
             Permission::query()->whereIn('slug', $permissions)->pluck('id')->all(),
         );
+
         return User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
     }
 
@@ -56,8 +56,8 @@ class MachineMoldCrudTest extends TestCase
     {
         $response = $this->actingAs($this->manager)->postJson('/api/v1/mrp/machines', [
             'machine_code' => 'INJ-01',
-            'name'         => 'Injection Press 1',
-            'tonnage'      => 250,
+            'name' => 'Injection Press 1',
+            'tonnage' => 250,
         ]);
 
         $response->assertCreated()
@@ -65,12 +65,12 @@ class MachineMoldCrudTest extends TestCase
             ->assertJsonPath('data.status', 'idle');
 
         $this->assertDatabaseHas('machines', [
-            'machine_code'           => 'INJ-01',
-            'name'                   => 'Injection Press 1',
-            'tonnage'                => 250,
-            'status'                 => 'idle',
-            'machine_type'           => 'injection_molder',
-            'operators_required'     => '1.0',
+            'machine_code' => 'INJ-01',
+            'name' => 'Injection Press 1',
+            'tonnage' => 250,
+            'status' => 'idle',
+            'machine_type' => 'injection_molder',
+            'operators_required' => '1.0',
             'available_hours_per_day' => '16.0',
         ]);
     }
@@ -81,12 +81,12 @@ class MachineMoldCrudTest extends TestCase
 
         $this->actingAs($this->manager)->postJson('/api/v1/mrp/machines', [
             'machine_code' => 'inj 01', // lowercase + space
-            'name'         => 'Bad code',
+            'name' => 'Bad code',
         ])->assertStatus(422);
 
         $this->actingAs($this->manager)->postJson('/api/v1/mrp/machines', [
             'machine_code' => 'INJ-01',
-            'name'         => 'Duplicate code',
+            'name' => 'Duplicate code',
         ])->assertStatus(422);
     }
 
@@ -95,8 +95,8 @@ class MachineMoldCrudTest extends TestCase
         $machine = Machine::factory()->create(['machine_code' => 'INJ-02', 'name' => 'Old name']);
 
         $response = $this->actingAs($this->manager)->putJson("/api/v1/mrp/machines/{$machine->hash_id}", [
-            'name'                => 'New name',
-            'tonnage'             => 300,
+            'name' => 'New name',
+            'tonnage' => 300,
             'available_hours_per_day' => '20',
         ]);
 
@@ -114,7 +114,7 @@ class MachineMoldCrudTest extends TestCase
 
         $this->actingAs($viewer)->postJson('/api/v1/mrp/machines', [
             'machine_code' => 'INJ-03',
-            'name'         => 'Nope',
+            'name' => 'Nope',
         ])->assertStatus(403);
 
         $machine = Machine::factory()->create();
@@ -130,16 +130,16 @@ class MachineMoldCrudTest extends TestCase
         $product = Product::factory()->create();
 
         $response = $this->actingAs($this->manager)->postJson('/api/v1/mrp/molds', [
-            'mold_code'                    => 'MD-01',
-            'name'                         => 'Wiper Bushing Mold',
-            'product_id'                   => $product->hash_id,
-            'cavity_count'                 => 4,
-            'cycle_time_seconds'           => 30,
-            'output_rate_per_hour'         => 480,
-            'setup_time_minutes'           => 45,
+            'mold_code' => 'MD-01',
+            'name' => 'Wiper Bushing Mold',
+            'product_id' => $product->hash_id,
+            'cavity_count' => 4,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 480,
+            'setup_time_minutes' => 45,
             'max_shots_before_maintenance' => 100000,
-            'lifetime_max_shots'           => 1000000,
-            'location'                     => 'Rack A-3',
+            'lifetime_max_shots' => 1000000,
+            'location' => 'Rack A-3',
         ]);
 
         $response->assertCreated()
@@ -148,31 +148,36 @@ class MachineMoldCrudTest extends TestCase
             ->assertJsonPath('data.product.id', $product->hash_id);
 
         $this->assertDatabaseHas('molds', [
-            'mold_code'                    => 'MD-01',
-            'product_id'                   => $product->id,
-            'cavity_count'                 => 4,
-            'status'                       => 'available',
-            'location'                     => 'Rack A-3',
+            'mold_code' => 'MD-01',
+            'product_id' => $product->id,
+            'cavity_count' => 4,
+            'status' => 'available',
+            'location' => 'Rack A-3',
         ]);
 
         $mold = Mold::query()->where('mold_code', 'MD-01')->firstOrFail();
         $this->assertDatabaseHas('mold_history', [
-            'mold_id'   => $mold->id,
+            'mold_id' => $mold->id,
             'event_type' => 'created',
+        ]);
+        $this->assertDatabaseHas('maintenance_schedules', [
+            'maintainable_type' => 'mold',
+            'maintainable_id' => $mold->id,
+            'interval_type' => 'shots',
         ]);
     }
 
     public function test_mold_rejects_bad_product_hash(): void
     {
         $this->actingAs($this->manager)->postJson('/api/v1/mrp/molds', [
-            'mold_code'                    => 'MD-02',
-            'name'                         => 'Bad product',
-            'product_id'                   => 'not-a-real-hash',
-            'cavity_count'                 => 2,
-            'cycle_time_seconds'           => 30,
-            'output_rate_per_hour'         => 240,
+            'mold_code' => 'MD-02',
+            'name' => 'Bad product',
+            'product_id' => 'not-a-real-hash',
+            'cavity_count' => 2,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 240,
             'max_shots_before_maintenance' => 1000,
-            'lifetime_max_shots'           => 10000,
+            'lifetime_max_shots' => 10000,
         ])->assertStatus(422);
     }
 
@@ -180,19 +185,19 @@ class MachineMoldCrudTest extends TestCase
     {
         $product = Product::factory()->create();
         $mold = Mold::query()->create([
-            'mold_code'                    => 'MD-03',
-            'name'                         => 'Old',
-            'product_id'                   => $product->id,
-            'cavity_count'                 => 2,
-            'cycle_time_seconds'           => 30,
-            'output_rate_per_hour'         => 240,
+            'mold_code' => 'MD-03',
+            'name' => 'Old',
+            'product_id' => $product->id,
+            'cavity_count' => 2,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 240,
             'max_shots_before_maintenance' => 1000,
-            'lifetime_max_shots'           => 10000,
-            'status'                       => 'available',
+            'lifetime_max_shots' => 10000,
+            'status' => 'available',
         ]);
 
         $response = $this->actingAs($this->manager)->putJson("/api/v1/mrp/molds/{$mold->hash_id}", [
-            'name'     => 'New mold name',
+            'name' => 'New mold name',
             'location' => 'Rack B-1',
         ]);
 
@@ -209,14 +214,14 @@ class MachineMoldCrudTest extends TestCase
         $product = Product::factory()->create();
 
         $this->actingAs($viewer)->postJson('/api/v1/mrp/molds', [
-            'mold_code'                    => 'MD-04',
-            'name'                         => 'Nope',
-            'product_id'                   => $product->hash_id,
-            'cavity_count'                 => 1,
-            'cycle_time_seconds'           => 30,
-            'output_rate_per_hour'         => 120,
+            'mold_code' => 'MD-04',
+            'name' => 'Nope',
+            'product_id' => $product->hash_id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 120,
             'max_shots_before_maintenance' => 1000,
-            'lifetime_max_shots'           => 10000,
+            'lifetime_max_shots' => 10000,
         ])->assertStatus(403);
     }
 }

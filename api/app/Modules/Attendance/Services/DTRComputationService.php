@@ -134,8 +134,8 @@ class DTRComputationService
         $isRestDay = (bool) $input['is_rest_day'];
         $hasApprovedOt = (bool) $input['has_approved_ot'];
 
-        $shiftStart = $this->shiftAnchor($date, $shift['start_time'], false);
-        $shiftEnd   = $this->shiftAnchor($date, $shift['end_time'], $shift['is_night_shift']);
+        $shiftStart = $this->shiftAnchor($date, $shift['start_time']);
+        $shiftEnd   = $this->shiftAnchor($date, $shift['end_time']);
         if ($shift['is_night_shift'] && $shiftEnd->lte($shiftStart)) {
             $shiftEnd = $shiftEnd->addDay();
         } elseif (! $shift['is_night_shift'] && $shiftEnd->lte($shiftStart)) {
@@ -381,7 +381,7 @@ class DTRComputationService
         return $minutes;
     }
 
-    private function shiftAnchor(CarbonImmutable $date, string $hhmm, bool $isNight): CarbonImmutable
+    private function shiftAnchor(CarbonImmutable $date, string $hhmm): CarbonImmutable
     {
         [$h, $m] = array_map('intval', explode(':', $hhmm) + [1 => 0]);
         return $date->setTime($h, $m, 0);

@@ -36,28 +36,30 @@ class MrpReaperTest extends TestCase
     private function makeRun(MrpRunStatus $status, Carbon $startedAt): MrpRun
     {
         $run = MrpRun::create([
-            'run_at'       => $startedAt,
-            'started_at'   => $startedAt,
+            'run_at' => $startedAt,
+            'started_at' => $startedAt,
             'heartbeat_at' => $startedAt,
             'triggered_by' => MrpRunTrigger::Scheduled->value,
-            'status'       => $status->value,
+            'status' => $status->value,
         ]);
         // run_at/started_at are real columns; ensure they persisted as given.
         $run->forceFill(['run_at' => $startedAt, 'started_at' => $startedAt])->saveQuietly();
+
         return $run->fresh();
     }
 
     private function autoPr(string $status, Carbon $createdAt): PurchaseRequest
     {
         $pr = PurchaseRequest::create([
-            'pr_number'         => 'PR-' . substr(uniqid(), -8),
-            'requested_by'      => $this->user->id,
-            'date'              => Carbon::today(),
-            'reason'            => 'auto',
-            'priority'          => 'normal',
+            'pr_number' => 'PR-'.substr(uniqid(), -8),
+            'requested_by' => $this->user->id,
+            'date' => Carbon::today(),
+            'reason' => 'auto',
+            'priority' => 'normal',
             'is_auto_generated' => true,
         ]);
         $pr->forceFill(['status' => $status, 'created_at' => $createdAt])->saveQuietly();
+
         return $pr->fresh();
     }
 
@@ -71,6 +73,9 @@ class MrpReaperTest extends TestCase
 
         $this->assertSame(MrpRunStatus::Failed, $stale->fresh()->status);
         $this->assertNotNull($stale->fresh()->error_message);
+        $this->assertSame('mrp_stale_run', $stale->fresh()->error_code);
+        $this->assertNotNull($stale->fresh()->duration_ms);
+        $this->assertNotNull($stale->fresh()->recovery_action);
     }
 
     public function test_fresh_running_run_is_left_alone(): void

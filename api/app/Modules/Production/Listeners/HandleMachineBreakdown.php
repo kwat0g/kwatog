@@ -49,10 +49,11 @@ class HandleMachineBreakdown implements ShouldQueue
     public function handle(MachineStatusChanged $event): void
     {
         $from = $event->from;
-        $to   = $event->to;
+        $to = $event->to;
 
         if ($from !== MachineStatus::Breakdown->value && $to === MachineStatus::Breakdown->value) {
             $this->handleEnteringBreakdown($event);
+
             return;
         }
 
@@ -60,6 +61,7 @@ class HandleMachineBreakdown implements ShouldQueue
             && in_array($to, [MachineStatus::Idle->value, MachineStatus::Running->value], true)
         ) {
             $this->handleRestoration($event);
+
             return;
         }
 
@@ -80,12 +82,16 @@ class HandleMachineBreakdown implements ShouldQueue
             $machine = Machine::query()
                 ->lockForUpdate()
                 ->find($event->machine->id);
-            if (! $machine) return;
+            if (! $machine) {
+                return;
+            }
 
             // The event may have waited in the queue while an operator
             // restored or reassigned the machine. Only the authoritative
             // breakdown state may pause the current work order.
-            if ($machine->status !== MachineStatus::Breakdown) return;
+            if ($machine->status !== MachineStatus::Breakdown) {
+                return;
+            }
             $outcomeCode = 'breakdown_published_without_running_work_order';
 
             $woId = $machine->current_work_order_id;
@@ -111,6 +117,19 @@ class HandleMachineBreakdown implements ShouldQueue
                 }
             }
 
+            if (! $pausedWo && ! MachineDowntime::query()
+                ->where('machine_id', $machine->id)
+                ->where('category', MachineDowntimeCategory::Breakdown->value)
+                ->whereNull('end_time')
+                ->exists()) {
+                MachineDowntime::create([
+                    'machine_id' => $machine->id,
+                    'start_time' => now(),
+                    'category' => MachineDowntimeCategory::Breakdown->value,
+                    'description' => $event->reason ?? 'Machine breakdown',
+                ]);
+            }
+
             // Surface compatible idle machines in the same transaction as the
             // pause, then persist the broadcast event in the outbox. The
             // dashboard alert can now be replayed after a worker outage.
@@ -119,9 +138,9 @@ class HandleMachineBreakdown implements ShouldQueue
                     ->whereHas('compatibleMolds', fn ($q) => $q->where('id', $pausedWo->mold_id))
                     ->get(['id', 'machine_code', 'name'])
                     ->map(fn ($m) => [
-                        'id'           => $m->hash_id,
+                        'id' => $m->hash_id,
                         'machine_code' => $m->machine_code,
-                        'name'         => $m->name,
+                        'name' => $m->name,
                     ])
                     ->values()
                     ->all();
@@ -147,6 +166,7 @@ class HandleMachineBreakdown implements ShouldQueue
 
         if (! $machine || $outcomeCode === 'machine_missing_or_not_in_breakdown') {
             app(ChainListenerRunService::class)->recordOutcome('skipped', $outcomeCode);
+
             return;
         }
 
@@ -172,7 +192,7 @@ class HandleMachineBreakdown implements ShouldQueue
             return;
         }
 
-        $existing = MaintenanceWorkOrder::query()
+        $maintenanceWorkOrder = MaintenanceWorkOrder::query()
             ->where('maintainable_type', 'machine')
             ->where('maintainable_id', $machine->id)
             ->where('type', MaintenanceWorkOrderType::Corrective->value)
@@ -182,31 +202,46 @@ class HandleMachineBreakdown implements ShouldQueue
                 MaintenanceWorkOrderStatus::InProgress->value,
             ])
             ->where('description', 'like', '%[Breakdown]%')
-            ->exists();
-        if ($existing) {
-            return;
+            ->latest('id')
+            ->first();
+        if (! $maintenanceWorkOrder) {
+            $actor = app(SystemActorService::class)->resolve();
+            if (! $actor) {
+                Log::warning('Machine breakdown: no automation actor to open a corrective MWO', [
+                    'machine_id' => $machine->id,
+                ]);
+
+                return;
+            }
+
+            $maintenanceWorkOrder = app(MaintenanceWorkOrderService::class)->create([
+                'maintainable_type' => 'machine',
+                'maintainable_id' => $machine->id,
+                'type' => MaintenanceWorkOrderType::Corrective->value,
+                'priority' => MaintenancePriority::High->value,
+                'description' => sprintf(
+                    '[Breakdown] %s%s',
+                    $reason !== null && trim($reason) !== '' ? $reason : 'Machine breakdown',
+                    $wo ? " — work order {$wo->wo_number}" : '',
+                ),
+            ], $actor);
         }
 
-        $actor = app(SystemActorService::class)->resolve();
-        if (! $actor) {
-            Log::warning('Machine breakdown: no automation actor to open a corrective MWO', [
-                'machine_id' => $machine->id,
-            ]);
-
-            return;
+        $breakdown = MachineDowntime::query()
+            ->where('machine_id', $machine->id)
+            ->where('category', MachineDowntimeCategory::Breakdown->value)
+            ->whereNull('end_time')
+            ->when(
+                $wo,
+                fn ($query) => $query->where('work_order_id', $wo->id),
+            )
+            ->whereNull('maintenance_order_id')
+            ->latest('id')
+            ->lockForUpdate()
+            ->first();
+        if ($breakdown) {
+            $breakdown->update(['maintenance_order_id' => $maintenanceWorkOrder->id]);
         }
-
-        app(MaintenanceWorkOrderService::class)->create([
-            'maintainable_type' => 'machine',
-            'maintainable_id'   => $machine->id,
-            'type'              => MaintenanceWorkOrderType::Corrective->value,
-            'priority'          => MaintenancePriority::High->value,
-            'description'       => sprintf(
-                '[Breakdown] %s%s',
-                $reason !== null && trim($reason) !== '' ? $reason : 'Machine breakdown',
-                $wo ? " — work order {$wo->wo_number}" : '',
-            ),
-        ], $actor);
     }
 
     private function handleRestoration(MachineStatusChanged $event): void
@@ -217,7 +252,9 @@ class HandleMachineBreakdown implements ShouldQueue
             $machine = Machine::query()
                 ->lockForUpdate()
                 ->find($event->machine->id);
-            if (! $machine) return;
+            if (! $machine) {
+                return;
+            }
 
             // A restoration event can be stale by the time a worker handles
             // it. Do not close a downtime row while the machine is still in
@@ -234,7 +271,7 @@ class HandleMachineBreakdown implements ShouldQueue
                 ->each(function ($row) use (&$closed): void {
                     $end = now();
                     $row->update([
-                        'end_time'         => $end,
+                        'end_time' => $end,
                         'duration_minutes' => (int) max(0, $row->start_time->diffInMinutes($end, true)),
                     ]);
                     $closed++;
@@ -243,10 +280,12 @@ class HandleMachineBreakdown implements ShouldQueue
 
         if (! $machine) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'machine_missing');
+
             return;
         }
         if ($closed === 0) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'no_open_machine_downtime');
+
             return;
         }
 

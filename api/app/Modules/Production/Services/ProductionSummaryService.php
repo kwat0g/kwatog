@@ -32,9 +32,14 @@ class ProductionSummaryService
                 $join->on('wo.work_order_id', '=', 'w.id')
                     ->whereBetween('wo.recorded_at', [$day, $end]);
             })
-            ->whereBetween('w.planned_start', [$day, $end])
-            ->orWhereBetween('w.planned_end', [$day, $end])
-            ->orWhereBetween('wo.recorded_at', [$day, $end])
+            ->where(function ($q) use ($day, $end): void {
+                $q->where(function ($planned) use ($day, $end): void {
+                    // A planned window overlaps the day when it starts before
+                    // the day ends and ends after the day starts.
+                    $planned->where('w.planned_start', '<=', $end)
+                        ->where('w.planned_end', '>=', $day);
+                })->orWhereBetween('wo.recorded_at', [$day, $end]);
+            })
             ->groupBy('w.id', 'w.wo_number', 'p.name', 'w.quantity_target', 'w.status')
             ->select(
                 'w.id',
@@ -48,24 +53,21 @@ class ProductionSummaryService
             ->orderBy('w.wo_number')
             ->get();
 
-        $totalGood   = (int) $woRows->sum('good');
+        $totalGood = (int) $woRows->sum('good');
         $totalReject = (int) $woRows->sum('reject');
-        $totalUnits  = $totalGood + $totalReject;
+        $totalUnits = $totalGood + $totalReject;
         // A day with no recorded output has no scrap-rate observation. Keep
         // the summary honest instead of presenting an unmeasured 0% rate.
-        $scrapRate   = $totalUnits > 0 ? round($totalReject / $totalUnits * 100, 2) : null;
+        $scrapRate = $totalUnits > 0 ? round($totalReject / $totalUnits * 100, 2) : null;
 
         $breakdowns = DB::table('machine_downtimes as md')
             ->join('machines as m', 'm.id', '=', 'md.machine_id')
-            // Grouped so `category = breakdown` applies to BOTH arms. Without
-            // the closure SQL parsed this as
-            // `start_time BETWEEN ? AND ? OR (end_time IS NULL AND category=?)`,
-            // so every downtime category starting today was reported as a
-            // breakdown.
+            // Include only breakdown intervals that overlap the requested day.
             ->where('md.category', 'breakdown')
-            ->where(function ($q) use ($day, $end): void {
-                $q->whereBetween('md.start_time', [$day, $end])
-                    ->orWhereNull('md.end_time');
+            ->where('md.start_time', '<=', $end)
+            ->where(function ($q) use ($day): void {
+                $q->whereNull('md.end_time')
+                    ->orWhere('md.end_time', '>=', $day);
             })
             ->select(
                 'md.id',
@@ -100,39 +102,39 @@ class ProductionSummaryService
             ->toArray();
 
         return [
-            'date'         => $day->toDateString(),
-            'wos'          => $woRows->map(fn ($r) => [
-                'wo_number'        => $r->wo_number,
-                'product_name'     => $r->product_name,
-                'quantity_target'  => (int) $r->quantity_target,
-                'status'           => $r->status,
-                'good'             => (int) $r->good,
-                'reject'           => (int) $r->reject,
-                'variance'         => (int) ((int) $r->good - (int) $r->quantity_target),
+            'date' => $day->toDateString(),
+            'wos' => $woRows->map(fn ($r) => [
+                'wo_number' => $r->wo_number,
+                'product_name' => $r->product_name,
+                'quantity_target' => (int) $r->quantity_target,
+                'status' => $r->status,
+                'good' => (int) $r->good,
+                'reject' => (int) $r->reject,
+                'variance' => (int) ((int) $r->good - (int) $r->quantity_target),
             ])->all(),
-            'totals'       => [
-                'good'        => $totalGood,
-                'reject'      => $totalReject,
+            'totals' => [
+                'good' => $totalGood,
+                'reject' => $totalReject,
                 'total_units' => $totalUnits,
-                'scrap_rate'  => $scrapRate,
+                'scrap_rate' => $scrapRate,
             ],
-            'breakdowns'   => $breakdowns->map(fn ($b) => [
-                'machine_code'   => $b->machine_code,
-                'machine_name'   => $b->name,
-                'start_time'     => (string) $b->start_time,
-                'end_time'       => $b->end_time ? (string) $b->end_time : 'ongoing',
-                'duration_min'   => (int) ($b->duration_minutes ?? 0),
-                'description'    => $b->description,
+            'breakdowns' => $breakdowns->map(fn ($b) => [
+                'machine_code' => $b->machine_code,
+                'machine_name' => $b->name,
+                'start_time' => (string) $b->start_time,
+                'end_time' => $b->end_time ? (string) $b->end_time : 'ongoing',
+                'duration_min' => (int) ($b->duration_minutes ?? 0),
+                'description' => $b->description,
             ])->all(),
-            'defects'      => $defects->map(fn ($d) => [
-                'code'  => $d->code,
-                'name'  => $d->name,
+            'defects' => $defects->map(fn ($d) => [
+                'code' => $d->code,
+                'name' => $d->name,
                 'count' => (int) $d->count,
             ])->all(),
-            'qc'           => [
+            'qc' => [
                 'passed' => (int) ($qc['passed'] ?? 0),
                 'failed' => (int) ($qc['failed'] ?? 0),
-                'total'  => array_sum(array_map('intval', $qc)),
+                'total' => array_sum(array_map('intval', $qc)),
             ],
         ];
     }
@@ -141,17 +143,17 @@ class ProductionSummaryService
     public function forWeek(Carbon $weekEnd): array
     {
         $rangeStart = $weekEnd->copy()->subDays(6)->startOfDay();
-        $end        = $weekEnd->copy()->endOfDay();
+        $end = $weekEnd->copy()->endOfDay();
 
         $totals = DB::table('work_order_outputs')
             ->whereBetween('recorded_at', [$rangeStart, $end])
             ->selectRaw('COALESCE(SUM(good_count),0) as good, COALESCE(SUM(reject_count),0) as reject')
             ->first();
-        $good   = (int) ($totals->good ?? 0);
+        $good = (int) ($totals->good ?? 0);
         $reject = (int) ($totals->reject ?? 0);
 
         $prevStart = $rangeStart->copy()->subDays(7);
-        $prevEnd   = $end->copy()->subDays(7);
+        $prevEnd = $end->copy()->subDays(7);
         $prevTotals = DB::table('work_order_outputs')
             ->whereBetween('recorded_at', [$prevStart, $prevEnd])
             ->selectRaw('COALESCE(SUM(good_count),0) as good')
@@ -161,10 +163,10 @@ class ProductionSummaryService
         $delta = $prev > 0 ? round(($good - $prev) / $prev * 100, 2) : null;
 
         return [
-            'range_start'   => $rangeStart->toDateString(),
-            'range_end'     => $end->toDateString(),
-            'good'          => $good,
-            'reject'        => $reject,
+            'range_start' => $rangeStart->toDateString(),
+            'range_end' => $end->toDateString(),
+            'good' => $good,
+            'reject' => $reject,
             'wow_delta_pct' => $delta,
         ];
     }

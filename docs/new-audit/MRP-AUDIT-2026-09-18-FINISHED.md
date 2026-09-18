@@ -31,32 +31,52 @@ Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
    the sub-assembly with no `active()` filter while `BomCostingService:193` uses `active()`, so
    an inactive product is exploded as manufactured (raw materials demanded) but costed as a
    bought leaf. **[confirmed]**
-2. **Outbox dedupe permanently drops repeated routing replans.** `event_outbox.dedupe_key` is
-   unique and rows are never pruned; the routing key `mrp:replan:routing:{id}:{reason}` means
-   editing the same routing twice with the same reason stages the replan **once ever**. (The BOM
-   key escapes because each edit is a new BOM id.) **[confirmed]**
+2. **Outbox dedupe permanently drops repeated routing replans.** This was true of the earlier
+   routing key, but the current implementation versions the key with the routing change
+   timestamp and has a regression test for repeated same-reason edits. **[resolved before this
+   pass]**
 3. **`SalesOrderService::confirmWithChainResult` reads a non-existent `mrp_plans.summary`.** The
    scheduling summary lives on `MrpRun`, so `chain_result.scheduling_conflicts` is always `[]`
    and `scheduled_start` always falls back to `planned_start`. **[confirmed]**
-4. **BOM authoring allows cycles** (A→B→A). They surface only as a `partial` MRP run.
-5. **No DB unique `(bom_id,item_id)`** on `bom_items`; duplicates are caught only at use time.
+4. **BOM graph validation is not explicit at the authoring boundary.** The costing call currently
+   rejects active transitive cycles indirectly, but direct imports or legacy writes can still
+   create a graph that fails only when it is later exploded.
+5. **No DB unique `(bom_id,item_id)`** on `bom_items`; service/runtime guards exist, but direct
+   writes can still persist invalid duplicates.
 6. **`RunAutomaticMrpJob::uniqueId` hashes an unsorted id list**, so `[21,22]` and `[22,21]` are
    distinct unique jobs; coalescing can lose a change that arrives while a same-scope job runs.
-7. **`RunDailyMrp` returns failure unless status is exactly `completed`**, so one missing BOM
-   (→ `Partial`) makes the daily cron report failure every day; it compares a raw string.
+7. **`RunDailyMrp` treats every `Partial` run as a command failure**, so one missing BOM can make
+   the daily cron report failure even when other sales orders planned successfully. The current
+   comparison uses the backed enum value correctly; the remaining issue is exit-status policy.
 8. **`ReapStaleMrpRuns` only flips status/heartbeat** (no `error_code`/`duration_ms`) and its
    `$description` claims it cancels orphan draft auto-PRs, which the body deliberately does not.
 9. **`prs_updated` metric is wrong** for retired PRs (the no-shortage branch cancels the draft
    but the counter calls it "updated").
 10. **Audit hygiene**: cancelled PRs/WOs use query-builder `->update()`, bypassing `HasAuditLog`,
     while the reuse paths use audited `forceFill()->save()`.
-11. **Dead code**: `BomService::productionTree`/`productionTreeInto` have zero callers;
-    `MrpPlanGenerated` is broadcast-only (no listener); docblock says the engine runs on SO
-    confirm, but confirm only queues the job.
-12. **No graphify/TODO markers** in the module; `BomItem` has no audit log/timestamps.
+11. **Dead code and contract drift**: `BomService::productionTree`/`productionTreeInto` have zero
+   callers; the SO-confirm documentation must describe queued execution. `MrpPlanGenerated` is
+   intentionally broadcast-only and is consumed by the SPA production dashboard.
+12. **`BomItem` has no audit log/timestamps**, leaving direct line edits outside the BOM-version
+   audit trail and outside cost-staleness detection.
 
-## 3. Assumptions
+## 3. Resolution Status
 
-- A1. No test run; findings from source/grep. A2. Production data (cycles, inactive products)
-  unquantified. A3. Seed settings (`mrp.bom.max_explode_depth`, `mrp.default_lead_time_days`,
-  `mrp.safety_buffer_days`) presence not verified per environment.
+- Findings 1, 3, 4, 5, 6, 7, 8, 9, 10, and 12 were addressed in the follow-up implementation.
+- Finding 2 was already resolved in the current tree; the follow-up preserves the versioned
+  dedupe behavior and changes automatic MRP uniqueness to release when processing starts, so a
+  change arriving during a running job can queue a follow-up run.
+- Finding 11 removed the unused BOM production-tree path and corrected the broadcast/queue
+  interpretation in this report. The broadcast event remains because the SPA consumes it.
+- Regression coverage was added for inactive subassemblies, transitive cycles, duplicate BOM
+  components, BOM-item audit timestamps, scheduling summaries, queue scope identity, daily-run
+  exit semantics, stale-run metadata, audited lifecycle retirement, and PR metrics.
+
+## 4. Assumptions
+
+- A1. The original audit used source/grep only. The follow-up added focused tests and passed
+  PHP linting, Pint, PHPStan, and PHPUnit test discovery; database-backed execution was blocked
+  because Docker is unavailable and the configured PostgreSQL host `db` is unreachable.
+- A2. Production data (cycles, inactive products, duplicate BOM lines) remains unquantified.
+- A3. Seed settings (`mrp.bom.max_explode_depth`, `mrp.default_lead_time_days`,
+  `mrp.safety_buffer_days`) presence was not verified per environment.

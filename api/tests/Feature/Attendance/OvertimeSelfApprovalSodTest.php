@@ -41,13 +41,15 @@ class OvertimeSelfApprovalSodTest extends TestCase
 
     private function makeOt(Employee $emp): OvertimeRequest
     {
-        return OvertimeRequest::create([
+        $ot = OvertimeRequest::make([
             'employee_id'     => $emp->id,
             'date'            => now()->subDay()->toDateString(),
             'hours_requested' => 2,
             'reason'          => 'SoD regression',
-            'status'          => OvertimeStatus::Pending->value,
         ]);
+        $ot->status = OvertimeStatus::Pending;
+        $ot->save();
+        return $ot;
     }
 
     public function test_employee_cannot_approve_their_own_overtime(): void

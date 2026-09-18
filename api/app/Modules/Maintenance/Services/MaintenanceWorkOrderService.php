@@ -32,6 +32,7 @@ use App\Modules\MRP\Models\MoldHistory;
 use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
+use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,16 @@ class MaintenanceWorkOrderService
             // Mark machine target as under maintenance
             if ($locked->maintainable_type === MaintainableType::Machine) {
                 $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
+                if ($machine && (
+                    $machine->status === MachineStatus::Running
+                    || $machine->current_work_order_id !== null
+                )) {
+                    throw ValidationException::withMessages([
+                        'maintainable_id' => [
+                            'A maintenance work order cannot start while the machine is assigned to active production.',
+                        ],
+                    ]);
+                }
                 if ($machine && $machine->status?->value !== 'maintenance') {
                     $this->machines->transitionStatus(
                         $machine,
@@ -261,7 +272,7 @@ class MaintenanceWorkOrderService
                 if ($mold) {
                     $shotsBefore = (int) $mold->current_shot_count;
                     $attrs = [
-                        'current_shot_count'     => 0,
+                        'current_shot_count' => 0,
                         // Lifecycle manager: stamp + accumulate maintenance cost/count.
                         'last_maintenance_at' => now()->toDateString(),
                         'maintenance_count' => (int) $mold->maintenance_count + 1,
@@ -271,9 +282,9 @@ class MaintenanceWorkOrderService
                             2,
                         ),
                     ];
-                    // Return the mold to the schedulable pool once maintenance is
-                    // done. A terminal mold (Retired) must stay retired (MT-01).
-                    if ($mold->status !== MoldStatus::Retired) {
+                    // Only a mold held in maintenance can be released by this
+                    // work order. Never free a mold that production still owns.
+                    if ($mold->status === MoldStatus::Maintenance) {
                         $attrs['status'] = MoldStatus::Available->value;
                     }
                     $mold->forceFill($attrs)->save();
@@ -286,6 +297,9 @@ class MaintenanceWorkOrderService
                         'event_date' => now()->toDateString(),
                         'shot_count_at_event' => 0,
                     ]);
+                    DB::afterCommit(static function (): void {
+                        ProductionDashboardService::forgetCache();
+                    });
                 }
             }
             // Machine: close the maintenance downtime ledger row, restore to idle

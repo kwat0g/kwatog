@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -34,7 +35,7 @@ class SettingsService
         // fall back to a direct DB read so callers never crash on a transient
         // cache outage.
         try {
-            $cacheMiss = new \stdClass();
+            $cacheMiss = new \stdClass;
             $cached = Cache::get("settings:{$key}", $cacheMiss);
             if ($cached !== $cacheMiss) {
                 return $cached;
@@ -47,6 +48,7 @@ class SettingsService
 
             $value = json_decode($row->value, true) ?? $default;
             Cache::put("settings:{$key}", $value, self::CACHE_TTL);
+
             return $value;
         } catch (\Throwable $e) {
             return $this->fetch($key, $default);
@@ -57,8 +59,9 @@ class SettingsService
     {
         $value = $this->get($key);
         if (! is_string($value) || (! $allowEmpty && trim($value) === '')) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
         }
+
         return $value;
     }
 
@@ -66,12 +69,13 @@ class SettingsService
     {
         $value = $this->get($key);
         if (! is_numeric($value) || (int) $value != (float) $value) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
         }
         $value = (int) $value;
         if (($minimum !== null && $value < $minimum) || ($maximum !== null && $value > $maximum)) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is outside its valid range.");
+            throw new BusinessRuleException("Required setting {$key} is outside its valid range.");
         }
+
         return $value;
     }
 
@@ -79,8 +83,9 @@ class SettingsService
     {
         $value = $this->get($key);
         if (! is_bool($value)) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
         }
+
         return $value;
     }
 
@@ -88,12 +93,13 @@ class SettingsService
     {
         $value = $this->get($key);
         if (! is_numeric($value)) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+            throw new BusinessRuleException("Required setting {$key} is missing or invalid.");
         }
         $value = (float) $value;
         if (($minimum !== null && $value < $minimum) || ($maximum !== null && $value > $maximum)) {
-            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is outside its valid range.");
+            throw new BusinessRuleException("Required setting {$key} is outside its valid range.");
         }
+
         return $value;
     }
 
@@ -101,6 +107,7 @@ class SettingsService
     {
         $row = DB::table('settings')->where('key', $key)->first();
         $val = $row ? json_decode($row->value, true) : null;
+
         return $val ?? $default;
     }
 
@@ -138,6 +145,7 @@ class SettingsService
 
         try {
             Cache::forget("settings:{$key}");
+            $this->forgetProductionDashboardCache($key);
         } catch (\Throwable $e) {
             // Cache layer may be unavailable; the next read will go straight
             // to the DB so this is non-fatal.
@@ -230,8 +238,16 @@ class SettingsService
 
         try {
             Cache::forget("settings:{$key}");
+            $this->forgetProductionDashboardCache($key);
         } catch (\Throwable $exception) {
             // A cache outage must not roll back a committed settings change.
+        }
+    }
+
+    private function forgetProductionDashboardCache(string $key): void
+    {
+        if (str_starts_with($key, 'production.') || $key === 'alerts.mold.warning_ratio') {
+            Cache::forget('dashboard:production');
         }
     }
 

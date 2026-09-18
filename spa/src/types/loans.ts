@@ -28,6 +28,8 @@ export interface EmployeeLoan {
  end_date: string | null;
  pay_periods_total: number;
  pay_periods_remaining: number;
+ repayment_months?: number;
+ remaining_repayment_months?: number;
  approval_chain_size: number;
  purpose: string | null;
  status: LoanStatus;

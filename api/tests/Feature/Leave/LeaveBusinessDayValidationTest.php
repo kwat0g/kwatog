@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Leave;
 
+use App\Modules\Attendance\Enums\HolidayType;
+use App\Modules\Attendance\Models\Holiday;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -56,7 +58,7 @@ class LeaveBusinessDayValidationTest extends TestCase
                 'end_date' => $sunday,
             ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'A full-day leave range must include at least one business day (Monday–Saturday).');
+            ->assertJsonPath('message', 'A leave range must include at least one working day (excluding Sundays and public holidays).');
 
         $this->assertDatabaseMissing('leave_requests', [
             'employee_id' => $employee->id,
@@ -90,6 +92,68 @@ class LeaveBusinessDayValidationTest extends TestCase
             'end_date' => $businessDay,
             'days' => '1.0',
         ]);
+    }
+
+    public function test_public_holiday_is_not_charged_as_a_leave_day(): void
+    {
+        $employee = Employee::factory()->create([
+            'department_id' => Department::query()->firstOrFail()->id,
+        ]);
+        $this->seedBalance($employee);
+        $start = Carbon::parse($this->nextSunday())->addDay();
+        $holiday = $start->copy()->addDay();
+        $end = $holiday->copy()->addDay();
+        Holiday::create([
+            'name' => 'Regular holiday fixture',
+            'date' => $holiday->toDateString(),
+            'type' => HolidayType::Regular->value,
+            'is_recurring' => false,
+        ]);
+
+        $this->actingAs($this->employeeUser($employee))
+            ->postJson('/api/v1/leaves/requests', [
+                'employee_id' => $employee->hash_id,
+                'leave_type_id' => $this->leaveType->hash_id,
+                'start_date' => $start->toDateString(),
+                'end_date' => $end->toDateString(),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.days', '2.0');
+    }
+
+    public function test_holiday_only_leave_request_is_rejected_without_consuming_balance(): void
+    {
+        $employee = Employee::factory()->create([
+            'department_id' => Department::query()->firstOrFail()->id,
+        ]);
+        $this->seedBalance($employee);
+        $holiday = Carbon::parse($this->nextSunday())->addDay();
+        Holiday::create([
+            'name' => 'Special non-working fixture',
+            'date' => $holiday->toDateString(),
+            'type' => HolidayType::SpecialNonWorking->value,
+            'is_recurring' => false,
+        ]);
+
+        $this->actingAs($this->employeeUser($employee))
+            ->postJson('/api/v1/leaves/requests', [
+                'employee_id' => $employee->hash_id,
+                'leave_type_id' => $this->leaveType->hash_id,
+                'start_date' => $holiday->toDateString(),
+                'end_date' => $holiday->toDateString(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'A leave range must include at least one working day (excluding Sundays and public holidays).');
+
+        $this->assertDatabaseMissing('leave_requests', [
+            'employee_id' => $employee->id,
+            'start_date' => $holiday->toDateString(),
+            'end_date' => $holiday->toDateString(),
+        ]);
+        $this->assertSame('0.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $this->leaveType->id)
+            ->value('used'));
     }
 
     private function employeeUser(Employee $employee): User

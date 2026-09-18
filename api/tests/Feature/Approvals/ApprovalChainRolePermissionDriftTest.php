@@ -40,7 +40,6 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
      */
     private const ACT_ROUTE_PERMISSIONS = [
         'leave_request' => ['leave.approve_dept', 'leave.approve_hr'],
-        'overtime_request' => ['attendance.ot.approve'],
         'cash_advance' => ['loans.approve'],
         'company_loan' => ['loans.approve'],
         'purchase_request' => ['purchasing.pr.approve'],

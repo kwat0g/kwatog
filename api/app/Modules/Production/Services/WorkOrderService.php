@@ -6,6 +6,7 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ActivityFeedService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
@@ -14,8 +15,11 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Services\StockMovementService;
@@ -25,6 +29,7 @@ use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\BomService;
+use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -79,6 +84,7 @@ class WorkOrderService
         private readonly SettingsService $settings,
         private readonly WoOperationService $operations,
         private readonly WorkOrderStateMachine $stateMachine,
+        private readonly MachineService $machines,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -109,17 +115,21 @@ class WorkOrderService
         }
         if (! empty($filters['sales_order_id'])) {
             $sid = HashIdFilter::decode($filters['sales_order_id'], SalesOrder::class);
-            if ($sid) $q->where('sales_order_id', $sid);
+            if ($sid) {
+                $q->where('sales_order_id', $sid);
+            }
         }
         if (! empty($filters['machine_id'])) {
             $mid = HashIdFilter::decode($filters['machine_id'], Machine::class);
-            if ($mid) $q->where('machine_id', $mid);
+            if ($mid) {
+                $q->where('machine_id', $mid);
+            }
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('wo_number', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhereHas('product', fn ($p) => $p->where('part_number', SearchOperator::like(), SearchOperator::contains($term)));
+                    ->orWhereHas('product', fn ($p) => $p->where('part_number', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 
@@ -149,35 +159,35 @@ class WorkOrderService
      * Optionally explodes the BOM into work_order_materials when an active
      * BOM exists for the product (no-op otherwise).
      *
-     * @param array $data fields: product_id, sales_order_id?, sales_order_item_id?,
-     *   mrp_plan_id?, parent_wo_id?, parent_ncr_id?, machine_id?, mold_id?,
-     *   quantity_target, planned_start, planned_end, priority?, created_by
+     * @param  array  $data  fields: product_id, sales_order_id?, sales_order_item_id?,
+     *                       mrp_plan_id?, parent_wo_id?, parent_ncr_id?, machine_id?, mold_id?,
+     *                       quantity_target, planned_start, planned_end, priority?, created_by
      */
     public function createDraft(array $data): WorkOrder
     {
         return DB::transaction(function () use ($data) {
             $payload = [
-                'wo_number'           => $this->sequences->generate('work_order'),
-                'product_id'          => (int) $data['product_id'],
-                'sales_order_id'      => $data['sales_order_id'] ?? null,
+                'wo_number' => $this->sequences->generate('work_order'),
+                'product_id' => (int) $data['product_id'],
+                'sales_order_id' => $data['sales_order_id'] ?? null,
                 'sales_order_item_id' => $data['sales_order_item_id'] ?? null,
-                'mrp_plan_id'         => $data['mrp_plan_id'] ?? null,
-                'parent_wo_id'        => $data['parent_wo_id'] ?? null,
-                'parent_ncr_id'       => $data['parent_ncr_id'] ?? null,
-                'machine_id'          => $data['machine_id'] ?? null,
-                'mold_id'             => $data['mold_id'] ?? null,
-                'quantity_target'     => (int) $data['quantity_target'],
-                'planned_start'       => $data['planned_start'],
-                'planned_end'         => $data['planned_end'],
-                'priority'            => array_key_exists('priority', $data) && $data['priority'] !== null
+                'mrp_plan_id' => $data['mrp_plan_id'] ?? null,
+                'parent_wo_id' => $data['parent_wo_id'] ?? null,
+                'parent_ncr_id' => $data['parent_ncr_id'] ?? null,
+                'machine_id' => $data['machine_id'] ?? null,
+                'mold_id' => $data['mold_id'] ?? null,
+                'quantity_target' => (int) $data['quantity_target'],
+                'planned_start' => $data['planned_start'],
+                'planned_end' => $data['planned_end'],
+                'priority' => array_key_exists('priority', $data) && $data['priority'] !== null
                     ? (int) $data['priority']
                     : $this->settings->requiredInt('mrp.work_order.normal_priority', 0, 255),
-                'status'              => WorkOrderStatus::Planned->value,
-                'work_order_class'    => $data['work_order_class'] ?? 'standard',
-                'exception_reason'    => $data['exception_reason'] ?? null,
+                'status' => WorkOrderStatus::Planned->value,
+                'work_order_class' => $data['work_order_class'] ?? 'standard',
+                'exception_reason' => $data['exception_reason'] ?? null,
                 'exception_authorized_by' => $data['exception_authorized_by'] ?? $data['created_by'],
                 'material_plan_source' => $this->boms->activeForProduct((int) $data['product_id']) !== null ? 'bom' : null,
-                'created_by'          => (int) $data['created_by'],
+                'created_by' => (int) $data['created_by'],
             ];
             $wo = WorkOrder::create($payload);
 
@@ -193,14 +203,14 @@ class WorkOrderService
                 $rows = $this->boms->directRequirements((int) $data['product_id'], (float) $data['quantity_target']);
                 foreach ($rows as $row) {
                     $wo->materials()->create([
-                        'item_id'                => (int) $row['item_id'],
-                        'bom_quantity'           => (string) $row['gross_quantity'],
-                        'standard_unit_cost'     => (string) $row['standard_unit_cost'],
-                        'standard_cost'          => (string) $row['standard_cost'],
+                        'item_id' => (int) $row['item_id'],
+                        'bom_quantity' => (string) $row['gross_quantity'],
+                        'standard_unit_cost' => (string) $row['standard_unit_cost'],
+                        'standard_cost' => (string) $row['standard_cost'],
                         'actual_quantity_issued' => '0',
-                        'actual_cost'            => '0',
-                        'cost_variance'          => Money::sub('0.00', (string) $row['standard_cost']),
-                        'variance'               => '0',
+                        'actual_cost' => '0',
+                        'cost_variance' => Money::sub('0.00', (string) $row['standard_cost']),
+                        'variance' => '0',
                     ]);
                 }
             }
@@ -276,6 +286,7 @@ class WorkOrderService
 
             return $confirmed;
         });
+
         return $result;
     }
 
@@ -297,7 +308,7 @@ class WorkOrderService
         $refs = [];
         $materials = $wo->materials()->with('item:id,code,name')->get();
         foreach ($materials as $material) {
-            $latestGrnItem = \App\Modules\Inventory\Models\GrnItem::query()
+            $latestGrnItem = GrnItem::query()
                 ->where('item_id', $material->item_id)
                 ->whereNotNull('material_lot_number')
                 ->with('grn:id,grn_number,received_date')
@@ -307,13 +318,13 @@ class WorkOrderService
                 continue;
             }
             $refs[] = [
-                'item_id'                => $material->item ? $material->item->hash_id : null,
-                'item_code'              => $material->item->code ?? null,
-                'item_name'              => $material->item->name ?? null,
-                'grn_number'             => $latestGrnItem->grn?->grn_number,
-                'material_lot_number'    => $latestGrnItem->material_lot_number,
+                'item_id' => $material->item ? $material->item->hash_id : null,
+                'item_code' => $material->item->code ?? null,
+                'item_name' => $material->item->name ?? null,
+                'grn_number' => $latestGrnItem->grn?->grn_number,
+                'material_lot_number' => $latestGrnItem->material_lot_number,
                 'supplier_lot_reference' => $latestGrnItem->supplier_lot_reference,
-                'quantity_used'          => (string) $material->bom_quantity,
+                'quantity_used' => (string) $material->bom_quantity,
             ];
         }
         if (! empty($refs)) {
@@ -337,7 +348,7 @@ class WorkOrderService
             $this->assertProductionDependenciesReady($lockedWo);
 
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
-            $mold    = $lockedWo->mold_id    ? Mold::lockForUpdate()->find($lockedWo->mold_id)       : null;
+            $mold = $lockedWo->mold_id ? Mold::lockForUpdate()->find($lockedWo->mold_id) : null;
             if (! $machine || ! $mold) {
                 throw new BusinessRuleException('Cannot start a work order without an assigned machine and mold.');
             }
@@ -350,7 +361,7 @@ class WorkOrderService
             $this->assertMachineNotOccupied($lockedWo, $machine);
 
             $machine->update([
-                'status'                => MachineStatus::Running->value,
+                'status' => MachineStatus::Running->value,
                 'current_work_order_id' => $lockedWo->id,
             ]);
             $mold->update(['status' => MoldStatus::InUse->value]);
@@ -360,7 +371,7 @@ class WorkOrderService
             $batchNumber = $lockedWo->batch_number ?: $this->sequences->generate('production_batch');
 
             $lockedWo->update([
-                'status'       => WorkOrderStatus::InProgress->value,
+                'status' => WorkOrderStatus::InProgress->value,
                 'actual_start' => $lockedWo->actual_start ?? Carbon::now(),
                 'batch_number' => $batchNumber,
             ]);
@@ -379,7 +390,7 @@ class WorkOrderService
             // C-2 — Promote the parent SO to in_production. app() lookup avoids
             // a circular dependency on SalesOrderService at construction time.
             if ($lockedWo->sales_order_id) {
-                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                app(SalesOrderService::class)
                     ->markInProduction((int) $lockedWo->sales_order_id);
             }
 
@@ -388,6 +399,7 @@ class WorkOrderService
 
             return $started;
         });
+
         return $result;
     }
 
@@ -410,19 +422,33 @@ class WorkOrderService
                 : null;
             if ($machine) {
                 MachineDowntime::create([
-                    'machine_id'    => $machine->id,
+                    'machine_id' => $machine->id,
                     'work_order_id' => $lockedWo->id,
-                    'start_time'    => Carbon::now(),
-                    'category'      => $category->value,
-                    'description'   => $reason,
+                    'start_time' => Carbon::now(),
+                    'category' => $category->value,
+                    'description' => $reason,
                 ]);
-                $machine->update([
-                    'status'                => MachineStatus::Idle->value,
-                    'current_work_order_id' => null,
-                ]);
+                if ($category === MachineDowntimeCategory::Breakdown) {
+                    // A breakdown pause must enter the same authoritative
+                    // machine-status flow as an operator transition. This
+                    // keeps the maintenance queue and alert listener alive.
+                    $machine->update(['current_work_order_id' => null]);
+                    if ($machine->status !== MachineStatus::Breakdown) {
+                        $this->machines->transitionStatus(
+                            $machine,
+                            MachineStatus::Breakdown,
+                            $reason,
+                        );
+                    }
+                } else {
+                    $machine->update([
+                        'status' => MachineStatus::Idle->value,
+                        'current_work_order_id' => null,
+                    ]);
+                }
             }
             $lockedWo->update([
-                'status'       => WorkOrderStatus::Paused->value,
+                'status' => WorkOrderStatus::Paused->value,
                 'pause_reason' => $reason,
             ]);
             $paused = $this->show($lockedWo->fresh());
@@ -430,6 +456,7 @@ class WorkOrderService
 
             return $paused;
         });
+
         return $result;
     }
 
@@ -470,7 +497,7 @@ class WorkOrderService
             if ($open) {
                 $end = Carbon::now();
                 $open->update([
-                    'end_time'         => $end,
+                    'end_time' => $end,
                     'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
                 ]);
             }
@@ -488,11 +515,11 @@ class WorkOrderService
                 throw new BusinessRuleException('Assigned mold is not available to resume production.');
             }
             $machine->update([
-                'status'                => MachineStatus::Running->value,
+                'status' => MachineStatus::Running->value,
                 'current_work_order_id' => $lockedWo->id,
             ]);
             $lockedWo->update([
-                'status'       => WorkOrderStatus::InProgress->value,
+                'status' => WorkOrderStatus::InProgress->value,
                 'pause_reason' => null,
             ]);
             $resumed = $this->show($lockedWo->fresh());
@@ -500,6 +527,7 @@ class WorkOrderService
 
             return $resumed;
         });
+
         return $result;
     }
 
@@ -520,7 +548,7 @@ class WorkOrderService
             $rejected = (int) $lockedWo->quantity_rejected;
             $scrap = $produced > 0 ? round(($rejected / $produced) * 100, 2) : 0.0;
             $lockedWo->update([
-                'status'     => WorkOrderStatus::Completed->value,
+                'status' => WorkOrderStatus::Completed->value,
                 'actual_end' => Carbon::now(),
                 'scrap_rate' => $scrap,
             ]);
@@ -529,7 +557,7 @@ class WorkOrderService
                 : null;
             if ($machine) {
                 $machine->update([
-                    'status'                => MachineStatus::Idle->value,
+                    'status' => MachineStatus::Idle->value,
                     'current_work_order_id' => null,
                 ]);
             }
@@ -562,6 +590,7 @@ class WorkOrderService
 
             return $completed;
         });
+
         return $result;
     }
 
@@ -583,6 +612,7 @@ class WorkOrderService
 
             return $closed;
         });
+
         return $result;
     }
 
@@ -600,7 +630,7 @@ class WorkOrderService
             $from = $lockedWo->status?->value ?? 'planned';
 
             $lockedWo->update([
-                'status'       => WorkOrderStatus::Cancelled->value,
+                'status' => WorkOrderStatus::Cancelled->value,
                 'pause_reason' => $reason,
             ]);
 
@@ -613,7 +643,7 @@ class WorkOrderService
                 : null;
             if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
                 $machine->update([
-                    'status'                => MachineStatus::Idle->value,
+                    'status' => MachineStatus::Idle->value,
                     'current_work_order_id' => null,
                 ]);
             }
@@ -637,6 +667,7 @@ class WorkOrderService
 
             return $cancelled;
         });
+
         return $result;
     }
 
@@ -688,21 +719,21 @@ class WorkOrderService
     {
         return [
             ['key' => 'planned',     'label' => 'Planned',
-             'date' => $wo->created_at?->toDateString(),
-             'state' => 'done'],
+                'date' => $wo->created_at?->toDateString(),
+                'state' => 'done'],
             ['key' => 'confirmed',   'label' => 'Confirmed',
-             'date' => null,
-             'state' => $wo->status === WorkOrderStatus::Planned ? 'pending' : 'done'],
+                'date' => null,
+                'state' => $wo->status === WorkOrderStatus::Planned ? 'pending' : 'done'],
             ['key' => 'in_progress', 'label' => 'In Progress',
-             'date' => optional($wo->actual_start)->toDateString(),
-             'state' => $wo->status === WorkOrderStatus::InProgress ? 'active'
-                        : (in_array($wo->status, [WorkOrderStatus::Completed, WorkOrderStatus::Closed], true) ? 'done' : 'pending')],
+                'date' => optional($wo->actual_start)->toDateString(),
+                'state' => $wo->status === WorkOrderStatus::InProgress ? 'active'
+                           : (in_array($wo->status, [WorkOrderStatus::Completed, WorkOrderStatus::Closed], true) ? 'done' : 'pending')],
             ['key' => 'completed',   'label' => 'Completed',
-             'date' => optional($wo->actual_end)->toDateString(),
-             'state' => in_array($wo->status, [WorkOrderStatus::Completed, WorkOrderStatus::Closed], true) ? 'done' : 'pending'],
+                'date' => optional($wo->actual_end)->toDateString(),
+                'state' => in_array($wo->status, [WorkOrderStatus::Completed, WorkOrderStatus::Closed], true) ? 'done' : 'pending'],
             ['key' => 'closed',      'label' => 'Closed',
-             'date' => null,
-             'state' => $wo->status === WorkOrderStatus::Closed ? 'done' : 'pending'],
+                'date' => null,
+                'state' => $wo->status === WorkOrderStatus::Closed ? 'done' : 'pending'],
         ];
     }
 
@@ -733,6 +764,7 @@ class WorkOrderService
             if (! in_array($class, ['service', 'non_stock', 'prototype'], true) || trim((string) $wo->exception_reason) === '') {
                 throw new BusinessRuleException('A no-BOM work order requires an explicit service, non-stock, or prototype class and an authorized reason.');
             }
+
             return;
         }
         if ($wo->materials()->exists()) {
@@ -813,11 +845,14 @@ class WorkOrderService
 
         // Series C — Task C4. Stage the canonical chain event in the same
         // transaction; only its outbox dispatch waits for commit.
-        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+        app(ChainBroadcaster::class)->broadcastFor(
             $wo,
             $to,
             auth()->user(),
         );
+        DB::afterCommit(static function (): void {
+            ProductionDashboardService::forgetCache();
+        });
     }
 
     /**
@@ -905,11 +940,12 @@ class WorkOrderService
                             && $cand->scheduled_start < $own->scheduled_end) {
                             throw new BusinessRuleException(
                                 "Machine is already committed to work order {$other->wo_number} "
-                                . 'over an overlapping schedule window.'
+                                .'over an overlapping schedule window.'
                             );
                         }
                     }
                 }
+
                 // No overlap with this candidate — keep checking others.
                 continue;
             }
@@ -942,7 +978,7 @@ class WorkOrderService
 
         throw new BusinessRuleException(
             "Machine {$machine->machine_code} is currently running work order "
-            . ($occupantNumber ?? "#{$occupantId}") . '. Complete or pause that work order first.'
+            .($occupantNumber ?? "#{$occupantId}").'. Complete or pause that work order first.'
         );
     }
 
@@ -964,7 +1000,9 @@ class WorkOrderService
         $wo->loadMissing('materials.item');
         foreach ($wo->materials as $material) {
             $needed = (string) $material->bom_quantity;
-            if (bccomp($needed, '0', 3) <= 0) continue;
+            if (bccomp($needed, '0', 3) <= 0) {
+                continue;
+            }
 
             $locationId = $this->bestLocationForItem(
                 (int) $material->item_id,
@@ -972,6 +1010,7 @@ class WorkOrderService
             );
             if ($locationId !== null) {
                 $this->reserveAt((int) $material->item_id, $locationId, $needed, $wo->id);
+
                 continue;
             }
 
@@ -991,7 +1030,7 @@ class WorkOrderService
                 $itemLabel = $material->item?->code ?? "item #{$material->item_id}";
                 throw new BusinessRuleException(
                     "Insufficient stock for {$itemLabel} (work order {$wo->wo_number}): "
-                    . "needed {$needed}."
+                    ."needed {$needed}."
                 );
             }
         }
@@ -1002,12 +1041,12 @@ class WorkOrderService
         $this->stock->reserve($itemId, $locationId, $quantity);
 
         MaterialReservation::create([
-            'item_id'       => $itemId,
+            'item_id' => $itemId,
             'work_order_id' => $woId,
-            'location_id'   => $locationId,
-            'quantity'      => $quantity,
-            'status'        => ReservationStatus::Reserved->value,
-            'reserved_at'   => Carbon::now(),
+            'location_id' => $locationId,
+            'quantity' => $quantity,
+            'status' => ReservationStatus::Reserved->value,
+            'reserved_at' => Carbon::now(),
         ]);
     }
 
@@ -1021,8 +1060,8 @@ class WorkOrderService
             // F-02 — never draw held/scrapped stock for production.
             ->whereHas('location.zone', function ($q) {
                 $q->whereNotIn('zone_type', [
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                    WarehouseZoneType::Quarantine->value,
+                    WarehouseZoneType::Scrap->value,
                 ]);
             })
             ->orderByRaw('(quantity - reserved_quantity) DESC')
@@ -1030,9 +1069,13 @@ class WorkOrderService
             ->get();
 
         foreach ($levels as $level) {
-            if (bccomp($remaining, '0', 3) <= 0) break;
+            if (bccomp($remaining, '0', 3) <= 0) {
+                break;
+            }
             $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
-            if (bccomp($available, '0', 3) <= 0) continue;
+            if (bccomp($available, '0', 3) <= 0) {
+                continue;
+            }
             $take = bccomp($available, $remaining, 3) >= 0 ? $remaining : $available;
             $this->reserveAt($itemId, (int) $level->location_id, $take, $woId);
             $remaining = bcsub($remaining, $take, 3);
@@ -1055,7 +1098,9 @@ class WorkOrderService
             ->get();
 
         foreach ($reservations as $res) {
-            if ($res->location_id === null) continue;
+            if ($res->location_id === null) {
+                continue;
+            }
 
             $qty = (string) $res->quantity;
             // Release first so the move()'s availability check sees the
@@ -1063,19 +1108,19 @@ class WorkOrderService
             $this->stock->release((int) $res->item_id, (int) $res->location_id, $qty);
 
             $movement = $this->stock->move(new StockMovementInput(
-                type:           StockMovementType::MaterialIssue,
-                itemId:         (int) $res->item_id,
+                type: StockMovementType::MaterialIssue,
+                itemId: (int) $res->item_id,
                 fromLocationId: (int) $res->location_id,
-                toLocationId:   null,
-                quantity:       $qty,
-                referenceType:  'work_order',
-                referenceId:    $wo->id,
-                remarks:        "WO {$wo->wo_number} material issue (reservation #{$res->id})",
-                createdBy:      $userId,
+                toLocationId: null,
+                quantity: $qty,
+                referenceType: 'work_order',
+                referenceId: $wo->id,
+                remarks: "WO {$wo->wo_number} material issue (reservation #{$res->id})",
+                createdBy: $userId,
             ));
 
             $res->update([
-                'status'      => ReservationStatus::Issued->value,
+                'status' => ReservationStatus::Issued->value,
                 'released_at' => Carbon::now(),
             ]);
 
@@ -1109,10 +1154,12 @@ class WorkOrderService
             ->get();
 
         foreach ($reservations as $res) {
-            if ($res->location_id === null) continue;
+            if ($res->location_id === null) {
+                continue;
+            }
             $this->stock->release((int) $res->item_id, (int) $res->location_id, (string) $res->quantity);
             $res->update([
-                'status'      => ReservationStatus::Released->value,
+                'status' => ReservationStatus::Released->value,
                 'released_at' => Carbon::now(),
             ]);
         }
@@ -1129,15 +1176,18 @@ class WorkOrderService
             // F-02 — never pick quarantine/scrap-zone stock for production.
             ->whereHas('location.zone', function ($q) {
                 $q->whereNotIn('zone_type', [
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
-                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                    WarehouseZoneType::Quarantine->value,
+                    WarehouseZoneType::Scrap->value,
                 ]);
             })
             ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->lockForUpdate()
             ->first();
-        if (! $row) return null;
+        if (! $row) {
+            return null;
+        }
         $available = bcsub((string) $row->quantity, (string) $row->reserved_quantity, 3);
+
         return bccomp($available, $needed, 3) >= 0 ? (int) $row->location_id : null;
     }
 }

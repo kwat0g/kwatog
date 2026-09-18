@@ -7,27 +7,30 @@ namespace Tests\Feature\MRP;
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
+use App\Common\Services\OutboxEventCodec;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
-use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\MRP\Enums\MrpRunStatus;
+use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\MRP\Jobs\RunAutomaticMrpJob;
+use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
+use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
+use App\Modules\MRP\Models\Bom;
+use App\Modules\MRP\Models\BomItem;
+use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Models\MrpRun;
+use App\Modules\MRP\Services\CapacityPlanningService;
 use App\Modules\MRP\Services\MrpAutomationService;
 use App\Modules\MRP\Services\MrpEngineService;
 use App\Modules\MRP\Services\MrpScopeResolver;
-use App\Modules\MRP\Services\CapacityPlanningService;
-use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
-use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
-use App\Modules\MRP\Enums\MrpRunTrigger;
-use App\Modules\MRP\Models\MrpRun;
-use App\Modules\MRP\Models\MrpPlan;
-use App\Modules\MRP\Models\Bom;
-use App\Modules\MRP\Models\BomItem;
 use App\Modules\Production\Models\WorkOrder;
-use App\Modules\Inventory\Events\StockMovementCompleted;
-use App\Modules\Inventory\Models\StockMovement;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -40,10 +43,10 @@ class MrpAutomationTest extends TestCase
     public function test_sales_order_confirmation_queues_scoped_automatic_mrp(): void
     {
         Queue::fake();
-        $salesOrder = new SalesOrder();
+        $salesOrder = new SalesOrder;
         $salesOrder->forceFill(['id' => 42]);
 
-        (new QueueMrpOnSalesOrderConfirmed())->handle(new SalesOrderConfirmed($salesOrder));
+        (new QueueMrpOnSalesOrderConfirmed)->handle(new SalesOrderConfirmed($salesOrder));
 
         Queue::assertPushed(RunAutomaticMrpJob::class, function (RunAutomaticMrpJob $job) use ($salesOrder): bool {
             return $job->salesOrderIds === [$salesOrder->id]
@@ -61,10 +64,37 @@ class MrpAutomationTest extends TestCase
         Queue::assertPushed(RunAutomaticMrpJob::class, 1);
     }
 
+    public function test_scope_identity_is_order_independent_and_lock_releases_when_processing_starts(): void
+    {
+        $first = new RunAutomaticMrpJob([22, 21], 'bom_changed');
+        $second = new RunAutomaticMrpJob([21, 22], 'inventory_changed');
+
+        $this->assertSame([21, 22], $first->salesOrderIds);
+        $this->assertSame($first->uniqueId(), $second->uniqueId());
+        $this->assertInstanceOf(ShouldBeUniqueUntilProcessing::class, $first);
+        $this->assertSame(50, $first->tries);
+    }
+
+    public function test_automatic_job_does_not_acknowledge_a_failed_run(): void
+    {
+        $run = new MrpRun;
+        $run->forceFill([
+            'status' => MrpRunStatus::Failed->value,
+            'error_message' => 'Database unavailable.',
+        ]);
+        $automation = Mockery::mock(MrpAutomationService::class);
+        $automation->shouldReceive('run')->once()->andReturn($run);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Database unavailable.');
+
+        (new RunAutomaticMrpJob([42], 'bom_changed'))->handle($automation);
+    }
+
     public function test_stock_change_queues_only_sales_orders_affected_by_the_item(): void
     {
         Queue::fake();
-        $movement = new StockMovement();
+        $movement = new StockMovement;
         $movement->forceFill(['id' => 7, 'item_id' => 88]);
 
         $resolver = Mockery::mock(MrpScopeResolver::class);
@@ -82,7 +112,7 @@ class MrpAutomationTest extends TestCase
     public function test_subassembly_scope_resolves_parent_sales_orders(): void
     {
         $child = Product::factory()->create([
-            'part_number' => 'SUB-' . strtoupper(substr(uniqid(), -6)),
+            'part_number' => 'SUB-'.strtoupper(substr(uniqid(), -6)),
         ]);
         $parent = Product::factory()->create();
         $childItem = Item::factory()->create([
@@ -117,7 +147,7 @@ class MrpAutomationTest extends TestCase
 
     public function test_mrp_replan_event_is_supported_by_the_durable_event_codec(): void
     {
-        $codec = app(\App\Common\Services\OutboxEventCodec::class);
+        $codec = app(OutboxEventCodec::class);
         $event = new MrpReplanRequested([21, 22], 'bom_changed');
 
         $encoded = $codec->encode($event);

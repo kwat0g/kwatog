@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Sprint 6 — Task 52. MRP engine.
  *
- * Run on SalesOrderService::confirm(). Produces:
+ * Run by the automatic queue after sales-order confirmation. Produces:
  *  - One mrp_plans row per run (versioned).
  *  - Draft purchase_requests for any raw-material shortfall (one PR row
  *    consolidating all material lines for the SO; each line is one
@@ -119,6 +119,20 @@ class MrpEngineService
 
         try {
             return DB::transaction(function () use ($so, &$sharedSupply, $run, $initiatingActorId, $triggerReason) {
+                if ($run !== null) {
+                    $activeRun = MrpRun::query()
+                        ->whereKey($run->id)
+                        ->where('status', MrpRunStatus::Running->value)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($activeRun === null) {
+                        throw new BusinessRuleException(
+                            'MRP run was reaped before this sales order could be planned. Retry the affected sales order.'
+                        );
+                    }
+                }
+
                 $actorId = $initiatingActorId ?? $run?->triggered_by_user_id;
                 $recordedBy = $actorId ?? (int) $so->created_by;
                 $purchaseRequestDepartmentId = $this->resolveAutoPurchaseRequestDepartment($so, $run, $actorId);
@@ -141,7 +155,7 @@ class MrpEngineService
                     ->orderByDesc('version')
                     ->first();
                 if ($previous) {
-                    $previous->update(['status' => MrpPlanStatus::Superseded->value]);
+                    $previous->forceFill(['status' => MrpPlanStatus::Superseded->value])->save();
                 }
 
                 // Load lines with product.
@@ -436,16 +450,20 @@ class MrpEngineService
                 } else {
                     // No shortages on this run — retire leftover draft auto-PRs so
                     // the purchasing queue never shows demand that no longer exists.
-                    PurchaseRequest::query()
+                    $retiredPrs = PurchaseRequest::query()
                         ->where('is_auto_generated', true)
                         ->where('status', PurchaseRequestStatus::Draft->value)
                         ->whereHas('mrpPlan', fn ($q) => $q
                             ->where('sales_order_id', $so->id)
                             ->where('id', '!=', $plan->id))
-                        ->update([
+                        ->lockForUpdate()
+                        ->get();
+
+                    foreach ($retiredPrs as $retiredPr) {
+                        $retiredPr->forceFill([
                             'status' => PurchaseRequestStatus::Cancelled->value,
-                            'updated_at' => now(),
-                        ]);
+                        ])->save();
+                    }
                 }
 
                 // Create one draft WO per SO line — reusing a prior plan's planned
@@ -589,6 +607,12 @@ class MrpEngineService
                     'mrp_plan_generated',
                 );
 
+                // Refresh while the run-row lock is still held. The reaper
+                // must see this heartbeat after the plan transaction commits.
+                if ($run !== null) {
+                    $this->touchRunHeartbeatOrFail($run);
+                }
+
                 return $this->show($finalPlan);
             });
         } catch (\Throwable $e) {
@@ -687,9 +711,9 @@ class MrpEngineService
             $sharedSupply = [];
 
             foreach ($sos as $so) {
-                try {
-                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
+                $this->touchRunHeartbeatOrFail($run);
 
+                try {
                     $beforeAutoPrs = PurchaseRequest::where('is_auto_generated', true)
                         ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
                         ->where('status', 'draft')
@@ -707,7 +731,7 @@ class MrpEngineService
                     $delta = $afterAutoPrs - $beforeAutoPrs;
                     if ($delta > 0) {
                         $prsCreated += $delta;
-                    } elseif ($beforeAutoPrs > 0) {
+                    } elseif ($afterAutoPrs > 0 && $beforeAutoPrs > 0) {
                         $prsUpdated += 1;
                     }
 
@@ -717,7 +741,6 @@ class MrpEngineService
                         'shortages_found' => (int) $plan->shortages_found,
                         'plan_no' => $plan->mrp_plan_no,
                     ];
-                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 } catch (\Throwable $inner) {
                     $failure = MrpErrorPolicy::describe($inner);
                     $failedSalesOrders++;
@@ -733,10 +756,10 @@ class MrpEngineService
                         'error_code' => $failure['code'],
                         'recovery_action' => $failure['recovery_action'],
                     ];
-                    $run->forceFill(['heartbeat_at' => now()])->saveQuietly();
                 }
             }
 
+            $this->touchRunHeartbeatOrFail($run);
             $run->update([
                 'sales_orders_evaluated' => $sos->count(),
                 'shortages_found' => $shortagesTotal,
@@ -755,17 +778,44 @@ class MrpEngineService
             ]);
         } catch (\Throwable $e) {
             $failure = MrpErrorPolicy::describe($e);
-            $run->update([
-                'duration_ms' => (int) round((microtime(true) - $start) * 1000),
-                'status' => MrpRunStatus::Failed->value,
-                'error_message' => $failure['message'],
-                'error_code' => $failure['code'],
-                'recovery_action' => $failure['recovery_action'],
-            ]);
+            $updated = MrpRun::query()
+                ->whereKey($run->id)
+                ->where('status', MrpRunStatus::Running->value)
+                ->update([
+                    'duration_ms' => (int) round((microtime(true) - $start) * 1000),
+                    'status' => MrpRunStatus::Failed->value,
+                    'error_message' => $failure['message'],
+                    'error_code' => $failure['code'],
+                    'recovery_action' => $failure['recovery_action'],
+                ]);
+
+            if ($updated === 0) {
+                $run->refresh();
+            }
             Log::error('MRP run: catastrophic failure', ['error' => $e->getMessage()]);
         }
 
         return $run->fresh();
+    }
+
+    private function touchRunHeartbeatOrFail(MrpRun $run): void
+    {
+        $now = now();
+        $updated = MrpRun::query()
+            ->whereKey($run->id)
+            ->where('status', MrpRunStatus::Running->value)
+            ->update([
+                'heartbeat_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        if ($updated !== 1) {
+            throw new BusinessRuleException(
+                'MRP run was reaped before planning completed. Review the run history and retry the affected sales orders.'
+            );
+        }
+
+        $run->setAttribute('heartbeat_at', $now);
     }
 
     public function list(array $filters): LengthAwarePaginator
@@ -801,16 +851,18 @@ class MrpEngineService
     /** Cancel only automatically planned roots made obsolete by a BOM gap. */
     private function cancelStalePlannedRootWorkOrders(int $salesOrderItemId, int $planId): void
     {
-        WorkOrder::query()
+        $workOrders = WorkOrder::query()
             ->where('sales_order_item_id', $salesOrderItemId)
             ->whereNull('parent_wo_id')
             ->whereNotNull('mrp_plan_id')
             ->where('mrp_plan_id', '!=', $planId)
             ->where('status', WorkOrderStatus::Planned->value)
-            ->update([
-                'status' => WorkOrderStatus::Cancelled->value,
-                'updated_at' => now(),
-            ]);
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($workOrders as $workOrder) {
+            $workOrder->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
+        }
     }
 
     /**
@@ -903,16 +955,18 @@ class MrpEngineService
      */
     private function cancelStalePlannedChildWorkOrders(int $salesOrderItemId, int $planId): void
     {
-        WorkOrder::query()
+        $workOrders = WorkOrder::query()
             ->where('sales_order_item_id', $salesOrderItemId)
             ->whereNotNull('parent_wo_id')
             ->whereNotNull('mrp_plan_id')
             ->where('mrp_plan_id', '!=', $planId)
             ->where('status', WorkOrderStatus::Planned->value)
-            ->update([
-                'status' => WorkOrderStatus::Cancelled->value,
-                'updated_at' => now(),
-            ]);
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($workOrders as $workOrder) {
+            $workOrder->forceFill(['status' => WorkOrderStatus::Cancelled->value])->save();
+        }
     }
 
     /**

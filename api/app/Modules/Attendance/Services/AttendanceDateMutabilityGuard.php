@@ -26,7 +26,7 @@ class AttendanceDateMutabilityGuard
 
         // Lock every overlapping period, not only periods already marked
         // locked. PayrollPeriodService takes this same row lock when it moves a
-        // period to Finalized/Disbursed/Voided, so an import cannot pass the
+        // period to Finalized/Disbursed, so an import cannot pass the
         // check and then write after a concurrent lifecycle transition.
         $periods = PayrollPeriod::query()
             ->where('period_start', '<=', $normalizedDate)
@@ -42,14 +42,13 @@ class AttendanceDateMutabilityGuard
             if (! in_array($period->status?->value, [
                 PayrollPeriodStatus::Finalized->value,
                 PayrollPeriodStatus::Disbursed->value,
-                PayrollPeriodStatus::Voided->value,
             ], true)) {
                 continue;
             }
 
             $status = $period->status?->label() ?? 'locked';
             throw new BusinessRuleException(sprintf(
-                'Attendance for %s is locked by payroll period %s–%s (%s). Void or correct the payroll period before changing this record.',
+                'Attendance for %s is locked by payroll period %s–%s (%s). Finalized or disbursed payroll periods must be corrected before changing this record.',
                 $normalizedDate,
                 CarbonImmutable::parse($period->period_start)->toDateString(),
                 CarbonImmutable::parse($period->period_end)->toDateString(),

@@ -49,7 +49,7 @@ class LoanService
             ->keyBy('workflow_type');
 
         return collect(LoanType::cases())
-            ->filter(fn (LoanType $type) => $workflows->has($type->value))
+            ->filter(fn (LoanType $type) => $type->isSupported() && $workflows->has($type->value))
             ->map(function (LoanType $type) use ($workflows) {
                 $workflow = $workflows->get($type->value);
                 $rate = $this->interestRateFor($type);
@@ -105,6 +105,7 @@ class LoanService
     /** @return array{principal_max:string, has_active:bool, max_pay_periods:int} */
     public function limitsFor(Employee $employee, LoanType $type): array
     {
+        $this->assertSupportedType($type);
         $multiplier = $this->decimalSetting("loans.{$type->value}.max_salary_multiplier");
         // Monthly equivalent, whichever pay type: the model reconciles the two so
         // a semi-monthly employee's cap is not computed off a half-month figure.
@@ -128,6 +129,8 @@ class LoanService
 
     public function request(int $employeeId, LoanType $type, array $data): EmployeeLoan
     {
+        $this->assertSupportedType($type);
+
         return DB::transaction(function () use ($employeeId, $type, $data) {
             $principal = $this->normalizeMoneyAmount($data['principal'] ?? null, 'Principal');
 
@@ -301,19 +304,41 @@ class LoanService
             if (! $this->access->canDecide($user, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to cancel this loan within your row scope.');
             }
-            // Retire the open approval step so a cancelled loan does not stay on
-            // the approval board as a live card that 422s on action.
-            ApprovalRecord::query()
-                ->where('approvable_type', $authoritative->getMorphClass())
-                ->where('approvable_id', $authoritative->getKey())
-                ->where('is_current', true)
-                ->whereIn('action', ['pending', 'skipped'])
-                ->update(['action' => 'superseded', 'is_current' => false]);
+            $this->retirePendingApprovalRecords($authoritative);
 
             $this->stateMachine->transition($authoritative, LoanStatus::Cancelled);
             $authoritative->save();
             return $authoritative->fresh(['employee', 'payments']);
         });
+    }
+
+    public function withdraw(EmployeeLoan $loan, Employee $employee): EmployeeLoan
+    {
+        return DB::transaction(function () use ($loan, $employee) {
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if ((int) $authoritative->employee_id !== (int) $employee->id) {
+                throw new BusinessRuleException('You may only withdraw your own loan request.');
+            }
+            if ($authoritative->status !== LoanStatus::Pending) {
+                throw new BusinessRuleException('Only pending loans can be withdrawn.');
+            }
+
+            $this->retirePendingApprovalRecords($authoritative);
+            $this->stateMachine->transition($authoritative, LoanStatus::Cancelled);
+            $authoritative->save();
+
+            return $authoritative->fresh(['employee', 'payments']);
+        });
+    }
+
+    private function retirePendingApprovalRecords(EmployeeLoan $loan): void
+    {
+        ApprovalRecord::query()
+            ->where('approvable_type', $loan->getMorphClass())
+            ->where('approvable_id', $loan->getKey())
+            ->where('is_current', true)
+            ->whereIn('action', ['pending', 'skipped'])
+            ->update(['action' => 'superseded', 'is_current' => false]);
     }
 
     public function recordPayment(
@@ -417,7 +442,16 @@ class LoanService
 
     public function interestRateFor(LoanType $type): string
     {
+        $this->assertSupportedType($type);
+
         return LoanRate::normalize((string) $this->requiredSetting("loans.{$type->value}.annual_interest_rate"));
+    }
+
+    private function assertSupportedType(LoanType $type): void
+    {
+        if (! $type->isSupported()) {
+            throw new BusinessRuleException('Government loan types are not currently supported.');
+        }
     }
 
     private function requiredSetting(string $key): mixed

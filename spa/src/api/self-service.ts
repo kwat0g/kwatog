@@ -59,9 +59,14 @@ export const selfServiceApi = {
  .then((r) => r.data.data),
 
  applyLoan: (data: { loan_type: string; amount: string | number; periods: number; reason?: string }) =>
- client
- .post<{ message: string; data: { id: string } }>('/hr/self-service/loans', data)
- .then((r) => r.data),
+  client
+  .post<{ message: string; data: { id: string } }>('/hr/self-service/loans', data)
+  .then((r) => r.data),
+
+  cancelLoan: (id: string) =>
+  client
+  .delete<{ message: string; data: { id: string; status: string } }>(`/hr/self-service/loans/${id}/cancel`)
+  .then((r) => r.data),
 
  profile: () =>
  client.get<{ data: SelfServiceProfile }>('/hr/self-service/profile').then((r) => r.data.data),

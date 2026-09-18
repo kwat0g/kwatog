@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Services\MrpAutomationService;
 use Illuminate\Console\Command;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\Log;
  */
 class RunDailyMrp extends Command
 {
-    protected $signature   = 'mrp:run-daily';
+    protected $signature = 'mrp:run-daily';
+
     protected $description = 'Re-run MRP across all active sales orders (Task A1)';
 
     public function handle(MrpAutomationService $automation, SettingsService $settings): int
@@ -45,21 +47,45 @@ class RunDailyMrp extends Command
                 ->get();
 
             app(NotificationService::class)->send($ppcHeads, 'mrp_run_completed', [
-                'title'           => 'Daily MRP run finished',
-                'message'         => "Daily MRP complete. {$run->shortages_found} shortages found. {$run->prs_created} PRs created, {$run->prs_updated} updated.",
+                'title' => 'Daily MRP run finished',
+                'message' => "Daily MRP complete. {$run->shortages_found} shortages found. {$run->prs_created} PRs created, {$run->prs_updated} updated.",
                 // There is no run-detail route; send operators to the existing
                 // MRP plans/run history surface instead of a dead URL.
-                'link_to'         => '/mrp/plans',
-                'entity_type'     => 'mrp_run',
-                'entity_id'       => $run->hash_id,
+                'link_to' => '/mrp/plans',
+                'entity_type' => 'mrp_run',
+                'entity_id' => $run->hash_id,
                 'shortages_found' => $run->shortages_found,
-                'prs_created'     => $run->prs_created,
-                'prs_updated'     => $run->prs_updated,
+                'prs_created' => $run->prs_created,
+                'prs_updated' => $run->prs_updated,
                 'plans_generated' => $run->plans_generated,
-            ]);        } catch (\Throwable $e) {
+            ]);
+        } catch (\Throwable $e) {
             Log::warning('mrp:run-daily — notify failed', ['error' => $e->getMessage()]);
         }
 
-        return $run->status?->value === 'completed' ? self::SUCCESS : self::FAILURE;
+        if ($run->status === MrpRunStatus::Failed) {
+            return self::FAILURE;
+        }
+
+        // A partial run is an expected warning when at least one SO planned
+        // successfully; the alert and run history carry the failed SO details.
+        // Treat an all-failed partial run as a command failure so monitoring
+        // still distinguishes useful work from a total planning outage.
+        if (
+            $run->status === MrpRunStatus::Partial
+            && (int) $run->sales_orders_evaluated > 0
+            && (int) $run->plans_generated === 0
+        ) {
+            return self::FAILURE;
+        }
+
+        if ($run->status === MrpRunStatus::Completed) {
+            return self::SUCCESS;
+        }
+
+        return $run->status === MrpRunStatus::Partial
+            && (int) $run->plans_generated > 0
+            ? self::SUCCESS
+            : self::FAILURE;
     }
 }

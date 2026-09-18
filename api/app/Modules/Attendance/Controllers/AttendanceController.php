@@ -78,6 +78,13 @@ class AttendanceController
         return response()->json(['data' => $result]);
     }
 
+    public function importRaw(ImportAttendanceRequest $request): JsonResponse
+    {
+        $result = $this->importer->importRawPunches($request->file('file'));
+
+        return response()->json(['data' => $result]);
+    }
+
     private function authorizeView(int $employeeId, Request $request): void
     {
         $user = $request->user();

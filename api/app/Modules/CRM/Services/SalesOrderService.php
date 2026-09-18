@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\ChainBroadcaster;
+use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
@@ -17,12 +19,19 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
 use App\Modules\CRM\Support\SalesOrderTransitionResult;
+use App\Modules\Inventory\Services\PickingListService;
+use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Services\CapacityPlanningService;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -67,7 +76,7 @@ class SalesOrderService
      *     no path forward (CR-01 / SC-01).
      *
      * Backwards transitions remain absent — `cancelled` and `closed` are
-      * terminal states — and an illegal transition is a hard error (see
+     * terminal states — and an illegal transition is a hard error (see
      * transitionOrFail) so the owning operation rolls back rather than
      * succeeding while the SO goes stale.
      *
@@ -78,15 +87,15 @@ class SalesOrderService
      * @var array<string, list<string>>
      */
     private const ALLOWED_TRANSITIONS = [
-        'confirmed'           => ['in_production', 'partially_delivered', 'delivered', 'invoiced'],
-        'in_production'       => ['partially_delivered', 'delivered', 'invoiced'],
+        'confirmed' => ['in_production', 'partially_delivered', 'delivered', 'invoiced'],
+        'in_production' => ['partially_delivered', 'delivered', 'invoiced'],
         'partially_delivered' => ['delivered', 'invoiced', 'paid', 'closed'],
-        'delivered'           => ['invoiced', 'paid', 'closed'],
-        'invoiced'            => ['confirmed', 'partially_delivered', 'delivered', 'paid', 'closed'],
-        'paid'                => ['partially_delivered', 'delivered', 'closed'],
-        'closed'              => [],
-        'cancelled'           => [],
-        'draft'               => [],
+        'delivered' => ['invoiced', 'paid', 'closed'],
+        'invoiced' => ['confirmed', 'partially_delivered', 'delivered', 'paid', 'closed'],
+        'paid' => ['partially_delivered', 'delivered', 'closed'],
+        'closed' => [],
+        'cancelled' => [],
+        'draft' => [],
     ];
 
     /** @return array<string, list<string>> */
@@ -119,7 +128,7 @@ class SalesOrderService
             return; // null or 0 = no limit enforced
         }
 
-        $arBalance = (string) (\App\Modules\Accounting\Models\Invoice::query()
+        $arBalance = (string) (Invoice::query()
             ->where('customer_id', $customer->id)
             ->whereIn('status', ['finalized', 'partial'])
             ->sum('balance') ?? '0');
@@ -142,11 +151,11 @@ class SalesOrderService
         if (bccomp($totalExposure, $limit, 2) > 0) {
             $msg = sprintf(
                 'Credit limit exceeded. Limit: %s, Current exposure: %s (AR %s + open SOs %s + this SO %s).',
-                app(\App\Common\Services\CurrencyDisplayService::class)->format($limit),
-                app(\App\Common\Services\CurrencyDisplayService::class)->format($totalExposure),
-                app(\App\Common\Services\CurrencyDisplayService::class)->format($arBalance),
-                app(\App\Common\Services\CurrencyDisplayService::class)->format($openSoExposure),
-                app(\App\Common\Services\CurrencyDisplayService::class)->format($so->total_amount),
+                app(CurrencyDisplayService::class)->format($limit),
+                app(CurrencyDisplayService::class)->format($totalExposure),
+                app(CurrencyDisplayService::class)->format($arBalance),
+                app(CurrencyDisplayService::class)->format($openSoExposure),
+                app(CurrencyDisplayService::class)->format($so->total_amount),
             );
             throw ValidationException::withMessages([
                 'credit_limit' => [$msg],
@@ -302,7 +311,9 @@ class SalesOrderService
 
         if (! empty($filters['customer_id'])) {
             $cid = HashIdFilter::decode($filters['customer_id'], Customer::class);
-            if ($cid) $q->where('customer_id', $cid);
+            if ($cid) {
+                $q->where('customer_id', $cid);
+            }
         }
         if (! empty($filters['status'])) {
             // A single status string or an array (the delivery create form
@@ -328,7 +339,7 @@ class SalesOrderService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('so_number', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhereHas('customer', fn ($c) => $c->where('name', SearchOperator::like(), SearchOperator::contains($term)));
+                    ->orWhereHas('customer', fn ($c) => $c->where('name', SearchOperator::like(), SearchOperator::contains($term)));
             });
         }
 
@@ -367,8 +378,8 @@ class SalesOrderService
     {
         return DB::transaction(function () use ($data, $userId) {
             $customerId = (int) $data['customer_id'];
-            $orderDate  = Carbon::parse($data['date']);
-            $items      = $data['items'];
+            $orderDate = Carbon::parse($data['date']);
+            $items = $data['items'];
 
             $this->lockOrderReferences($customerId, $items);
             $this->assertActiveOrderReferences($customerId, $items);
@@ -380,15 +391,15 @@ class SalesOrderService
             $lines = [];
             $subtotal = Money::zero();
             foreach ($items as $idx => $item) {
-                $productId    = (int) $item['product_id'];
+                $productId = (int) $item['product_id'];
                 $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty          = (string) $item['quantity'];
+                $qty = (string) $item['quantity'];
 
                 // Resolve at delivery_date — that's the date the price applies to.
                 try {
                     $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
-                } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
-                    throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
+                } catch (NoPriceAgreementException $e) {
+                    throw new NoPriceAgreementException("items.{$idx}.product_id");
                 }
                 // Volume tier resolution: tiered agreements pick the unit price
                 // for this line's quantity; flat agreements return $agreement->price.
@@ -396,35 +407,35 @@ class SalesOrderService
                 $lineTotal = Money::mul($qty, $unitPrice);
 
                 $lines[] = [
-                    'product_id'         => $productId,
-                    'quantity'           => $qty,
-                    'unit_price'         => $unitPrice,
-                    'total'              => $lineTotal,
+                    'product_id' => $productId,
+                    'quantity' => $qty,
+                    'unit_price' => $unitPrice,
+                    'total' => $lineTotal,
                     'quantity_delivered' => 0,
-                    'delivery_date'      => $deliveryDate->toDateString(),
+                    'delivery_date' => $deliveryDate->toDateString(),
                 ];
                 $subtotal = Money::add($subtotal, $lineTotal);
             }
 
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             $so = SalesOrder::create([
-                'so_number'          => $this->sequences->generate('sales_order'),
-                'customer_id'        => $customerId,
-                'date'               => $orderDate->toDateString(),
-                'subtotal'           => $subtotal,
-                'vat_amount'         => $vat,
-                'total_amount'       => $total,
-                'status'             => SalesOrderStatus::Draft->value,
+                'so_number' => $this->sequences->generate('sales_order'),
+                'customer_id' => $customerId,
+                'date' => $orderDate->toDateString(),
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'status' => SalesOrderStatus::Draft->value,
                 'payment_terms_days' => $data['payment_terms_days']
                     ?? (int) Customer::query()->whereKey($customerId)->value('payment_terms_days'),
-                'delivery_terms'     => $data['delivery_terms'] ?? null,
-                'notes'              => $data['notes'] ?? null,
-                'incoterm'           => $data['incoterm'] ?? null,
-                'submission_source'  => $data['submission_source'] ?? 'internal',
-                'created_by'         => $userId,
+                'delivery_terms' => $data['delivery_terms'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'incoterm' => $data['incoterm'] ?? null,
+                'submission_source' => $data['submission_source'] ?? 'internal',
+                'created_by' => $userId,
             ]);
 
             // Persist lines.
@@ -452,8 +463,8 @@ class SalesOrderService
             }
 
             $customerId = (int) ($data['customer_id'] ?? $lockedSo->customer_id);
-            $orderDate  = Carbon::parse($data['date'] ?? $lockedSo->date->toDateString());
-            $items      = $data['items'];
+            $orderDate = Carbon::parse($data['date'] ?? $lockedSo->date->toDateString());
+            $items = $data['items'];
 
             $this->lockOrderReferences($customerId, $items);
             $this->assertActiveOrderReferences($customerId, $items);
@@ -463,45 +474,45 @@ class SalesOrderService
             $newLines = [];
 
             foreach ($items as $idx => $item) {
-                $productId    = (int) $item['product_id'];
+                $productId = (int) $item['product_id'];
                 $deliveryDate = Carbon::parse($item['delivery_date']);
-                $qty          = (string) $item['quantity'];
+                $qty = (string) $item['quantity'];
                 try {
                     $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
-                } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
-                    throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
+                } catch (NoPriceAgreementException $e) {
+                    throw new NoPriceAgreementException("items.{$idx}.product_id");
                 }
                 // Volume tier resolution (see create()).
                 $unitPrice = (string) $this->prices->resolveUnitPrice($agreement, $qty);
                 $lineTotal = Money::mul($qty, $unitPrice);
                 $newLines[] = [
-                    'product_id'         => $productId,
-                    'quantity'           => $qty,
-                    'unit_price'         => $unitPrice,
-                    'total'              => $lineTotal,
+                    'product_id' => $productId,
+                    'quantity' => $qty,
+                    'unit_price' => $unitPrice,
+                    'total' => $lineTotal,
                     'quantity_delivered' => 0,
-                    'delivery_date'      => $deliveryDate->toDateString(),
+                    'delivery_date' => $deliveryDate->toDateString(),
                 ];
                 $subtotal = Money::add($subtotal, $lineTotal);
             }
             $isVatable = $this->taxPolicy->isVatRegistered();
-            $vat   = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             $lockedSo->update([
-                'customer_id'        => $customerId,
-                'date'               => $orderDate->toDateString(),
-                'subtotal'           => $subtotal,
-                'vat_amount'         => $vat,
-                'total_amount'       => $total,
+                'customer_id' => $customerId,
+                'date' => $orderDate->toDateString(),
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
                 'payment_terms_days' => $data['payment_terms_days'] ?? $lockedSo->payment_terms_days,
-                'delivery_terms'     => array_key_exists('delivery_terms', $data)
+                'delivery_terms' => array_key_exists('delivery_terms', $data)
                     ? $data['delivery_terms']
                     : $lockedSo->delivery_terms,
-                'incoterm'           => array_key_exists('incoterm', $data)
+                'incoterm' => array_key_exists('incoterm', $data)
                     ? $data['incoterm']
                     : $lockedSo->incoterm?->value,
-                'notes'              => array_key_exists('notes', $data)
+                'notes' => array_key_exists('notes', $data)
                     ? $data['notes']
                     : $lockedSo->notes,
             ]);
@@ -574,7 +585,7 @@ class SalesOrderService
             // Stage real-time chain progress with the confirmation. The
             // outbox dispatch itself still waits for commit, so a rollback
             // cannot leave a phantom confirmed step.
-            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+            app(ChainBroadcaster::class)->broadcastFor(
                 $fresh,
                 SalesOrderStatus::Confirmed->value,
                 auth()->user(),
@@ -610,18 +621,20 @@ class SalesOrderService
      * Resolve the CapacityPlanningService via the container so this module
      * can run without the MRP module being booted.
      */
-    private function capacityPlanner(): ?\App\Modules\MRP\Services\CapacityPlanningService
+    private function capacityPlanner(): ?CapacityPlanningService
     {
         $cls = '\\App\\Modules\\MRP\\Services\\CapacityPlanningService';
+
         return class_exists($cls) ? app($cls) : null;
     }
 
     /**
      * Resolve PickingListService via the container (optional dependency).
      */
-    private function pickingListService(): ?\App\Modules\Inventory\Services\PickingListService
+    private function pickingListService(): ?PickingListService
     {
         $cls = '\\App\\Modules\\Inventory\\Services\\PickingListService';
+
         return class_exists($cls) ? app($cls) : null;
     }
 
@@ -647,7 +660,7 @@ class SalesOrderService
 
         // Gather what MRP created.
         $confirmedSo->load([
-            'mrpPlan',
+            'mrpPlan.mrpRun',
             'workOrders.product:id,part_number,name',
             'workOrders.machine:id,machine_code,name',
             'workOrders.mold:id,mold_code,name',
@@ -656,7 +669,7 @@ class SalesOrderService
         $plan = $confirmedSo->mrpPlan;
         $workOrders = $confirmedSo->workOrders;
 
-        $planSummary = (array) ($plan?->summary ?? []);
+        $planSummary = (array) ($plan?->mrpRun?->summary ?? []);
         $schedulingResult = $planSummary['scheduling'] ?? ['scheduled' => [], 'conflicts' => []];
         $planningStatus = $plan ? 'completed' : 'queued';
 
@@ -673,6 +686,7 @@ class SalesOrderService
         $woSummaries = $workOrders->map(function ($wo) use ($schedulingResult) {
             $schedule = collect($schedulingResult['scheduled'])
                 ->firstWhere('work_order_id', $wo->hash_id);
+
             return [
                 'id' => $wo->hash_id,
                 'wo_number' => $wo->wo_number,
@@ -682,10 +696,10 @@ class SalesOrderService
                 ] : null,
                 'status' => $wo->status?->value,
                 'quantity_target' => (int) $wo->quantity_target,
-                'machine' => $wo->machine ? $wo->machine->machine_code . ' ' . $wo->machine->name : null,
+                'machine' => $wo->machine ? $wo->machine->machine_code.' '.$wo->machine->name : null,
                 'scheduled_start' => $schedule['scheduled_start'] ?? optional($wo->planned_start)->toIso8601String(),
                 'scheduled_end' => $schedule['scheduled_end'] ?? optional($wo->planned_end)->toIso8601String(),
-                'needs_manual_scheduling' => $wo->status?->value === 'planned' && !$wo->machine_id,
+                'needs_manual_scheduling' => $wo->status?->value === 'planned' && ! $wo->machine_id,
             ];
         })->values()->all();
 
@@ -729,7 +743,7 @@ class SalesOrderService
             $lockedSo->update([
                 'status' => SalesOrderStatus::Cancelled->value,
                 ...$this->transitionTimestamp(SalesOrderStatus::Cancelled),
-                'notes'  => trim(($lockedSo->notes ?? '') . "\n\n[Cancelled" . ($reason ? ': ' . $reason : '') . ']'),
+                'notes' => trim(($lockedSo->notes ?? '')."\n\n[Cancelled".($reason ? ': '.$reason : '').']'),
             ]);
 
             // Sprint 6 audit §1.2: cascade through the chain.
@@ -738,22 +752,22 @@ class SalesOrderService
             //     the MRP plan; in_progress/completed/closed WOs are left
             //     alone — the operator must finish or cancel them manually.
             //     WorkOrderService::cancel() releases each WO's reservations.
-            $plan = \App\Modules\MRP\Models\MrpPlan::where('sales_order_id', $lockedSo->id)
-                ->where('status', \App\Modules\MRP\Enums\MrpPlanStatus::Active->value)
+            $plan = MrpPlan::where('sales_order_id', $lockedSo->id)
+                ->where('status', MrpPlanStatus::Active->value)
                 ->lockForUpdate()
                 ->first();
             if ($plan) {
-                $plan->update(['status' => \App\Modules\MRP\Enums\MrpPlanStatus::Cancelled->value]);
+                $plan->update(['status' => MrpPlanStatus::Cancelled->value]);
             }
 
             $woService = $this->workOrderService();
             if ($woService) {
                 $cancellableStatuses = [
-                    \App\Modules\Production\Enums\WorkOrderStatus::Planned->value,
-                    \App\Modules\Production\Enums\WorkOrderStatus::Confirmed->value,
-                    \App\Modules\Production\Enums\WorkOrderStatus::Paused->value,
+                    WorkOrderStatus::Planned->value,
+                    WorkOrderStatus::Confirmed->value,
+                    WorkOrderStatus::Paused->value,
                 ];
-                $linkedWos = \App\Modules\Production\Models\WorkOrder::query()
+                $linkedWos = WorkOrder::query()
                     ->where('sales_order_id', $lockedSo->id)
                     ->whereIn('status', $cancellableStatuses)
                     ->lockForUpdate()
@@ -766,9 +780,9 @@ class SalesOrderService
             // Series C — Task C4. Stage real-time chain progress atomically
             // with the cancellation and its downstream work-order changes.
             $fresh = $lockedSo->fresh();
-            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+            app(ChainBroadcaster::class)->broadcastFor(
                 $fresh,
-                \App\Modules\CRM\Enums\SalesOrderStatus::Cancelled->value,
+                SalesOrderStatus::Cancelled->value,
                 auth()->user(),
             );
 
@@ -780,9 +794,10 @@ class SalesOrderService
      * Resolve the production WorkOrderService through the container so that
      * the CRM module's tests can run without booting the Production module.
      */
-    private function workOrderService(): ?\App\Modules\Production\Services\WorkOrderService
+    private function workOrderService(): ?WorkOrderService
     {
         $cls = '\\App\\Modules\\Production\\Services\\WorkOrderService';
+
         return class_exists($cls) ? app($cls) : null;
     }
 
@@ -992,9 +1007,10 @@ class SalesOrderService
             ]);
             Log::debug('SalesOrder transition skipped', [
                 'sales_order_id' => $so->id,
-                'from'           => $currentValue,
-                'to'             => $target->value,
+                'from' => $currentValue,
+                'to' => $target->value,
             ]);
+
             return new SalesOrderTransitionResult('skipped', 409, $currentValue, $target->value, $reason);
         }
 
@@ -1003,7 +1019,7 @@ class SalesOrderService
             ...$this->transitionTimestamp($target),
         ]);
         $fresh = $so->fresh();
-        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
+        app(ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
 
         return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
     }
@@ -1048,27 +1064,27 @@ class SalesOrderService
 
         return [
             ['key' => 'order_entered', 'label' => 'Order Entered',
-             'date' => $so->created_at?->toDateString(),
-             'state' => 'done'],
+                'date' => $so->created_at?->toDateString(),
+                'state' => 'done'],
             ['key' => 'mrp_planned', 'label' => 'MRP Planned',
-             'date' => $so->confirmed_at?->toDateString(),
-             'state' => $mrpState],
+                'date' => $so->confirmed_at?->toDateString(),
+                'state' => $mrpState],
             ['key' => 'in_production', 'label' => 'In Production',
-             'date' => $so->in_production_at?->toDateString(),
-             'state' => $productionState],
+                'date' => $so->in_production_at?->toDateString(),
+                'state' => $productionState],
             ['key' => 'qc_outgoing', 'label' => 'QC Outgoing', 'date' => $qc['date'], 'state' => $qc['state']],
             ['key' => 'delivered', 'label' => 'Delivered',
-             'date' => ($so->delivered_at ?? $so->partially_delivered_at)?->toDateString(),
-             'state' => $deliveryState],
+                'date' => ($so->delivered_at ?? $so->partially_delivered_at)?->toDateString(),
+                'state' => $deliveryState],
             ['key' => 'invoiced', 'label' => 'Invoiced',
-             'date' => $so->invoiced_at?->toDateString(),
-             'state' => $isCancelled ? 'skipped' : ($isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
+                'date' => $so->invoiced_at?->toDateString(),
+                'state' => $isCancelled ? 'skipped' : ($isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
             ['key' => 'paid', 'label' => 'Paid',
-             'date' => $so->paid_at?->toDateString(),
-             'state' => $isCancelled ? 'skipped' : ($isPaid ? 'done' : 'pending')],
+                'date' => $so->paid_at?->toDateString(),
+                'state' => $isCancelled ? 'skipped' : ($isPaid ? 'done' : 'pending')],
             ['key' => 'closed', 'label' => 'Closed',
-             'date' => $so->closed_at?->toDateString(),
-             'state' => $isCancelled ? 'skipped' : ($isClosed ? 'done' : 'pending')],
+                'date' => $so->closed_at?->toDateString(),
+                'state' => $isCancelled ? 'skipped' : ($isClosed ? 'done' : 'pending')],
         ];
     }
 
@@ -1090,7 +1106,7 @@ class SalesOrderService
         $row = DB::table('inspections as i')
             ->join('work_orders as w', function ($j) {
                 $j->on('w.id', '=', 'i.entity_id')
-                  ->where('i.entity_type', '=', InspectionEntityType::WorkOrder->value);
+                    ->where('i.entity_type', '=', InspectionEntityType::WorkOrder->value);
             })
             ->where('w.sales_order_id', $so->id)
             ->where('i.stage', InspectionStage::Outgoing->value)
@@ -1109,6 +1125,7 @@ class SalesOrderService
         if ($status === 'failed') {
             return ['state' => 'failed', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
         }
+
         return ['state' => 'active', 'date' => optional(Carbon::parse($row->started_at))->toDateString()];
     }
 }

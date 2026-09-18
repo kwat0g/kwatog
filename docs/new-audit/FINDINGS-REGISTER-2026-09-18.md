@@ -76,7 +76,8 @@ Summarized by audit file; each doc lists the full set.
 - **SUPPLYCHAIN**: dead `by_weight`/`manual`; `Vehicle.asset_id` dead; no SPA consumers for container/landed/reschedule.
 - **CRM**: dead `crm.customers.manage`/`crm.so.create`; duplicated pricing validation; inquiry API in Landing without `feature:crm`.
 - **HR**: dead property/directory stack; `is_final_pay_deduction` never set; importer bypasses position uniqueness.
-- **ATTENDANCE-LEAVE-LOANS**: dead `overtime_request` workflow, `seedFor`, `government_reference_no`, `LeaveHalfDayPeriod::FullDay`.
+- **ATTENDANCE-LEAVE-LOANS**: remaining register items were remediated or explicitly retained as
+  future government-loan scope; see the domain audit for the current status.
 - **FORECASTING-ASSETS**: forecasts advisory-only; duplicate accuracy endpoint/N+1; hidden transfer stack; QR docblock lie.
 - **B2B-MAINTENANCE**: reset tokens never pruned; supplier can't re-download docs; condition-reading surface disabled but job runs; maintenance N+1.
 - **PLATFORM**: dashboard/Admin/Auth/Landing/Common dead-ends listed in that doc.

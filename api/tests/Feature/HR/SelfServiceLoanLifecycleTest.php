@@ -73,6 +73,8 @@ class SelfServiceLoanLifecycleTest extends TestCase
             ->assertJsonPath('data.active.0.loan_type', 'cash_advance')
             ->assertJsonPath('data.active.0.periods', 5)
             ->assertJsonPath('data.active.0.periods_remaining', 5)
+            ->assertJsonPath('data.active.0.repayment_months', 5)
+            ->assertJsonPath('data.active.0.remaining_repayment_months', 5)
             ->assertJsonPath('data.active.0.outstanding_balance', '5000.00');
     }
 
@@ -97,6 +99,76 @@ class SelfServiceLoanLifecycleTest extends TestCase
             ->assertJsonFragment(['message' => 'An active or pending cash_advance already exists for this employee.']);
 
         $this->assertSame(1, EmployeeLoan::query()->where('employee_id', $employee->id)->count());
+    }
+
+    public function test_borrower_can_withdraw_own_pending_loan_and_retire_approval_card(): void
+    {
+        $employee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/hr/self-service/loans', [
+                'loan_type' => 'cash_advance',
+                'amount' => 5000,
+                'periods' => 5,
+                'reason' => 'Withdrawal regression.',
+            ])
+            ->assertCreated();
+
+        $loan = EmployeeLoan::query()->where('employee_id', $employee->id)->firstOrFail();
+
+        $this->actingAs($user)
+            ->deleteJson('/api/v1/hr/self-service/loans/'.$loan->hash_id.'/cancel')
+            ->assertOk()
+            ->assertJsonPath('message', 'Loan request withdrawn.')
+            ->assertJsonPath('data.id', $loan->hash_id)
+            ->assertJsonPath('data.status', LoanStatus::Cancelled->value);
+
+        $this->assertSame(LoanStatus::Cancelled, $loan->fresh()->status);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $loan->getMorphClass(),
+            'approvable_id' => $loan->id,
+            'action' => 'superseded',
+            'is_current' => false,
+        ]);
+    }
+
+    public function test_borrower_cannot_withdraw_another_employees_pending_loan(): void
+    {
+        $owner = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $ownerUser = User::factory()->create(['employee_id' => $owner->id]);
+        $otherEmployee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $otherUser = User::factory()->create(['employee_id' => $otherEmployee->id]);
+
+        $this->actingAs($ownerUser)
+            ->postJson('/api/v1/hr/self-service/loans', [
+                'loan_type' => 'cash_advance',
+                'amount' => 5000,
+                'periods' => 5,
+                'reason' => 'Owner-only withdrawal regression.',
+            ])
+            ->assertCreated();
+        $loan = EmployeeLoan::query()->where('employee_id', $owner->id)->firstOrFail();
+
+        $this->actingAs($otherUser)
+            ->deleteJson('/api/v1/hr/self-service/loans/'.$loan->hash_id.'/cancel')
+            ->assertNotFound();
+
+        $this->assertSame(LoanStatus::Pending, $loan->fresh()->status);
+    }
+
+    public function test_borrower_cannot_withdraw_an_active_loan(): void
+    {
+        $employee = Employee::factory()->create(['basic_monthly_salary' => 30000]);
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+        $loan = EmployeeLoan::factory()->create(['employee_id' => $employee->id]);
+
+        $this->actingAs($user)
+            ->deleteJson('/api/v1/hr/self-service/loans/'.$loan->hash_id.'/cancel')
+            ->assertUnprocessable()
+            ->assertJsonFragment(['message' => 'Only pending loans can be withdrawn.']);
+
+        $this->assertSame(LoanStatus::Active, $loan->fresh()->status);
     }
 
     public function test_history_limit_keeps_all_active_loans_but_caps_completed_history(): void

@@ -8,7 +8,9 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\MRP\Enums\MoldEventType;
 use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Events\MoldShotLimitNearing;
@@ -16,7 +18,7 @@ use App\Modules\MRP\Events\MoldShotLimitReached;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
-use App\Common\Support\TrashedFilter;
+use App\Modules\Production\Services\ProductionDashboardService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +36,9 @@ class MoldService
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
-            if ($pid) $q->where('product_id', $pid);
+            if ($pid) {
+                $q->where('product_id', $pid);
+            }
         }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -47,7 +51,7 @@ class MoldService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('mold_code', SearchOperator::like(), SearchOperator::contains($term))
-                   ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
+                    ->orWhere('name', SearchOperator::like(), SearchOperator::contains($term));
             });
         }
 
@@ -65,30 +69,42 @@ class MoldService
 
     public function create(array $data): Mold
     {
-        return DB::transaction(function () use ($data) {
+        $mold = DB::transaction(function () use ($data) {
             $mold = Mold::create($data);
             MoldHistory::create([
-                'mold_id'             => $mold->id,
-                'event_type'          => MoldEventType::Created->value,
-                'description'         => 'Mold created in system.',
-                'event_date'          => now()->toDateString(),
+                'mold_id' => $mold->id,
+                'event_type' => MoldEventType::Created->value,
+                'description' => 'Mold created in system.',
+                'event_date' => now()->toDateString(),
                 'shot_count_at_event' => 0,
             ]);
-            return $mold->fresh()->load('product:id,part_number,name,unit_of_measure');
+            $mold = $mold->fresh()->load('product:id,part_number,name,unit_of_measure');
+            $this->ensureShotMaintenanceSchedule($mold);
+
+            return $mold;
         });
+
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     public function update(Mold $m, array $data): Mold
     {
-        return DB::transaction(function () use ($m, $data) {
+        $mold = DB::transaction(function () use ($m, $data) {
             $m->update($data);
+
             return $m->fresh()->load('product:id,part_number,name,unit_of_measure');
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     public function delete(Mold $m): void
     {
         $m->delete();
+        ProductionDashboardService::forgetCache();
     }
 
     /**
@@ -97,10 +113,14 @@ class MoldService
      */
     public function syncCompatibility(Mold $m, array $machineIds): Mold
     {
-        return DB::transaction(function () use ($m, $machineIds) {
+        $mold = DB::transaction(function () use ($m, $machineIds) {
             $m->compatibleMachines()->sync($machineIds);
+
             return $this->show($m->fresh());
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     /**
@@ -120,10 +140,10 @@ class MoldService
             if ($row->current_shot_count >= $row->max_shots_before_maintenance) {
                 $row->status = MoldStatus::Maintenance->value;
                 MoldHistory::create([
-                    'mold_id'             => $row->id,
-                    'event_type'          => MoldEventType::ShotLimitReached->value,
-                    'description'         => 'Shot limit reached — automatically flagged for maintenance.',
-                    'event_date'          => now()->toDateString(),
+                    'mold_id' => $row->id,
+                    'event_type' => MoldEventType::ShotLimitReached->value,
+                    'description' => 'Shot limit reached — automatically flagged for maintenance.',
+                    'event_date' => now()->toDateString(),
                     'shot_count_at_event' => $row->current_shot_count,
                 ]);
             }
@@ -143,27 +163,33 @@ class MoldService
 
         [$row, $beforePct] = $fresh;
 
+        ProductionDashboardService::forgetCache();
+
         return $row;
     }
 
     /** Reset shot count after maintenance. Archives the prior count to history. */
     public function resetShotCount(Mold $m, ?string $performedBy = null): Mold
     {
-        return DB::transaction(function () use ($m, $performedBy) {
+        $mold = DB::transaction(function () use ($m, $performedBy) {
             MoldHistory::create([
-                'mold_id'             => $m->id,
-                'event_type'          => MoldEventType::MaintenanceCompleted->value,
-                'description'         => "Reset after maintenance (count was {$m->current_shot_count}).",
-                'performed_by'        => $performedBy,
-                'event_date'          => now()->toDateString(),
+                'mold_id' => $m->id,
+                'event_type' => MoldEventType::MaintenanceCompleted->value,
+                'description' => "Reset after maintenance (count was {$m->current_shot_count}).",
+                'performed_by' => $performedBy,
+                'event_date' => now()->toDateString(),
                 'shot_count_at_event' => $m->current_shot_count,
             ]);
             $m->update([
                 'current_shot_count' => 0,
-                'status'             => MoldStatus::Available->value,
+                'status' => MoldStatus::Available->value,
             ]);
+
             return $m->fresh();
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     /**
@@ -172,42 +198,27 @@ class MoldService
      */
     public function commission(Mold $m, ?string $performedBy = null): Mold
     {
-        return DB::transaction(function () use ($m, $performedBy) {
+        $mold = DB::transaction(function () use ($m, $performedBy) {
             $m->update([
                 'commissioned_at' => now()->toDateString(),
-                'status'          => MoldStatus::Available->value,
+                'status' => MoldStatus::Available->value,
             ]);
             MoldHistory::create([
-                'mold_id'             => $m->id,
-                'event_type'          => MoldEventType::Created->value,
-                'description'         => 'Mold commissioned into service.',
-                'performed_by'        => $performedBy,
-                'event_date'          => now()->toDateString(),
+                'mold_id' => $m->id,
+                'event_type' => MoldEventType::Created->value,
+                'description' => 'Mold commissioned into service.',
+                'performed_by' => $performedBy,
+                'event_date' => now()->toDateString(),
                 'shot_count_at_event' => $m->current_shot_count,
             ]);
 
-            // Auto-create a shot-based PM schedule when the Maintenance module
-            // is present. Guarded so MRP doesn't hard-depend on Maintenance.
-            $interval = (int) ($m->maintenance_frequency_shots ?? $m->max_shots_before_maintenance);
-            if ($interval > 0 && class_exists(\App\Modules\Maintenance\Models\MaintenanceSchedule::class)) {
-                \App\Modules\Maintenance\Models\MaintenanceSchedule::firstOrCreate(
-                    [
-                        'maintainable_type' => 'mold',
-                        'maintainable_id'   => $m->id,
-                        'interval_type'     => 'shots',
-                    ],
-                    [
-                        'schedule_type'  => 'preventive',
-                        'interval_value' => $interval,
-                        'description'    => "Auto PM: {$m->name} every {$interval} shots",
-                        'is_active'      => true,
-                        'next_due_at'    => null,
-                    ],
-                );
-            }
+            $this->ensureShotMaintenanceSchedule($m);
 
             return $m->fresh();
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     /**
@@ -215,26 +226,26 @@ class MoldService
      */
     public function decommission(Mold $m, ?string $reason = null, ?string $performedBy = null): Mold
     {
-        return DB::transaction(function () use ($m, $reason, $performedBy) {
+        $mold = DB::transaction(function () use ($m, $reason, $performedBy) {
             $m->update([
                 'decommissioned_at' => now()->toDateString(),
-                'status'            => MoldStatus::Retired->value,
+                'status' => MoldStatus::Retired->value,
             ]);
             MoldHistory::create([
-                'mold_id'             => $m->id,
-                'event_type'          => MoldEventType::Retired->value,
-                'description'         => $reason
+                'mold_id' => $m->id,
+                'event_type' => MoldEventType::Retired->value,
+                'description' => $reason
                     ? "Decommissioned: {$reason}"
                     : 'Mold decommissioned / retired.',
-                'cost'                => null,
-                'performed_by'        => $performedBy,
-                'event_date'          => now()->toDateString(),
+                'cost' => null,
+                'performed_by' => $performedBy,
+                'event_date' => now()->toDateString(),
                 'shot_count_at_event' => $m->current_shot_count,
             ]);
 
             // Deactivate any PM schedules.
-            if (class_exists(\App\Modules\Maintenance\Models\MaintenanceSchedule::class)) {
-                \App\Modules\Maintenance\Models\MaintenanceSchedule::query()
+            if (class_exists(MaintenanceSchedule::class)) {
+                MaintenanceSchedule::query()
                     ->where('maintainable_type', 'mold')
                     ->where('maintainable_id', $m->id)
                     ->update(['is_active' => false]);
@@ -242,6 +253,9 @@ class MoldService
 
             return $m->fresh();
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
     }
 
     /**
@@ -250,23 +264,50 @@ class MoldService
      */
     public function recordMaintenance(Mold $m, float $cost = 0.0, ?string $description = null, ?string $performedBy = null): Mold
     {
-        return DB::transaction(function () use ($m, $cost, $description, $performedBy) {
+        $mold = DB::transaction(function () use ($m, $cost, $description, $performedBy) {
             MoldHistory::create([
-                'mold_id'             => $m->id,
-                'event_type'          => MoldEventType::MaintenanceCompleted->value,
-                'description'         => $description ?? 'Maintenance completed.',
-                'cost'                => number_format($cost, 2, '.', ''),
-                'performed_by'        => $performedBy,
-                'event_date'          => now()->toDateString(),
+                'mold_id' => $m->id,
+                'event_type' => MoldEventType::MaintenanceCompleted->value,
+                'description' => $description ?? 'Maintenance completed.',
+                'cost' => number_format($cost, 2, '.', ''),
+                'performed_by' => $performedBy,
+                'event_date' => now()->toDateString(),
                 'shot_count_at_event' => $m->current_shot_count,
             ]);
             $m->update([
-                'last_maintenance_at'    => now()->toDateString(),
-                'maintenance_count'      => (int) $m->maintenance_count + 1,
+                'last_maintenance_at' => now()->toDateString(),
+                'maintenance_count' => (int) $m->maintenance_count + 1,
                 'total_maintenance_cost' => number_format((float) $m->total_maintenance_cost + $cost, 2, '.', ''),
             ]);
+
             return $m->fresh();
         });
+        ProductionDashboardService::forgetCache();
+
+        return $mold;
+    }
+
+    private function ensureShotMaintenanceSchedule(Mold $m): void
+    {
+        $interval = (int) ($m->maintenance_frequency_shots ?? $m->max_shots_before_maintenance);
+        if ($interval <= 0 || ! class_exists(MaintenanceSchedule::class)) {
+            return;
+        }
+
+        MaintenanceSchedule::firstOrCreate(
+            [
+                'maintainable_type' => 'mold',
+                'maintainable_id' => $m->id,
+                'interval_type' => 'shots',
+            ],
+            [
+                'schedule_type' => 'preventive',
+                'interval_value' => $interval,
+                'description' => "Auto PM: {$m->name} every {$interval} shots",
+                'is_active' => true,
+                'next_due_at' => null,
+            ],
+        );
     }
 
     /**
@@ -286,8 +327,8 @@ class MoldService
             ->orderBy('month')
             ->get()
             ->map(fn ($r) => [
-                'month'  => $r->month,
-                'cost'   => number_format((float) $r->cost, 2, '.', ''),
+                'month' => $r->month,
+                'cost' => number_format((float) $r->cost, 2, '.', ''),
                 'events' => (int) $r->events,
             ])
             ->all();

@@ -243,8 +243,10 @@ class SelfServiceController
             'principal' => $loan->principal !== null ? (string) $loan->principal : null,
             'outstanding_balance' => $loan->balance !== null ? (string) $loan->balance : null,
             'monthly_amortization' => $loan->monthly_amortization !== null ? (string) $loan->monthly_amortization : null,
-            'periods' => (int) ($loan->pay_periods_total ?? 0),
-            'periods_remaining' => (int) ($loan->pay_periods_remaining ?? 0),
+             'periods' => (int) ($loan->pay_periods_total ?? 0),
+             'periods_remaining' => (int) ($loan->pay_periods_remaining ?? 0),
+             'repayment_months' => (int) ($loan->pay_periods_total ?? 0),
+             'remaining_repayment_months' => (int) ($loan->pay_periods_remaining ?? 0),
             'status' => $loan->status?->value,
             'status_label' => $loan->status?->label(),
             'created_at' => optional($loan->created_at)->toIso8601String(),
@@ -390,6 +392,32 @@ class SelfServiceController
             'message' => 'Overtime request submitted for Dept Head approval.',
             'data' => ['id' => $ot->hash_id, 'status' => $ot->status?->value],
         ], 201);
+    }
+
+    public function cancelLoan(Request $request, string $id): JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+        $loanId = EmployeeLoan::tryDecodeHash($id);
+        abort_if($loanId === null, 404);
+
+        $loan = EmployeeLoan::query()
+            ->whereKey($loanId)
+            ->where('employee_id', $employee->id)
+            ->firstOrFail();
+
+        try {
+            $loan = $this->loans->withdraw($loan, $employee);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return response()->json([
+            'message' => 'Loan request withdrawn.',
+            'data' => [
+                'id' => $loan->hash_id,
+                'status' => $loan->status?->value,
+            ],
+        ]);
     }
 
     /**

@@ -15,9 +15,11 @@ use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\OeeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -134,6 +136,52 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
 
         $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
         $this->assertSame(0, MachineDowntime::query()->where('machine_id', $machine->id)->count());
+    }
+
+    public function test_start_refuses_a_machine_still_running_production(): void
+    {
+        $machine = Machine::factory()->create([
+            'status' => MachineStatus::Running->value,
+        ]);
+        $activeWorkOrder = WorkOrder::factory()->create([
+            'machine_id' => $machine->id,
+            'status' => 'in_progress',
+        ]);
+        $machine->update(['current_work_order_id' => $activeWorkOrder->id]);
+        $wo = $this->machineMwo(MaintenanceWorkOrderStatus::Open, $machine);
+
+        $this->expectException(ValidationException::class);
+
+        $this->svc->start($wo, $this->tech);
+    }
+
+    public function test_completing_a_mold_mwo_does_not_free_a_mold_still_in_use(): void
+    {
+        $mold = Mold::create([
+            'mold_code' => 'M-'.substr(uniqid(), -6),
+            'name' => 'Test mold',
+            'product_id' => Product::factory()->create()->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 10,
+            'output_rate_per_hour' => 300,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'current_shot_count' => 5000,
+            'status' => 'in_use',
+        ]);
+        $wo = MaintenanceWorkOrder::create([
+            'mwo_number' => 'MWO-'.substr(uniqid(), -8),
+            'maintainable_type' => 'mold',
+            'maintainable_id' => $mold->id,
+            'type' => 'preventive',
+            'description' => 'Mold PM',
+            'status' => MaintenanceWorkOrderStatus::InProgress->value,
+            'created_by' => $this->tech->id,
+        ]);
+
+        $this->svc->complete($wo, [], $this->tech);
+
+        $this->assertSame('in_use', $mold->fresh()->status->value);
     }
 
     // ─── MT-02: transitions emit MachineStatusChanged ────────────────

@@ -24,6 +24,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -144,6 +145,18 @@ class LeaveRequestHardeningTest extends TestCase
         $this->assertSame(LeaveRequestStatus::Cancelled, $cancelled->status);
         $this->assertSame($hr->id, $cancelled->cancelled_by);
         $this->assertNotNull($cancelled->cancelled_at);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'action' => 'superseded',
+            'is_current' => false,
+        ]);
+        $this->assertSame(0, DB::table('approval_records')
+            ->where('approvable_type', $request->getMorphClass())
+            ->where('approvable_id', $request->id)
+            ->where('action', 'pending')
+            ->where('is_current', true)
+            ->count());
     }
 
     public function test_approval_fails_closed_when_payroll_date_is_locked(): void

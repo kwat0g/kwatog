@@ -27,6 +27,15 @@ class OvertimeRequestFactory extends Factory
         ];
     }
 
+    public function configure(): static
+    {
+        return $this->afterMaking(function (OvertimeRequest $request): void {
+            $request->forceFill([
+                'status' => $request->getRawOriginal('status') ?: OvertimeStatus::Pending->value,
+            ]);
+        });
+    }
+
     public function pending(): static
     {
         return $this->state(['status' => OvertimeStatus::Pending->value]);

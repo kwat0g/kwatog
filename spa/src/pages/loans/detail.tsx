@@ -118,8 +118,8 @@ export default function LoanDetailPage() {
  </div>
  </div>
  <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
- <Item label="Pay periods" value={`${loan.pay_periods_remaining}/${loan.pay_periods_total}`} mono />
- <Item label="Per period" value={formatPeso(loan.monthly_amortization)} mono />
+  <Item label="Repayment months" value={`${loan.remaining_repayment_months ?? loan.pay_periods_remaining}/${loan.repayment_months ?? loan.pay_periods_total}`} mono />
+  <Item label="Monthly amortization" value={formatPeso(loan.monthly_amortization)} mono />
  <Item label="Start date" value={loan.start_date ? formatDate(loan.start_date) : '—'} mono />
  <Item label="End date" value={loan.end_date ? formatDate(loan.end_date) : '—'} mono />
  <Item label="Interest rate" value={formatPercent(loan.interest_rate)} mono />

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Attendance;
 
 use App\Modules\Attendance\Services\DTRImportService;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -13,6 +14,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Database\Seeders\RolePermissionSeeder;
 use Tests\TestCase;
 
 /**
@@ -31,6 +33,7 @@ class RawPunchImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->svc = app(DTRImportService::class);
     }
 
@@ -92,6 +95,42 @@ class RawPunchImportTest extends TestCase
             'employee_id' => $emp->id,
             'date'        => '2026-04-02',
         ]);
+    }
+
+    public function test_raw_punch_import_is_available_through_the_attendance_route(): void
+    {
+        $emp = $this->employee();
+        $user = User::factory()->withRole('system_admin')->create();
+        $file = $this->csv(
+            "employee_no,timestamp,direction\n".
+            "{$emp->employee_no},2026-04-02 08:00:00,in\n".
+            "{$emp->employee_no},2026-04-02 17:00:00,out\n"
+        );
+
+        $this->actingAs($user)
+            ->post('/api/v1/attendance/attendances/import/raw', ['file' => $file])
+            ->assertOk()
+            ->assertJsonPath('data.imported', 1);
+    }
+
+    public function test_direction_column_selects_directional_in_and_out_punches(): void
+    {
+        $emp = $this->employee();
+        $file = $this->csv(
+            "employee_no,timestamp,direction\n".
+            "{$emp->employee_no},2026-04-02 08:00:00,out\n".
+            "{$emp->employee_no},2026-04-02 09:00:00,in\n".
+            "{$emp->employee_no},2026-04-02 12:00:00,in\n".
+            "{$emp->employee_no},2026-04-02 17:00:00,out\n"
+        );
+
+        $this->assertSame(1, $this->svc->importRawPunches($file)['imported']);
+        $attendance = \App\Modules\Attendance\Models\Attendance::query()
+            ->where('employee_id', $emp->id)
+            ->whereDate('date', '2026-04-02')
+            ->firstOrFail();
+        $this->assertSame('09:00', $attendance->time_in->format('H:i'));
+        $this->assertSame('17:00', $attendance->time_out->format('H:i'));
     }
 
     public function test_duplicate_punches_are_deduped(): void

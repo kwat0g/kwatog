@@ -14,19 +14,6 @@ use Illuminate\Support\Facades\DB;
 
 class LeaveBalanceService
 {
-    /** Ensure all active leave-type balances exist for an employee for a given year. */
-    public function seedFor(int $employeeId, int $year): void
-    {
-        DB::transaction(function () use ($employeeId, $year) {
-            LeaveType::where('is_active', true)->get()->each(function (LeaveType $lt) use ($employeeId, $year) {
-                EmployeeLeaveBalance::firstOrCreate(
-                    ['employee_id' => $employeeId, 'leave_type_id' => $lt->id, 'year' => $year],
-                    ['total_credits' => $lt->default_balance, 'used' => 0, 'remaining' => $lt->default_balance],
-                );
-            });
-        });
-    }
-
     /**
      * LV-02 — seed a new hire's balances for the hire year, pro-rated against
      * the hire date: total_credits = round(default_balance × remaining_days /

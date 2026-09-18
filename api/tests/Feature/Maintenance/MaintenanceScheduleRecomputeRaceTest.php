@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Maintenance;
 
+use App\Modules\CRM\Models\Product;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenanceScheduleInterval;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
 use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
 use Database\Seeders\MachineSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -30,12 +33,12 @@ class MaintenanceScheduleRecomputeRaceTest extends TestCase
     {
         return MaintenanceSchedule::create([
             'maintainable_type' => MaintainableType::Machine->value,
-            'maintainable_id'   => 1,
-            'schedule_type'     => 'preventive',
-            'description'       => 'Monthly PM',
-            'interval_type'     => MaintenanceScheduleInterval::Days->value,
-            'interval_value'    => 30,
-            'is_active'         => true,
+            'maintainable_id' => 1,
+            'schedule_type' => 'preventive',
+            'description' => 'Monthly PM',
+            'interval_type' => MaintenanceScheduleInterval::Days->value,
+            'interval_value' => 30,
+            'is_active' => true,
         ]);
     }
 
@@ -72,11 +75,11 @@ class MaintenanceScheduleRecomputeRaceTest extends TestCase
         $svc = app(MaintenanceScheduleService::class);
         $schedule = $svc->create([
             'maintainable_type' => MaintainableType::Machine->value,
-            'maintainable_id'   => $machine->id,
-            'description'       => 'Runtime PM',
-            'interval_type'     => MaintenanceScheduleInterval::Hours->value,
-            'interval_value'    => 10,
-            'is_active'         => true,
+            'maintainable_id' => $machine->id,
+            'description' => 'Runtime PM',
+            'interval_type' => MaintenanceScheduleInterval::Hours->value,
+            'interval_value' => 10,
+            'is_active' => true,
         ]);
 
         $this->assertSame('100.00', (string) $schedule->refresh()->running_hours_baseline);
@@ -95,5 +98,50 @@ class MaintenanceScheduleRecomputeRaceTest extends TestCase
 
         $machine->forceFill(['running_hours_total' => '119.99'])->save();
         $this->assertCount(0, $svc->machineHourSchedulesAtOrAboveThreshold());
+    }
+
+    public function test_null_machine_hour_baseline_is_initialized_to_current_runtime(): void
+    {
+        $this->seed(MachineSeeder::class);
+        $machine = Machine::query()->firstOrFail();
+        $machine->forceFill(['running_hours_total' => '77.50'])->save();
+        $schedule = MaintenanceSchedule::create([
+            'maintainable_type' => MaintainableType::Machine->value,
+            'maintainable_id' => $machine->id,
+            'schedule_type' => 'preventive',
+            'description' => 'Legacy runtime PM',
+            'interval_type' => MaintenanceScheduleInterval::Hours->value,
+            'interval_value' => 10,
+            'running_hours_baseline' => null,
+            'is_active' => true,
+        ]);
+
+        $this->assertCount(0, app(MaintenanceScheduleService::class)->machineHourSchedulesAtOrAboveThreshold());
+        $this->assertSame('77.50', (string) $schedule->refresh()->running_hours_baseline);
+    }
+
+    public function test_mold_hour_schedule_is_rejected_without_mold_runtime_semantics(): void
+    {
+        $mold = Mold::create([
+            'mold_code' => 'M-'.substr(uniqid(), -6),
+            'name' => 'Runtime test mold',
+            'product_id' => Product::factory()->create()->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 10,
+            'output_rate_per_hour' => 300,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'status' => 'available',
+        ]);
+
+        $this->expectException(ValidationException::class);
+        app(MaintenanceScheduleService::class)->create([
+            'maintainable_type' => MaintainableType::Mold->value,
+            'maintainable_id' => $mold->id,
+            'description' => 'Invalid mold hour PM',
+            'interval_type' => MaintenanceScheduleInterval::Hours->value,
+            'interval_value' => 10,
+            'is_active' => true,
+        ]);
     }
 }

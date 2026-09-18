@@ -8,6 +8,7 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\Attendance\Services\AttendanceService;
 use App\Modules\Attendance\Services\OvertimeService;
+use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -116,6 +117,86 @@ class AutoDetectOvertimeFeatureTest extends TestCase
             ->whereDate('date', '2026-06-15')
             ->where('is_auto_detected', true)
             ->count());
+    }
+
+    public function test_rejected_auto_ot_is_reopened_when_punches_are_detected_again(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+        $ot = OvertimeRequest::query()->where('employee_id', $employee->id)->firstOrFail();
+        $ot->forceFill([
+            'status' => OvertimeStatus::Rejected->value,
+            'rejection_reason' => 'Punch was corrected.',
+            'approved_at' => now(),
+        ])->save();
+
+        $attendance->forceFill(['time_out' => '2026-06-15 19:00:00'])->save();
+        $reopened = app(OvertimeService::class)->autoDetectFromAttendance($attendance->fresh());
+
+        $this->assertNotNull($reopened);
+        $this->assertSame($ot->id, $reopened->id);
+        $this->assertSame(OvertimeStatus::Pending, $reopened->status);
+        $this->assertEqualsWithDelta(2.0, (float) $reopened->hours_requested, 0.05);
+        $this->assertNull($reopened->approved_by);
+        $this->assertNull($reopened->rejection_reason);
+    }
+
+    public function test_rejected_auto_ot_stays_rejected_when_detection_is_replayed_unchanged(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+        $ot = OvertimeRequest::query()->where('employee_id', $employee->id)->firstOrFail();
+        $ot->forceFill([
+            'status' => OvertimeStatus::Rejected->value,
+            'rejection_reason' => 'Not approved.',
+        ])->save();
+
+        $reopened = app(OvertimeService::class)->autoDetectFromAttendance($attendance->fresh());
+
+        $this->assertNull($reopened);
+        $this->assertSame(OvertimeStatus::Rejected, $ot->fresh()->status);
+    }
+
+    public function test_cancelled_auto_ot_is_reopened_when_punches_are_detected_again(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+        $ot = OvertimeRequest::query()->where('employee_id', $employee->id)->firstOrFail();
+        $ot->forceFill([
+            'status' => OvertimeStatus::Rejected->value,
+            'rejection_reason' => 'Employee withdrew the request.',
+            'cancelled_at' => now(),
+        ])->save();
+
+        $attendance->forceFill(['time_out' => '2026-06-15 19:00:00'])->save();
+        $reopened = app(OvertimeService::class)->autoDetectFromAttendance($attendance->fresh());
+
+        $this->assertNotNull($reopened);
+        $this->assertSame($ot->id, $reopened->id);
+        $this->assertSame(OvertimeStatus::Pending, $reopened->status);
+        $this->assertNull($reopened->cancelled_by);
+        $this->assertNull($reopened->cancelled_at);
     }
 
     public function test_distinct_employee_sources_on_same_date_each_create_auto_ot(): void

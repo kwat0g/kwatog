@@ -39,6 +39,8 @@ class EmployeeLoanResource extends JsonResource
             'end_date'               => optional($this->end_date)->toDateString(),
             'pay_periods_total'      => (int) $this->pay_periods_total,
             'pay_periods_remaining'  => (int) $this->pay_periods_remaining,
+            'repayment_months'       => (int) $this->pay_periods_total,
+            'remaining_repayment_months' => (int) $this->pay_periods_remaining,
             'approval_chain_size'    => (int) $this->approval_chain_size,
             'purpose'                => $this->purpose,
             'status'                 => $this->status?->value,

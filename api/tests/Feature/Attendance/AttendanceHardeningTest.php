@@ -123,7 +123,7 @@ class AttendanceHardeningTest extends TestCase
         ]);
     }
 
-    public function test_paired_csv_import_uses_the_same_payroll_write_fence(): void
+    public function test_paired_csv_import_allows_correction_in_a_voided_payroll_period(): void
     {
         $employee = Employee::factory()->create();
         $this->lockedPeriod($employee, PayrollPeriodStatus::Voided, '2026-04-20', '2026-04-25');
@@ -133,10 +133,9 @@ class AttendanceHardeningTest extends TestCase
 
         $result = app(DTRImportService::class)->import($file);
 
-        $this->assertSame(0, $result['imported']);
-        $this->assertSame(1, $result['skipped']);
-        $this->assertStringContainsString('Attendance for 2026-04-21 is locked', $result['errors'][0]['message']);
-        $this->assertDatabaseMissing('attendances', [
+        $this->assertSame(1, $result['imported']);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertDatabaseHas('attendances', [
             'employee_id' => $employee->id,
             'date' => '2026-04-21',
         ]);
@@ -239,7 +238,6 @@ class AttendanceHardeningTest extends TestCase
             'date' => $date,
             'hours_requested' => 2,
             'reason' => 'Attendance hardening test',
-            'status' => OvertimeStatus::Pending->value,
         ]);
     }
 

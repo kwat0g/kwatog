@@ -30,13 +30,6 @@ class WorkflowSeeder extends Seeder
                 ],
             ],
             [
-                'workflow_type' => 'overtime_request',
-                'name'          => 'Overtime Request Approval',
-                'steps' => [
-                    ['order' => 1, 'role' => 'department_head', 'label' => 'Approved by'],
-                ],
-            ],
-            [
                 'workflow_type' => 'cash_advance',
                 'name'          => 'Cash Advance Approval',
                 'steps' => [

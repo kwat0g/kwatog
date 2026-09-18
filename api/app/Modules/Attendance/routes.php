@@ -38,6 +38,7 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     Route::delete('/attendances/{attendance}', [AttendanceController::class, 'destroy'])->middleware('permission:attendance.edit');
     Route::patch('/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])->middleware('permission:attendance.edit')->withTrashed();
     Route::post('/attendances/import', [AttendanceController::class, 'import'])->middleware('permission:attendance.import');
+    Route::post('/attendances/import/raw', [AttendanceController::class, 'importRaw'])->middleware('permission:attendance.import');
 
     // Overtime requests
     Route::get('/overtime-requests', [OvertimeController::class, 'index'])->middleware('permission:attendance.view');

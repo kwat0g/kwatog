@@ -309,6 +309,8 @@ class WorkOrderOutputService
             Cache::put("production:idem:{$output->work_order_id}:{$idempotencyKey}", $output->id, self::IDEMPOTENCY_TTL_SECONDS);
         }
 
+        ProductionDashboardService::forgetCache();
+
         return $output;
     }
 

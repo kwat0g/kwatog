@@ -156,9 +156,8 @@ class DTRImportService
      * cross-midnight aware) and written exactly like import() does — same
      * DTR compute + OT auto-detect — so downstream behaviour is identical.
      *
-     * Days that fall inside a locked payroll period (finalized, disbursed, or
-     * voided) are blocked (skipped with an error) so we never mutate attendance
-     * after the payroll run is closed.
+     * Days that fall inside a finalized or disbursed payroll period are blocked
+     * (skipped with an error); voided periods remain correction-capable.
      *
      * The paired-CSV path uses the same mutability guard and transaction fence.
      *
@@ -205,6 +204,9 @@ class DTRImportService
                 $dir   = isset($idx['direction']) ? strtolower(trim((string) ($row[$idx['direction']] ?? ''))) : null;
                 if ($empNo === '' || $tsStr === '') {
                     throw new \RuntimeException('Employee number and timestamp are required.');
+                }
+                if ($dir !== null && ! in_array($dir, ['in', 'out'], true)) {
+                    throw new \RuntimeException("Direction must be 'in' or 'out'.");
                 }
                 $punches[] = [
                     'employee_no' => $empNo,

@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import {
  Button, Chip, EmptyState, Input, Modal, ModalFooter, Select, SkeletonTable, Textarea, Td, Th,
 } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { selfServiceApi } from '@/api/self-service';
 import type { SelfServiceLoan, SelfServiceLoansResponse } from '@/types/self-service';
@@ -29,7 +30,10 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-function loanColumns(loanTypeLabels: ReadonlyMap<string, string>): Column<SelfServiceLoan>[] {
+function loanColumns(
+ loanTypeLabels: ReadonlyMap<string, string>,
+ onCancel?: (id: string) => void,
+): Column<SelfServiceLoan>[] {
  return [
  {
  key: 'loan_type',
@@ -60,7 +64,7 @@ function loanColumns(loanTypeLabels: ReadonlyMap<string, string>): Column<SelfSe
  align: 'right',
  cell: (l) => (
  <NumCell>
- {l.periods - l.periods_remaining}/{l.periods} paid
+  {(l.repayment_months ?? l.periods) - (l.remaining_repayment_months ?? l.periods_remaining)}/{l.repayment_months ?? l.periods} months paid
  </NumCell>
  ),
  },
@@ -80,12 +84,28 @@ function loanColumns(loanTypeLabels: ReadonlyMap<string, string>): Column<SelfSe
  </Chip>
  ),
  },
+  ...(onCancel ? [{
+  key: 'actions',
+  header: 'Actions',
+  cell: (l: SelfServiceLoan) => l.status === 'pending' ? (
+  <Button
+  variant="ghost"
+  size="sm"
+  className="text-accent-fg hover:bg-accent-bg"
+  onClick={() => onCancel(l.id)}
+  aria-label={`Withdraw ${l.loan_type_label ?? 'loan'} request`}
+  >
+  Withdraw
+  </Button>
+  ) : null,
+  }] satisfies Column<SelfServiceLoan>[] : []),
  ];
 }
 
 export default function SelfServiceLoansPage() {
  const queryClient = useQueryClient();
  const [showApply, setShowApply] = useState(false);
+ const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
  const { data, isLoading, isError, refetch } = useQuery<SelfServiceLoansResponse>({
  queryKey: ['self-service', 'loans'],
@@ -107,6 +127,16 @@ export default function SelfServiceLoansPage() {
  },
  onError: () => toast.error('Failed to submit loan request.'),
  });
+
+ const cancel = useMutation({
+  mutationFn: (id: string) => selfServiceApi.cancelLoan(id),
+  onSuccess: () => {
+  toast.success('Loan request withdrawn.');
+  setConfirmCancel(null);
+  queryClient.invalidateQueries({ queryKey: ['self-service', 'loans'] });
+  },
+  onError: () => toast.error('Failed to withdraw loan request.'),
+  });
 
  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
  const loanTypeLabels = new Map((data?.loan_types ?? []).map((type) => [type.value, type.label]));
@@ -156,7 +186,7 @@ export default function SelfServiceLoansPage() {
  <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
  Active · {data.active.length}
  </h2>
- <DataTable columns={loanColumns(loanTypeLabels)} data={data.active} stickyHeader={false} />
+ <DataTable columns={loanColumns(loanTypeLabels, (id) => setConfirmCancel(id))} data={data.active} stickyHeader={false} />
  </section>
  )}
 
@@ -177,6 +207,16 @@ export default function SelfServiceLoansPage() {
  loanTypes={data?.loan_types ?? []}
  maxPayPeriods={data?.max_pay_periods}
  />
+
+  <ConfirmDialog
+  isOpen={confirmCancel !== null}
+  onClose={() => setConfirmCancel(null)}
+  onConfirm={() => { if (confirmCancel) cancel.mutate(confirmCancel); }}
+  title="Withdraw loan request?"
+  variant="danger"
+  confirmLabel="Yes, withdraw"
+  pending={cancel.isPending}
+  />
  </div>
  </div>
  );

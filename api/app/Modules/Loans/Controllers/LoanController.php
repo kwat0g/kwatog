@@ -165,7 +165,7 @@ class LoanController
     public function previewAmortization(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'loan_type' => ['required', \Illuminate\Validation\Rule::in(LoanType::values())],
+            'loan_type' => ['required', \Illuminate\Validation\Rule::in(LoanType::supportedValues())],
             'principal' => ['required', 'decimal:0,2', 'min:1'],
             'pay_periods' => ['required', 'integer', 'min:1', 'max:'.$this->settings->requiredInt('loans.max_pay_periods', 1, 120)],
         ]);

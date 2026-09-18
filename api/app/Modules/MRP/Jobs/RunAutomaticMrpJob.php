@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Jobs;
 
+use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Services\MrpAutomationService;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -21,11 +22,13 @@ use Illuminate\Queue\SerializesModels;
  * create a stack of identical plans. A plant-wide overlap fence protects the
  * shared stock-allocation ledger when different scopes arrive together.
  */
-class RunAutomaticMrpJob implements ShouldBeUnique, ShouldQueue
+class RunAutomaticMrpJob implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    // A follow-up released by the plant overlap fence must outlive the first
+    // 900-second run plus the 300-second lock grace period.
+    public int $tries = 50;
 
     /** @var array<int, int> */
     public array $backoff = [30, 120, 300];
@@ -44,7 +47,9 @@ class RunAutomaticMrpJob implements ShouldBeUnique, ShouldQueue
     /** @param list<int> $salesOrderIds */
     public function __construct(array $salesOrderIds, string $reason, ?int $initiatedBy = null)
     {
-        $this->salesOrderIds = array_values(array_unique(array_map('intval', $salesOrderIds)));
+        $ids = array_values(array_unique(array_map('intval', $salesOrderIds)));
+        sort($ids);
+        $this->salesOrderIds = $ids;
         $this->reason = $reason;
         $this->initiatedBy = $initiatedBy;
     }
@@ -66,11 +71,17 @@ class RunAutomaticMrpJob implements ShouldBeUnique, ShouldQueue
 
     public function handle(MrpAutomationService $automation): void
     {
-        $automation->run(
+        $run = $automation->run(
             $this->salesOrderIds,
             MrpRunTrigger::Automatic,
             $this->initiatedBy,
             $this->reason,
         );
+
+        if ($run->status === MrpRunStatus::Failed) {
+            throw new \RuntimeException(
+                $run->error_message ?: 'Automatic MRP run failed without an error message.'
+            );
+        }
     }
 }

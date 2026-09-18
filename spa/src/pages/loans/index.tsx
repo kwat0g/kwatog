@@ -35,7 +35,7 @@ export default function LoansPage() {
  { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type_label ?? r.loan_type}</Chip> },
  { key: 'principal', header: 'Principal', align: 'right', cell: (r) => <NumCell>{formatPeso(r.principal)}</NumCell> },
  { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
- { key: 'pay_periods', header: 'Periods', align: 'right', cell: (r) => <NumCell>{r.pay_periods_remaining}/{r.pay_periods_total}</NumCell> },
+  { key: 'pay_periods', header: 'Repayment months', align: 'right', cell: (r) => <NumCell>{r.remaining_repayment_months ?? r.pay_periods_remaining}/{r.repayment_months ?? r.pay_periods_total}</NumCell> },
  { key: 'start_date', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_date ? formatDate(r.start_date) : '—'}</NumCell> },
  { key: 'status', header: 'Status', cell: (r) => (
  <span className="flex items-center gap-1.5">

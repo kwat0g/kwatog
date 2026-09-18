@@ -30,7 +30,7 @@ class StoreLoanRequest extends FormRequest
         $maxPeriods = app(SettingsService::class)->requiredInt('loans.max_pay_periods', 1, 120);
         return [
             'employee_id' => ['required', 'string'],
-            'loan_type'   => ['required', Rule::in(LoanType::values())],
+            'loan_type'   => ['required', Rule::in(LoanType::supportedValues())],
             'principal'   => ['required', 'numeric', 'decimal:0,2', 'min:1'],
             'pay_periods' => ['required', 'integer', 'min:1', 'max:'.$maxPeriods],
             'purpose'     => ['nullable', 'string', 'max:1000'],

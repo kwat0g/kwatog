@@ -7,6 +7,10 @@ depends on (`api/app/Modules/MRP/` machine+mold+capacity services, `api/app/Modu
 `SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; summarized here, not re-traced.
 Claims are marked **[confirmed]** (file:line, grep, or code read) or **[assumption/unverified]**.
 
+**Audit status as of 2026-09-19:** **FINISHED** for the production audit scope. Source remediation
+listed in §9 passed the isolated PostgreSQL regression and migration checks. One unrelated
+PPAP self-approval failure remains in the broader Quality suite and is recorded below.
+
 ---
 
 ## 1. Executive summary
@@ -244,3 +248,38 @@ findings in §7.1/§7.2 plus the rest of §7.
 - A4. OEE correctness against a worked example was not numerically verified.
 - A5. Mold/machine count and soft-delete state in real data is unknown, so the impact of the
   inactive-machine OEE inclusion is unquantified.
+
+---
+
+## 9. Remediation status (2026-09-19)
+
+The following source-level remediations were implemented after this audit. The original
+findings above remain as the historical audit record; this section records the current
+implementation state and its evidence boundary.
+
+| Finding | Remediation | Status |
+|---|---|---|
+| §7.1 Breakdown corrective MWO missing | Breakdown handling now creates one active corrective MWO, links the open downtime row, and records idle-machine breakdowns as downtime. | **[source remediated]** |
+| §7.2 Summary downtime precedence | Daily summary now groups category and interval predicates and includes all overlapping breakdown intervals. | **[source remediated]** |
+| §7.3 Daily output over-count | Daily summary joins only outputs recorded in the requested day and handles multi-day planned windows. | **[source remediated]** |
+| §7.4 Operations schedule dead endpoint | Routing generation now allocates planned operation windows inside the WO window, including legacy pending rows. | **[source remediated]** |
+| §7.7 QC-required operation stub | Required operation completion now creates or reuses an in-process inspection. Final operation quantities must reconcile with the canonical WO output ledger. | **[source remediated]** |
+| §7.5 OEE trend and inactive machines | All-machine OEE scopes to idle/running machines; trends use batched inputs and weekly buckets beyond 92 days. | **[source remediated]** |
+| §7.6 Dashboard cache | Dashboard OEE is calculated once per cache miss; production, machine, mold, work-order, and relevant setting writes invalidate the cache. | **[source remediated]** |
+| §7.12 Mold overlap/schema gaps | Added a database FK for downtime-to-MWO links and a PostgreSQL GiST exclusion constraint for mold schedule overlap. | **[source remediated]** |
+| §7.13 Preventive schedule edge cases | Null machine-hour baselines self-heal to current runtime; mold-hour schedules are rejected and excluded from date-driven generation. | **[source remediated]** |
+| §7.14 Mold PM creation | Mold creation and commissioning now share idempotent shot-based PM schedule creation. | **[source remediated]** |
+
+### Verification boundary
+
+- PHP syntax checks, PHPStan, Pint, and PHPUnit test discovery passed for the changed code.
+- Focused production remediation suite: **83 tests, 229 assertions passed**.
+- Broader Production, MRP, and Maintenance suites: **231 tests, 656 assertions passed**.
+- The changed Quality in-process QC coverage passed, and the PostgreSQL mold-overlap exclusion
+  constraint was exercised successfully through the migration-backed tests.
+- The broader Quality suite produced **134 passed, 8 pending, 1 unrelated failure**. The failure
+  is `TraceabilityPpapAuditRegressionTest::test_evidence_cannot_be_swapped_after_approval`, where
+  the test's submitter attempts self-approval and receives the current intended `403` guard. It
+  is outside this production audit remediation and was not changed here.
+- This file is marked `FINISHED` because the production audit findings and their scoped runtime
+  evidence are complete. The unrelated PPAP failure remains a separate Quality follow-up.

@@ -106,6 +106,11 @@ class YearEndLeaveReconciliationTest extends TestCase
         $this->assertSame('0.00', (string) $disp->cash_value);
         // Non-convertible → no encashment adjustment.
         $this->assertSame(0, PayrollAdjustment::where('employee_id', $emp->id)->count());
+        $processed = \App\Modules\Leave\Models\ProcessedYearEndLeaveType::query()
+            ->where('leave_type_id', $lt->id)
+            ->where('year', 2025)
+            ->firstOrFail();
+        $this->assertSame('5.0', (string) $processed->days_carried);
     }
 
     public function test_reset_consumes_disposition_without_double_counting(): void

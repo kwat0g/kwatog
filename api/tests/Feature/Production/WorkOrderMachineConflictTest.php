@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Production;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Models\Machine;
@@ -12,10 +13,10 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Database\QueryException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -35,7 +36,9 @@ class WorkOrderMachineConflictTest extends TestCase
     use RefreshDatabase;
 
     private WorkOrderService $service;
+
     private User $user;
+
     private Product $product;
 
     protected function setUp(): void
@@ -46,13 +49,13 @@ class WorkOrderMachineConflictTest extends TestCase
         Event::fake();
 
         $this->service = app(WorkOrderService::class);
-        $this->user    = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->product = Product::create([
-            'part_number'     => 'WO-CONF-1',
-            'name'            => 'Conflict Product',
+            'part_number' => 'WO-CONF-1',
+            'name' => 'Conflict Product',
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => 10.00,
-            'is_active'       => true,
+            'standard_cost' => 10.00,
+            'is_active' => true,
         ]);
     }
 
@@ -64,17 +67,17 @@ class WorkOrderMachineConflictTest extends TestCase
     private function mold(): Mold
     {
         return Mold::create([
-            'mold_code'                     => 'MD-' . substr(uniqid(), -5),
-            'name'                          => 'Test Mold',
-            'product_id'                    => $this->product->id,
-            'cavity_count'                  => 1,
-            'cycle_time_seconds'            => 30,
-            'output_rate_per_hour'          => 100,
-            'setup_time_minutes'            => 10,
-            'current_shot_count'            => 0,
-            'max_shots_before_maintenance'  => 100000,
-            'lifetime_max_shots'            => 1000000,
-            'status'                        => 'available',
+            'mold_code' => 'MD-'.substr(uniqid(), -5),
+            'name' => 'Test Mold',
+            'product_id' => $this->product->id,
+            'cavity_count' => 1,
+            'cycle_time_seconds' => 30,
+            'output_rate_per_hour' => 100,
+            'setup_time_minutes' => 10,
+            'current_shot_count' => 0,
+            'max_shots_before_maintenance' => 100000,
+            'lifetime_max_shots' => 1000000,
+            'status' => 'available',
         ]);
     }
 
@@ -85,26 +88,26 @@ class WorkOrderMachineConflictTest extends TestCase
         }
 
         return WorkOrder::factory()->create([
-            'product_id'    => $this->product->id,
-            'machine_id'    => $machine?->id,
-            'mold_id'       => $mold?->id,
-            'status'        => WorkOrderStatus::Planned->value,
+            'product_id' => $this->product->id,
+            'machine_id' => $machine?->id,
+            'mold_id' => $mold?->id,
+            'status' => WorkOrderStatus::Planned->value,
             'planned_start' => Carbon::today()->addDay()->toDateTimeString(),
-            'planned_end'   => Carbon::today()->addDays(2)->toDateTimeString(),
-            'created_by'    => $this->user->id,
+            'planned_end' => Carbon::today()->addDays(2)->toDateTimeString(),
+            'created_by' => $this->user->id,
         ]);
     }
 
     private function schedule(WorkOrder $wo, Machine $machine, Mold $mold, Carbon $start, Carbon $end): ProductionSchedule
     {
         return ProductionSchedule::create([
-            'work_order_id'   => $wo->id,
-            'machine_id'      => $machine->id,
-            'mold_id'         => $mold->id,
+            'work_order_id' => $wo->id,
+            'machine_id' => $machine->id,
+            'mold_id' => $mold->id,
             'scheduled_start' => $start,
-            'scheduled_end'   => $end,
-            'priority_order'  => 1,
-            'status'          => 'pending',
+            'scheduled_end' => $end,
+            'priority_order' => 1,
+            'status' => 'pending',
         ]);
     }
 
@@ -114,8 +117,8 @@ class WorkOrderMachineConflictTest extends TestCase
     public function test_confirm_succeeds_on_free_machine(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
-        $wo      = $this->plannedWo($machine, $mold);
+        $mold = $this->mold();
+        $wo = $this->plannedWo($machine, $mold);
 
         $confirmed = $this->service->confirm($wo);
 
@@ -129,7 +132,7 @@ class WorkOrderMachineConflictTest extends TestCase
         $wo = $this->plannedWo($machine, $mold);
         $confirmed = $this->service->confirm($wo);
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->service->start($confirmed, $this->user->id);
     }
 
@@ -150,7 +153,7 @@ class WorkOrderMachineConflictTest extends TestCase
         ])->save();
         $parent->forceFill(['status' => WorkOrderStatus::Confirmed->value])->save();
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('waiting for subassembly work orders');
 
         $this->service->start($parent->fresh(), $this->user->id);
@@ -188,7 +191,7 @@ class WorkOrderMachineConflictTest extends TestCase
     public function test_confirm_blocked_when_machine_has_active_wo_without_schedules(): void
     {
         $machine = $this->machine();
-        $mold    = $this->mold();
+        $mold = $this->mold();
 
         $existing = $this->plannedWo($machine, $mold);
         $this->service->confirm($existing); // now Confirmed on the machine
@@ -228,6 +231,32 @@ class WorkOrderMachineConflictTest extends TestCase
         $this->schedule(
             $second, $machine, $this->mold(),
             Carbon::parse('2026-07-01 10:00'), Carbon::parse('2026-07-01 14:00'),
+        );
+    }
+
+    public function test_overlapping_schedule_windows_are_rejected_for_a_shared_mold_across_machines(): void
+    {
+        $machineA = $this->machine();
+        $machineB = $this->machine();
+        $mold = $this->mold();
+        $first = $this->plannedWo($machineA, $mold);
+        $second = $this->plannedWo($machineB, $mold);
+
+        $this->schedule(
+            $first,
+            $machineA,
+            $mold,
+            Carbon::parse('2026-07-01 08:00'),
+            Carbon::parse('2026-07-01 12:00'),
+        );
+
+        $this->expectException(QueryException::class);
+        $this->schedule(
+            $second,
+            $machineB,
+            $mold,
+            Carbon::parse('2026-07-01 10:00'),
+            Carbon::parse('2026-07-01 14:00'),
         );
     }
 

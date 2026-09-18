@@ -20,6 +20,7 @@ class ProcessedYearEndLeaveType extends Model
         'processed_by',
         'employees_count',
         'days_converted',
+        'days_carried',
         'days_forfeited',
     ];
 
@@ -28,6 +29,7 @@ class ProcessedYearEndLeaveType extends Model
         'processed_at' => 'datetime',
         'employees_count' => 'integer',
         'days_converted' => 'decimal:1',
+        'days_carried' => 'decimal:1',
         'days_forfeited' => 'decimal:1',
     ];
 

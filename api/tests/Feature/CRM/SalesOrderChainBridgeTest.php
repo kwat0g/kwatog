@@ -9,7 +9,6 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
-use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -93,6 +92,10 @@ class SalesOrderChainBridgeTest extends TestCase
         $this->assertIsInt($cr['prs_created']);
         $this->assertIsArray($cr['work_orders']);
         $this->assertIsArray($cr['scheduling_conflicts']);
+        $this->assertNotEmpty(
+            $cr['scheduling_conflicts'],
+            'The chain response must expose the capacity planner conflict for the unassigned work order.',
+        );
 
         // Each WO summary has required keys.
         foreach ($cr['work_orders'] as $woSummary) {
@@ -230,36 +233,37 @@ class SalesOrderChainBridgeTest extends TestCase
     private function makeUserWithPermission(string $permSlug): User
     {
         $role = Role::create([
-            'name' => 'CB Test ' . substr(uniqid(), -5),
-            'slug' => 'cb_test_' . substr(uniqid(), -8),
+            'name' => 'CB Test '.substr(uniqid(), -5),
+            'slug' => 'cb_test_'.substr(uniqid(), -8),
         ]);
         $perm = Permission::firstOrCreate(
             ['slug' => $permSlug],
             ['name' => ucfirst(str_replace('.', ' ', $permSlug)), 'module' => 'crm'],
         );
         $role->permissions()->syncWithoutDetaching([$perm->id]);
+
         return User::factory()->create(['role_id' => $role->id]);
     }
 
     private function makeSo(SalesOrderStatus $status): SalesOrder
     {
         $customer = Customer::create([
-            'name'               => 'Cust ' . substr(uniqid(), -5),
-            'is_active'          => true,
+            'name' => 'Cust '.substr(uniqid(), -5),
+            'is_active' => true,
             'payment_terms_days' => 30,
         ]);
 
         $user = $this->makeUserWithPermission('crm.sales_orders.confirm');
 
         return SalesOrder::create([
-            'so_number'    => 'SO-CB-' . substr(uniqid(), -8),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '500.00',
-            'vat_amount'   => '60.00',
+            'so_number' => 'SO-CB-'.substr(uniqid(), -8),
+            'customer_id' => $customer->id,
+            'date' => now()->toDateString(),
+            'subtotal' => '500.00',
+            'vat_amount' => '60.00',
             'total_amount' => '560.00',
-            'status'       => $status->value,
-            'created_by'   => $user->id,
+            'status' => $status->value,
+            'created_by' => $user->id,
         ]);
     }
 
@@ -272,71 +276,71 @@ class SalesOrderChainBridgeTest extends TestCase
     private function makeSoWithBom(float $stockQuantity = 1000): array
     {
         $customer = Customer::create([
-            'name'               => 'Cust ' . substr(uniqid(), -5),
-            'is_active'          => true,
+            'name' => 'Cust '.substr(uniqid(), -5),
+            'is_active' => true,
             'payment_terms_days' => 30,
         ]);
 
         $user = $this->makeUserWithPermission('crm.sales_orders.confirm');
 
         $product = Product::create([
-            'part_number'     => strtoupper('PT-' . substr(uniqid(), -7)),
-            'name'            => 'Wiper Bushing ' . substr(uniqid(), -5),
+            'part_number' => strtoupper('PT-'.substr(uniqid(), -7)),
+            'name' => 'Wiper Bushing '.substr(uniqid(), -5),
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => '50.00',
-            'is_active'       => true,
+            'standard_cost' => '50.00',
+            'is_active' => true,
         ]);
 
         // Raw material item.
         $category = ItemCategory::firstOrCreate(['name' => 'Raw Materials']);
         $rawItem = Item::create([
-            'code'            => 'RM-' . substr(uniqid(), -7),
-            'name'            => 'PP Resin ' . substr(uniqid(), -5),
-            'category_id'     => $category->id,
-            'item_type'       => 'raw_material',
+            'code' => 'RM-'.substr(uniqid(), -7),
+            'name' => 'PP Resin '.substr(uniqid(), -5),
+            'category_id' => $category->id,
+            'item_type' => 'raw_material',
             'unit_of_measure' => 'kg',
-            'standard_cost'   => '85.0000',
-            'lead_time_days'  => 7,
-            'is_active'       => true,
+            'standard_cost' => '85.0000',
+            'lead_time_days' => 7,
+            'is_active' => true,
         ]);
 
         // BOM: 1 product requires 0.5 kg of raw material.
         $bom = Bom::create([
             'product_id' => $product->id,
-            'version'    => 1,
-            'is_active'  => true,
+            'version' => 1,
+            'is_active' => true,
         ]);
         BomItem::create([
-            'bom_id'            => $bom->id,
-            'item_id'           => $rawItem->id,
+            'bom_id' => $bom->id,
+            'item_id' => $rawItem->id,
             'quantity_per_unit' => '0.5000',
-            'unit'              => 'kg',
-            'waste_factor'      => '5.00',
-            'sort_order'        => 0,
+            'unit' => 'kg',
+            'waste_factor' => '5.00',
+            'sort_order' => 0,
         ]);
 
         // Stock level (warehouse → zone → location → stock).
         if ($stockQuantity > 0) {
             $warehouse = Warehouse::create([
-                'name'      => 'Main WH',
-                'code'      => 'WH-' . substr(uniqid(), -5),
+                'name' => 'Main WH',
+                'code' => 'WH-'.substr(uniqid(), -5),
                 'is_active' => true,
             ]);
             $zone = WarehouseZone::create([
                 'warehouse_id' => $warehouse->id,
-                'name'         => 'Zone A',
-                'code'         => 'ZA',
-                'zone_type'    => 'raw_materials',
+                'name' => 'Zone A',
+                'code' => 'ZA',
+                'zone_type' => 'raw_materials',
             ]);
             $location = WarehouseLocation::create([
-                'zone_id'   => $zone->id,
-                'code'      => 'A-01',
+                'zone_id' => $zone->id,
+                'code' => 'A-01',
                 'is_active' => true,
             ]);
             StockLevel::create([
-                'item_id'           => $rawItem->id,
-                'location_id'       => $location->id,
-                'quantity'          => number_format($stockQuantity, 3, '.', ''),
+                'item_id' => $rawItem->id,
+                'location_id' => $location->id,
+                'quantity' => number_format($stockQuantity, 3, '.', ''),
                 'reserved_quantity' => '0.000',
                 'weighted_avg_cost' => '85.0000',
             ]);
@@ -344,24 +348,24 @@ class SalesOrderChainBridgeTest extends TestCase
 
         // Draft SO with one line.
         $so = SalesOrder::create([
-            'so_number'    => 'SO-CB-' . substr(uniqid(), -8),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '5000.00',
-            'vat_amount'   => '600.00',
+            'so_number' => 'SO-CB-'.substr(uniqid(), -8),
+            'customer_id' => $customer->id,
+            'date' => now()->toDateString(),
+            'subtotal' => '5000.00',
+            'vat_amount' => '600.00',
             'total_amount' => '5600.00',
-            'status'       => SalesOrderStatus::Draft->value,
-            'created_by'   => $user->id,
+            'status' => SalesOrderStatus::Draft->value,
+            'created_by' => $user->id,
         ]);
 
         SalesOrderItem::create([
-            'sales_order_id'     => $so->id,
-            'product_id'         => $product->id,
-            'quantity'           => 100,
-            'unit_price'         => '50.00',
-            'total'              => '5000.00',
+            'sales_order_id' => $so->id,
+            'product_id' => $product->id,
+            'quantity' => 100,
+            'unit_price' => '50.00',
+            'total' => '5000.00',
             'quantity_delivered' => 0,
-            'delivery_date'      => now()->addDays(14)->toDateString(),
+            'delivery_date' => now()->addDays(14)->toDateString(),
         ]);
 
         return [$so, $product, $rawItem];
@@ -375,40 +379,40 @@ class SalesOrderChainBridgeTest extends TestCase
     private function makeSoWithoutBom(): array
     {
         $customer = Customer::create([
-            'name'               => 'Cust ' . substr(uniqid(), -5),
-            'is_active'          => true,
+            'name' => 'Cust '.substr(uniqid(), -5),
+            'is_active' => true,
             'payment_terms_days' => 30,
         ]);
 
         $user = $this->makeUserWithPermission('crm.sales_orders.confirm');
 
         $product = Product::create([
-            'part_number'     => strtoupper('PT-' . substr(uniqid(), -7)),
-            'name'            => 'No BOM Product ' . substr(uniqid(), -5),
+            'part_number' => strtoupper('PT-'.substr(uniqid(), -7)),
+            'name' => 'No BOM Product '.substr(uniqid(), -5),
             'unit_of_measure' => 'pcs',
-            'standard_cost'   => '100.00',
-            'is_active'       => true,
+            'standard_cost' => '100.00',
+            'is_active' => true,
         ]);
 
         $so = SalesOrder::create([
-            'so_number'    => 'SO-CB-' . substr(uniqid(), -8),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '10000.00',
-            'vat_amount'   => '1200.00',
+            'so_number' => 'SO-CB-'.substr(uniqid(), -8),
+            'customer_id' => $customer->id,
+            'date' => now()->toDateString(),
+            'subtotal' => '10000.00',
+            'vat_amount' => '1200.00',
             'total_amount' => '11200.00',
-            'status'       => SalesOrderStatus::Draft->value,
-            'created_by'   => $user->id,
+            'status' => SalesOrderStatus::Draft->value,
+            'created_by' => $user->id,
         ]);
 
         SalesOrderItem::create([
-            'sales_order_id'     => $so->id,
-            'product_id'         => $product->id,
-            'quantity'           => 100,
-            'unit_price'         => '100.00',
-            'total'              => '10000.00',
+            'sales_order_id' => $so->id,
+            'product_id' => $product->id,
+            'quantity' => 100,
+            'unit_price' => '100.00',
+            'total' => '10000.00',
             'quantity_delivered' => 0,
-            'delivery_date'      => now()->addDays(14)->toDateString(),
+            'delivery_date' => now()->addDays(14)->toDateString(),
         ]);
 
         return [$so, $product];

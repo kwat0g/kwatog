@@ -48,6 +48,8 @@ export interface SelfServiceLoan {
  monthly_amortization: string | null;
  periods: number;
  periods_remaining: number;
+ repayment_months?: number;
+ remaining_repayment_months?: number;
  status: string;
  status_label?: string;
  created_at: string | null;

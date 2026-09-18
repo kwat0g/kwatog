@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Loans;
 
+use App\Common\Services\ApprovalBoardService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Services\LoanService;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -191,5 +193,29 @@ class LoanApprovalChainTest extends TestCase
         $this->approve($loan, $head)->assertForbidden();
 
         $this->assertSame('pending', $this->stepAction($loan, 2));
+    }
+
+    public function test_cancelling_a_pending_loan_retires_its_approval_board_card(): void
+    {
+        $loan = $this->pendingLoan();
+        $this->seedChain($loan, [
+            ['role' => 'system_admin'],
+        ]);
+        $admin = $this->user('system_admin');
+
+        $cancelled = app(LoanService::class)->cancel($loan, $admin);
+
+        $this->assertSame(LoanStatus::Cancelled, $cancelled->status);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $loan->getMorphClass(),
+            'approvable_id' => $loan->id,
+            'action' => 'superseded',
+            'is_current' => false,
+        ]);
+        $cards = app(ApprovalBoardService::class)->board($admin)['my_action'];
+        $this->assertNotContains($loan->loan_no, array_map(
+            static fn (array $card): string => (string) $card['number'],
+            $cards,
+        ));
     }
 }

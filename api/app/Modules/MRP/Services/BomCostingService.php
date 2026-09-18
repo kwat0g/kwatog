@@ -6,7 +6,6 @@ namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
-use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
@@ -26,10 +25,15 @@ use RuntimeException;
  */
 class BomCostingService
 {
-    public function __construct(private readonly BomComponentIntegrityService $integrity) {}
+    public function __construct(
+        private readonly BomComponentIntegrityService $integrity,
+        private readonly BomManufacturedComponentResolver $manufacturedComponents,
+    ) {}
 
     public function recalculate(Bom $bom): Bom
     {
+        $this->manufacturedComponents->reset();
+
         return DB::transaction(function () use ($bom): Bom {
             $this->recalculateBom($bom, []);
 
@@ -43,9 +47,12 @@ class BomCostingService
      */
     public function ensureFresh(Bom $bom): Bom
     {
-        $this->ensureFreshBom($bom, []);
+        return DB::transaction(function () use ($bom): Bom {
+            $this->manufacturedComponents->reset();
+            $this->ensureFreshBom($bom, []);
 
-        return $bom->fresh()->load(['product', 'items.item']);
+            return $bom->fresh()->load(['product', 'items.item']);
+        });
     }
 
     /** @param list<int> $path */
@@ -59,18 +66,30 @@ class BomCostingService
         $bom->refresh();
         $costedAt = $bom->costed_at;
         $stale = $costedAt === null;
-        $lines = BomItem::query()->where('bom_id', $bom->id)->get(['item_id']);
+        $lines = BomItem::query()
+            ->where('bom_id', $bom->id)
+            ->get(['item_id', 'updated_at', 'cost_source']);
         $items = Item::withTrashed()->whereIn('id', $lines->pluck('item_id'))->get()->keyBy('id');
 
         foreach ($lines as $line) {
             $item = $items->get((int) $line->item_id);
-            if ($item === null || $costedAt === null || $item->updated_at?->gt($costedAt)) {
+            if (
+                $item === null
+                || $costedAt === null
+                || $line->updated_at?->gt($costedAt)
+                || $item->updated_at?->gt($costedAt)
+            ) {
                 $stale = true;
+
                 continue;
             }
 
             $nested = $this->activeBomForItem($item);
             if ($nested === null) {
+                if ($line->cost_source === 'bom_rollup') {
+                    $stale = true;
+                }
+
                 continue;
             }
 
@@ -87,7 +106,7 @@ class BomCostingService
     }
 
     /**
-     * @param list<int> $path
+     * @param  list<int>  $path
      * @return array{material_cost:string, labor_cost:string, machine_cost:string, overhead_cost:string, total_cost:string, warnings:list<array<string, string>>}
      */
     private function recalculateBom(Bom $bom, array $path): array
@@ -143,16 +162,16 @@ class BomCostingService
 
             $line->forceFill([
                 'cost_quantity' => bcadd($baseQuantity, '0', 6),
-                'unit_cost'     => $unitCost,
+                'unit_cost' => $unitCost,
                 'extended_cost' => $extendedCost,
-                'cost_source'   => $costSource,
+                'cost_source' => $costSource,
             ])->save();
 
             if (bccomp($unitCost, '0', 4) === 0) {
                 $warnings[] = [
-                    'type'       => 'zero_standard_cost',
-                    'item_code'  => $item->code,
-                    'message'    => "Item {$item->code} has a zero standard cost.",
+                    'type' => 'zero_standard_cost',
+                    'item_code' => $item->code,
+                    'message' => "Item {$item->code} has a zero standard cost.",
                 ];
             }
 
@@ -169,32 +188,28 @@ class BomCostingService
 
         $bom->forceFill([
             'material_cost' => $materialCost,
-            'labor_cost'    => $conversionCosts['labor_cost'],
-            'machine_cost'  => $conversionCosts['machine_cost'],
+            'labor_cost' => $conversionCosts['labor_cost'],
+            'machine_cost' => $conversionCosts['machine_cost'],
             'overhead_cost' => $conversionCosts['overhead_cost'],
-            'total_cost'    => $totalCost,
-            'cost_basis'    => $conversionCosts['has_routing'] ? 'standard_cost+routing' : 'standard_cost',
-            'costed_at'     => now(),
+            'total_cost' => $totalCost,
+            'cost_basis' => $conversionCosts['has_routing'] ? 'standard_cost+routing' : 'standard_cost',
+            'costed_at' => now(),
             'cost_warnings' => $warnings,
         ])->save();
 
         return [
             'material_cost' => $materialCost,
-            'labor_cost'    => $conversionCosts['labor_cost'],
-            'machine_cost'  => $conversionCosts['machine_cost'],
+            'labor_cost' => $conversionCosts['labor_cost'],
+            'machine_cost' => $conversionCosts['machine_cost'],
             'overhead_cost' => $conversionCosts['overhead_cost'],
-            'total_cost'    => $totalCost,
-            'warnings'      => $warnings,
+            'total_cost' => $totalCost,
+            'warnings' => $warnings,
         ];
     }
 
     private function activeBomForItem(Item $item): ?Bom
     {
-        return Product::query()
-            ->where('part_number', (string) $item->code)
-            ->active()
-            ->with('activeBom')
-            ->first()?->activeBom;
+        return $this->manufacturedComponents->forItem($item);
     }
 
     /**

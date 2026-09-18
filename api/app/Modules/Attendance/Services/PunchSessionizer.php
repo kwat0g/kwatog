@@ -80,12 +80,15 @@ class PunchSessionizer
             if ($current === null) {
                 return;
             }
-            $hasOut = $current['last'] !== $current['in'];
+            $timeIn = $current['directional_in'] ?? $current['in'];
+            $timeOut = $current['directional_out']
+                ?? ($current['last'] !== $current['in'] ? $current['last'] : null);
+            $hasOut = $timeOut !== null && $timeOut !== $timeIn;
             $days[] = [
                 'employee_no' => $current['emp'],
                 'date'        => $current['date'],
-                'time_in'     => $current['in'],
-                'time_out'    => $hasOut ? $current['last'] : null,
+                'time_in'     => $timeIn,
+                'time_out'    => $hasOut ? $timeOut : null,
                 'flag'        => $hasOut ? null : 'missing_out',
             ];
             $current = null;
@@ -95,7 +98,7 @@ class PunchSessionizer
             $ts = Carbon::parse($r['ts']);
 
             if ($current === null) {
-                $current = ['emp' => $empNo, 'date' => $ts->toDateString(), 'in' => $r['ts'], 'last' => $r['ts']];
+                $current = $this->startSession($empNo, $ts->toDateString(), $r);
                 continue;
             }
 
@@ -117,13 +120,41 @@ class PunchSessionizer
 
             if ($withinSession) {
                 $current['last'] = $r['ts'];
+                $this->recordDirectionalPunch($current, $r);
             } else {
                 $flush();
-                $current = ['emp' => $empNo, 'date' => $ts->toDateString(), 'in' => $r['ts'], 'last' => $r['ts']];
+                $current = $this->startSession($empNo, $ts->toDateString(), $r);
             }
         }
         $flush();
 
         return $days;
+    }
+
+    /** @param array{employee_no:string, ts:string, direction:?string} $row */
+    private function startSession(string $employeeNo, string $date, array $row): array
+    {
+        $current = [
+            'emp' => $employeeNo,
+            'date' => $date,
+            'in' => $row['ts'],
+            'last' => $row['ts'],
+            'directional_in' => null,
+            'directional_out' => null,
+        ];
+        $this->recordDirectionalPunch($current, $row);
+
+        return $current;
+    }
+
+    /** @param array{employee_no:string, ts:string, direction:?string} $row */
+    private function recordDirectionalPunch(array &$session, array $row): void
+    {
+        if ($row['direction'] === 'in' && $session['directional_in'] === null) {
+            $session['directional_in'] = $row['ts'];
+        }
+        if ($row['direction'] === 'out') {
+            $session['directional_out'] = $row['ts'];
+        }
     }
 }

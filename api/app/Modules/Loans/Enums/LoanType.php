@@ -26,6 +26,11 @@ enum LoanType: string
         return in_array($this, [self::SssLoan, self::PagibigLoan]);
     }
 
+    public function isSupported(): bool
+    {
+        return ! $this->isGovernment();
+    }
+
     /** Workflow type for ApprovalService. */
     public function workflowType(): string
     {
@@ -35,5 +40,14 @@ enum LoanType: string
     public static function values(): array
     {
         return array_map(fn ($c) => $c->value, self::cases());
+    }
+
+    /** @return array<int, string> */
+    public static function supportedValues(): array
+    {
+        return array_map(
+            static fn (self $type): string => $type->value,
+            array_filter(self::cases(), static fn (self $type): bool => $type->isSupported()),
+        );
     }
 }

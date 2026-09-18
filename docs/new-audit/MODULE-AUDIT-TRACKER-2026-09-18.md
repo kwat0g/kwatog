@@ -17,11 +17,11 @@ with verified status (the working tree carries an uncommitted fix pass).
 | 6 | Inventory (stock, valuation, transfers, counts, warehouse) | audited | `INVENTORY-RETURNS-AUDIT-2026-09-18.md` |
 | 7 | Quality (specs, inspections, NCR, CoC, PPAP, SPC) | audited | `QUALITY-AUDIT-2026-09-18.md` |
 | 8 | Production (WO, output, OEE, downtime, routing) | audited | `PRODUCTION-AUDIT-2026-09-18.md` |
-| 9 | MRP / MRP II (BOM, capacity, molds, machines) | audited | `MRP-AUDIT-2026-09-18.md` |
+| 9 | MRP / MRP II (BOM, capacity, molds, machines) | audited | `MRP-AUDIT-2026-09-18-FINISHED.md` (missing follow-up coverage: `MRP-AUDIT-2026-09-18-MISSING-TESTS.md`) |
 | 10 | SupplyChain (shipments, impex, fleet, landed cost) | audited | `SUPPLYCHAIN-AUDIT-2026-09-18.md` |
 | 11 | CRM — complaints / 8D / price agreements / products | audited | `CRM-AUDIT-2026-09-18.md` (complaints/8D in `QUALITY-AUDIT-2026-09-18.md`) |
 | 12 | HR (employees, recruitment, onboarding, training, docs) | audited | `HR-AUDIT-2026-09-18.md` |
-| 13 | Attendance (DTR, shifts, holidays, OT) | audited | `ATTENDANCE-LEAVE-LOANS-AUDIT-2026-09-18.md` |
+| 13 | Attendance (DTR, shifts, holidays, OT) | audited | `ATTENDANCE-LEAVE-LOANS-AUDIT-2026-09-18-FINISHED.md` |
 | 14 | Leave (types, balances, year-end) | audited | same doc as Attendance |
 | 15 | Loans (company loan, cash advance) | audited | same doc as Attendance |
 | 16 | Return Management (RMA) | audited | `INVENTORY-RETURNS-AUDIT-2026-09-18.md` |

@@ -8,6 +8,7 @@ use App\Common\Support\TrashedFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Attendance\Models\Holiday;
 use Carbon\CarbonInterface;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -88,7 +89,30 @@ class HolidayService
         $key = $date->toDateString();
         $row = $cached[$key] ?? null;
         if (!$row) return null;
-        return Holiday::find($row['id']);
+
+        $holiday = new Holiday();
+        $holiday->forceFill([
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'date' => $key,
+            'type' => $row['type'],
+        ]);
+        $holiday->exists = true;
+
+        return $holiday;
+    }
+
+    /** @return array<string, true> */
+    public function datesBetween(CarbonInterface $start, CarbonInterface $end): array
+    {
+        return array_fill_keys(
+            Holiday::query()
+                ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+                ->pluck('date')
+                ->map(static fn (mixed $date): string => CarbonImmutable::parse((string) $date)->toDateString())
+                ->all(),
+            true,
+        );
     }
 
     /** @return array<string, array{id:int, name:string, type:string}> */
