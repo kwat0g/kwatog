@@ -11,6 +11,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
 use App\Modules\Payroll\Services\PayrollGlPostingService;
@@ -102,6 +103,60 @@ class PayrollGlPostingTest extends TestCase
 
         $period->refresh();
         $this->assertSame((int) $entryId, (int) $period->journal_entry_id);
+    }
+
+    public function test_payroll_wages_are_classified_by_production_department(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.accounting', true, 'modules');
+        $settings->set('accounting.payroll.direct_labor_department_codes', ['PRD'], 'accounting');
+        $settings->set('accounting.accounts.salary_expense_code', '6010', 'accounting');
+        $settings->set('accounting.accounts.overtime_expense_code', '6015', 'accounting');
+        $settings->set('accounting.accounts.thirteenth_month_expense_code', '6020', 'accounting');
+        $settings->set('accounting.accounts.production_salary_expense_code', '5020', 'accounting');
+        $settings->set('accounting.accounts.production_overtime_expense_code', '5020', 'accounting');
+        $settings->set('accounting.accounts.production_thirteenth_month_expense_code', '5070', 'accounting');
+
+        foreach ([
+            ['code' => '5020', 'name' => 'Direct Labor', 'type' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6010', 'name' => 'Salaries & Wages Expense', 'type' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6015', 'name' => 'Overtime Expense', 'type' => 'expense', 'normal_balance' => 'debit'],
+            ['code' => '6020', 'name' => 'Employee Benefits Expense', 'type' => 'expense', 'normal_balance' => 'debit'],
+        ] as $account) {
+            DB::table('accounts')->updateOrInsert(
+                ['code' => $account['code']],
+                $account + ['is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+            );
+        }
+
+        [$user, $period] = $this->fullySetup();
+        $adminDepartment = Department::create(['name' => 'Administration', 'code' => 'ADMIN']);
+        $adminPosition = Position::create(['title' => 'Finance Clerk', 'department_id' => $adminDepartment->id]);
+        $adminEmployee = Employee::factory()->create([
+            'department_id' => $adminDepartment->id,
+            'position_id' => $adminPosition->id,
+            'pay_type' => 'monthly',
+            'basic_monthly_salary' => '6000.00',
+        ]);
+        Payroll::create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $adminEmployee->id,
+            'pay_type' => 'monthly',
+            'basic_pay' => '3000.00',
+            'gross_pay' => '3000.00',
+            'net_pay' => '3000.00',
+            'computed_at' => now(),
+        ]);
+
+        $entryId = app(PayrollGlPostingService::class)->post($period->fresh());
+        $lines = DB::table('journal_entry_lines as line')
+            ->join('accounts as account', 'account.id', '=', 'line.account_id')
+            ->where('line.journal_entry_id', $entryId)
+            ->get(['account.code', 'line.debit', 'line.credit']);
+
+        $this->assertGreaterThan('0.00', (string) $lines->firstWhere('code', '5020')->debit);
+        $this->assertSame('3000.00', (string) $lines->firstWhere('code', '6010')->debit);
+        $this->assertSame('0', (string) $lines->where('code', '5050')->sum('debit'));
     }
 
     public function test_idempotent_returns_existing_entry(): void
@@ -226,5 +281,32 @@ class PayrollGlPostingTest extends TestCase
             (float) $lines->sum('credit'),
             0.01,
         );
+    }
+
+    public function test_thirteenth_month_gl_posts_gross_expense_and_withholding_payable(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+
+        [, $period] = $this->fullySetup();
+        $period->forceFill(['is_thirteenth_month' => true])->save();
+        $period->payrolls()->firstOrFail()->forceFill([
+            'basic_pay'        => '0.00',
+            'gross_pay'        => '1000.00',
+            'withholding_tax'  => '100.00',
+            'total_deductions' => '100.00',
+            'net_pay'          => '900.00',
+        ])->save();
+
+        $entryId = app(PayrollGlPostingService::class)->post($period->fresh());
+        $lines = DB::table('journal_entry_lines as jel')
+            ->join('accounts as a', 'a.id', '=', 'jel.account_id')
+            ->where('jel.journal_entry_id', $entryId)
+            ->get(['a.code', 'jel.debit', 'jel.credit']);
+
+        $this->assertSame('1000.00', (string) $lines->firstWhere('code', '5070')->debit);
+        $this->assertSame('100.00', (string) $lines->firstWhere('code', '2050')->credit);
+        $this->assertSame('900.00', (string) $lines->firstWhere('code', '2080')->credit);
+        $this->assertSame((string) DB::table('journal_entries')->where('id', $entryId)->value('total_debit'),
+            (string) DB::table('journal_entries')->where('id', $entryId)->value('total_credit'));
     }
 }

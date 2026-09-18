@@ -24,6 +24,50 @@ use App\Modules\Accounting\Enums\AccountType;
  */
 final class AccountingAccountPolicyService
 {
+    /** @var array<string, AccountType> */
+    private const SETTING_TYPES = [
+        'accounting.default_sales_revenue_account_code' => AccountType::Revenue,
+        'accounting.default_expense_account_code' => AccountType::Expense,
+        'accounting.accounts.ar_code' => AccountType::Asset,
+        'accounting.accounts.ap_code' => AccountType::Liability,
+        'accounting.accounts.vat_output_code' => AccountType::Liability,
+        'accounting.accounts.vat_input_code' => AccountType::Asset,
+        'accounting.accounts.discount_code' => AccountType::Revenue,
+        'accounting.accounts.grni_code' => AccountType::Liability,
+        'accounting.accounts.inventory_raw_material_code' => AccountType::Asset,
+        'accounting.accounts.inventory_finished_goods_code' => AccountType::Asset,
+        'accounting.accounts.inventory_packaging_code' => AccountType::Asset,
+        'accounting.accounts.inventory_spare_parts_code' => AccountType::Asset,
+        'accounting.accounts.purchase_return_expense_code' => AccountType::Expense,
+        'accounting.accounts.final_pay_salary_expense_code' => AccountType::Expense,
+        'accounting.accounts.cash_code' => AccountType::Asset,
+        'accounting.accounts.loans_payable_code' => AccountType::Liability,
+        'accounting.accounts.accrued_expense_code' => AccountType::Liability,
+        'accounting.accounts.asset_cash_code' => AccountType::Asset,
+        'accounting.accounts.asset_accumulated_depreciation_code' => AccountType::Asset,
+        'accounting.accounts.asset_cost_code' => AccountType::Asset,
+        'accounting.accounts.asset_disposal_loss_code' => AccountType::Expense,
+        'accounting.accounts.asset_disposal_gain_code' => AccountType::Revenue,
+        'accounting.accounts.depreciation_expense_code' => AccountType::Expense,
+        'accounting.accounts.material_consumption_code' => AccountType::Expense,
+        'accounting.accounts.inventory_adjustment_code' => AccountType::Expense,
+        'accounting.accounts.sss_payable_code' => AccountType::Liability,
+        'accounting.accounts.philhealth_payable_code' => AccountType::Liability,
+        'accounting.accounts.pagibig_payable_code' => AccountType::Liability,
+        'accounting.accounts.withholding_tax_payable_code' => AccountType::Liability,
+        'accounting.accounts.thirteenth_month_payable_code' => AccountType::Liability,
+        'accounting.accounts.salary_expense_code' => AccountType::Expense,
+        'accounting.accounts.overtime_expense_code' => AccountType::Expense,
+        'accounting.accounts.thirteenth_month_expense_code' => AccountType::Expense,
+        'accounting.accounts.production_salary_expense_code' => AccountType::Expense,
+        'accounting.accounts.production_overtime_expense_code' => AccountType::Expense,
+        'accounting.accounts.production_thirteenth_month_expense_code' => AccountType::Expense,
+        'accounting.accounts.sss_employer_expense_code' => AccountType::Expense,
+        'accounting.accounts.philhealth_employer_expense_code' => AccountType::Expense,
+        'accounting.accounts.pagibig_employer_expense_code' => AccountType::Expense,
+        'accounting.accounts.payroll_cash_code' => AccountType::Asset,
+    ];
+
     public function __construct(
         private readonly SettingsService $settings,
         private readonly PostingAccountResolver $postingAccounts,
@@ -66,6 +110,16 @@ final class AccountingAccountPolicyService
     public function controlAccountId(string $code): int
     {
         $type = $this->typeFor($code);
+
+        return $type === null
+            ? $this->postingAccounts->configuredIdByCode($code)
+            : $this->postingAccounts->configuredIdByCode($code, $type);
+    }
+
+    public function controlAccountIdForSetting(string $settingKey): int
+    {
+        $code = $this->settings->requiredString($settingKey);
+        $type = self::SETTING_TYPES[$settingKey] ?? null;
 
         return $type === null
             ? $this->postingAccounts->configuredIdByCode($code)

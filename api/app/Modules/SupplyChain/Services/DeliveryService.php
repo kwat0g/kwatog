@@ -15,8 +15,8 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Enums\InvoiceStatus;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
@@ -78,6 +78,7 @@ class DeliveryService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly NotificationService $notifications,
         private readonly CoCService $coc,
         private readonly TaxPolicyService $taxPolicy,
@@ -1027,6 +1028,14 @@ class DeliveryService
                 ])->save();
             }
 
+            // The final delivery may create a new invoice after all previous
+            // invoices were paid. Reconcile only after that handoff exists;
+            // otherwise the SO could close before its final invoice is staged.
+            if (! $invoiceHandoffNeedsRecovery && $locked->sales_order_id) {
+                app(SalesOrderService::class)
+                    ->synchronizeCompletionState((int) $locked->sales_order_id);
+            }
+
             if ($invoiceHandoffNeedsRecovery) {
                 // C-1 — surface the failure to AR clerks immediately. The
                 // durable request below is the actual retry/recovery path.
@@ -1254,7 +1263,8 @@ class DeliveryService
         }
 
         try {
-            $defaultCode = $this->settings->requiredString('accounting.default_sales_revenue_account_code');
+            $defaultAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.default_sales_revenue_account_code');
         } catch (\Throwable $e) {
             throw new DeliveryInvoiceHandoffException(
                 'The default sales revenue account is not configured.',
@@ -1262,7 +1272,6 @@ class DeliveryService
                 $e,
             );
         }
-        $defaultAccountId = Account::query()->where('code', $defaultCode)->value('id');
 
         $customerHashId = app('hashids')->encode($d->salesOrder->customer_id);
         $hashids = app('hashids');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\SeparationReason;
@@ -130,7 +131,7 @@ class FinalPayProrationParityTest extends TestCase
      * No computed payroll row (separation outran the compute) — the fallback
      * must land on the SAME number the calculator produced above.
      */
-    public function test_fallback_matches_what_payroll_would_have_computed(): void
+    public function test_final_pay_refuses_to_compute_before_the_covering_period_is_disbursed(): void
     {
         $employee = $this->makeEmployee();
         $this->seedOpenPeriod();
@@ -150,19 +151,18 @@ class FinalPayProrationParityTest extends TestCase
         }
 
         $clearance = $this->makeClearance($employee, '2026-03-10');
-        $breakdown = app(FinalPayService::class)->compute($clearance)->final_pay_breakdown;
-
-        $this->assertSame('7332.60', $breakdown['last_salary_pro_rated']);
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        app(FinalPayService::class)->compute($clearance);
     }
 
     /**
      * Direct engine-vs-fallback equality on the same cutoff, so any future
      * divergence between the two halves of the seam fails here first.
      */
-    public function test_engine_and_fallback_agree_for_a_partial_cutoff(): void
+    public function test_final_pay_does_not_use_an_open_period_fallback(): void
     {
         $engineEmployee = $this->makeEmployee();
-        $fallbackEmployee = $this->makeEmployee();
         $periodId = $this->seedOpenPeriod();
         $period   = PayrollPeriod::query()->findOrFail($periodId);
 
@@ -182,14 +182,16 @@ class FinalPayProrationParityTest extends TestCase
 
         $engineBasic = $this->calc->computeForEmployee($period, $engineEmployee)->basic_pay;
 
-        $clearance = $this->makeClearance($fallbackEmployee, '2026-03-10');
-        $breakdown = app(FinalPayService::class)->compute($clearance)->final_pay_breakdown;
+        $this->assertSame('7332.60', $engineBasic);
 
-        $this->assertSame($engineBasic, $breakdown['last_salary_pro_rated']);
+        $clearance = $this->makeClearance($engineEmployee, '2026-03-10');
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        app(FinalPayService::class)->compute($clearance);
     }
 
     /** A semi-monthly leaver prorates on the same calendar-day fraction. */
-    public function test_fallback_prorates_semi_monthly_on_the_same_basis(): void
+    public function test_final_pay_refuses_an_open_period_for_semi_monthly_employee(): void
     {
         $employee = $this->makeEmployee([
             'pay_type'             => 'semi_monthly',
@@ -199,9 +201,8 @@ class FinalPayProrationParityTest extends TestCase
         $this->seedOpenPeriod();
 
         $clearance = $this->makeClearance($employee, '2026-03-03');
-        $breakdown = app(FinalPayService::class)->compute($clearance)->final_pay_breakdown;
-
-        // Flat cutoff 9460 × 3/15 = 1892.00.
-        $this->assertSame('1892.00', $breakdown['last_salary_pro_rated']);
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        app(FinalPayService::class)->compute($clearance);
     }
 }

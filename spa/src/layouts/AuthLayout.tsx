@@ -66,13 +66,12 @@ export function AuthLayout() {
 
   useEffect(() => {
     const labels: Record<string, string> = {
+      '/sign-in': 'Sign in',
       '/login': 'Sign in',
       '/forgot-password': 'Forgot password',
       '/reset-password': 'Reset password',
       '/change-password': 'Change password',
-      '/portal/supplier/login': 'Supplier sign in',
       '/portal/supplier/forgot-password': 'Supplier password reset',
-      '/portal/customer/login': 'Customer sign in',
       '/portal/customer/forgot-password': 'Customer password reset',
       '/portal/password-reset': 'Portal password reset',
     };

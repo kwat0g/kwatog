@@ -72,6 +72,10 @@ class ShipmentService
             'purchaseOrder:id,po_number,vendor_id',
             'creator:id,name,role_id',
             'documents' => fn ($q) => $q->with('uploader:id,name,role_id')->orderBy('uploaded_at'),
+            // ShipmentLandedCostResource is exposed via whenLoaded('landedCosts'),
+            // so without this the detail endpoint always returned it as null and
+            // the allocated costs were invisible to the UI.
+            'landedCosts',
         ]);
     }
 

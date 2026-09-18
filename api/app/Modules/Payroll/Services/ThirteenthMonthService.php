@@ -51,8 +51,9 @@ class ThirteenthMonthService
 
         return DB::transaction(function () use ($payroll, $year) {
             // Serialize on the employee row so concurrent accruals for the same
-            // employee/year cannot double-create the accrual (no unique index)
-            // or lose a period's contribution from a stale running total.
+            // employee/year cannot double-create the accrual or lose a period's
+            // contribution from a stale running total. The unique index is the
+            // durable backstop; this lock keeps the running-total update ordered.
             Employee::query()->lockForUpdate()->findOrFail($payroll->employee_id);
 
             $accrual = ThirteenthMonthAccrual::firstOrCreate(
@@ -155,6 +156,19 @@ class ThirteenthMonthService
                 $payDate = $payrollDate
                     ? CarbonImmutable::parse($payrollDate)
                     : CarbonImmutable::create($year, 12, $payDay);
+                $periodStart = CarbonImmutable::create($year, 12, 1);
+                $periodEnd = CarbonImmutable::create($year, 12, 31);
+                $graceDays = $this->settings->get('payroll.payroll_date.max_days_after_period_end');
+                $graceDays = is_numeric($graceDays) && (int) $graceDays >= 1 ? (int) $graceDays : 45;
+                $latestPayDate = $periodEnd->addDays($graceDays);
+                if ($payDate->lt($periodStart) || $payDate->gt($latestPayDate)) {
+                    throw new BusinessRuleException(sprintf(
+                        'The 13th-month payroll date (%s) must fall between %s and %s.',
+                        $payDate->toDateString(),
+                        $periodStart->toDateString(),
+                        $latestPayDate->toDateString(),
+                    ));
+                }
 
                 // Re-read after the advisory lock. Do not select a voided period:
                 // voiding is the explicit lifecycle operation that permits a
@@ -188,8 +202,8 @@ class ThirteenthMonthService
                     $period = $existing;
                 } else {
                     $period = PayrollPeriod::create([
-                        'period_start' => "{$year}-12-01",
-                        'period_end' => "{$year}-12-31",
+                        'period_start' => $periodStart->toDateString(),
+                        'period_end' => $periodEnd->toDateString(),
                         'payroll_date' => $payDate->toDateString(),
                         'is_first_half' => false,
                         'is_thirteenth_month' => true,

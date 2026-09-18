@@ -35,7 +35,7 @@ class UpdateLeaveTypeRequest extends FormRequest
             'requires_document'            => ['sometimes', 'boolean'],
             'is_convertible_on_separation' => ['sometimes', 'boolean'],
             'is_convertible_year_end'      => ['sometimes', 'boolean'],
-            'conversion_rate'              => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9.99'],
+            'conversion_rate'              => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:1'],
             'max_carryover_days'           => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:366'],
             'is_active'                    => ['sometimes', 'boolean'],
         ];

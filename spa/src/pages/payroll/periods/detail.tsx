@@ -403,15 +403,15 @@ export default function PayrollPeriodDetailPage() {
   const canRequestCorrection = can('payroll.periods.request_correction') && period.status === 'computed';
   const canFinalize = can('payroll.periods.finalize') && period.status === 'approved';
   const canBankFile =
-    can('payroll.periods.finalize') &&
+    can('payroll.periods.bank_file') &&
     (period.status === 'finalized' || period.status === 'disbursed');
-  const canDisburse = can('payroll.periods.finalize') && period.status === 'finalized';
+  const canDisburse = can('payroll.periods.disburse') && period.status === 'finalized';
   const canRetryGl =
     can('accounting.journal.post') &&
     (period.status === 'finalized' || period.status === 'disbursed') &&
     (period.gl_handoff_status === 'manual_required' || period.gl_handoff_status === 'not_required');
   const canUploadProof =
-    can('payroll.periods.finalize') &&
+    can('payroll.periods.disburse') &&
     period.status === 'finalized';
   // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
   const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';

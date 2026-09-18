@@ -11,7 +11,7 @@
  * fell out of that: `pusher-js` + `laravel-echo` (~21 KB gzipped) sat in the
  * entry chunk on every route, and `new Echo()` opened a WebSocket to Reverb
  * the moment the bundle evaluated — including for anonymous visitors on the
- * public landing page and /login, whose private-channel subscribes can only
+ * public landing page and /sign-in, whose private-channel subscribes can only
  * ever be rejected by the Sanctum-gated auth endpoint.
  *
  * `getEcho()` defers both: the libraries download on first call and the

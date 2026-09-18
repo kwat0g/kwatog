@@ -73,17 +73,17 @@ export default function App() {
  </Route>
 
  {/* Driver PWA — T2.5
- Uses AuthGuard with the main session (drivers log in via /login).
+  Uses AuthGuard with the main session (drivers sign in via /sign-in).
  DriverLayout renders a mobile-first shell with no sidebar. */}
  {driverRoutes}
 
  {/* Factory Floor PWA — Mobile-first for shop floor operators.
- Uses AuthGuard with the main session (operators log in via /login).
+  Uses AuthGuard with the main session (operators sign in via /sign-in).
  FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
  {factoryRoutes}
 
  {/* Maintenance Mobile PWA — Mobile-first for maintenance techs.
- Uses AuthGuard with the main session (techs log in via /login).
+  Uses AuthGuard with the main session (techs sign in via /sign-in).
  MaintenanceMobileLayout renders a mobile-first shell with bottom nav. */}
  {maintenanceMobileRoutes}
 

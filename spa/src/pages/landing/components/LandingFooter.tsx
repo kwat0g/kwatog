@@ -269,26 +269,10 @@ export function LandingFooter() {
               </li>
               <li className="pt-2">
                 <Link
-                  to="/login"
+                  to="/sign-in"
                   className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
                 >
-                  Staff login →
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/portal/customer"
-                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
-                >
-                  Customer portal →
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/portal/supplier"
-                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
-                >
-                  Supplier portal →
+                  Sign in →
                 </Link>
               </li>
             </ul>

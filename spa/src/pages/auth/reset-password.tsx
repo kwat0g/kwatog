@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     if (!token) {
-      navigate('/login', { replace: true });
+       navigate('/sign-in', { replace: true });
     }
   }, [token, navigate]);
 
@@ -128,7 +128,7 @@ export default function ResetPasswordPage() {
             You can now sign in with your new password.
           </p>
           <Link
-            to="/login"
+             to="/sign-in"
             className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
           >
             Go to sign in

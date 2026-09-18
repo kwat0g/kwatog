@@ -26,7 +26,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
  if (isLoading) return <FullPageLoader />;
 
  if (!isAuthenticated) {
- return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  return <Navigate to="/sign-in" state={{ from: location.pathname }} replace />;
  }
 
  if (user?.must_change_password && location.pathname !== '/change-password') {

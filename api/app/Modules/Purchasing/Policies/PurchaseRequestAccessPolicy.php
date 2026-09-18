@@ -26,14 +26,17 @@ use Illuminate\Support\Collection;
 final class PurchaseRequestAccessPolicy
 {
     /**
-     * The one workflow step that is scoped to a department.
+     * The only role whose PR row-visibility is department-scoped.
      *
-     * The seeded purchase_request chain is department_head → production_manager
-     * → purchasing_officer → system_admin, i.e. CLAUDE.md's Staff → Dept Head →
-     * Manager → Officer → VP. Only the first step belongs to a department; every
-     * later step is a company-level office that must be able to act on any
-     * department's request. Scoping them all to a department made every step
-     * after the first unsatisfiable, so a submitted PR could never leave step 2.
+     * The seeded purchase_request chain has been money-only since 2026-09-10
+     * (finance_officer → vice_president ≥ ₱50k — see WorkflowSeeder): no
+     * workflow step is department-scoped any more, so `respectsDepartmentScope`
+     * never finds a departmental step to enforce. This constant is NOT dead,
+     * though — it still drives the LIST/row branches below: a department head
+     * (who may raise PRs for their own department via the create gate) sees
+     * their department's requests in addition to their own; every other
+     * non-global role sees only what they requested plus the rows waiting on
+     * a plant-wide step they hold.
      */
     private const DEPARTMENTAL_STEP_ROLE = 'department_head';
 
@@ -255,8 +258,17 @@ final class PurchaseRequestAccessPolicy
     }
 
     /**
-     * The one approval rule ApprovalService cannot know: the department_head
-     * step is scoped to the requesting department.
+     * Departmental guard on the PR approve/reject action, kept from the era
+     * when the chain's first step was a department head.
+     *
+     * The seeded chain is now money-only (finance_officer → vice_president),
+     * so this never fires for it: no current step names `department_head`.
+     * It remains because the method is public API — ApprovalRefusalRenderingTest
+     * and any future chain that reintroduces a departmental step call it — and
+     * because its refusal sentence ("You can only approve purchase requests
+     * from your own department.") is the product behaviour PurchaseRequest-
+     * Service::assertMayDecide() renders when a departmental step exists.
+     * Against today's seeded chain it is a no-op passthrough.
      *
      * Public because a caller that must *explain* its refusal needs this rule
      * on its own. `canApprove()` answers "show the button?" and may collapse

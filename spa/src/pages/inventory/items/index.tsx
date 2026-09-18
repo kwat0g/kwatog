@@ -103,6 +103,7 @@ export default function ItemsListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('inventory.items.manage');
+  const canManageWarehouse = can('inventory.warehouse.manage');
   // Categories folded into this modal (2026-08-08) — the standalone
   // /inventory/categories route was removed. Stock Levels + Movements shortcuts
   // were dropped: both live one click away in the sidebar.
@@ -307,7 +308,9 @@ export default function ItemsListPage() {
  Categories
  </Button>
  {/* Warehouse Structure = master data (zones/locations). Warehouse Map (sidebar) is the live floor view. */}
- <Button variant="secondary" size="xs" onClick={() => navigate('/inventory/warehouse')}>Warehouse Structure</Button>
+  {canManageWarehouse && (
+  <Button variant="secondary" size="xs" onClick={() => navigate('/inventory/warehouse')}>Warehouse Structure</Button>
+  )}
  {canManage && (
  <Button variant="primary" size="xs" icon={<LuPlus size={14} />} onClick={() => navigate('/inventory/items/create')}>
  New item

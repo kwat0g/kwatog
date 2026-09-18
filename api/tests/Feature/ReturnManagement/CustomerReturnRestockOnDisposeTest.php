@@ -132,7 +132,8 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
     {
         $admin = $this->admin();
         $item  = Item::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), $this->invoice($this->customer(), $admin), $item);
+        $customer = $this->customer();
+        $rma   = $this->inspectedRma($admin, $customer, $this->invoice($customer, $admin), $item);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
@@ -152,7 +153,8 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
         $admin = $this->admin();
         $item  = Item::factory()->create();
         $loc   = WarehouseLocation::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), $this->invoice($this->customer(), $admin), $item);
+        $customer = $this->customer();
+        $rma   = $this->inspectedRma($admin, $customer, $this->invoice($customer, $admin), $item);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
@@ -202,7 +204,8 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
         $admin = $this->admin();
         $item  = Item::factory()->create();
         $loc   = WarehouseLocation::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), $this->invoice($this->customer(), $admin), $item);
+        $customer = $this->customer();
+        $rma   = $this->inspectedRma($admin, $customer, $this->invoice($customer, $admin), $item);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
@@ -235,7 +238,8 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
     {
         $admin = $this->admin();
         $item  = Item::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), $this->invoice($this->customer(), $admin), $item);
+        $customer = $this->customer();
+        $rma   = $this->inspectedRma($admin, $customer, $this->invoice($customer, $admin), $item);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [

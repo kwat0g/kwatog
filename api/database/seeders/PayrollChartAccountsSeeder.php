@@ -35,8 +35,12 @@ class PayrollChartAccountsSeeder extends Seeder
             ['code' => '2080', 'name' => '13th Month Pay Payable',        'type' => 'liability', 'normal_balance' => 'credit'],
             ['code' => '2100', 'name' => 'Loans Payable',                 'type' => 'liability', 'normal_balance' => 'credit'],
             // Expenses
+            ['code' => '5020', 'name' => 'Direct Labor',                 'type' => 'expense',   'normal_balance' => 'debit'],
             ['code' => '5050', 'name' => 'Salaries Expense',              'type' => 'expense',   'normal_balance' => 'debit'],
             ['code' => '5060', 'name' => 'Overtime Expense',              'type' => 'expense',   'normal_balance' => 'debit'],
+            ['code' => '6010', 'name' => 'Salaries & Wages Expense',       'type' => 'expense',   'normal_balance' => 'debit'],
+            ['code' => '6015', 'name' => 'Overtime Expense',               'type' => 'expense',   'normal_balance' => 'debit'],
+            ['code' => '6020', 'name' => 'Employee Benefits Expense',      'type' => 'expense',   'normal_balance' => 'debit'],
             ['code' => '6030', 'name' => 'SSS Expense (Employer)',        'type' => 'expense',   'normal_balance' => 'debit'],
             ['code' => '6040', 'name' => 'PhilHealth Expense (Employer)', 'type' => 'expense',   'normal_balance' => 'debit'],
             ['code' => '6050', 'name' => 'Pag-IBIG Expense (Employer)',   'type' => 'expense',   'normal_balance' => 'debit'],

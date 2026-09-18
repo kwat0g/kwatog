@@ -15,6 +15,8 @@ use App\Modules\Accounting\Models\OfficialReceipt;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\SalesOrder;
 use Carbon\Carbon;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -64,10 +66,11 @@ class InvoiceCollectionTest extends TestCase
         bool $isVatable = false,
         ?string $date = null,
         ?string $dueDate = null,
+        ?SalesOrder $salesOrder = null,
     ): \App\Modules\Accounting\Models\Invoice {
         $revenueId = $this->accountHashId('4010');
         $invoiceDate = $date ?? '2026-04-01';
-        $invoice = $svc->create([
+        $data = [
             'customer_id' => $customer->hash_id,
             'lifecycle_type' => 'prebill',
             'prebill_reason' => 'Collection accounting test fixture',
@@ -82,7 +85,12 @@ class InvoiceCollectionTest extends TestCase
                     'unit_price'         => $unitPrice,
                 ],
             ],
-        ], $user);
+        ];
+        if ($salesOrder) {
+            $data['sales_order_id'] = $salesOrder->hash_id;
+        }
+
+        $invoice = $svc->create($data, $user);
 
         return $svc->finalize($invoice, $user);
     }
@@ -139,6 +147,28 @@ class InvoiceCollectionTest extends TestCase
         $this->assertSame('0.00', (string) $cashLine->credit);
         $this->assertSame('0.00', (string) $arLine->debit);
         $this->assertSame('10000.00', (string) $arLine->credit, 'AR must be credited.');
+    }
+
+    public function test_full_collection_promotes_linked_sales_order_to_paid(): void
+    {
+        $user = $this->newUser();
+        $customer = Customer::create(['name' => 'Suzuki PH', 'payment_terms_days' => 30]);
+        $so = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'created_by' => $user->id,
+            'status' => SalesOrderStatus::Invoiced->value,
+        ]);
+        $svc = app(InvoiceService::class);
+        $invoice = $this->makeFinalizedInvoice($svc, $user, $customer, salesOrder: $so);
+
+        $svc->recordCollection($invoice->fresh(), [
+            'cash_account_id' => $this->accountHashId('1010'),
+            'collection_date' => '2026-04-15',
+            'amount' => (string) $invoice->total_amount,
+            'payment_method' => PaymentMethod::Cash->value,
+        ], $user);
+
+        $this->assertSame(SalesOrderStatus::Paid, $so->fresh()->status);
     }
 
     // ─── Test 2: Partial collection ─────────────────────────────────────────

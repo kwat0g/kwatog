@@ -235,7 +235,7 @@ export async function setupDashboard(
   await mockDashboardApi(page, apiUrl, mockData, opts);
   await page.goto(urlFromApi(apiUrl));
   await page.waitForLoadState('networkidle');
-  if (new URL(page.url()).pathname === '/login') {
+  if (new URL(page.url()).pathname === '/sign-in') {
     throw new Error(`Mock authentication failed; unauthorized: ${unauthorizedUrls.join(', ') || 'none'}`);
   }
 }

@@ -10,6 +10,8 @@ import { AxiosError } from 'axios';
 import gsap from 'gsap';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { authApi } from '@/api/auth';
+import { queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -54,7 +56,7 @@ export default function LoginPage() {
  const companyEmail = contact?.company_email ?? '';
  const navigate = useNavigate();
  const location = useLocation();
- const login = useAuthStore((s) => s.login);
+  const applyUser = useAuthStore((s) => s.applyUser);
 
  const [cooldown, setCooldown] = useState(0);
  const [showPassword, setShowPassword] = useState(false);
@@ -125,13 +127,21 @@ export default function LoginPage() {
 
  const onSubmit = async (data: LoginForm) => {
  try {
- const user = await login({
- email: data.email,
- password: data.password,
- });
- useSidebarStore.getState().init(user.sidebar_collapsed);
- const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
- navigate(user.must_change_password ? '/change-password' : from, { replace: true });
+  queryClient.clear();
+  const result = await authApi.signIn({
+  email: data.email,
+  password: data.password,
+  });
+
+  if (result.realm === 'internal') {
+  applyUser(result.user);
+  useSidebarStore.getState().init(result.user.sidebar_collapsed);
+  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+  navigate(result.must_change_password ? '/change-password' : from, { replace: true });
+  } else {
+  const portalPath = `/portal/${result.realm}`;
+  navigate(result.must_change_password ? `${portalPath}/change-password` : portalPath, { replace: true });
+  }
  } catch (err) {
  const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
  const status = axe.response?.status;
@@ -173,10 +183,10 @@ export default function LoginPage() {
  {/* Header block */}
  <div className="mb-6" data-entrance="header">
  <h1 className="font-display text-2xl tracking-tight text-primary">
- Welcome back
+  Sign in to Ogami
  </h1>
  <p className="mt-1.5 text-[13px] text-muted">
- Sign in with your work email to access {legalName ? `${legalName} (ERP)` : 'the ERP'}.
+  Use the email address associated with your {legalName ? `${legalName} account` : 'Ogami account'}.
  </p>
  </div>
 
@@ -284,24 +294,7 @@ export default function LoginPage() {
  </form>
  </div>
 
- </Panel>
- <div className="mt-4 px-2 text-center">
- <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
- External partner access
- </p>
- <p className="mt-1 text-xs text-muted">
- Customers and suppliers use their dedicated portal sign-in.
- </p>
- <div className="mt-2 flex items-center justify-center gap-4 text-xs">
- <Link to="/portal/customer/login" className="text-accent underline-offset-2 hover:underline">
- Customer portal
- </Link>
- <span className="text-subtle" aria-hidden="true">·</span>
- <Link to="/portal/supplier/login" className="text-accent underline-offset-2 hover:underline">
- Supplier portal
- </Link>
- </div>
- </div>
+  </Panel>
  </div>
  );
 }

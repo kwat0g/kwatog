@@ -28,6 +28,7 @@ import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { focusRingInset } from '@/lib/focus';
 import { Button } from '@/components/ui/Button';
 import { useChainProgress } from '@/hooks/useChainProgress';
+import { usePermission } from '@/hooks/usePermission';
 import type { SalesOrderStatus } from '@/types/crm';
 import type { ChainBottleneckRow } from '@/types/chain';
 import { cn } from '@/lib/cn';
@@ -40,6 +41,8 @@ const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
  partially_delivered: 'warning',
  delivered: 'success',
  invoiced: 'success',
+ paid: 'success',
+ closed: 'success',
  cancelled: 'danger',
 } as Record<SalesOrderStatus, ChipVariant>;
 
@@ -108,7 +111,9 @@ export default function ChainTrackerPage() {
 /* ── Picker + plant-wide bottlenecks ─────────────────────────────── */
 
 function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
- const [search, setSearch] = useState('');
+  const [search, setSearch] = useState('');
+  const { can } = usePermission();
+  const canViewBottlenecks = can('dashboard.view_bottlenecks');
  // One sales-order lookup per keystroke, unthrottled, against a search index.
  const debouncedSearch = useDebounce(search, 300);
 
@@ -118,10 +123,11 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  placeholderData: (prev) => prev,
  });
 
- const bottlenecks = useQuery({
- queryKey: ['chains', 'bottlenecks'],
- queryFn: () => chainApi.bottlenecks(),
- });
+  const bottlenecks = useQuery({
+  queryKey: ['chains', 'bottlenecks'],
+  queryFn: () => chainApi.bottlenecks(),
+  enabled: canViewBottlenecks,
+  });
 
  const orders = results.data?.data ?? [];
 
@@ -168,8 +174,9 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  </div>
  </Panel>
 
- {/* Plant-wide bottlenecks */}
- <Panel
+  {/* Plant-wide bottlenecks */}
+  {canViewBottlenecks && (
+  <Panel
  title="Stuck across the plant"
  meta={bottlenecks.data ? `${bottlenecks.data.total} stuck` : undefined}
  >
@@ -209,17 +216,18 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
  <span className="inline-flex items-center gap-1 font-mono text-2xs tabular-nums text-muted">
  <LuClock size={11} /> {Math.round(row.hours_stuck)}h
  </span>
- )}
+   )}
  </Link>
  </li>
  ))}
  </ul>
  </div>
  ))}
- </div>
- )}
- </Panel>
- </div>
+  </div>
+  )}
+  </Panel>
+  )}
+  </div>
  );
 }
 

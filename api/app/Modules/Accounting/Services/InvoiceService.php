@@ -22,6 +22,7 @@ use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -109,16 +110,18 @@ class InvoiceService
             if (! $customerId) {
                 throw new BusinessRuleException('Invalid customer selected for invoice.');
             }
-            $customer = Customer::query()->lockForUpdate()->find($customerId);
+            $customer = Customer::withTrashed()->lockForUpdate()->find($customerId);
             if (! $customer) {
                 throw new BusinessRuleException('Selected customer no longer exists.');
             }
+            $this->assertCustomerActive($customer);
             $source = $this->resolveSourceChain($data, $customer);
             $classification = $this->resolveClassification($data);
             $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
             $discount = $this->normalizeDiscount($data['senior_pwd_discount'] ?? null, $subtotal);
             [$vat, $total] = $this->computeTotals($classification, $subtotal, $discount);
+            $this->assertCreditLimit($customer, $total, $source['sales_order_id']);
 
             $invoice = Invoice::create([
                 // Number reserved at finalize-time so drafts that get cancelled don't burn numbers.
@@ -221,7 +224,13 @@ class InvoiceService
             // OGAMI-001 — block finalizing into a closed period.
             $this->periods->assertPostingAllowed($lockedInvoice->date);
 
-            $lockedInvoice->loadMissing(['items', 'customer']);
+            $lockedInvoice->loadMissing(['items']);
+            $customer = Customer::withTrashed()->lockForUpdate()->find($lockedInvoice->customer_id);
+            if (! $customer) {
+                throw new BusinessRuleException('The invoice customer no longer exists.');
+            }
+            $this->assertCustomerActive($customer);
+            $lockedInvoice->setRelation('customer', $customer);
 
             // Standard final invoices are delivery-gated. Prebilling is a
             // distinct, explicitly approved lifecycle and never masquerades
@@ -236,6 +245,12 @@ class InvoiceService
                 }
                 $this->assertInvoiceMatchesConfirmedDelivery($lockedInvoice, $delivery);
             }
+
+            $this->assertCreditLimit(
+                $customer,
+                (string) $lockedInvoice->total_amount,
+                $lockedInvoice->sales_order_id,
+            );
 
             $arId        = $this->configuredAccountId($this->accounts->ar());
             $vatOutputId = $this->configuredAccountId($this->accounts->vatOutput());
@@ -353,6 +368,18 @@ class InvoiceService
                 'cancelled_at' => now(),
                 'cancelled_by' => $by->id,
             ]);
+
+            if ($lockedInvoice->delivery_id) {
+                Delivery::query()
+                    ->whereKey($lockedInvoice->delivery_id)
+                    ->where('invoice_id', $lockedInvoice->id)
+                    ->update(['invoice_id' => null]);
+            }
+            if ($lockedInvoice->sales_order_id) {
+                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                    ->synchronizeAfterInvoiceCancellation((int) $lockedInvoice->sales_order_id);
+            }
+
             return $lockedInvoice->fresh();
         });
     }
@@ -442,6 +469,11 @@ class InvoiceService
                 'balance'     => $newBalance,
                 'status'      => $newStatus,
             ]);
+
+            if ($lockedInvoice->sales_order_id && $newStatus === InvoiceStatus::Paid) {
+                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                    ->synchronizeCompletionState((int) $lockedInvoice->sales_order_id);
+            }
 
             // 2026-08-08 — broadcast the chain step: partial → paid on settle.
             app(ChainBroadcaster::class)->broadcastFor(
@@ -801,5 +833,44 @@ class InvoiceService
     private function discountAccountId(): int
     {
         return $this->configuredAccountId($this->accounts->discount());
+    }
+
+    private function assertCustomerActive(Customer $customer): void
+    {
+        if (! $customer->is_active || $customer->trashed()) {
+            throw new BusinessRuleException('The selected customer is not active or no longer exists.');
+        }
+    }
+
+    private function assertCreditLimit(Customer $customer, string $invoiceTotal, ?int $salesOrderId): void
+    {
+        $limit = (string) ($customer->credit_limit ?? Money::zero());
+        if (Money::lte($limit, Money::zero())) {
+            return;
+        }
+
+        $arBalance = (string) Invoice::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial])
+            ->sum('balance');
+        $openSoExposure = (string) SalesOrder::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction])
+            ->sum('total_amount');
+        $sourceSoIsOpen = $salesOrderId !== null
+            && SalesOrder::query()
+                ->whereKey($salesOrderId)
+                ->whereIn('status', [SalesOrderStatus::Confirmed, SalesOrderStatus::InProduction])
+                ->exists();
+        $additionalInvoiceExposure = $sourceSoIsOpen ? Money::zero() : $invoiceTotal;
+        $totalExposure = Money::add($arBalance, $openSoExposure, $additionalInvoiceExposure);
+
+        if (Money::gt($totalExposure, $limit)) {
+            throw new BusinessRuleException(sprintf(
+                'Credit limit exceeded. Limit: %s, Current exposure: %s.',
+                $limit,
+                $totalExposure,
+            ));
+        }
     }
 }

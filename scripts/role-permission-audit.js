@@ -34,6 +34,7 @@ const LEAKS_DENIAL = /\bForbidden\b|access denied|not authoriz/i;
 
 const ALL_ACCOUNTS = [
   ['system_admin', 'admin@ogami.test'],
+  ['vice_president', 'vp@ogami.test'],
   ['hr_officer', 'hr@ogami.test'],
   ['finance_officer', 'finance@ogami.test'],
   ['production_manager', 'production@ogami.test'],
@@ -46,6 +47,8 @@ const ALL_ACCOUNTS = [
   ['department_head', 'depthead@ogami.test'],
   ['employee', 'employee@ogami.test'],
   ['driver', 'driver@ogami.test'],
+  ['sales_officer', 'crm@ogami.test'],
+  ['customer_service_officer', 'customerservice@ogami.test'],
 ];
 const requestedRoles = new Set((process.env.AUDIT_ROLES || '').split(',').filter(Boolean));
 const ACCOUNTS = requestedRoles.size
@@ -55,14 +58,42 @@ const ACCOUNTS = requestedRoles.size
 const SURFACES = [
   { path: '/hr/attendance', roles: ['system_admin', 'hr_officer', 'department_head'] },
   { path: '/hr/leaves', roles: ['system_admin', 'hr_officer', 'department_head'] },
-  { path: '/hr/loans', roles: ['system_admin', 'hr_officer', 'finance_officer', 'department_head'] },
+  { path: '/hr/loans', roles: ['system_admin', 'vice_president', 'hr_officer', 'finance_officer', 'production_manager', 'department_head'] },
   { path: '/payroll/periods', roles: ['system_admin', 'hr_officer', 'finance_officer'] },
-  { path: '/payroll/statutory', roles: ['system_admin', 'hr_officer', 'finance_officer'] },
+  { path: '/payroll/statutory', roles: ['system_admin', 'hr_officer'] },
   // '/quality/documents' removed: no route and no sidebar item exist for it
   // anywhere in spa/src, so the expectation could never be met.
 ];
 
 const SIDEBAR_SURFACES = SURFACES.filter((surface) => surface.path !== '/hr/loans');
+const WAREHOUSE_NAV = [
+  '/inventory/material-issues',
+  '/inventory/stock-adjustments',
+  '/inventory/warehouse-map',
+  '/inventory/transfer-orders',
+  '/inventory/picking',
+];
+const EXPECTED_WAREHOUSE_NAV = {
+  system_admin: WAREHOUSE_NAV,
+  finance_officer: ['/inventory/stock-adjustments'],
+  warehouse_staff: WAREHOUSE_NAV,
+};
+const PROCUREMENT_NAV = [
+  '/purchasing/chain',
+  '/purchasing/purchase-orders',
+  '/purchasing/purchase-requests',
+  '/purchasing/rfqs',
+  '/purchasing/approved-suppliers',
+  '/purchasing/supplier-listings',
+];
+const EXPECTED_PROCUREMENT_NAV = {
+  system_admin: PROCUREMENT_NAV,
+  vice_president: ['/purchasing/chain', '/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
+  finance_officer: ['/purchasing/chain', '/purchasing/purchase-orders', '/purchasing/purchase-requests', '/purchasing/rfqs'],
+  purchasing_officer: PROCUREMENT_NAV,
+  qc_inspector: ['/purchasing/rfqs'],
+  department_head: ['/purchasing/chain', '/purchasing/purchase-requests'],
+};
 
 async function login(page, email) {
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
@@ -113,6 +144,9 @@ async function navigateSpa(page, route) {
         const visibleSidebarRoutes = [...new Set(await page.locator('aside nav a[href]').evaluateAll((links) =>
           links.map((link) => link.getAttribute('href')).filter((href) => href && href.startsWith('/')),
         ))];
+        if (process.env.AUDIT_PRINT_SIDEBAR === '1') {
+          console.log(`SIDEBAR ${role}: ${visibleSidebarRoutes.join(', ')}`);
+        }
 
         for (const surface of SIDEBAR_SURFACES) {
           checks += 1;
@@ -121,6 +155,26 @@ async function navigateSpa(page, route) {
           const visible = await page.locator(`aside a[href="${surface.path}"]`).count() > 0;
           if (visible !== expected) {
             failures.push(`${role}: sidebar ${surface.path} expected ${expected ? 'visible' : 'hidden'}, got ${visible ? 'visible' : 'hidden'}`);
+          }
+        }
+
+        for (const path of WAREHOUSE_NAV) {
+          checks += 1;
+          roleChecks += 1;
+          const expected = EXPECTED_WAREHOUSE_NAV[role]?.includes(path) ?? false;
+          const visible = await page.locator(`aside a[href="${path}"]`).count() > 0;
+          if (visible !== expected) {
+            failures.push(`${role}: sidebar ${path} expected ${expected ? 'visible' : 'hidden'}, got ${visible ? 'visible' : 'hidden'}`);
+          }
+        }
+
+        for (const path of PROCUREMENT_NAV) {
+          checks += 1;
+          roleChecks += 1;
+          const expected = EXPECTED_PROCUREMENT_NAV[role]?.includes(path) ?? false;
+          const visible = await page.locator(`aside a[href="${path}"]`).count() > 0;
+          if (visible !== expected) {
+            failures.push(`${role}: sidebar ${path} expected ${expected ? 'visible' : 'hidden'}, got ${visible ? 'visible' : 'hidden'}`);
           }
         }
 

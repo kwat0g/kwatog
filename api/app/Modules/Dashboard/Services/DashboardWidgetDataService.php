@@ -103,7 +103,7 @@ class DashboardWidgetDataService
             ])->count(), "scheduled in the next {$ganttDays} days"),
             'machine.utilization', 'oee.gauges' => $this->ratio(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->count(), 'machines running now'),
             'machine.status' => $this->number(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->where('status', MachineStatus::Breakdown->value)->count().' in breakdown'),
-            'chain.stage_breakdown' => $this->number(DB::table('sales_orders')->whereNotIn('status', [SalesOrderStatus::Delivered->value, SalesOrderStatus::Invoiced->value, SalesOrderStatus::Cancelled->value])->count(), 'active order-to-cash chains'),
+            'chain.stage_breakdown' => $this->number(DB::table('sales_orders')->whereNotIn('status', [SalesOrderStatus::Delivered->value, SalesOrderStatus::Invoiced->value, SalesOrderStatus::Paid->value, SalesOrderStatus::Closed->value, SalesOrderStatus::Cancelled->value])->count(), 'active order-to-cash chains'),
 
             'qc.pareto' => $this->number(DB::table('inspections')->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('defect_count'), 'defects recorded this month'),
             'qc.pending_inspections' => $this->number(DB::table('inspections')->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value])->count(), 'awaiting completion'),

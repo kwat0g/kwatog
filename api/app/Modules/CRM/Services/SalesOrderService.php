@@ -12,6 +12,7 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\CRM\Enums\SalesOrderStatus;
@@ -65,8 +66,8 @@ class SalesOrderService
      *     confirmation — the delivery was stuck at `delivered` forever with
      *     no path forward (CR-01 / SC-01).
      *
-     * Backwards transitions remain absent — `cancelled` is still the only
-     * terminal state — and an illegal transition is a hard error (see
+     * Backwards transitions remain absent — `cancelled` and `closed` are
+      * terminal states — and an illegal transition is a hard error (see
      * transitionOrFail) so the owning operation rolls back rather than
      * succeeding while the SO goes stale.
      *
@@ -79,9 +80,11 @@ class SalesOrderService
     private const ALLOWED_TRANSITIONS = [
         'confirmed'           => ['in_production', 'partially_delivered', 'delivered', 'invoiced'],
         'in_production'       => ['partially_delivered', 'delivered', 'invoiced'],
-        'partially_delivered' => ['delivered', 'invoiced'],
-        'delivered'           => ['invoiced'],
-        'invoiced'            => ['partially_delivered', 'delivered'],
+        'partially_delivered' => ['delivered', 'invoiced', 'paid', 'closed'],
+        'delivered'           => ['invoiced', 'paid', 'closed'],
+        'invoiced'            => ['confirmed', 'partially_delivered', 'delivered', 'paid', 'closed'],
+        'paid'                => ['partially_delivered', 'delivered', 'closed'],
+        'closed'              => [],
         'cancelled'           => [],
         'draft'               => [],
     ];
@@ -282,6 +285,8 @@ class SalesOrderService
             SalesOrderStatus::PartiallyDelivered => ['partially_delivered_at' => now()],
             SalesOrderStatus::Delivered => ['delivered_at' => now()],
             SalesOrderStatus::Invoiced => ['invoiced_at' => now()],
+            SalesOrderStatus::Paid => ['paid_at' => now()],
+            SalesOrderStatus::Closed => ['closed_at' => now()],
             SalesOrderStatus::Cancelled => ['cancelled_at' => now()],
             default => [],
         };
@@ -835,6 +840,112 @@ class SalesOrderService
         return $this->transitionOrFail($salesOrderId, SalesOrderStatus::Invoiced);
     }
 
+    public function markPaid(?int $salesOrderId): SalesOrderTransitionResult
+    {
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::Paid);
+    }
+
+    public function markClosed(?int $salesOrderId): SalesOrderTransitionResult
+    {
+        return $this->transitionOrFail($salesOrderId, SalesOrderStatus::Closed);
+    }
+
+    /**
+     * Reconcile the SO's coarse financial terminal state from its linked
+     * invoices and delivered quantities. The owning collection or delivery
+     * transaction calls this while its own write is still open.
+     */
+    public function synchronizeCompletionState(?int $salesOrderId): void
+    {
+        if ($salesOrderId === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($salesOrderId): void {
+            $so = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+            if (! $so || in_array($so->status, [SalesOrderStatus::Cancelled, SalesOrderStatus::Closed], true)) {
+                return;
+            }
+
+            $invoices = Invoice::query()
+                ->where('sales_order_id', $so->id)
+                ->where('status', '!=', InvoiceStatus::Cancelled->value)
+                ->get(['status', 'total_amount']);
+            if ($invoices->isEmpty() || ! $invoices->every(
+                static fn (Invoice $invoice): bool => $invoice->status === InvoiceStatus::Paid,
+            )) {
+                return;
+            }
+
+            $invoicedTotal = Money::add(...$invoices->pluck('total_amount')->map(
+                static fn (mixed $amount): string => (string) $amount,
+            )->all());
+            $target = $this->isFullyDelivered($so)
+                && Money::gte($invoicedTotal, (string) $so->total_amount)
+                ? SalesOrderStatus::Closed
+                : SalesOrderStatus::Paid;
+            $result = $this->transitionLocked($so, $target);
+            if (! $result->isSuccess()) {
+                throw new BusinessRuleException($result->reason ?? 'Sales order completion state is invalid.');
+            }
+        });
+    }
+
+    /** Re-open the physical SO state after its last linked invoice is cancelled. */
+    public function synchronizeAfterInvoiceCancellation(?int $salesOrderId): void
+    {
+        if ($salesOrderId === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($salesOrderId): void {
+            $so = SalesOrder::query()->lockForUpdate()->find($salesOrderId);
+            if (! $so || in_array($so->status, [SalesOrderStatus::Cancelled, SalesOrderStatus::Closed], true)) {
+                return;
+            }
+
+            if (Invoice::query()
+                ->where('sales_order_id', $so->id)
+                ->where('status', '!=', InvoiceStatus::Cancelled->value)
+                ->exists()) {
+                return;
+            }
+
+            $hasConfirmedDelivery = Delivery::query()
+                ->where('sales_order_id', $so->id)
+                ->whereIn('status', ['delivered', 'confirmed'])
+                ->exists();
+            $target = ! $hasConfirmedDelivery
+                ? SalesOrderStatus::Confirmed
+                : ($this->isFullyDelivered($so)
+                    ? SalesOrderStatus::Delivered
+                    : SalesOrderStatus::PartiallyDelivered);
+
+            if ($so->status === $target) {
+                return;
+            }
+
+            $result = $this->transitionLocked($so, $target);
+            if (! $result->isSuccess()) {
+                throw new BusinessRuleException($result->reason ?? 'Sales order state could not be reconciled after invoice cancellation.');
+            }
+        });
+    }
+
+    private function isFullyDelivered(SalesOrder $so): bool
+    {
+        $items = SalesOrderItem::query()
+            ->where('sales_order_id', $so->id)
+            ->get(['quantity', 'quantity_delivered']);
+
+        return $items->isNotEmpty() && $items->every(
+            static fn (SalesOrderItem $item): bool => Money::gte(
+                (string) ($item->quantity_delivered ?? '0.00'),
+                (string) $item->quantity,
+            ),
+        );
+    }
+
     private function transitionOrFail(?int $salesOrderId, SalesOrderStatus $target): SalesOrderTransitionResult
     {
         $result = $this->transitionTo($salesOrderId, $target);
@@ -859,47 +970,54 @@ class SalesOrderService
                 return new SalesOrderTransitionResult('skipped', 422, null, $target->value, 'sales_order_missing');
             }
 
-            $currentValue = $so->status?->value;
-
-            // Idempotent: already at the target state.
-            if ($currentValue === $target->value) {
-                return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
-            }
-
-            $allowed = self::ALLOWED_TRANSITIONS[$currentValue ?? ''] ?? [];
-            if (! in_array($target->value, $allowed, true)) {
-                $reason = "Transition from {$currentValue} to {$target->value} is not allowed.";
-                SalesOrderTransitionRejection::create([
-                    'sales_order_id' => $so->id, 'from_status' => $currentValue,
-                    'to_status' => $target->value, 'reason_code' => 'illegal_transition',
-                    'reason' => $reason, 'requested_by' => null,
-                ]);
-                Log::debug('SalesOrder transition skipped', [
-                    'sales_order_id' => $so->id,
-                    'from'           => $currentValue,
-                    'to'             => $target->value,
-                ]);
-                return new SalesOrderTransitionResult('skipped', 409, $currentValue, $target->value, $reason);
-            }
-
-            $so->update([
-                'status' => $target->value,
-                ...$this->transitionTimestamp($target),
-            ]);
-            $fresh = $so->fresh();
-            app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
-            return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
+            return $this->transitionLocked($so, $target);
         });
+    }
+
+    private function transitionLocked(SalesOrder $so, SalesOrderStatus $target): SalesOrderTransitionResult
+    {
+        $currentValue = $so->status?->value;
+
+        if ($currentValue === $target->value) {
+            return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
+        }
+
+        $allowed = self::ALLOWED_TRANSITIONS[$currentValue ?? ''] ?? [];
+        if (! in_array($target->value, $allowed, true)) {
+            $reason = "Transition from {$currentValue} to {$target->value} is not allowed.";
+            SalesOrderTransitionRejection::create([
+                'sales_order_id' => $so->id, 'from_status' => $currentValue,
+                'to_status' => $target->value, 'reason_code' => 'illegal_transition',
+                'reason' => $reason, 'requested_by' => null,
+            ]);
+            Log::debug('SalesOrder transition skipped', [
+                'sales_order_id' => $so->id,
+                'from'           => $currentValue,
+                'to'             => $target->value,
+            ]);
+            return new SalesOrderTransitionResult('skipped', 409, $currentValue, $target->value, $reason);
+        }
+
+        $so->update([
+            'status' => $target->value,
+            ...$this->transitionTimestamp($target),
+        ]);
+        $fresh = $so->fresh();
+        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
+
+        return new SalesOrderTransitionResult('succeeded', 200, $currentValue, $target->value);
     }
 
     /**
      * Chain payload — qc_outgoing derived from real Inspection state (H-4);
-     * other 5 stages still derive from the SO's own status field.
+     * the remaining stages derive from the SO's own lifecycle state.
      */
     public function chain(SalesOrder $so): array
     {
         $status = $so->status;
         $isCancelled = $status === SalesOrderStatus::Cancelled;
+        $isPaid = in_array($status, [SalesOrderStatus::Paid, SalesOrderStatus::Closed], true);
+        $isClosed = $status === SalesOrderStatus::Closed;
         $qc = $isCancelled
             ? ['state' => 'skipped', 'date' => null]
             : $this->deriveOutgoingQcStage($so);
@@ -924,7 +1042,7 @@ class SalesOrderService
             $isCancelled => 'skipped',
             $status === SalesOrderStatus::Draft, $status === SalesOrderStatus::Confirmed,
             $status === SalesOrderStatus::InProduction => 'pending',
-            $status === SalesOrderStatus::PartiallyDelivered => 'active',
+            $status === SalesOrderStatus::PartiallyDelivered, $status === SalesOrderStatus::Paid => 'active',
             default => 'done',
         };
 
@@ -944,7 +1062,13 @@ class SalesOrderService
              'state' => $deliveryState],
             ['key' => 'invoiced', 'label' => 'Invoiced',
              'date' => $so->invoiced_at?->toDateString(),
-             'state' => $isCancelled ? 'skipped' : ($status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
+             'state' => $isCancelled ? 'skipped' : ($isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
+            ['key' => 'paid', 'label' => 'Paid',
+             'date' => $so->paid_at?->toDateString(),
+             'state' => $isCancelled ? 'skipped' : ($isPaid ? 'done' : 'pending')],
+            ['key' => 'closed', 'label' => 'Closed',
+             'date' => $so->closed_at?->toDateString(),
+             'state' => $isCancelled ? 'skipped' : ($isClosed ? 'done' : 'pending')],
         ];
     }
 

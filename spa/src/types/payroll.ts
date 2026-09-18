@@ -304,30 +304,6 @@ export interface CreatePayrollAdjustmentData {
  reason: string;
 }
 
-// ─── CA3 — Payroll pipeline ─────────────────────────────────────────
-
-export interface PipelinePeriod {
- id: string | null;
- period_start: string;
- period_end: string;
- is_first_half: boolean;
- status: PayrollPeriodStatus | 'scheduled' | 'not_created';
- status_label: string;
- is_auto_created: boolean;
- employee_count: number;
- total_gross: string;
- total_net: string;
- label: string;
- exists: boolean;
-}
-
-export interface PayrollPipeline {
- year: number;
- periods: PipelinePeriod[];
- auto_schedule_enabled: boolean;
- next_auto_run: string | null;
-}
-
 // Task 9 — Period-over-period variance report
 export interface PayrollVarianceSummary {
  employee_count: number;
@@ -353,27 +329,4 @@ export interface PayrollVarianceReport {
  deductions: number | null;
  headcount: number | null;
  };
-}
-
-// CA3 — Payroll pipeline
-export interface PipelinePeriod {
- id: string | null;
- period_start: string;
- period_end: string;
- is_first_half: boolean;
- status: PayrollPeriodStatus | 'scheduled' | 'not_created';
- status_label: string;
- is_auto_created: boolean;
- employee_count: number;
- total_gross: string;
- total_net: string;
- label: string;
- exists: boolean;
-}
-
-export interface PayrollPipeline {
- year: number;
- periods: PipelinePeriod[];
- auto_schedule_enabled: boolean;
- next_auto_run: string | null;
 }

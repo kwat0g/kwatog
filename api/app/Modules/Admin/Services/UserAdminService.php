@@ -14,7 +14,10 @@ use App\Modules\Admin\Support\CreatedUser;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\EmployeeStatus;
+use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -141,22 +144,113 @@ class UserAdminService
         return $user->load(['role', 'employee.department', 'employee.position']);
     }
 
-    public function createStandalone(array $data, ?User $actor = null): CreatedUser
+    /**
+     * Picker source for Admin > Create User: employees WITHOUT a user
+     * account, restricted to regular/probationary (the account-eligible
+     * employment types — separated types are excluded by design).
+     *
+     * Department-first flow: the admin picks a department and the endpoint
+     * returns that department's eligible employees; the optional search then
+     * only narrows WITHIN it. An unknown department hash therefore yields an
+     * empty list rather than falling back to the whole company.
+     *
+     * @return array<int, array{id: string, employee_no: string, full_name: string, first_name: string, last_name: string, email: ?string, department: ?string, position: ?string, employment_type: string}>
+     */
+    public function employeeCandidates(?string $search = null, ?string $departmentHash = null, int $limit = 100): array
+    {
+        $query = Employee::query()
+            ->with(['department:id,name', 'position:id,title'])
+            ->whereDoesntHave('user')
+            ->whereIn('employment_type', [EmploymentType::Regular->value, EmploymentType::Probationary->value])
+            ->orderBy('last_name')
+            ->orderBy('first_name');
+
+        $departmentId = $departmentHash !== null && $departmentHash !== ''
+            ? Department::tryDecodeHash($departmentHash)
+            : null;
+        if ($departmentId === null) {
+            return [];
+        }
+        $query->where('department_id', $departmentId);
+
+        if ($search !== null && trim($search) !== '') {
+            $term = trim($search);
+            $query->where(function ($q) use ($term) {
+                $q->where('employee_no', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('last_name', SearchOperator::like(), SearchOperator::contains($term))
+                    ->orWhere('first_name', SearchOperator::like(), SearchOperator::contains($term));
+            });
+        }
+
+        return $query
+            ->limit(min($limit, 100))
+            ->get()
+            ->map(fn (Employee $employee): array => [
+                'id' => $employee->hash_id,
+                'employee_no' => $employee->employee_no,
+                'full_name' => $employee->full_name,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'email' => $employee->email,
+                'department' => $employee->department?->name,
+                'position' => $employee->position?->title,
+                'employment_type' => $employee->employment_type instanceof EmploymentType
+                    ? $employee->employment_type->value
+                    : (string) $employee->employment_type,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Create a user account FOR an employee record. Identity (name) comes
+     * from the HR record; the login email resolves through
+     * UserProvisioningService::resolveEmailFor — an explicitly typed email
+     * (already uniqueness-validated by the FormRequest) wins, else the
+     * employee's HR email, else a generated one.
+     *
+     * Row-level guards re-run INSIDE the transaction under lockForUpdate so
+     * two concurrent submissions for the same employee cannot both pass the
+     * FormRequest check: the unique users.employee_id FK is the final backstop.
+     */
+    public function createForEmployee(array $data, ?User $actor = null): CreatedUser
     {
         $actor = $this->resolveActor($actor);
 
         return DB::transaction(function () use ($data, $actor) {
             $role = $this->activeRole((int) $data['role_id'], lock: true);
             $this->assertCanAssignRole($actor, $role);
-            $tempPassword = $data['temp_password'] ?? $this->temporaryPasswords->generate();
+
+            /** @var Employee|null $employee */
+            $employee = Employee::query()->lockForUpdate()->find((int) $data['employee_id']);
+            if ($employee === null) {
+                throw new BusinessRuleException('The selected employee is no longer available.');
+            }
+            if ($employee->user()->exists()) {
+                throw new ConflictHttpException('This employee already has a user account.');
+            }
+            if (! in_array($employee->employment_type, [EmploymentType::Regular, EmploymentType::Probationary], true)) {
+                throw new BusinessRuleException('Only regular and probationary employees can be given a user account.');
+            }
+            if ($employee->status === EmployeeStatus::Terminated) {
+                throw new BusinessRuleException('This employee is separated and cannot be given a user account.');
+            }
+
+            $validated = validator(
+                ['email' => $this->provisioning->resolveEmailFor($employee, $data['email'] ?? null)],
+                ['email' => ['required', 'email', 'max:255', 'unique:users,email']],
+            )->validate();
+            $email = $validated['email'];
+
+            $tempPassword = $this->temporaryPasswords->generate();
 
             /** @var User $user */
             $user = User::create([
-                'name' => $data['name'],
-                'email' => $data['email'],
+                'name' => $employee->full_name,
+                'email' => $email,
                 'password' => Hash::make($tempPassword),
                 'role_id' => $role->id,
-                'employee_id' => null,
+                'employee_id' => $employee->id,
                 'is_active' => true,
                 'must_change_password' => true,
                 'failed_login_attempts' => 0,
@@ -175,7 +269,7 @@ class UserAdminService
                 null,
                 $this->userSnapshot($created),
                 $actor,
-                'Admin user account created',
+                'Admin user account created for employee '.$employee->employee_no,
             );
 
             return new CreatedUser(

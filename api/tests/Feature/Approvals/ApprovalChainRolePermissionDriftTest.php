@@ -45,7 +45,14 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
         'company_loan' => ['loans.approve'],
         'purchase_request' => ['purchasing.pr.approve'],
         'purchase_order' => ['purchasing.po.approve'],
-        'bill_payment' => ['accounting.bills.pay'],
+        // 2026-09-15 payment-approval flow split maker from checker: recording
+        // a payment is Finance's act (accounting.bills.pay on POST /payments);
+        // the CHAIN acts on /payments/{payment}/approve|reject, which is gated
+        // by accounting.bills.payment_approve. The chain's act route is what
+        // this map mirrors — mapping the maker route here false-positives a
+        // stall that does not exist (step 1 finance holds both slugs; step 2
+        // vice_president holds only the checker slug, by design).
+        'bill_payment' => ['accounting.bills.payment_approve'],
         'salary_adjustment' => ['hr.salary_adjustments.act'],
         'return_request' => ['return_management.approve'],
         'asset_disposal' => ['assets.dispose.approve'],

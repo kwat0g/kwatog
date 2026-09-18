@@ -16,7 +16,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { buildLoanChain } from '@/lib/chains';
 import { fromApprovalRecords } from '@/lib/approvals';
-import { usePermission } from '@/hooks/usePermission';
 import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { toCentavos } from '@/lib/money';
 import { formatDate } from '@/lib/formatDate';
@@ -25,7 +24,6 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 export default function LoanDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
  const qc = useQueryClient();
- const { can } = usePermission();
  const [reject, setReject] = useState(false);
  const [reason, setReason] = useState('');
  const [confirmApprove, setConfirmApprove] = useState(false);
@@ -57,8 +55,6 @@ export default function LoanDetailPage() {
  return <EmptyState icon="alert-circle" title="Loan not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const isPending = loan.status === 'pending';
-
  const loanChain = buildLoanChain(loan);
  // Decimals arrive as strings so that decimal(15,2) precision survives the
  // wire; parsing two of them into JS doubles and ADDING them reintroduces
@@ -85,13 +81,13 @@ export default function LoanDetailPage() {
  backLabel="Loans"
  actions={
  <>
- {isPending && can('loans.approve') && (
+  {loan.actions?.can_approve && (
  <>
  <Button variant="primary" size="xs" icon={<LuCheck size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
  <Button variant="danger" size="xs" icon={<LuX size={12} />} onClick={() => setReject(true)}>Reject</Button>
  </>
  )}
- {isPending && can('loans.write_off') && (
+  {loan.actions?.can_cancel && (
  <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
  )}
  </>

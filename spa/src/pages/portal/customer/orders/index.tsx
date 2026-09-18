@@ -27,6 +27,8 @@ const STATUS_OPTIONS = [
   { value: 'partially_delivered', label: 'Partially delivered' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'invoiced', label: 'Invoiced' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'closed', label: 'Closed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 

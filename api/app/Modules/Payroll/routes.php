@@ -33,7 +33,8 @@ Route::middleware('auth:sanctum')->prefix('admin/gov-tables')->group(function ()
     Route::delete('/{govTable}', [GovernmentTableController::class, 'destroy'])
         ->middleware('permission:admin.gov_tables.manage');
     Route::patch('/{govTable}/restore', [GovernmentTableController::class, 'restore'])
-        ->middleware('permission:admin.gov_tables.manage');
+        ->middleware('permission:admin.gov_tables.manage')
+        ->withTrashed();
 });
 
 // T1.8 — CSV import endpoint for HR / payroll users (separate gate from admin CRUD).
@@ -50,15 +51,6 @@ if (class_exists(PayrollPeriodController::class)) {
         Route::prefix('payroll-periods')->group(function () {
             Route::get('/', [PayrollPeriodController::class, 'index'])->middleware('permission:payroll.periods.view');
             Route::get('/options', [PayrollPeriodController::class, 'options'])->middleware('permission:payroll.periods.view');
-            /*
-             * /payroll-periods/pipeline — HIDDEN 2026-08-08 (scope cut).
-             * The full-year pipeline board is a redundant report once the
-             * periods list shows status per row. Re-enable: uncomment and
-             * restore the SPA route + sidebar entry. Controller method and
-             * PayrollPeriodService::pipeline() are intact.
-             *
-             * Route::get('/pipeline', [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.periods.view');
-             */
             Route::post('/', [PayrollPeriodController::class, 'store'])->middleware('permission:payroll.periods.create');
             // Dry-run a scope before creating the period: headcount, estimated
             // gross, and anyone another period already paid for this cutoff.
@@ -72,12 +64,12 @@ if (class_exists(PayrollPeriodController::class)) {
                 ->middleware('permission:payroll.periods.request_correction');
             Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::post('/{period}/retry-gl', [PayrollPeriodController::class, 'retryGl'])->middleware('permission:accounting.journal.post');
-            Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.finalize');
-            Route::post('/{period}/bank-file', [PayrollPeriodController::class, 'generateBankFile'])->middleware('permission:payroll.periods.finalize');
-            Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
+            Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.bank_file');
+            Route::post('/{period}/bank-file', [PayrollPeriodController::class, 'generateBankFile'])->middleware('permission:payroll.periods.bank_file');
+            Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.bank_file');
             Route::get('/{period}/variance', [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.periods.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
-            Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.finalize');
+            Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.disburse');
             // H-8 — Admin escape hatch for periods stuck at Processing because
             // the payroll job worker crashed before its finally block could
             // reset status. POST (not PATCH) — recovery action with side
@@ -95,11 +87,11 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::prefix('payroll-periods/{period}/disbursement-proofs')->group(function () {
                 Route::get('/options', [DisbursementProofController::class, 'options'])->middleware('permission:payroll.periods.view');
                 Route::get('/', [DisbursementProofController::class, 'index'])->middleware('permission:payroll.periods.view');
-                Route::post('/', [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.finalize');
+                 Route::post('/', [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.disburse');
                 Route::get('/{proof}', [DisbursementProofController::class, 'show'])->middleware('permission:payroll.periods.view');
-                Route::delete('/{proof}', [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.finalize');
-                Route::patch('/{proof}/restore', [DisbursementProofController::class, 'restore'])
-                    ->middleware('permission:payroll.periods.finalize')
+                 Route::delete('/{proof}', [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.disburse');
+                 Route::patch('/{proof}/restore', [DisbursementProofController::class, 'restore'])
+                     ->middleware('permission:payroll.periods.disburse')
                     ->withTrashed();
             });
         }

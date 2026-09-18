@@ -191,4 +191,12 @@ class GovComputationServicesTest extends TestCase
         $svc = app(BirTaxComputationService::class);
         $this->assertSame('0.00', $svc->compute('0'));
     }
+
+    public function test_bir_rejects_an_unsupported_period_type_instead_of_mixing_tables(): void
+    {
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('do not support');
+
+        app(BirTaxComputationService::class)->compute('10000.00', 'monthly');
+    }
 }

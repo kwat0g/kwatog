@@ -110,11 +110,13 @@ class ProductionDashboardService
      */
     private function chainStageBreakdown(): array
     {
-        // SOs that have not been delivered/invoiced/cancelled.
+        // SOs that have not been delivered/invoiced/paid/closed/cancelled.
         $sos = SalesOrder::query()
             ->whereNotIn('status', [
                 SalesOrderStatus::Delivered->value,
                 SalesOrderStatus::Invoiced->value,
+                SalesOrderStatus::Paid->value,
+                SalesOrderStatus::Closed->value,
                 SalesOrderStatus::Cancelled->value,
             ])
             ->get();

@@ -14,6 +14,13 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('landing')->group(function (): void {
     Route::post('contact-inquiry', [ContactInquiryController::class, 'store'])->middleware('throttle:public-form');
     Route::post('newsletter',      [NewsletterController::class, 'store'])->middleware('throttle:public-form');
+    // Opt-out. POST is the programmatic path; the signed GET is the one-click
+    // link a newsletter email would carry (no auth, signature-protected).
+    Route::post('newsletter/unsubscribe', [NewsletterController::class, 'unsubscribe'])
+        ->middleware('throttle:public-form');
+    Route::get('newsletter/unsubscribe/{subscriber}', [NewsletterController::class, 'unsubscribeViaLink'])
+        ->middleware(['signed', 'throttle:public-form'])
+        ->name('landing.newsletter.unsubscribe');
     // On-demand PDF render is expensive — keep the 10/min public-form limiter
     // (mirrors the comment in bootstrap/app.php). Landing content reads stay
     // unthrottled so normal page navigation is not degraded.

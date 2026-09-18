@@ -9,6 +9,7 @@ use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
@@ -32,6 +33,7 @@ class PayrollGlPostingService
 
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly AccountingPeriodService $periods,
         private readonly JournalEntryService $journals,
     ) {}
@@ -144,7 +146,7 @@ class PayrollGlPostingService
             return null;
         }
 
-        $totals = $validPayrolls
+            $totals = $validPayrolls
                 ->where('payroll_period_id', $period->id)
                 ->whereNull('error_message')
                 ->selectRaw('
@@ -167,7 +169,51 @@ class PayrollGlPostingService
                     COALESCE(SUM(gross_pay),       0) as gross,
                     COALESCE(SUM(net_pay),         0) as net
                 ')
-                ->first();
+                 ->first();
+
+            $payrollRows = DB::table('payrolls as payroll')
+                ->join('employees as employee', 'employee.id', '=', 'payroll.employee_id')
+                ->leftJoin('departments as department', 'department.id', '=', 'employee.department_id')
+                ->where('payroll.payroll_period_id', $period->id)
+                ->whereNull('payroll.error_message')
+                ->get([
+                    'payroll.basic_pay', 'payroll.leave_pay', 'payroll.overtime_pay',
+                    'payroll.night_diff_pay', 'payroll.holiday_pay',
+                    'payroll.tardiness_deduction', 'payroll.undertime_deduction',
+                    'payroll.adjustment_amount', 'payroll.gross_pay',
+                    'department.code as department_code',
+                ]);
+            $directDepartmentCodes = $this->directLaborDepartmentCodes();
+            $expenseTotals = [
+                'production' => ['basic' => '0.00', 'overtime' => '0.00', 'lateness' => '0.00', 'adjustments' => '0.00', 'gross' => '0.00'],
+                'operating' => ['basic' => '0.00', 'overtime' => '0.00', 'lateness' => '0.00', 'adjustments' => '0.00', 'gross' => '0.00'],
+            ];
+            foreach ($payrollRows as $row) {
+                $category = in_array(strtoupper(trim((string) $row->department_code)), $directDepartmentCodes, true)
+                    ? 'production'
+                    : 'operating';
+                $expenseTotals[$category]['basic'] = Money::add(
+                    $expenseTotals[$category]['basic'],
+                    Money::add((string) $row->basic_pay, (string) $row->leave_pay),
+                );
+                $expenseTotals[$category]['overtime'] = Money::add(
+                    $expenseTotals[$category]['overtime'],
+                    Money::add((string) $row->overtime_pay, (string) $row->night_diff_pay, (string) $row->holiday_pay),
+                );
+                $expenseTotals[$category]['lateness'] = Money::add(
+                    $expenseTotals[$category]['lateness'],
+                    (string) $row->tardiness_deduction,
+                    (string) $row->undertime_deduction,
+                );
+                $expenseTotals[$category]['adjustments'] = Money::add(
+                    $expenseTotals[$category]['adjustments'],
+                    (string) $row->adjustment_amount,
+                );
+                $expenseTotals[$category]['gross'] = Money::add(
+                    $expenseTotals[$category]['gross'],
+                    (string) $row->gross_pay,
+                );
+            }
 
             $isThirteenth = (bool) $period->is_thirteenth_month;
 
@@ -178,11 +224,26 @@ class PayrollGlPostingService
                 'withholding_payable' => 'accounting.accounts.withholding_tax_payable_code', 'thirteenth_payable' => 'accounting.accounts.thirteenth_month_payable_code',
                 'loans_payable' => 'accounting.accounts.loans_payable_code', 'salary_expense' => 'accounting.accounts.salary_expense_code',
                 'overtime_expense' => 'accounting.accounts.overtime_expense_code', 'thirteenth_expense' => 'accounting.accounts.thirteenth_month_expense_code',
+                'production_salary_expense' => 'accounting.accounts.production_salary_expense_code',
+                'production_overtime_expense' => 'accounting.accounts.production_overtime_expense_code',
+                'production_thirteenth_expense' => 'accounting.accounts.production_thirteenth_month_expense_code',
                 'sss_employer_expense' => 'accounting.accounts.sss_employer_expense_code', 'philhealth_employer_expense' => 'accounting.accounts.philhealth_employer_expense_code',
                 'pagibig_employer_expense' => 'accounting.accounts.pagibig_employer_expense_code',
             ];
-            $codes = array_map(fn (string $key) => $this->settings->requiredString($key), $accountKeys);
-            $accounts = DB::table('accounts')->whereIn('code', array_values($codes))->pluck('id', 'code');
+            $codes = [];
+            $accounts = [];
+            foreach ($accountKeys as $name => $settingKey) {
+                $codes[$name] = $this->settings->requiredString($settingKey);
+                try {
+                    $accounts[$codes[$name]] = $this->accountPolicies->controlAccountIdForSetting($settingKey);
+                } catch (\RuntimeException $e) {
+                    throw new BusinessRuleException(
+                        "Configured payroll GL account {$codes[$name]} is missing from the chart of accounts.",
+                        0,
+                        $e,
+                    );
+                }
+            }
             $code = fn (string $name): string => $codes[$name];
 
             // Build journal lines.
@@ -219,8 +280,6 @@ class PayrollGlPostingService
                 $totalCredit = Money::add($totalCredit, $amount);
             };
 
-            $basicLine    = Money::add((string) $totals->basic, (string) $totals->leave_pay);
-            $otLine       = Money::add((string) $totals->overtime, (string) $totals->night_diff, (string) $totals->holiday);
             $sssEr        = (string) $totals->sss_er;
             $phEr         = (string) $totals->ph_er;
             $pgEr         = (string) $totals->pg_er;
@@ -230,11 +289,6 @@ class PayrollGlPostingService
             $wht          = (string) $totals->wht;
             $loans        = (string) $totals->loans;
             $net          = (string) $totals->net;
-            // Lateness withheld from pay. Earnings are debited at their full
-            // gross, so this must come back as a credit or the entry cannot
-            // balance — this omission is why payroll GL posting had never
-            // succeeded on any period that had a single late employee.
-            $lateness     = Money::add((string) $totals->tardiness, (string) $totals->undertime);
             // Signed net effect of applied adjustments (positive = extra pay).
             $adjustments  = (string) $totals->adjustments;
             $grossTotal   = (string) $totals->gross;
@@ -249,26 +303,37 @@ class PayrollGlPostingService
             );
 
             if ($isThirteenth) {
-                // 13th-month: gross is in basic_pay slot in the calc-and-pay flow,
-                // but for accounting we expense it under 13th Month and credit a
-                // dedicated payable (paid out via separate disbursement).
-                $debit($code('thirteenth_expense'),  $net, '13th Month Expense');
+                // 13th-month withholding reduces the employee payable, not the
+                // employer expense. Post the gross expense and split the credit
+                // between withholding tax payable and the net 13th-month payable.
+                $debit($code('production_thirteenth_expense'), $expenseTotals['production']['gross'], '13th Month Expense — Production');
+                $debit($code('thirteenth_expense'), $expenseTotals['operating']['gross'], '13th Month Expense — Operating');
+                $credit($code('withholding_payable'), $wht, '13th Month Withholding Tax Payable');
                 $credit($code('thirteenth_payable'), $net, '13th Month Pay Payable');
             } else {
-                // Salary expense
-                $debit($code('salary_expense'),  $basicLine, 'Salaries Expense');
-                $debit($code('overtime_expense'),  $otLine,    'Overtime + Night Diff + Holiday Premium Expense');
+                // Production department wages are direct labor; all other
+                // departments remain operating expense.
+                $debit($code('production_salary_expense'), $expenseTotals['production']['basic'], 'Salaries Expense — Production');
+                $debit($code('salary_expense'), $expenseTotals['operating']['basic'], 'Salaries Expense — Operating');
+                $debit($code('production_overtime_expense'), $expenseTotals['production']['overtime'], 'Overtime + Premiums — Production');
+                $debit($code('overtime_expense'), $expenseTotals['operating']['overtime'], 'Overtime + Premiums — Operating');
 
-                // Tardiness / undertime withheld — contra to Salaries Expense.
-                $credit($code('salary_expense'), $lateness, 'Tardiness + Undertime Withheld');
+                // Tardiness / undertime withheld — contra to the matching
+                // department's salary expense.
+                $credit($code('production_salary_expense'), $expenseTotals['production']['lateness'], 'Tardiness + Undertime Withheld — Production');
+                $credit($code('salary_expense'), $expenseTotals['operating']['lateness'], 'Tardiness + Undertime Withheld — Operating');
 
                 // Applied adjustments (back-pay, corrections). Signed: a
                 // positive figure is extra pay owed (more expense), a negative
                 // one recovers an overpayment.
-                if (Money::lt($adjustments, '0')) {
-                    $credit($code('salary_expense'), Money::negate($adjustments), 'Payroll Adjustments (recovery)');
-                } else {
-                    $debit($code('salary_expense'), $adjustments, 'Payroll Adjustments (back-pay)');
+                foreach (['production', 'operating'] as $category) {
+                    $salaryCode = $category === 'production' ? 'production_salary_expense' : 'salary_expense';
+                    $adjustment = $expenseTotals[$category]['adjustments'];
+                    if (Money::lt($adjustment, '0')) {
+                        $credit($code($salaryCode), Money::negate($adjustment), "Payroll Adjustments (recovery) — {$category}");
+                    } else {
+                        $debit($code($salaryCode), $adjustment, "Payroll Adjustments (back-pay) — {$category}");
+                    }
                 }
 
                 // Employer expenses
@@ -350,5 +415,24 @@ class PayrollGlPostingService
             ])->save();
 
             return $entryId;
+    }
+
+    /** @return list<string> */
+    private function directLaborDepartmentCodes(): array
+    {
+        $configured = $this->settings->get('accounting.payroll.direct_labor_department_codes', ['PROD', 'PRD']);
+        if (! is_array($configured)) {
+            throw new BusinessRuleException('Direct-labor department codes setting must be an array.');
+        }
+
+        $codes = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $code): string => strtoupper(trim((string) $code)),
+            $configured,
+        ))));
+        if ($codes === []) {
+            throw new BusinessRuleException('At least one direct-labor department code must be configured.');
+        }
+
+        return $codes;
     }
 }

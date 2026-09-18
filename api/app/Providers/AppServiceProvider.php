@@ -71,6 +71,7 @@ use App\Modules\Inventory\Listeners\CreateDraftGrnOnPoSent;
 use App\Modules\Inventory\Listeners\NotifyOnGrnReceived;
 use App\Modules\Inventory\Listeners\NotifyOnLowStockPrCreated;
 use App\Modules\Inventory\Listeners\PostStockMovementToGlOnRequested;
+use App\Modules\Inventory\Listeners\VerifyCoaOnIncomingQcPass;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
@@ -336,6 +337,9 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(WorkOrderCompleted::class, [NotifyOnWorkOrderCompleted::class,  'handle']);
         Event::listen(InspectionPassed::class, [CreateDeliveryDraftOnQcPass::class, 'handle']);
         Event::listen(InspectionPassed::class, [AcceptGrnOnIncomingQcPass::class,      'handle']);
+        // OGAMI-005 — an incoming pass with a CoA on file verifies the CoA
+        // (trace §7.7: the column previously had no writer at all).
+        Event::listen(InspectionPassed::class, [VerifyCoaOnIncomingQcPass::class,      'handle']);
 
         // C2 Procure-to-Pay
         Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,                'handle']);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Services;
 
+use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;

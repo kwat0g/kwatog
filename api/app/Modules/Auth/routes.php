@@ -10,10 +10,12 @@ use App\Modules\Auth\Controllers\LogoutController;
 use App\Modules\Auth\Controllers\NotificationController;
 use App\Modules\Auth\Controllers\PreferencesController;
 use App\Modules\Auth\Controllers\ResetPasswordController;
+use App\Modules\Auth\Controllers\SignInController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
     // Public — login attempt + CSRF priming.
+    Route::post('sign-in', SignInController::class)->middleware('throttle:auth');
     Route::post('login', LoginController::class)->middleware('throttle:auth');
     Route::post('forgot-password', ForgotPasswordController::class)->middleware('throttle:auth');
     Route::post('reset-password', ResetPasswordController::class)->middleware('throttle:auth');

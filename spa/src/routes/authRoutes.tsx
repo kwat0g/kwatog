@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Route } from 'react-router-dom';
+import { Navigate, Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
 import { GuestGuard } from '@/components/guards/GuestGuard';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -21,14 +21,16 @@ export const authRoutes = (
  }
  >
  <Route
- path="/login"
+  path="/sign-in"
  element={
  <Suspense fallback={<SkeletonForm />}>
  <LoginPage />
  </Suspense>
  }
- />
- </Route>
+  />
+  </Route>
+
+  <Route path="/login" element={<Navigate to="/sign-in" replace />} />
 
  {/* Password recovery remains available without a session. */}
  <Route element={<AuthLayout />}>

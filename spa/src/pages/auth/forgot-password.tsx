@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
  Forgot your password?
  </h1>
  <p className="mt-1.5 text-[13px] text-muted">
- Enter your work email and we&apos;ll send you a secure reset link.
+  Enter the email associated with your Ogami account and we&apos;ll send a secure reset link.
  </p>
  </div>
 
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
  If an account exists for that email, you&apos;ll receive a reset link shortly.
  </p>
  <Link
- to="/login"
+  to="/sign-in"
  className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
  >
  <LuArrowLeft size={14} />
@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
  </Button>
  <div className="mt-1 text-center text-xs text-muted">
  <Link
- to="/login"
+  to="/sign-in"
  className="inline-flex items-center gap-1 underline-offset-2 transition-colors hover:text-primary hover:underline"
  >
  <LuArrowLeft size={12} />

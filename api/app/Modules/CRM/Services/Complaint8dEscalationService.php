@@ -46,17 +46,50 @@ class Complaint8dEscalationService
         ],
     ];
 
+    /** advanceOne() outcomes. `failed` and `unstaffed` are never folded into `skipped`. */
+    private const OUTCOME_ADVANCED = 'advanced';
+
+    private const OUTCOME_SKIPPED = 'skipped';
+
+    private const OUTCOME_UNSTAFFED = 'unstaffed';
+
+    private const OUTCOME_FAILED = 'failed';
+
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
     ) {}
 
     /**
+     * Backward-compatible per-tier advance counts. Prefer runWithOutcome().
+     *
      * @return array{d3:int, d4:int, finalize:int}
      */
     public function run(): array
     {
-        $counts = ['d3' => 0, 'd4' => 0, 'finalize' => 0];
+        $outcome = $this->runWithOutcome();
+
+        return [
+            'd3'       => $outcome['advanced_by_tier']['d3'],
+            'd4'       => $outcome['advanced_by_tier']['d4'],
+            'finalize' => $outcome['advanced_by_tier']['finalize'],
+        ];
+    }
+
+    /**
+     * Escalate every eligible complaint and report what actually happened.
+     *
+     * A zero advanced count cannot be read as health: a run in which every
+     * candidate threw also advances nothing, which is exactly how the 8D SLA
+     * ledger stayed dead while the cron printed zeros and exited SUCCESS (see
+     * CLAUDE.md). `failed` and `unstaffed` are therefore reported separately and
+     * never folded into `skipped`, and the command exits non-zero when any
+     * candidate failed.
+     *
+     * @return array{considered:int, advanced:int, skipped:int, unstaffed:int, failed:int, advanced_by_tier:array{d3:int, d4:int, finalize:int}}
+     */
+    public function runWithOutcome(): array
+    {
         $now = now();
 
         $candidates = CustomerComplaint::query()
@@ -80,28 +113,40 @@ class Complaint8dEscalationService
             ->where('is_active', true)
             ->get();
 
+        $tally = [
+            'considered'       => 0,
+            'advanced'         => 0,
+            'skipped'          => 0,
+            'unstaffed'        => 0,
+            'failed'           => 0,
+            'advanced_by_tier' => ['d3' => 0, 'd4' => 0, 'finalize' => 0],
+        ];
+
         // Keep scheduler memory bounded. Each complaint is re-read and locked
         // before any claim or notification row is written.
         $candidates->orderBy('id')->chunkById(100, function ($batch) use (
-            &$counts,
+            &$tally,
             $now,
             $recipients,
             $subjects,
         ): void {
             foreach ($batch as $candidate) {
-                foreach ($this->advanceOne((int) $candidate->id, $now, $recipients, $subjects) as $tier) {
-                    $counts[$tier]++;
+                $tally['considered']++;
+                $result = $this->advanceOne((int) $candidate->id, $now, $recipients, $subjects);
+                $tally[$result['outcome']]++;
+                foreach ($result['fired'] as $tier) {
+                    $tally['advanced_by_tier'][$tier]++;
                 }
             }
         });
 
-        return $counts;
+        return $tally;
     }
 
     /**
      * @param Collection<int, User> $configuredRecipients
      * @param array<string, mixed> $subjects
-     * @return list<string>
+     * @return array{fired: list<string>, outcome: string}
      */
     private function advanceOne(
         int $complaintId,
@@ -120,14 +165,14 @@ class Complaint8dEscalationService
                     ->lockForUpdate()
                     ->find($complaintId);
                 if (! $complaint) {
-                    return [];
+                    return ['fired' => [], 'outcome' => self::OUTCOME_SKIPPED];
                 }
 
                 $status = $complaint->status instanceof ComplaintStatus
                     ? $complaint->status
                     : ComplaintStatus::tryFrom((string) $complaint->status);
                 if ($status === null || $status->isTerminal()) {
-                    return [];
+                    return ['fired' => [], 'outcome' => self::OUTCOME_SKIPPED];
                 }
 
                 $complaint->load(['eightDReport', 'assignee']);
@@ -195,7 +240,7 @@ class Complaint8dEscalationService
                 }
 
                 if ($toFire === []) {
-                    return [];
+                    return ['fired' => [], 'outcome' => self::OUTCOME_SKIPPED];
                 }
 
                 $audience = $this->deliverableAudience($configuredRecipients, $complaint->assignee);
@@ -204,7 +249,9 @@ class Complaint8dEscalationService
                         $this->markPending($delivery, 'No active notification recipient is configured.');
                     }
 
-                    return [];
+                    // A tier nobody received is not a silent skip: it stays
+                    // pending for the next run and is surfaced in its own bucket.
+                    return ['fired' => [], 'outcome' => self::OUTCOME_UNSTAFFED];
                 }
 
                 $sent = [];
@@ -245,16 +292,30 @@ class Complaint8dEscalationService
                     'sla_alert_levels' => array_values(array_unique($fired)),
                 ])->save();
 
-                return $sent;
+                return ['fired' => $sent, 'outcome' => self::OUTCOME_ADVANCED];
             });
+        } catch (BusinessRuleException $exception) {
+            // A malformed/missing escalation policy is an operator-facing
+            // configuration error, not a transient delivery failure. Surface it
+            // instead of pretending the tier was simply skipped.
+            Log::error('Complaint8dEscalationService: escalation policy is invalid', [
+                'complaint_id' => $complaintId,
+                'message'      => $exception->getMessage(),
+            ]);
+
+            throw $exception;
         } catch (Throwable $exception) {
+            // The transaction above rolled back the tier and any notification
+            // rows. Preserve a retryable delivery record separately, and report
+            // the complaint as failed so the command cannot exit SUCCESS while
+            // nothing survived.
             $this->recordFailure($complaintId, $exception);
             Log::warning('Complaint8dEscalationService: tier evaluation failed', [
                 'complaint_id' => $complaintId,
                 'error'        => $exception->getMessage(),
             ]);
 
-            return [];
+            return ['fired' => [], 'outcome' => self::OUTCOME_FAILED];
         }
     }
 

@@ -37,6 +37,7 @@ export interface EmployeeLoan {
  is_final_pay_deduction: boolean;
  payments?: LoanPayment[];
  approval_records?: ApprovalRecordPayload[];
+ actions?: { can_approve: boolean; can_reject: boolean; can_cancel: boolean };
  created_at: string;
  updated_at: string;
 }

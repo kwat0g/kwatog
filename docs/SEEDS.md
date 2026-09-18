@@ -117,6 +117,7 @@ ADMIN: Admin Staff
 | 4000 | Revenue | revenue | credit | — |
 | 4010 | Sales Revenue | revenue | credit | 4000 |
 | 4020 | Other Income | revenue | credit | 4000 |
+| 4040 | Sales Discounts | revenue | debit | 4000 |
 | 5000 | Cost of Goods Sold | expense | debit | — |
 | 5010 | Direct Materials | expense | debit | 5000 |
 | 5020 | Direct Labor | expense | debit | 5000 |
@@ -252,11 +253,11 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | separation_clearance | [{order:1, role:"department_head"}, {order:2, role:"warehouse_head"}, {order:3, role:"maintenance_head"}, {order:4, role:"finance_officer"}, {order:5, role:"hr_officer"}] |
 | 8d_report | [{order:1, role:"qc_manager", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |
 
-## 13. DEMO ACCOUNTS (17, password: `password`)
+## 13. DEMO ACCOUNTS (18, password: `password`)
 
 | Email | Name | Role | Department |
 |---|---|---|---|
-| admin@ogami.test | System Administrator | system_admin | — |
+| admin@ogami.test | System Administrator | system_admin | IT |
 | vp@ogami.test | Kenji Watanabe | vice_president | EXEC |
 | hr@ogami.test | Maria Santos | hr_officer | HR |
 | finance@ogami.test | Ana Reyes | finance_officer | FIN |
@@ -271,6 +272,8 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | impex@ogami.test | Lisa Yamamoto | impex_officer | IMPEX |
 | depthead@ogami.test | Roberto Santos | department_head | PROD |
 | employee@ogami.test | Manuel Cruz | employee | PROD |
+| crm@ogami.test | Sara Sales | sales_officer | SALES |
+| customerservice@ogami.test | Maya Customer Service | customer_service_officer | CS |
 
 > 2026-09-10 approval-chain redesign: `vp@ogami.test` is the business
 > executive who signs PRs ≥ ₱50k and all PO chains; `buyer2@ogami.test` exists

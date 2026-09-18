@@ -9,6 +9,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanStatus;
@@ -570,10 +571,10 @@ class PayrollCalculatorService
     /**
      * The employee's last working day, if a separation is on record.
      *
-     * Read from clearances.separation_date — the authoritative last day, set when
-     * the separation is initiated. Guarded so the calculator keeps working if the
-     * clearance table is absent, and takes the EARLIEST separation date on record
-     * so a re-initiated separation cannot extend paid days.
+     * Read from an active clearance's separation_date — the authoritative last
+     * day, set when the separation is initiated. Guarded so the calculator keeps
+     * working if the clearance table is absent, and takes the EARLIEST active
+     * separation date so a re-initiated separation cannot extend paid days.
      */
     private function separationDate(Employee $employee): ?\Illuminate\Support\Carbon
     {
@@ -584,6 +585,11 @@ class PayrollCalculatorService
         $date = DB::table('clearances')
             ->where('employee_id', $employee->id)
             ->whereNull('deleted_at')
+            ->whereIn('status', [
+                ClearanceStatus::Pending->value,
+                ClearanceStatus::InProgress->value,
+                ClearanceStatus::Completed->value,
+            ])
             ->whereNotNull('separation_date')
             ->min('separation_date');
 

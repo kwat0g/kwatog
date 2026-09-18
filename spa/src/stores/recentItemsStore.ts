@@ -55,7 +55,7 @@ interface RecentItemsState {
   * Assert who the list belongs to, discarding it if that is someone else.
   *
   * Called on every auth-state change (below). Clearing on *logout* alone would
-  * miss the 401 path, where the axios interceptor hard-navigates to /login
+  * miss the 401 path, where the axios interceptor hard-navigates to /sign-in
   * without ever running `logout()`; claiming on *login* catches that too,
   * because whoever signs in next must claim the list before it renders.
   */

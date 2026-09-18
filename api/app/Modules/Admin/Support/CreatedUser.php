@@ -7,7 +7,7 @@ namespace App\Modules\Admin\Support;
 use App\Modules\Auth\Models\User;
 
 /**
- * M-40 — Tuple returned from UserAdminService::createStandalone so callers
+ * M-40 — Tuple returned from UserAdminService::createForEmployee so callers
  * outside of an HTTP request (Artisan commands, queued jobs) can read the
  * one-time temp password without going through request()->attributes.
  */

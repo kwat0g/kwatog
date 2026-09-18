@@ -310,6 +310,132 @@ class SalesOrderStatusTransitionsTest extends TestCase
         $this->assertSame(SalesOrderStatus::Invoiced->value, $so->fresh()->status->value);
     }
 
+    public function test_fully_paid_invoiced_so_promotes_to_paid(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Invoiced);
+        Invoice::create([
+            'invoice_number' => 'INV-TEST-PAID',
+            'customer_id' => $so->customer_id,
+            'sales_order_id' => $so->id,
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '100.00',
+            'balance' => '0.00',
+            'status' => 'paid',
+            'created_by' => $so->created_by,
+        ]);
+
+        $this->soService->synchronizeCompletionState($so->id);
+
+        $this->assertSame(SalesOrderStatus::Paid->value, $so->fresh()->status->value);
+    }
+
+    public function test_fully_paid_and_delivered_so_promotes_to_closed(): void
+    {
+        [$so, $soItem] = $this->makeSoWithLine(
+            qty: '10',
+            price: '50.00',
+            status: SalesOrderStatus::Delivered,
+        );
+        $so->update(['total_amount' => '500.00']);
+        $soItem->update(['quantity_delivered' => '10.00']);
+
+        Invoice::create([
+            'invoice_number' => 'INV-TEST-CLOSED',
+            'customer_id' => $so->customer_id,
+            'sales_order_id' => $so->id,
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => '500.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '500.00',
+            'amount_paid' => '500.00',
+            'balance' => '0.00',
+            'status' => 'paid',
+            'created_by' => $so->created_by,
+        ]);
+
+        $this->soService->synchronizeCompletionState($so->id);
+
+        $this->assertSame(SalesOrderStatus::Closed->value, $so->fresh()->status->value);
+    }
+
+    public function test_fully_delivered_so_with_unbilled_value_does_not_close(): void
+    {
+        [$so, $soItem] = $this->makeSoWithLine(
+            qty: '10',
+            price: '50.00',
+            status: SalesOrderStatus::Delivered,
+        );
+        $so->update(['total_amount' => '500.00']);
+        $soItem->update(['quantity_delivered' => '10.00']);
+        Invoice::create([
+            'invoice_number' => 'INV-TEST-PARTIAL-COVER',
+            'customer_id' => $so->customer_id,
+            'sales_order_id' => $so->id,
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => '200.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '200.00',
+            'amount_paid' => '200.00',
+            'balance' => '0.00',
+            'status' => 'paid',
+            'created_by' => $so->created_by,
+        ]);
+
+        $this->soService->synchronizeCompletionState($so->id);
+
+        $this->assertSame(SalesOrderStatus::Paid->value, $so->fresh()->status->value);
+    }
+
+    public function test_paid_and_closed_states_complete_the_sales_order_chain(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Closed);
+
+        $steps = collect($this->soService->chain($so))->keyBy('key');
+
+        $this->assertSame('done', $steps->get('paid')['state']);
+        $this->assertSame('done', $steps->get('closed')['state']);
+    }
+
+    public function test_final_delivery_stages_its_invoice_before_completion_can_close_the_so(): void
+    {
+        $user = $this->makeUser();
+        [$so, $soItem] = $this->makeSoWithLine(
+            qty: '10',
+            price: '50.00',
+            status: SalesOrderStatus::Paid,
+        );
+        [$priorDelivery] = $this->makeDelivery($so, $soItem, qty: '4', user: $user);
+        $priorDelivery->forceFill(['status' => DeliveryStatus::Confirmed->value])->save();
+        Invoice::create([
+            'invoice_number' => 'INV-TEST-PRIOR-PAID',
+            'customer_id' => $so->customer_id,
+            'sales_order_id' => $so->id,
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'subtotal' => '200.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '200.00',
+            'amount_paid' => '200.00',
+            'balance' => '0.00',
+            'status' => 'paid',
+            'created_by' => $so->created_by,
+        ]);
+
+        [$delivery] = $this->makeDelivery($so, $soItem, qty: '6', user: $user);
+        $this->addProof($delivery, $user);
+        app(DeliveryService::class)->confirm($delivery->fresh(), $user);
+
+        $this->assertSame(SalesOrderStatus::Delivered, $so->fresh()->status);
+        $this->assertNotNull($delivery->fresh()->invoice_id);
+        $this->assertSame('draft', Invoice::query()->find($delivery->fresh()->invoice_id)->status->value);
+    }
+
     /**
      * CR-01 / SC-01 regression — the full stuck sequence.
      *

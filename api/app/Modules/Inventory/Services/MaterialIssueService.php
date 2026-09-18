@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
 use App\Modules\Inventory\Enums\ReservationStatus;

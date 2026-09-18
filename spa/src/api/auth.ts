@@ -34,6 +34,10 @@ export interface LoginPayload {
  password: string;
 }
 
+export type SignInResult =
+  | { realm: 'internal'; must_change_password: boolean; user: AuthUser }
+  | { realm: 'customer' | 'supplier'; must_change_password: boolean; user: null };
+
 export interface ChangePasswordPayload {
  current_password: string;
  new_password: string;
@@ -53,6 +57,11 @@ export const authApi = {
  await getCsrfCookie();
  return (await client.post<AuthUser>('/auth/login', payload)).data;
  },
+
+  signIn: async (payload: LoginPayload): Promise<SignInResult> => {
+  await getCsrfCookie();
+  return (await client.post<SignInResult>('/auth/sign-in', payload)).data;
+  },
 
  logout: async () => {
  await client.post('/auth/logout');

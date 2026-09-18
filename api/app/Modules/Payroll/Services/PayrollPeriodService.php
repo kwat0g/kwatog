@@ -12,6 +12,7 @@ use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\ClearanceStatus;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\PayType;
@@ -477,18 +478,20 @@ class PayrollPeriodService
 
         // Resolve the actual employee set the new scope would pay, then look for
         // anyone a sibling scope also pays.
-        $newIds = $this->employeeIdsForScope($scope, $end);
+        $newIds = $this->employeeIdsForScope($scope, $start, $end);
         if ($newIds === []) {
             return; // nothing to collide with; the empty-scope guard fires at compute time
         }
         $newIdSet = array_flip($newIds);
 
         foreach ($siblings as $sibling) {
+            $siblingStart = CarbonImmutable::parse($sibling->period_start);
+            $siblingEnd = CarbonImmutable::parse($sibling->period_end);
             $siblingIds = $this->employeeIdsForScope([
                 'employment_types' => $sibling->scope_employment_types,
                 'department_ids'   => $sibling->scope_department_ids,
                 'pay_types'        => $sibling->scope_pay_types,
-            ], CarbonImmutable::parse($sibling->period_end));
+            ], $siblingStart, $siblingEnd);
 
             $shared = [];
             foreach ($siblingIds as $id) {
@@ -523,9 +526,12 @@ class PayrollPeriodService
      * @param  array{employment_types: array<int,string>|null, department_ids: array<int,int>|null, pay_types: array<int,string>|null}  $scope
      * @return array<int, int>
      */
-    private function employeeIdsForScope(array $scope, CarbonImmutable $asOf): array
+    private function employeeIdsForScope(array $scope, CarbonImmutable $periodStart, CarbonImmutable $periodEnd): array
     {
-        return $this->scopedEmployeeQuery($scope, $asOf)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        return $this->scopedEmployeeQuery($scope, $periodStart, $periodEnd)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
@@ -537,11 +543,35 @@ class PayrollPeriodService
      *
      * @param  array{employment_types: array<int,string>|null, department_ids: array<int,int>|null, pay_types: array<int,string>|null}  $scope
      */
-    private function scopedEmployeeQuery(array $scope, CarbonImmutable $asOf): \Illuminate\Database\Eloquent\Builder
+    private function scopedEmployeeQuery(
+        array $scope,
+        CarbonImmutable $periodStart,
+        CarbonImmutable $periodEnd,
+    ): \Illuminate\Database\Eloquent\Builder
     {
         $query = Employee::query()
-            ->where('status', EmployeeStatus::Active->value)
-            ->whereDate('date_hired', '<=', $asOf->toDateString());
+            ->whereDate('date_hired', '<=', $periodEnd->toDateString())
+            ->where(function ($query) use ($periodStart) {
+                $query->where('status', EmployeeStatus::Active->value)
+                    ->orWhere(function ($query) use ($periodStart) {
+                        // Separation initiation moves an employee to OnLeave
+                        // immediately, even when the last paid day is future
+                        // dated. Keep that employee in the covering cutoff.
+                        $query->where('status', EmployeeStatus::OnLeave->value)
+                            ->whereExists(function ($clearances) use ($periodStart) {
+                                $clearances->selectRaw('1')
+                                    ->from('clearances')
+                                    ->whereColumn('clearances.employee_id', 'employees.id')
+                                    ->whereNull('clearances.deleted_at')
+                                    ->whereIn('clearances.status', [
+                                        ClearanceStatus::Pending->value,
+                                        ClearanceStatus::InProgress->value,
+                                        ClearanceStatus::Completed->value,
+                                    ])
+                                    ->whereDate('clearances.separation_date', '>=', $periodStart->toDateString());
+                            });
+                    });
+            });
 
         if (! empty($scope['employment_types'])) {
             $query->whereIn('employment_type', (array) $scope['employment_types']);
@@ -575,6 +605,7 @@ class PayrollPeriodService
      */
     public function scopePreview(array $data): array
     {
+        $start = CarbonImmutable::parse($data['period_start']);
         $end   = CarbonImmutable::parse($data['period_end']);
         $scope = $this->normalizeScope($data);
 
@@ -582,7 +613,7 @@ class PayrollPeriodService
             'employment_types' => $scope['employment_types'],
             'department_ids'   => $scope['department_ids'],
             'pay_types'        => $scope['pay_types'],
-        ], $end)->get(['id', 'employee_no', 'first_name', 'last_name', 'pay_type', 'basic_monthly_salary', 'semi_monthly_rate']);
+        ], $start, $end)->get(['id', 'employee_no', 'first_name', 'last_name', 'pay_type', 'basic_monthly_salary', 'semi_monthly_rate']);
 
         // Estimated gross = one cutoff of basic for each matched employee. A
         // rough figure by design (no attendance yet), but enough for HR to
@@ -631,10 +662,11 @@ class PayrollPeriodService
     }
 
     /**
-     * Active employees who should be included in this period's batch.
+     * Employees eligible for this period's batch.
      *
      * Honours the period's scope filters. An unscoped period returns every
-     * active employee, exactly as before scoping existed.
+     * eligible employee, while a future-dated separation remains eligible
+     * through its last paid day.
      *
      * @return Builder
      */
@@ -644,7 +676,7 @@ class PayrollPeriodService
             'employment_types' => $period->scope_employment_types,
             'department_ids'   => $period->scope_department_ids,
             'pay_types'        => $period->scope_pay_types,
-        ], CarbonImmutable::parse($period->period_end))
+        ], CarbonImmutable::parse($period->period_start), CarbonImmutable::parse($period->period_end))
             ->orderBy('id');
     }
 
@@ -1090,113 +1122,6 @@ class PayrollPeriodService
         return $fresh;
     }
 
-    /**
-     * CA3 — Payroll pipeline view. Returns all periods for a given year,
-     * including future scheduled ones that haven't been created yet.
-     */
-    public function pipeline(int $year): array
-    {
-        // Get all existing periods for the year
-        $existing = PayrollPeriod::query()
-            ->whereYear('period_start', $year)
-            ->where('is_thirteenth_month', false)
-            ->orderBy('period_start')
-            ->get();
-
-        // Attach summaries in bulk
-        $ids = $existing->pluck('id')->all();
-        $summaries = [];
-        if (!empty($ids)) {
-            $rows = DB::table('payrolls')
-                ->whereIn('payroll_period_id', $ids)
-                ->groupBy('payroll_period_id')
-                ->selectRaw('
-                    payroll_period_id,
-                    COUNT(*) as employee_count,
-                    COALESCE(SUM(gross_pay), 0) as total_gross,
-                    COALESCE(SUM(net_pay), 0) as total_net
-                ')
-                ->get()
-                ->keyBy('payroll_period_id');
-            foreach ($rows as $pid => $r) {
-                $summaries[$pid] = [
-                    'employee_count' => (int) $r->employee_count,
-                    'total_gross'    => Money::round2((string) $r->total_gross),
-                    'total_net'      => Money::round2((string) $r->total_net),
-                ];
-            }
-        }
-
-        // Build periods list — 24 half-month slots per year
-        $periods = [];
-        for ($month = 1; $month <= 12; $month++) {
-            foreach ([true, false] as $isFirstHalf) {
-                $start = CarbonImmutable::create($year, $month, $isFirstHalf ? 1 : 16);
-                $end = $isFirstHalf
-                    ? CarbonImmutable::create($year, $month, 15)
-                    : CarbonImmutable::create($year, $month, 1)->endOfMonth()->startOfDay();
-
-                $match = $existing->first(function ($p) use ($start) {
-                    return $p->period_start->format('Y-m-d') === $start->format('Y-m-d');
-                });
-
-                if ($match) {
-                    $periods[] = [
-                        'id'              => $match->hash_id,
-                        'period_start'    => $match->period_start->format('Y-m-d'),
-                        'period_end'      => $match->period_end->format('Y-m-d'),
-                        'is_first_half'   => (bool) $match->is_first_half,
-                        'status'          => $match->status?->value,
-                        'status_label'    => $match->status?->label(),
-                        'is_auto_created' => (bool) $match->is_auto_created,
-                        'employee_count'  => $summaries[$match->id]['employee_count'] ?? 0,
-                        'total_gross'     => $summaries[$match->id]['total_gross'] ?? '0.00',
-                        'total_net'       => $summaries[$match->id]['total_net'] ?? '0.00',
-                        'label'           => $match->label(),
-                        'exists'          => true,
-                    ];
-                } else {
-                    $label = $start->format('M j') . '–' . $end->format('M j, Y');
-                    $periods[] = [
-                        'id'              => null,
-                        'period_start'    => $start->format('Y-m-d'),
-                        'period_end'      => $end->format('Y-m-d'),
-                        'is_first_half'   => $isFirstHalf,
-                        'status'          => $start->isFuture() ? 'scheduled' : 'not_created',
-                        'status_label'    => $start->isFuture() ? 'Scheduled' : 'Not Created',
-                        'is_auto_created' => false,
-                        'employee_count'  => 0,
-                        'total_gross'     => '0.00',
-                        'total_net'       => '0.00',
-                        'label'           => $label,
-                        'exists'          => false,
-                    ];
-                }
-            }
-        }
-
-        // Auto-schedule config
-        $autoScheduleEnabled = (bool) DB::table('settings')
-            ->where('key', 'payroll.auto_schedule')
-            ->value('value');
-
-        // Next auto-run date
-        $now = CarbonImmutable::now();
-        $nextRun = null;
-        if ($now->day <= 14) {
-            $nextRun = $now->copy()->day(14)->setTime(23, 0)->format('M j \a\t g:i A');
-        } else {
-            $nextRun = $now->copy()->endOfMonth()->startOfDay()->setTime(23, 0)->format('M j \a\t g:i A');
-        }
-
-        return [
-            'year'                  => $year,
-            'periods'               => $periods,
-            'auto_schedule_enabled' => $autoScheduleEnabled,
-            'next_auto_run'         => $nextRun,
-        ];
-    }
-
     public function finalize(PayrollPeriod $period, User $actor): PayrollPeriod
     {
         // P3.5 — wrap the status mutation in a transaction so any DB write
@@ -1219,21 +1144,16 @@ class PayrollPeriodService
 
             // Task A9 — block finalization while unresolved anomaly flags exist.
             //
-            // AUDIT NOTE (2026-08-30, M021): this gate can currently be reached
-            // with zero flags because detection never ran. It happens in
-            // ProcessPayrollJob's finally block inside catch(Throwable) →
-            // Log::warning, so an invalid `payroll.anomaly.*` setting is enough
-            // to produce no flags at all, and a broken gate reads exactly like a
-            // clean period. Measured: a period whose anomaly policy was invalid
-            // approved and finalized with the gate silently disabled.
-            //
-            // Deliberately NOT closed here by re-running detect(): the 13th-month
-            // path (ThirteenthMonthService::computeAndPay) never runs detection
-            // at all, and single-employee recompute does not either, so
-            // re-deriving flags at finalize would newly block flows that have
-            // never been evaluated. Closing this needs a durable
-            // "detection completed / failed" state on the period plus a decision
-            // about the 13th-month path — see M021-F11 in the action plan.
+            // The detector records an evaluation failure on the period instead
+            // of allowing a broken policy or schema to look like a clean run.
+            // Direct single-employee and 13th-month paths do not invoke the
+            // detector, so their default false value remains non-blocking.
+            if ((bool) $locked->anomaly_detection_failed) {
+                throw new BusinessRuleException(
+                    'Cannot finalize: payroll anomaly detection failed. Recompute the period after fixing the anomaly policy settings.'
+                );
+            }
+
             $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
                 ->where('payroll_period_id', $locked->id)
                 ->where('is_resolved', false)

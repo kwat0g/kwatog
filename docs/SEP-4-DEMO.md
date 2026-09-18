@@ -60,7 +60,8 @@ browser profiles or switch accounts at each handoff.
 | `impex@ogami.test` | ImpEx Officer | Shipments, import documents, delivery/fleet view |
 | `driver@ogami.test` | Driver | Driver delivery list, delivery status, delivery receipt/photo flow |
 | `finance@ogami.test` | Finance Officer | Invoices, bills, budgets, collections, payroll approval/finalization |
-| `crm@ogami.test` | Sales Officer | Customers, sales orders, and Sales/CRM records |
+| `crm@ogami.test` | Sales Officer | Sales orders, customer negotiation, and commercial records |
+| `customerservice@ogami.test` | Customer Service Officer | Customer records, inquiries, complaints, and returns |
 | `hr@ogami.test` | HR Officer | Employees, attendance, leave, loans, payroll creation/computation |
 | `depthead@ogami.test` | Department Head | Department leave, overtime, loan, and Purchase Request approvals |
 | `maintenance@ogami.test` | Maintenance Technician | Maintenance Work Orders and condition-based maintenance |
@@ -89,8 +90,10 @@ approval screens, and `maintenance@ogami.test` for the maintenance handoff.
 
 ### Important non-admin access note
 
-`crm@ogami.test` is the scoped **Sales Officer** demo account. It can manage
-customers and sales orders but does not inherit Finance, HR, or administrative
+`crm@ogami.test` is the scoped **Sales Officer** demo account. It can create and
+confirm sales orders but cannot manage customer-service records. The
+`customerservice@ogami.test` account owns customer records, inquiries,
+complaints, and returns. Neither account inherits Finance, HR, or administrative
 authority. If the full central view is required without using an administrator
 during the presentation, prepare a dedicated read-only **Demo Presenter** role
 before the event. It should have only the read permissions needed for the

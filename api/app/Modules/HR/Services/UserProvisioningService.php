@@ -79,6 +79,27 @@ class UserProvisioningService
         });
     }
 
+    /**
+     * Resolve the login email for an employee WITHOUT creating anything —
+     * the one shared implementation for every provisioning path.
+     *
+     * Admin > Users (employee-based account creation) calls this to mirror
+     * what provisionForEmployee will do, so the email the admin confirms on
+     * the form is byte-identical to the email stored. An explicitly typed
+     * email (already validated unique by the FormRequest) wins; otherwise the
+     * employee's own HR email is used, else one is generated from their name
+     * against company.employee_email_domain.
+     */
+    public function resolveEmailFor(Employee $employee, ?string $preferredEmail = null): string
+    {
+        $preferred = strtolower(trim((string) $preferredEmail));
+        if ($preferred !== '' && filter_var($preferred, FILTER_VALIDATE_EMAIL) !== false) {
+            return $preferred;
+        }
+
+        return $this->resolveEmail($employee);
+    }
+
     public function deactivateForEmployee(Employee $employee): void
     {
         DB::transaction(function () use ($employee): void {

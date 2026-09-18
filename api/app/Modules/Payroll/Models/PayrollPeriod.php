@@ -55,6 +55,7 @@ class PayrollPeriod extends Model
         'status'              => PayrollPeriodStatus::class,
         'bank_file_status'    => BankFileGenerationStatus::class,
         'gl_handoff_status'   => PayrollGlHandoffStatus::class,
+        'anomaly_detection_failed' => 'boolean',
         'bank_file_at'        => 'datetime',
         'gl_handoff_at'       => 'datetime',
         'disbursement_status' => 'string',

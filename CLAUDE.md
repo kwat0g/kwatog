@@ -151,6 +151,12 @@ Required on every response: HSTS, `X-Frame-Options: DENY`, `X-Content-Type-Optio
 `docker/nginx/security-headers-dev.conf` and `security-headers-prod.conf` — edit those,
 never inline headers into a server block.
 
+**Deliberate carve-out:** the SPA `location` block overrides `X-Frame-Options` to
+`SAMEORIGIN` and `frame-ancestors` to `'self'` (`docker/nginx/default.conf`,
+`docker/nginx/prod.conf`). The SPA iframes its own PDF preview (`PdfPreviewModal`), so a
+blanket `DENY` breaks in-app document viewing. The API stays `DENY`; only the same-origin
+SPA allows self-framing. Do not "fix" this by copying `DENY` into the SPA block.
+
 ### Rate Limiting & Account Protection
 
 ```php

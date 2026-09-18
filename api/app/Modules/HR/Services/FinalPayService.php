@@ -9,13 +9,14 @@ use App\Common\Models\AuditLog;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
-use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
@@ -46,6 +47,7 @@ class FinalPayService
 {
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly SettingsService $settings,
     ) {}
 
@@ -71,8 +73,13 @@ class FinalPayService
             $employee = $lockedClearance->employee;
             if (! $employee) throw new BusinessRuleException('Clearance has no employee.');
 
+            // Final pay and the covering payroll period must never both own the
+            // same cutoff. Keep this guard at compute time as well as posting
+            // time so HR cannot approve a figure that is known to be unpostable.
+            $this->assertCoveringPeriodAllowsFinalPay($lockedClearance);
+
             $lastSalary = $this->lastSalaryProRated($employee, $lockedClearance->separation_date);
-            $leaveValue = $this->unusedConvertibleLeaveValue($employee);
+            $leaveValue = $this->unusedConvertibleLeaveValue($employee, $lockedClearance);
             $thirteenth = $this->proRatedThirteenthMonth($employee, $lockedClearance->separation_date);
             // Settlements an earlier compute already recorded for THIS clearance
             // stay deducted: that money moved from the payout into the loan
@@ -117,6 +124,7 @@ class FinalPayService
                 'gross_plus'                      => $plus,
                 'gross_less'                      => $less,
                 'net'                             => $net,
+                'leave_balance_consumed'          => true,
             ];
 
             $previous = [
@@ -283,10 +291,13 @@ class FinalPayService
 
             $loan = $liveLoan;
 
-            $salariesExp = Account::where('code', $this->settings->requiredString('accounting.accounts.final_pay_salary_expense_code'))->firstOrFail();
-            $cashInBank  = Account::where('code', $this->settings->requiredString('accounting.accounts.cash_code'))->firstOrFail();
-            $loansPayable= Account::where('code', $this->settings->requiredString('accounting.accounts.loans_payable_code'))->firstOrFail();
-            $accrued     = Account::where('code', $this->settings->requiredString('accounting.accounts.accrued_expense_code'))->firstOrFail();
+            $salaryExpenseAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.final_pay_salary_expense_code');
+            $cashAccountId = $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.cash_code');
+            $loansPayableAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.loans_payable_code');
+            $accruedExpenseAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.accrued_expense_code');
 
             // P05-01 — when deductions exceed earnings, net is clamped at 0.00
             // but crediting the full deductions would leave an unbalanced JE
@@ -298,19 +309,19 @@ class FinalPayService
             $otherCredit = Money::sub($recoverable, $loanCredit);
 
             $lines = [
-                ['account_id' => $salariesExp->id, 'debit' => $plus, 'credit' => Money::zero(), 'description' => 'Final pay components'],
+                ['account_id' => $salaryExpenseAccountId, 'debit' => $plus, 'credit' => Money::zero(), 'description' => 'Final pay components'],
             ];
             if (Money::gt($loanCredit, Money::zero())) {
-                $lines[] = ['account_id' => $loansPayable->id, 'debit' => Money::zero(), 'credit' => $loanCredit, 'description' => 'Settle outstanding loan from final pay'];
+                $lines[] = ['account_id' => $loansPayableAccountId, 'debit' => Money::zero(), 'credit' => $loanCredit, 'description' => 'Settle outstanding loan from final pay'];
             }
             if (Money::gt($otherCredit, Money::zero())) {
-                $lines[] = ['account_id' => $accrued->id, 'debit' => Money::zero(), 'credit' => $otherCredit, 'description' => 'Settle advance / unreturned property'];
+                $lines[] = ['account_id' => $accruedExpenseAccountId, 'debit' => Money::zero(), 'credit' => $otherCredit, 'description' => 'Settle advance / unreturned property'];
             }
             // Only add the cash disbursement line when net > 0. When deductions
             // exactly cancel earnings (net = 0.00), the journal validator
             // rejects a line with both debit and credit equal to zero.
             if (Money::gt($net, Money::zero())) {
-                $lines[] = ['account_id' => $cashInBank->id, 'debit' => Money::zero(), 'credit' => $net, 'description' => 'Final pay disbursement'];
+                $lines[] = ['account_id' => $cashAccountId, 'debit' => Money::zero(), 'credit' => $net, 'description' => 'Final pay disbursement'];
             }
 
             $je = $this->journals->create([
@@ -472,7 +483,7 @@ class FinalPayService
 
         if ($period->status !== PayrollPeriodStatus::Disbursed) {
             throw new BusinessRuleException(sprintf(
-                'Payroll period %s covering the separation date has not been disbursed — disburse or void it, then recompute final pay before posting the journal entry.',
+                'Payroll period %s covering the separation date has not been disbursed and is awaiting disbursement — disburse or void it, then recompute final pay before posting the journal entry.',
                 $period->label(),
             ));
         }
@@ -487,18 +498,42 @@ class FinalPayService
         }
     }
 
-    private function unusedConvertibleLeaveValue(Employee $e): string
+    private function unusedConvertibleLeaveValue(Employee $e, Clearance $clearance): string
     {
-        // A missing/failed leave query must not silently become zero final pay.
-        // Database errors propagate so the separation remains visibly pending
-        // until the authoritative leave data source is available.
-        $rows = DB::table('employee_leave_balances as elb')
-            ->join('leave_types as lt', 'elb.leave_type_id', '=', 'lt.id')
-            ->where('elb.employee_id', $e->id)
-            ->where('lt.is_convertible_on_separation', true)
-            ->select(DB::raw('SUM(elb.remaining * lt.conversion_rate) as v'))
-            ->value('v');
-        $days = (string) ($rows ?? '0');
+        // A recompute must reuse the first computed snapshot. The source
+        // balances are consumed below, so recalculating would turn a harmless
+        // retry into a zero-value payout.
+        $breakdown = $clearance->final_pay_breakdown;
+        if (($breakdown['leave_balance_consumed'] ?? false) === true) {
+            return Money::round2((string) ($breakdown['unused_convertible_leave_value'] ?? Money::zero()));
+        }
+
+        // Lock and consume the authoritative balances in this transaction. A
+        // failed computation rolls the mutation back with the rest of final pay.
+        $balances = EmployeeLeaveBalance::query()
+            ->with('leaveType')
+            ->where('employee_id', $e->id)
+            ->where('remaining', '>', 0)
+            ->whereHas('leaveType', fn ($query) => $query->where('is_convertible_on_separation', true))
+            ->lockForUpdate()
+            ->get();
+
+        $days = '0.0000';
+        foreach ($balances as $balance) {
+            $remaining = (string) $balance->remaining;
+            $conversionRate = (string) ($balance->leaveType?->conversion_rate ?? '0.00');
+            $conversionRate = Money::clampMin($conversionRate, '0.00');
+            if (Money::gt($conversionRate, '1.00')) {
+                $conversionRate = '1.00';
+            }
+
+            $days = bcadd($days, bcmul($remaining, $conversionRate, Money::INNER), Money::INNER);
+
+            $balance->forceFill([
+                'used'      => bcadd((string) $balance->total_credits, '0', 1),
+                'remaining' => '0.0',
+            ])->save();
+        }
 
         $rate = $this->authoritativeDailyRate($e);
         return Money::clampMin(Money::mul($days, $rate), Money::zero());
@@ -544,7 +579,9 @@ class FinalPayService
             ->orderByDesc('id')
             ->first();
         if ($row) {
-            return Money::round2((string) $row->accrued_amount);
+            return (bool) $row->is_paid
+                ? Money::zero()
+                : Money::round2((string) $row->accrued_amount);
         }
 
         // Rebuild from authoritative computed payroll when an accrual snapshot

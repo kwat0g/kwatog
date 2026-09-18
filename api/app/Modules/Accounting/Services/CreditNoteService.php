@@ -103,12 +103,27 @@ class CreditNoteService
     {
         $type = CreditNoteType::from($data['type']);
         $lines = $data['lines'] ?? [];
+        $customerId = $this->decode($data['customer_id'] ?? null, \App\Modules\Accounting\Models\Customer::class);
+        $vendorId = $this->decode($data['vendor_id'] ?? null, \App\Modules\Accounting\Models\Vendor::class);
+        $invoiceId = $this->decode($data['invoice_id'] ?? null, Invoice::class);
+        $billId = $this->decode($data['bill_id'] ?? null, Bill::class);
         if (count($lines) < 1) {
             throw new BusinessRuleException('A credit note needs at least one line.');
         }
 
-        return DB::transaction(function () use ($data, $type, $lines, $by) {
-            $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
+        return DB::transaction(function () use ($data, $type, $lines, $by, $customerId, $vendorId, $invoiceId, $billId) {
+            $sourceInvoice = $invoiceId !== null
+                ? Invoice::query()->lockForUpdate()->findOrFail($invoiceId)
+                : null;
+            $sourceBill = $billId !== null
+                ? Bill::query()->lockForUpdate()->findOrFail($billId)
+                : null;
+            $this->assertSourceParty($type, $customerId, $vendorId, $sourceInvoice, $sourceBill);
+            $isVatable = $sourceInvoice !== null
+                ? (bool) $sourceInvoice->is_vatable
+                : ($sourceBill !== null
+                    ? (bool) $sourceBill->is_vatable
+                    : (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered()));
 
             $subtotal = Money::zero();
             $resolvedLines = [];
@@ -129,10 +144,10 @@ class CreditNoteService
             $cn = new CreditNote();
             $cn->fill([
                 'type'              => $type->value,
-                'customer_id'       => $this->decode($data['customer_id'] ?? null, \App\Modules\Accounting\Models\Customer::class),
-                'vendor_id'         => $this->decode($data['vendor_id'] ?? null, \App\Modules\Accounting\Models\Vendor::class),
-                'invoice_id'        => $this->decode($data['invoice_id'] ?? null, Invoice::class),
-                'bill_id'           => $this->decode($data['bill_id'] ?? null, Bill::class),
+                'customer_id'       => $customerId,
+                'vendor_id'         => $vendorId,
+                'invoice_id'        => $invoiceId,
+                'bill_id'           => $billId,
                 'return_request_id' => $data['return_request_id'] ?? null,
                 'date'              => $data['date'],
                 'is_vatable'        => $isVatable,
@@ -263,6 +278,10 @@ class CreditNoteService
                     'balance'     => $newBalance,
                     'status'      => $newStatus,
                 ]);
+                if ($newStatus === InvoiceStatus::Paid && $invoice->sales_order_id) {
+                    app(\App\Modules\CRM\Services\SalesOrderService::class)
+                        ->synchronizeCompletionState((int) $invoice->sales_order_id);
+                }
                 if ($invoice->wasChanged('status')) {
                     $fresh = $invoice->fresh();
                     app(ChainBroadcaster::class)
@@ -362,25 +381,9 @@ class CreditNoteService
     }
 
     /**
-     * The header must name one party.
-     *
-     * AUDIT 2026-08-30 (M028-F19, deferred): the header's source-document link
-     * is NOT bound to that party. `create()` decodes `customer_id` and
-     * `invoice_id` independently, so a credit note for customer A can reference
-     * customer B's invoice; `CreditNoteResource:41` then serialises B's
-     * `invoice_number` onto A's credit note. Money cannot cross — `apply()`
-     * re-checks the party at :243/:277 — but this is a cross-tenant metadata
-     * disclosure and a false audit link. Measured accepted.
-     *
-     * The guard was implemented and reverted in that session: it is correct, but
-     * `ReturnRequestService::creditNoteFor()` (:1362-1364) forwards
-     * `$rma->customer_id` and `$rma->invoice_id` with no cross-check of its own,
-     * and `tests/Feature/ReturnManagement/CustomerReturnRestockOnDisposeTest.php`
-     * :135,:155,:205,:238 call `$this->customer()` twice — and `customer()` (:57)
-     * mints a NEW row per call — so the fixture builds an RMA whose invoice
-     * belongs to a different customer and 3 of its tests went red. Landing this
-     * needs a coordinated return-management change, which is out of this
-     * module's scope. See action-plan item 5.
+     * The header must name one party, and a linked source document must belong
+     * to that same party. This is enforced at draft creation so a mismatched
+     * source cannot appear in the credit-note list or detail response.
      */
     private function assertParty(CreditNote $cn): void
     {
@@ -389,6 +392,27 @@ class CreditNoteService
         }
         if ($cn->type === CreditNoteType::Supplier && ! $cn->vendor_id) {
             throw new BusinessRuleException('A supplier credit note requires a vendor.');
+        }
+    }
+
+    private function assertSourceParty(
+        CreditNoteType $type,
+        ?int $customerId,
+        ?int $vendorId,
+        ?Invoice $sourceInvoice,
+        ?Bill $sourceBill,
+    ): void {
+        if ($type === CreditNoteType::Customer && $sourceBill !== null) {
+            throw new BusinessRuleException('A customer credit note must reference an invoice, not a bill.');
+        }
+        if ($type === CreditNoteType::Supplier && $sourceInvoice !== null) {
+            throw new BusinessRuleException('A supplier credit note must reference a bill, not an invoice.');
+        }
+        if ($sourceInvoice !== null && (int) $sourceInvoice->customer_id !== (int) $customerId) {
+            throw new BusinessRuleException('Credit note and source invoice belong to different customers.');
+        }
+        if ($sourceBill !== null && (int) $sourceBill->vendor_id !== (int) $vendorId) {
+            throw new BusinessRuleException('Credit note and source bill belong to different vendors.');
         }
     }
 

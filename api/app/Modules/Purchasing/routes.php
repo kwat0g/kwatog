@@ -101,9 +101,9 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::get('/purchase-orders/{purchaseOrder}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchasing.view');
 
     /* ─── Approved Suppliers ─── */
-    Route::get('/approved-suppliers', [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/approved-suppliers', [ApprovedSupplierController::class, 'index'])->middleware('permission:purchasing.po.create');
     // Static segment declared before any {approvedSupplier} binding.
-    Route::get('/approved-suppliers/options', [ApprovedSupplierController::class, 'options'])->middleware('permission:purchasing.view');
+    Route::get('/approved-suppliers/options', [ApprovedSupplierController::class, 'options'])->middleware('permission:purchasing.po.create');
     Route::post('/approved-suppliers', [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
@@ -112,7 +112,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
         ->withTrashed();
 
     /* ─── Supplier Item Listings (supplier-submitted offers, reviewed here) ─── */
-    Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/supplier-listings', [SupplierListingController::class, 'index'])->middleware('permission:purchasing.supplier_listings.review');
     // Literal bulk segments BEFORE the {supplierItemListing} binding routes.
     Route::patch('/supplier-listings/bulk-approve', [SupplierListingController::class, 'bulkApprove'])->middleware('permission:purchasing.supplier_listings.review');
     Route::patch('/supplier-listings/bulk-reject', [SupplierListingController::class, 'bulkReject'])->middleware('permission:purchasing.supplier_listings.review');

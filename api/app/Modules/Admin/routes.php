@@ -70,6 +70,7 @@ Route::prefix('admin')
             ->group(function (): void {
                 Route::get('/', [UserAdminController::class, 'index']);
                 Route::get('/options', [UserAdminController::class, 'options']);
+                Route::get('/employee-candidates', [UserAdminController::class, 'employeeCandidates']);
                 Route::post('/', [UserAdminController::class, 'store']);
                 // ADV — bulk role update. MUST be declared before `{user}` wildcard routes
                 // or the literal string `bulk-role` gets captured as a hash ID and 404s.

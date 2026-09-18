@@ -9,6 +9,7 @@ use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -29,10 +30,11 @@ class UserAdministrationHardeningTest extends TestCase
         $manager = $this->userWithPermissions(['admin.users.manage']);
         $systemRole = Role::where('slug', 'system_admin')->firstOrFail();
 
+        $employee = Employee::factory()->create(['email' => 'escalation@t.test']);
+
         $this->actingAs($manager)
             ->postJson('/api/v1/admin/users', [
-                'name' => 'Escalation Attempt',
-                'email' => 'escalation@t.test',
+                'employee_id' => $employee->hash_id,
                 'role_id' => $systemRole->hash_id,
                 'send_welcome' => false,
             ])

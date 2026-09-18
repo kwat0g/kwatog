@@ -133,8 +133,8 @@ class KpiComputeProcessTest extends TestCase
 
     /**
      * Budget utilization reads the generated `annual_total` column, not a
-     * `budgeted_amount` column that does not exist. 250 actual over 1000
-     * budgeted is 25%.
+     * `budgeted_amount` column that does not exist. It also reads the live
+     * posted ledger, not a stale persisted `actual_total` cache.
      */
     public function test_budget_utilization_uses_the_generated_annual_total(): void
     {
@@ -161,8 +161,35 @@ class KpiComputeProcessTest extends TestCase
             'jan' => '100.00', 'feb' => '100.00', 'mar' => '100.00', 'apr' => '100.00',
             'may' => '100.00', 'jun' => '100.00', 'jul' => '100.00', 'aug' => '100.00',
             'sep' => '100.00', 'oct' => '0.00', 'nov' => '0.00', 'dec' => '100.00',
-            'actual_total' => '250.00', 'variance' => '0.00',
+            // Deliberately stale. The posted ledger below is authoritative.
+            'actual_total' => '999.00', 'variance' => '0.00',
             'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $offsetAccountId = DB::table('accounts')->insertGetId([
+            'code' => '3000-KPI', 'name' => 'KPI Offset', 'type' => 'equity',
+            'normal_balance' => 'credit', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $journalId = DB::table('journal_entries')->insertGetId([
+            'entry_number' => 'JE-KPI-'.substr(uniqid(), -8),
+            'date' => '2026-07-15', 'description' => 'KPI live actual fixture',
+            'total_debit' => '250.00', 'total_credit' => '250.00',
+            'status' => 'draft',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('journal_entry_lines')->insert([
+            [
+                'journal_entry_id' => $journalId, 'account_id' => $accountId, 'line_no' => 1,
+                'debit' => '250.00', 'credit' => '0.00', 'description' => 'KPI actual',
+            ],
+            [
+                'journal_entry_id' => $journalId, 'account_id' => $offsetAccountId, 'line_no' => 2,
+                'debit' => '0.00', 'credit' => '250.00', 'description' => 'KPI offset',
+            ],
+        ]);
+        DB::table('journal_entries')->where('id', $journalId)->update([
+            'status' => 'posted', 'posted_at' => now(), 'updated_at' => now(),
         ]);
 
         $definition = KpiDefinition::query()->create([

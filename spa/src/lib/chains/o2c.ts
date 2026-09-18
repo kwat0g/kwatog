@@ -46,7 +46,7 @@ export function buildO2cChain(input: O2cChainInput): ChainStep[] {
   // invoice step only turns active once goods are delivered/confirmed.
   const invoiceReady =
     deliveryStatus === 'delivered' || deliveryStatus === 'confirmed';
-  const isPaid = invoices.some((inv) => inv.status === 'paid');
+  const isPaid = invoices.length > 0 && invoices.every((inv) => inv.status === 'paid');
   const firstInvoice = invoices[0];
   // Draft invoices have no number yet (assigned at finalize) — never render a
   // bare "Invoice  issued".

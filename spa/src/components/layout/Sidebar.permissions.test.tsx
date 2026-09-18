@@ -144,20 +144,113 @@ describe('role-aligned sidebar permissions', () => {
   expect(isNavItemVisible(item('/accounting/portal-access'), purchasing)).toBe(false);
   });
 
-  it('exposes the merged Warehouse Map from inventory.view (Stock Count is its toggle)', () => {
+   it('exposes the merged Warehouse Map only to warehouse structure managers', () => {
  // 2026-08-08: Stock Count merged into the Warehouse Map page. The sidebar
- // shows one entry for inventory.view users; the Stock Count tab inside the
- // page is gated on inventory.stock_count.view by the page itself, and the
- // /inventory/stock-count route keeps its stock_count gate for scanner links.
- const genericInventory = {
- permissions: new Set(['inventory.view']),
- features: allFeatures,
- roleSlug: 'production_manager',
- };
+  // Warehouse Map is structure-sensitive WMS navigation; generic inventory
+  // readers keep item/stock-level access but do not receive the map entry.
+  const genericInventory = {
+  permissions: new Set(['inventory.view']),
+  features: allFeatures,
+  roleSlug: 'production_manager',
+  };
+  const warehouse = {
+  permissions: new Set(['inventory.warehouse.manage']),
+  features: allFeatures,
+  roleSlug: 'warehouse_staff',
+  };
 
- expect(isNavItemVisible(item('/inventory/warehouse-map'), genericInventory)).toBe(true);
- expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
- });
+  expect(isNavItemVisible(item('/inventory/warehouse-map'), genericInventory)).toBe(false);
+  expect(isNavItemVisible(item('/inventory/warehouse-map'), warehouse)).toBe(true);
+  expect(SECTIONS.flatMap((s) => s.items).some((entry) => entry.to === '/inventory/stock-count')).toBe(false);
+  });
+
+  it('keeps Warehouse execution navigation aligned across every seeded role', () => {
+  const warehousePaths = [
+  '/inventory/material-issues',
+  '/inventory/stock-adjustments',
+  '/inventory/warehouse-map',
+  '/inventory/transfer-orders',
+  '/inventory/picking',
+  ];
+  const rolePermissions: Record<string, string[]> = {
+  system_admin: [],
+  vice_president: [],
+  hr_officer: [],
+  finance_officer: ['inventory.adjust.approve'],
+  production_manager: ['inventory.view'],
+  ppc_head: [],
+  purchasing_officer: ['inventory.view', 'inventory.grn.create'],
+  warehouse_staff: [
+  'inventory.view', 'inventory.issue.create', 'inventory.adjust',
+  'inventory.warehouse.manage', 'inventory.picking.view',
+  ],
+  qc_inspector: ['inventory.view'],
+  maintenance_tech: [],
+  impex_officer: [],
+  department_head: [],
+  employee: [],
+  driver: [],
+  sales_officer: [],
+  customer_service_officer: [],
+  };
+  const expected: Record<string, string[]> = {
+  system_admin: warehousePaths,
+  finance_officer: ['/inventory/stock-adjustments'],
+  warehouse_staff: warehousePaths,
+  };
+
+  for (const [roleSlug, permissions] of Object.entries(rolePermissions)) {
+  const context = { permissions: new Set(permissions), features: allFeatures, roleSlug };
+  const visible = warehousePaths.filter((path) => isNavItemVisible(item(path), context));
+  expect(visible, `${roleSlug} Warehouse navigation`).toEqual(expected[roleSlug] ?? []);
+  }
+  });
+
+  it('keeps Procurement navigation aligned with maker, checker, and review roles', () => {
+  const procurementPaths = [
+  '/purchasing/chain',
+  '/purchasing/purchase-orders',
+  '/purchasing/purchase-requests',
+  '/purchasing/rfqs',
+  '/purchasing/approved-suppliers',
+  '/purchasing/supplier-listings',
+  ];
+  const rolePermissions: Record<string, string[]> = {
+  system_admin: [],
+  vice_president: ['purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
+  hr_officer: [],
+  finance_officer: ['purchasing.pr.approve', 'purchasing.po.approve', 'purchasing.rfq.view'],
+  production_manager: ['purchasing.view'],
+  ppc_head: [],
+  purchasing_officer: [
+  'purchasing.pr.create', 'purchasing.po.create', 'purchasing.rfq.view',
+  'purchasing.supplier_listings.review',
+  ],
+  warehouse_staff: [],
+  qc_inspector: ['purchasing.rfq.view'],
+  maintenance_tech: [],
+  impex_officer: ['purchasing.view'],
+  department_head: ['purchasing.pr.approve'],
+  employee: [],
+  driver: [],
+  sales_officer: [],
+  customer_service_officer: [],
+  };
+  const expected: Record<string, string[]> = {
+  system_admin: procurementPaths,
+  vice_president: procurementPaths.slice(0, 4),
+  finance_officer: procurementPaths.slice(0, 4),
+  purchasing_officer: procurementPaths,
+  qc_inspector: ['/purchasing/rfqs'],
+  department_head: ['/purchasing/chain', '/purchasing/purchase-requests'],
+  };
+
+  for (const [roleSlug, permissions] of Object.entries(rolePermissions)) {
+  const context = { permissions: new Set(permissions), features: allFeatures, roleSlug };
+  const visible = procurementPaths.filter((path) => isNavItemVisible(item(path), context));
+  expect(visible, `${roleSlug} Procurement navigation`).toEqual(expected[roleSlug] ?? []);
+  }
+  });
 
   it('keeps the Finance sidebar focused on the dashboard, invoices, bills, vendors, and primary statements', () => {
  const finance = {
@@ -175,13 +268,24 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/dashboard/finance'), employee)).toBe(false);
 
   const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map((entry) => entry.to);
-  expect(financePaths).toEqual([
-  '/dashboard/finance',
-  '/accounting/invoices',
+   expect(financePaths).toEqual([
+   '/dashboard/finance',
+   '/accounting/invoices',
   '/accounting/bills',
   '/accounting/vendors',
   '/accounting/income-statement',
-  '/accounting/balance-sheet',
-  ]);
- });
+   '/accounting/balance-sheet',
+   ]);
+   });
+
+   it('shows payroll processing to the Finance checker without exposing HR statutory exports', () => {
+   const finance = {
+   permissions: new Set(['payroll.periods.view', 'payroll.periods.approve', 'payroll.periods.finalize']),
+   features: allFeatures,
+   roleSlug: 'finance_officer',
+   };
+
+   expect(isNavItemVisible(item('/payroll/periods'), finance)).toBe(true);
+   expect(isNavItemVisible(item('/payroll/statutory'), finance)).toBe(false);
+   });
 });

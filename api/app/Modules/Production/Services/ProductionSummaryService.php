@@ -25,7 +25,13 @@ class ProductionSummaryService
 
         $woRows = DB::table('work_orders as w')
             ->leftJoin('products as p', 'p.id', '=', 'w.product_id')
-            ->leftJoin('work_order_outputs as wo', 'wo.work_order_id', '=', 'w.id')
+            // Join only outputs RECORDED in this window. A work order matched by
+            // its planned dates must contribute the output produced today, not
+            // its whole multi-day total.
+            ->leftJoin('work_order_outputs as wo', function ($join) use ($day, $end): void {
+                $join->on('wo.work_order_id', '=', 'w.id')
+                    ->whereBetween('wo.recorded_at', [$day, $end]);
+            })
             ->whereBetween('w.planned_start', [$day, $end])
             ->orWhereBetween('w.planned_end', [$day, $end])
             ->orWhereBetween('wo.recorded_at', [$day, $end])
@@ -51,9 +57,16 @@ class ProductionSummaryService
 
         $breakdowns = DB::table('machine_downtimes as md')
             ->join('machines as m', 'm.id', '=', 'md.machine_id')
-            ->whereBetween('md.start_time', [$day, $end])
-            ->orWhereNull('md.end_time')
+            // Grouped so `category = breakdown` applies to BOTH arms. Without
+            // the closure SQL parsed this as
+            // `start_time BETWEEN ? AND ? OR (end_time IS NULL AND category=?)`,
+            // so every downtime category starting today was reported as a
+            // breakdown.
             ->where('md.category', 'breakdown')
+            ->where(function ($q) use ($day, $end): void {
+                $q->whereBetween('md.start_time', [$day, $end])
+                    ->orWhereNull('md.end_time');
+            })
             ->select(
                 'md.id',
                 'm.machine_code',

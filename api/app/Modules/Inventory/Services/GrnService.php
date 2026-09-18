@@ -9,6 +9,7 @@ use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
@@ -29,6 +30,9 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
@@ -563,6 +567,14 @@ class GrnService
                 $poItem->save();
                 $this->moveAcceptedQuantity($row, $delta, $by, "GRN {$lockedGrn->grn_number}");
             }
+
+            // OGAMI-005 / trace §7.7 — acceptance is the moment the incoming
+            // QC verdict becomes final for every eligible line, so a line that
+            // carries a CoA document and passed its incoming inspection gets
+            // the flag set HERE — the one writer in the codebase. Receiving
+            // cannot self-verify (both create() paths refuse the input).
+            $this->verifyCoaOnIncomingPass($lockedGrn);
+
             $po = PurchaseOrder::query()->lockForUpdate()->findOrFail($lockedGrn->purchase_order_id);
             $this->refreshPoStatus($po, $by);
             $lockedGrn->update([
@@ -645,6 +657,11 @@ class GrnService
             if (! $hasDelta) {
                 throw new BusinessRuleException('Increase at least one accepted quantity before submitting.');
             }
+
+            // Same CoA verification contract as accept() — a partial
+            // acceptance finalises the pass verdict for the lines it moves.
+            $this->verifyCoaOnIncomingPass($lockedGrn);
+
             $lockedGrn->update([
                 'status' => $allFull ? GrnStatus::Accepted : GrnStatus::PartialAccepted,
                 'accepted_by' => $by->id,
@@ -829,6 +846,48 @@ class GrnService
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->get(['id', 'status', 'grn_item_id']);
+    }
+
+    /**
+     * OGAMI-005 / trace §7.7 — COA verification is a Quality decision, and
+     * the accept gate (assertQcGate) has just confirmed every QC-eligible
+     * line's incoming inspection is terminal. A line that carries a CoA
+     * document reference AND a PASSED per-line incoming inspection is now
+     * verified. A cancelled verdict is a completed logistics decision, not
+     * quality evidence, so it never verifies anything.
+     *
+     * One writer: receiving stores coa_verified = false at create/finalize
+     * and refuses the field as input; this is the only place it becomes true.
+     */
+    private function verifyCoaOnIncomingPass(GoodsReceiptNote $grn): void
+    {
+        $rows = GrnItem::query()
+            ->where('goods_receipt_note_id', $grn->id)
+            ->whereNotNull('coa_document_path')
+            ->where('coa_verified', false)
+            ->get();
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $passedLineIds = Inspection::query()
+            ->where('stage', InspectionStage::Incoming->value)
+            ->where('entity_type', InspectionEntityType::Grn->value)
+            ->where('entity_id', $grn->id)
+            ->where('status', InspectionStatus::Passed->value)
+            ->whereNotNull('grn_item_id')
+            ->pluck('grn_item_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+        if ($passedLineIds === []) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            if (in_array((int) $row->id, $passedLineIds, true)) {
+                $row->forceFill(['coa_verified' => true])->save();
+            }
+        }
     }
 
     /**

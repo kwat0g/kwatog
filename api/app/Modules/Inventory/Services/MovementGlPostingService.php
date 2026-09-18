@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -51,6 +52,7 @@ class MovementGlPostingService
 
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly SettingsService $settings,
         private readonly GrnGlPostingService $grnPosting,
     ) {}
@@ -138,7 +140,7 @@ class MovementGlPostingService
         }
 
         try {
-            [$inventoryCode, $offsetCode, $inventoryIsDebit] = $this->mapping($type, $item);
+            [$inventoryCode, $offsetCode, $inventoryIsDebit, $offsetSetting] = $this->mapping($type, $item);
         } catch (BusinessRuleException $e) {
             Log::warning('MovementGlPostingService: required GL mapping is missing', [
                 'movement_id' => $movement->id,
@@ -148,31 +150,27 @@ class MovementGlPostingService
             return null;
         }
 
-        $accountIds = DB::table('accounts')
-            ->whereIn('code', array_unique([$inventoryCode, $offsetCode]))
-            ->pluck('id', 'code');
-
-        foreach (['inventory' => $inventoryCode, 'offset' => $offsetCode] as $side => $code) {
-            if (! isset($accountIds[$code])) {
-                Log::error('MovementGlPostingService: configured account missing from COA', [
-                    'movement_id' => $movement->id,
-                    'side' => $side,
-                    'missing_code' => $code,
-                ]);
-                $this->markManual($movement->id);
-                return null;
-            }
+        try {
+            $inventoryAccountId = $this->grnPosting->inventoryAccountId($item);
+            $offsetAccountId = $this->accountPolicies->controlAccountIdForSetting($offsetSetting);
+        } catch (\RuntimeException $e) {
+            Log::warning('MovementGlPostingService: configured account is unavailable or wrongly typed', [
+                'movement_id' => $movement->id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->markManual($movement->id);
+            return null;
         }
 
         $description = sprintf('%s — %s', $movement->reference_type ?? 'stock movement', $type->value);
         $lines = $inventoryIsDebit
             ? [
-                ['account_id' => $accountIds[$inventoryCode], 'debit' => $value, 'credit' => '0.00', 'description' => $description],
-                ['account_id' => $accountIds[$offsetCode],    'debit' => '0.00', 'credit' => $value, 'description' => $description],
+                ['account_id' => $inventoryAccountId, 'debit' => $value, 'credit' => '0.00', 'description' => $description],
+                ['account_id' => $offsetAccountId,    'debit' => '0.00', 'credit' => $value, 'description' => $description],
             ]
             : [
-                ['account_id' => $accountIds[$inventoryCode], 'debit' => '0.00', 'credit' => $value, 'description' => $description],
-                ['account_id' => $accountIds[$offsetCode],    'debit' => $value, 'credit' => '0.00', 'description' => $description],
+                ['account_id' => $inventoryAccountId, 'debit' => '0.00', 'credit' => $value, 'description' => $description],
+                ['account_id' => $offsetAccountId,    'debit' => $value, 'credit' => '0.00', 'description' => $description],
             ];
 
         try {
@@ -242,7 +240,7 @@ class MovementGlPostingService
             || $this->settings->get('modules.accounting', false) !== true;
     }
 
-    /** @return array{0: string, 1: string, 2: bool} inventoryCode, offsetCode, inventoryIsDebit */
+    /** @return array{0: string, 1: string, 2: bool, 3: string} inventoryCode, offsetCode, inventoryIsDebit, offsetSetting */
     private function mapping(StockMovementType $type, Item $item): array
     {
         $inventoryCode = $this->grnPosting->inventoryAccountCode($item);
@@ -253,27 +251,32 @@ class MovementGlPostingService
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.inventory_adjustment_code'),
                 true,  // DR inventory, CR COGS
+                'accounting.accounts.inventory_adjustment_code',
             ],
             StockMovementType::AdjustmentOut => [
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.inventory_adjustment_code'),
                 false, // DR COGS, CR inventory
+                'accounting.accounts.inventory_adjustment_code',
             ],
             StockMovementType::MaterialIssue,
             StockMovementType::Scrap => [
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.material_consumption_code'),
                 false, // DR consumption, CR inventory
+                'accounting.accounts.material_consumption_code',
             ],
             StockMovementType::ReturnToVendor => [
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.grni_code'),
                 false, // DR GRNI, CR inventory
+                'accounting.accounts.grni_code',
             ],
             StockMovementType::ProductionReceipt => [
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.material_consumption_code'),
                 true,  // DR inventory, CR consumption (reversal)
+                'accounting.accounts.material_consumption_code',
             ],
             // Left unmapped: a StockMovementType with no GL mapping means a new
             // enum case shipped without its posting rule. That is a developer

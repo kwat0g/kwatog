@@ -7,7 +7,6 @@ namespace App\Modules\ReturnManagement\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Invoice;
@@ -1879,10 +1878,8 @@ class ReturnRequestService
                     ->orderByDesc('id')
                     ->first();
             }
-            $settings = app(\App\Common\Services\SettingsService::class);
             $accountId = $billItem?->expense_account_id
-                ?? Account::query()->where('code', $settings->requiredString('accounting.accounts.purchase_return_expense_code'))->value('id')
-                ?? Account::query()->where('code', $settings->requiredString('accounting.default_expense_account_code'))->value('id');
+                ?? $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.purchase_return_expense_code');
             if (! $accountId) {
                 throw new BusinessRuleException('No accounting account is available for the supplier credit.');
             }
@@ -1986,8 +1983,8 @@ class ReturnRequestService
             throw new BusinessRuleException('Finance-only returns require explicit approval before credit.');
         }
         $rma->loadMissing(['items.product']);
-        $defaultRevenueId = Account::query()
-            ->where('code', $this->accountPolicies->revenue())->value('id');
+        $defaultRevenueId = $this->accountPolicies
+            ->controlAccountIdForSetting('accounting.default_sales_revenue_account_code');
         $hashids = app('hashids');
 
         $lines = [];

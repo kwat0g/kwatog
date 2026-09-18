@@ -95,7 +95,7 @@ export function TouchShell({
             className="text-secondary"
             onClick={async () => {
               await logout();
-              navigate('/login');
+               navigate('/sign-in');
             }}
           >
             Log out

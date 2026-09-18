@@ -64,4 +64,30 @@ class JournalEntryMutationContractTest extends TestCase
             );
         }
     }
+
+    public function test_automated_gl_writers_use_the_configured_account_policy(): void
+    {
+        $writers = [
+            'Modules/Accounting/Services/BillService.php',
+            'Modules/Accounting/Services/CreditNoteService.php',
+            'Modules/Accounting/Services/InvoiceService.php',
+            'Modules/Assets/Services/AssetService.php',
+            'Modules/Assets/Services/DepreciationService.php',
+            'Modules/HR/Services/FinalPayService.php',
+            'Modules/Inventory/Services/GrnGlPostingService.php',
+            'Modules/Inventory/Services/MovementGlPostingService.php',
+            'Modules/Payroll/Services/PayrollGlPostingService.php',
+            'Modules/ReturnManagement/Services/ReturnRequestService.php',
+            'Modules/SupplyChain/Services/DeliveryService.php',
+        ];
+
+        foreach ($writers as $relative) {
+            $source = File::get(app_path($relative));
+            $this->assertStringContainsString(
+                'AccountingAccountPolicyService',
+                $source,
+                "Automated GL writer does not use the configured account policy: {$relative}",
+            );
+        }
+    }
 }

@@ -235,6 +235,11 @@ class ApprovalService
         return in_array($user->id, $delegates, true);
     }
 
+    public function canUserActFor(User $user, string $roleSlug): bool
+    {
+        return $this->userMayActFor($user, $roleSlug);
+    }
+
     /**
      * Resolve the user id of whoever submitted this approvable, so approve()
      * and reject() can refuse self-action. Returns null if the submitter cannot

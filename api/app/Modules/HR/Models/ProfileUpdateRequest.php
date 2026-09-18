@@ -7,6 +7,7 @@ namespace App\Modules\HR\Models;
 use App\Common\Traits\HasHashId;
 use App\Common\Traits\HasAuditLog;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Casts\EncryptedArrayCast;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -30,11 +31,27 @@ class ProfileUpdateRequest extends Model
     ];
 
     protected $casts = [
-        'changes'             => 'array',
+        'changes'             => EncryptedArrayCast::class,
         'requires_finance'    => 'boolean',
         'reviewed_at'         => 'datetime',
         'finance_reviewed_at' => 'datetime',
     ];
+
+    /**
+     * Expose the decrypted `changes` array to the audit trail so per-key
+     * redaction runs (HasAuditLog cannot decode a custom cast class). The
+     * encrypted cast keeps the column ciphertext at rest; the audit row stores
+     * the redacted array, exactly as it did before encryption.
+     *
+     * @return array<string, mixed>
+     */
+    public function auditAttributeSnapshot(): array
+    {
+        // getAttribute(), not $this->changes: Eloquent's inherited protected
+        // $changes array (its dirty-attribute bag) shadows the attribute name
+        // inside the class scope, so $this->changes reads [] here.
+        return ['changes' => $this->getAttribute('changes')];
+    }
 
     public function employee(): BelongsTo
     {

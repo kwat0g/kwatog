@@ -142,7 +142,7 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
 
  const requestUrl = error.config?.url ?? '';
  const isBootstrap = requestUrl.endsWith('/auth/user');
- const isLoginAttempt = requestUrl.endsWith('/auth/login');
+  const isLoginAttempt = requestUrl.endsWith('/auth/login') || requestUrl.endsWith('/auth/sign-in');
 
  // Pages and mutations own their *validation* UI; the interceptor owns the
  // failures a page cannot diagnose. See `interceptorOwnsToast`.
@@ -176,12 +176,12 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  // • the login attempt itself (form handles its own error UI)
  // • the bootstrap call from AuthGuard (AuthGuard handles routing)
  if (!isLoginAttempt && !isBootstrap) {
- if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/sign-in' && window.location.pathname !== '/login') {
  // Defense in depth: the hard navigation below normally wipes
  // in-memory state, but clearing the query cache here guarantees no
  // stale cross-user data survives (e.g. a future soft-nav refactor).
  queryClient.clear();
- window.location.href = '/login';
+  window.location.href = '/sign-in';
  }
  }
  break;

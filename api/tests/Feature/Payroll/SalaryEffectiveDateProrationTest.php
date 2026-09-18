@@ -87,7 +87,7 @@ class SalaryEffectiveDateProrationTest extends TestCase
             'role_id' => Role::query()->where('slug', 'production_manager')->value('id'),
         ]);
         $approver = User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
         ]);
 
         $adjustment = $this->adjustments->request($employee, $to + [

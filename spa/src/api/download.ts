@@ -70,7 +70,7 @@ export async function downloadAuthenticatedFile(
  } catch (error) {
  popup?.close();
  const axiosError = error as AxiosError;
- // The shared client is already moving an expired session to /login.
+  // The shared client is already moving an expired session to /sign-in.
  if (axiosError.response?.status !== 401) {
  toast.error(
  (await blobErrorMessage(axiosError))

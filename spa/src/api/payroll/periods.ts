@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { BankFilePreview, CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollPipeline, PayrollScopePreview, PayrollVarianceReport, ProofType } from '@/types/payroll';
+import type { BankFilePreview, CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollScopePreview, PayrollVarianceReport, ProofType } from '@/types/payroll';
 
 export interface PeriodListParams extends ListParams {
  status?: string;
@@ -114,11 +114,6 @@ export const periodsApi = {
  client.delete(`/payroll-periods/${periodId}/disbursement-proofs/${proofId}`),
  restoreProof: (periodId: string, proofId: string) =>
  client.patch(`/payroll-periods/${periodId}/disbursement-proofs/${proofId}/restore`),
-
- // CA3 — Payroll pipeline (full-year view) — kept: referenced by the retained
- // pipeline.tsx page file (dead code per hide-access policy).
- pipeline: (year?: number) =>
- client.get<{ data: PayrollPipeline }>('/payroll-periods/pipeline', { params: year ? { year } : undefined }).then((r) => r.data.data),
 
  // BIR 2316 alphalist moved to statutoryApi.bir2316Alphalist (2026-08-08) —
  // the export lives on the Statutory Exports page behind payroll.statutory.export.

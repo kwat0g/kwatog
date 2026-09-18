@@ -13,6 +13,15 @@ Schedule::command('purchasing:close-due-rfqs')
     ->withoutOverlapping(5)
     ->onOneServer();
 
+// Trace §7.9 — automatic recovery for GRNs whose incoming-QC handoff failed
+// or never fired. The handoff listener is idempotent; a failed retry simply
+// re-records manual_required with a fresh message. Complements the operator
+// POST /grn/{id}/retry-incoming-qc route.
+Schedule::command('grn:retry-pending-incoming-qc --limit=50')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 Artisan::command('inspire', function (): void {
     echo Inspiring::quote().PHP_EOL;
 })->purpose('Display an inspiring quote');

@@ -29,8 +29,9 @@ export interface Asset {
   amount: string | null;
   date: string | null;
   reason: string | null;
-  requested_by: { id: string; name: string } | null;
-  can_cancel: boolean;
+   requested_by: { id: string; name: string } | null;
+   can_cancel: boolean;
+   can_approve: boolean;
  } | null;
  approval_records?: Array<{
   step_order: number;

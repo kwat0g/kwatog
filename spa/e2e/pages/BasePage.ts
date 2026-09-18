@@ -55,6 +55,6 @@ export class BasePage {
   async logout(): Promise<void> {
     await this.topbar.getByRole('button', { name: /user|account|profile/i }).first().click();
     await this.page.getByText(/sign out|logout/i).first().click();
-    await this.page.waitForURL('**/login');
+    await this.page.waitForURL('**/sign-in');
   }
 }

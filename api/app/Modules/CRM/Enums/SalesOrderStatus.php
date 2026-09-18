@@ -12,6 +12,8 @@ enum SalesOrderStatus: string
     case PartiallyDelivered  = 'partially_delivered';
     case Delivered           = 'delivered';
     case Invoiced            = 'invoiced';
+    case Paid                = 'paid';
+    case Closed              = 'closed';
     case Cancelled           = 'cancelled';
 
     public static function values(): array
@@ -28,6 +30,8 @@ enum SalesOrderStatus: string
             self::PartiallyDelivered => 'Partially Delivered',
             self::Delivered          => 'Delivered',
             self::Invoiced           => 'Invoiced',
+            self::Paid               => 'Paid',
+            self::Closed             => 'Closed',
             self::Cancelled          => 'Cancelled',
         };
     }

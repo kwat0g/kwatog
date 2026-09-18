@@ -125,6 +125,11 @@ describe('response error interceptor', () => {
     expect(queryClient.clear).not.toHaveBeenCalled();
   });
 
+  it('does not redirect on the unified sign-in attempt itself', async () => {
+    await expect(reject({ status: 401, url: '/auth/sign-in', method: 'post' })).rejects.toBeTruthy();
+    expect(queryClient.clear).not.toHaveBeenCalled();
+  });
+
   it('honours an explicit opt-out', async () => {
     const config = {
       method: 'get',

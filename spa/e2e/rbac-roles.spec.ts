@@ -34,7 +34,6 @@ const GATED_PAGES: Record<string, { url: string; permission: string; }> = {
 
   'payroll periods':          { url: '/payroll/periods',           permission: 'payroll.periods.view' },
   'payroll adjustments':      { url: '/payroll/adjustments',       permission: 'payroll.adjustments.create' },
-  'payroll pipeline':         { url: '/payroll/pipeline',          permission: 'payroll.periods.view' },
   'payroll statutory':        { url: '/payroll/statutory',         permission: 'payroll.statutory.export' },
 
   'accounting coa':           { url: '/accounting/coa',            permission: 'accounting.coa.view' },
@@ -244,6 +243,25 @@ test.describe('Permission guards — Purchasing boundaries', () => {
     const bp = new BasePage(page);
     await loginAs(page, 'warehouse', '/purchasing/purchase-orders');
     await bp.expectDeniedAsNotFound();
+  });
+
+  test('purchasing officer sees procurement inventory context, not warehouse execution', async ({ page }) => {
+    const bp = new BasePage(page);
+    await loginAs(page, 'purchasing', '/purchasing/purchase-orders');
+    await expect(bp.deniedPageText).not.toBeVisible();
+
+    for (const path of ['/inventory/items', '/inventory/grn', '/inventory/stock-levels']) {
+      await expect(page.locator(`aside a[href="${path}"]`)).toHaveCount(1);
+    }
+    for (const path of [
+      '/inventory/material-issues',
+      '/inventory/stock-adjustments',
+      '/inventory/warehouse-map',
+      '/inventory/transfer-orders',
+      '/inventory/picking',
+    ]) {
+      await expect(page.locator(`aside a[href="${path}"]`)).toHaveCount(0);
+    }
   });
 });
 

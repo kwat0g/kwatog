@@ -58,6 +58,21 @@ class EffectiveDatedBracketsTest extends TestCase
         $this->assertCount(1, $rows);
     }
 
+    public function test_delete_and_restore_update_the_effective_schedule_source(): void
+    {
+        $this->sssRow('2025-01-01', 150.00, 300.00);
+        $svc = app(GovernmentContributionTableService::class);
+        $row = GovernmentContributionTable::query()->firstOrFail();
+
+        $this->assertCount(1, $svc->bracketsEffectiveOn(ContributionAgency::Sss, '2025-06-01'));
+        $svc->delete($row);
+        $this->assertSoftDeleted('government_contribution_tables', ['id' => $row->id]);
+
+        $svc->restore($row);
+        $this->assertDatabaseHas('government_contribution_tables', ['id' => $row->id, 'deleted_at' => null]);
+        $this->assertCount(1, $svc->bracketsEffectiveOn(ContributionAgency::Sss, '2025-06-01'));
+    }
+
     public function test_sss_service_uses_schedule_in_force_on_pay_date(): void
     {
         $this->sssRow('2024-01-01', 100.00, 200.00);

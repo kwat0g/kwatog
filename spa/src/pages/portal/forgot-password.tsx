@@ -16,7 +16,7 @@ export default function PortalForgotPasswordPage({ portalType }: { portalType: P
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const label = portalType === 'customer' ? 'Customer' : 'Supplier';
-  const loginPath = `/portal/${portalType}/login`;
+   const loginPath = '/sign-in';
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -51,7 +51,7 @@ export default function PortalForgotPasswordPage({ portalType }: { portalType: P
           <LuCircleCheck size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
           <h2 className="mt-3 font-display text-lg text-primary">Check your inbox</h2>
           <p className="mt-1 text-[13px] text-secondary">If an account exists, you&apos;ll receive a reset link shortly.</p>
-          <Link to={loginPath} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+           <Link to={loginPath} state={{ realm: portalType }} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
             <LuArrowLeft size={14} />
             Back to sign in
           </Link>
@@ -71,7 +71,7 @@ export default function PortalForgotPasswordPage({ portalType }: { portalType: P
             Send reset link
           </Button>
           <div className="mt-1 text-center text-xs text-muted">
-            <Link to={loginPath} className="inline-flex items-center gap-1 underline-offset-2 transition-colors hover:text-primary hover:underline">
+             <Link to={loginPath} state={{ realm: portalType }} className="inline-flex items-center gap-1 underline-offset-2 transition-colors hover:text-primary hover:underline">
               <LuArrowLeft size={12} />
               Back to sign in
             </Link>

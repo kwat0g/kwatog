@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
@@ -68,6 +69,7 @@ class LoanService
     {
         $q = EmployeeLoan::query()->with([
             'employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id',
+            'employee.user:id,employee_id',
             'approvalRecords',
         ]);
         if (!empty($filters['employee_id'])) {
@@ -91,14 +93,13 @@ class LoanService
         // Permission grants the operation; this policy grants the rows.
         $q = $this->access->visibleTo($q, $user);
 
-        return $q->with(['employee:id,employee_no,first_name,last_name,department_id'])
-            ->orderByDesc('created_at')
+        return $q->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function show(EmployeeLoan $loan): EmployeeLoan
     {
-        return $loan->load(['employee', 'payments', 'approvalRecords.approver:id,name']);
+        return $loan->load(['employee.user:id,employee_id', 'payments', 'approvalRecords.approver:id,name']);
     }
 
     /** @return array{principal_max:string, has_active:bool, max_pay_periods:int} */
@@ -300,6 +301,15 @@ class LoanService
             if (! $this->access->canDecide($user, $authoritative)) {
                 throw new BusinessRuleException('You do not have permission to cancel this loan within your row scope.');
             }
+            // Retire the open approval step so a cancelled loan does not stay on
+            // the approval board as a live card that 422s on action.
+            ApprovalRecord::query()
+                ->where('approvable_type', $authoritative->getMorphClass())
+                ->where('approvable_id', $authoritative->getKey())
+                ->where('is_current', true)
+                ->whereIn('action', ['pending', 'skipped'])
+                ->update(['action' => 'superseded', 'is_current' => false]);
+
             $this->stateMachine->transition($authoritative, LoanStatus::Cancelled);
             $authoritative->save();
             return $authoritative->fresh(['employee', 'payments']);

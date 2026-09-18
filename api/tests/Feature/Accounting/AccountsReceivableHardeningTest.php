@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Accounting;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Account;
@@ -210,6 +211,82 @@ class AccountsReceivableHardeningTest extends TestCase
         }
 
         $this->assertSame(0, Invoice::query()->count(), 'no invoice may be created from a refused amount');
+    }
+
+    public function test_invoice_refuses_an_inactive_customer_before_creating_a_draft(): void
+    {
+        $user = $this->admin();
+        $customer = $this->customer(['is_active' => false]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not active');
+
+        app(InvoiceService::class)->create([
+            'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Inactive customer gate',
+            'date' => '2026-04-01',
+            'due_date' => '2026-04-30',
+            'vat_classification' => 'vat_exempt',
+            'items' => [[
+                'revenue_account_id' => $this->revenueAccountHashId(),
+                'description' => 'Wiper bushings',
+                'quantity' => '1',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+    }
+
+    public function test_prebill_refuses_when_the_invoice_would_exceed_customer_credit_limit(): void
+    {
+        $user = $this->admin();
+        $customer = $this->customer(['credit_limit' => '100.00']);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('Credit limit exceeded');
+
+        app(InvoiceService::class)->create([
+            'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Credit limit gate',
+            'date' => '2026-04-01',
+            'due_date' => '2026-04-30',
+            'vat_classification' => 'vat_exempt',
+            'items' => [[
+                'revenue_account_id' => $this->revenueAccountHashId(),
+                'description' => 'Wiper bushings',
+                'quantity' => '1',
+                'unit_price' => '101.00',
+            ]],
+        ], $user);
+    }
+
+    public function test_invoice_finalize_rechecks_customer_activity_after_draft_creation(): void
+    {
+        $user = $this->admin();
+        $customer = $this->customer();
+        $service = app(InvoiceService::class);
+        $draft = $service->create([
+            'customer_id' => $customer->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Finalization activity gate',
+            'date' => '2026-04-01',
+            'due_date' => '2026-04-30',
+            'vat_classification' => 'vat_exempt',
+            'items' => [[
+                'revenue_account_id' => $this->revenueAccountHashId(),
+                'description' => 'Wiper bushings',
+                'quantity' => '1',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+
+        $customer->forceFill(['is_active' => false])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not active');
+
+        $service->finalize($draft, $user);
     }
 
     public function test_collection_amount_rejects_the_same_shapes(): void

@@ -23,6 +23,8 @@ class DepartmentSeeder extends Seeder
             ['code' => 'MAINT', 'name' => 'Maintenance & Engineering'],
             ['code' => 'MOLD',  'name' => 'Mold Department'],
             ['code' => 'IMPEX', 'name' => 'Import/Export'],
+            ['code' => 'SALES', 'name' => 'Sales & Marketing'],
+            ['code' => 'CS',    'name' => 'Customer Service'],
             ['code' => 'ADMIN', 'name' => 'Admin & General Affairs'],
             // Owns the IT clearance items (equipment returned, accounts
             // disabled) so the per-department signing gate can resolve them.

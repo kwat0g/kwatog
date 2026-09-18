@@ -521,11 +521,17 @@ class InspectionService
                 $m->save();
             }
 
-            // Recompute defect_count and bump status to in_progress.
+            // Recompute defect_count and bump status to in_progress. A defect is
+            // a defective SAMPLE UNIT (one Sample index), not a failed
+            // parameter row: a single part failing three dimensions is one
+            // defect against Ac, not three. Counting rows made a good lot fail
+            // AQL whenever one sampled unit had multiple out-of-tolerance
+            // measurements.
             $defects = InspectionMeasurement::query()
                 ->where('inspection_id', $lockedInspection->id)
                 ->where('is_pass', false)
-                ->count();
+                ->distinct()
+                ->count('sample_index');
 
             $this->states->assertAllowed($lockedInspection, InspectionStatus::InProgress);
             $lockedInspection->forceFill([
@@ -577,7 +583,9 @@ class InspectionService
             }
 
             $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-            $defects = $rows->where('is_pass', false)->count();
+            // AQL counts DEFECTIVE UNITS: a sample unit (one Sample index) that
+            // failed at least one parameter is one defect. See recordMeasurements().
+            $defects = $rows->where('is_pass', false)->pluck('sample_index')->unique()->count();
             $accept = (int) $lockedInspection->accept_count;
 
             $passed = ! $criticalFail && $defects <= $accept;

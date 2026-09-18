@@ -17,9 +17,9 @@ class DemoAccountSeeder extends Seeder
 {
     private const PASSWORD = 'password';
 
-    /** @var array<int, array{email:string,name:string,role:string,dept:?string}> */
+    /** @var array<int, array{email:string,name:string,role:string,dept:string}> */
     private array $accounts = [
-        ['email' => 'admin@ogami.test',       'name' => 'System Administrator', 'role' => 'system_admin',       'dept' => null],
+        ['email' => 'admin@ogami.test',       'name' => 'System Administrator', 'role' => 'system_admin',       'dept' => 'IT'],
         ['email' => 'hr@ogami.test',          'name' => 'Maria Santos',         'role' => 'hr_officer',         'dept' => 'HR'],
         ['email' => 'finance@ogami.test',     'name' => 'Ana Reyes',            'role' => 'finance_officer',    'dept' => 'FIN'],
         // Distinct same-role checker for Finance-maker workflows.
@@ -35,13 +35,14 @@ class DemoAccountSeeder extends Seeder
         // Replaces the old system_admin stand-in in the approval chains.
         ['email' => 'vp@ogami.test',          'name' => 'Kenji Watanabe',       'role' => 'vice_president',     'dept' => 'EXEC'],
         ['email' => 'employee@ogami.test',    'name' => 'Manuel Cruz',          'role' => 'employee',           'dept' => 'PROD'],
-        ['email' => 'crm@ogami.test',         'name' => 'Sara Sales',           'role' => 'sales_officer',      'dept' => null],
+        ['email' => 'crm@ogami.test',         'name' => 'Sara Sales',           'role' => 'sales_officer',      'dept' => 'SALES'],
         ['email' => 'warehouse@ogami.test',   'name' => 'Carlos Mendoza',       'role' => 'warehouse_staff',    'dept' => 'WH'],
         ['email' => 'qc@ogami.test',          'name' => 'Rosa Villareal',       'role' => 'qc_inspector',       'dept' => 'QC'],
         ['email' => 'maintenance@ogami.test', 'name' => 'Juan Bautista',        'role' => 'maintenance_tech',   'dept' => 'MAINT'],
         ['email' => 'impex@ogami.test',       'name' => 'Lisa Yamamoto',        'role' => 'impex_officer',      'dept' => 'IMPEX'],
         ['email' => 'depthead@ogami.test',    'name' => 'Roberto Santos',       'role' => 'department_head',    'dept' => 'PROD'],
         ['email' => 'driver@ogami.test',      'name' => 'Nestor Flores',        'role' => 'driver',             'dept' => 'WH'],
+        ['email' => 'customerservice@ogami.test', 'name' => 'Maya Customer Service', 'role' => 'customer_service_officer', 'dept' => 'CS'],
     ];
 
     public function run(): void
@@ -50,7 +51,7 @@ class DemoAccountSeeder extends Seeder
 
         foreach ($this->accounts as $index => $account) {
             $role = Role::where('slug', $account['role'])->firstOrFail();
-            $employee = $account['dept'] ? $this->employeeFor($account, $index) : null;
+            $employee = $this->employeeFor($account, $index);
 
             User::updateOrCreate(
                 ['email' => $account['email']],
@@ -58,7 +59,7 @@ class DemoAccountSeeder extends Seeder
                     'name'                 => $account['name'],
                     'password'             => Hash::make(self::PASSWORD),
                     'role_id'              => $role->id,
-                    'employee_id'          => $employee?->id,
+                    'employee_id'          => $employee->id,
                     'is_active'            => true,
                     'must_change_password' => false,
                     'password_changed_at'  => now(),
@@ -72,7 +73,7 @@ class DemoAccountSeeder extends Seeder
     }
 
     /**
-     * @param array{email:string,name:string,role:string,dept:?string} $account
+     * @param array{email:string,name:string,role:string,dept:string} $account
      */
     private function employeeFor(array $account, int $index): Employee
     {
@@ -100,7 +101,7 @@ class DemoAccountSeeder extends Seeder
                 'first_name'           => $first,
                 'last_name'            => $last,
                 'birth_date'           => now()->subYears(30 + ($index % 12))->toDateString(),
-                'gender'               => in_array($first, ['Maria', 'Ana', 'Elena', 'Rosa', 'Lisa'], true) ? 'female' : 'male',
+                'gender'               => in_array($first, ['Maria', 'Ana', 'Elena', 'Rosa', 'Lisa', 'Maya'], true) ? 'female' : 'male',
                 'civil_status'         => 'single',
                 'nationality'          => 'Filipino',
                 'mobile_number'        => '+63917' . str_pad((string) (1000000 + $index), 7, '0', STR_PAD_LEFT),

@@ -9,10 +9,9 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
-use App\Common\Services\SettingsService;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\Money;
-use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetCategory;
@@ -33,8 +32,8 @@ class AssetService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly AccountingPeriodService $periods,
-        private readonly SettingsService $settings,
         private readonly ApprovalService $approvals,
         private readonly DepreciationService $depreciation,
     ) {}
@@ -404,11 +403,12 @@ class AssetService
             $accumulated = Money::round2((string) $locked->accumulated_depreciation);
             $bookValue = Money::clampMin(Money::sub($cost, $accumulated), Money::zero());
 
-            $cashAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cash_code'))->firstOrFail();
-            $accumAcct = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
-            $assetAcct = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cost_code'))->firstOrFail();
-            $lossAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_loss_code'))->firstOrFail();
-            $gainAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_gain_code'))->firstOrFail();
+            $cashAccountId = $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.asset_cash_code');
+            $accumulatedDepreciationAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.asset_accumulated_depreciation_code');
+            $assetCostAccountId = $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.asset_cost_code');
+            $lossAccountId = $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.asset_disposal_loss_code');
+            $gainAccountId = $this->accountPolicies->controlAccountIdForSetting('accounting.accounts.asset_disposal_gain_code');
 
             // Only non-zero lines are journalised. JournalEntryService rejects a
             // line whose debit and credit are both zero, so emitting the cash or
@@ -421,21 +421,21 @@ class AssetService
             // stays balanced because acquisition cost is credited either way.
             $lines = [];
             if (Money::gt($disposalAmount, Money::zero())) {
-                $lines[] = ['account_id' => $cashAcct->id, 'debit' => $disposalAmount, 'credit' => Money::zero(), 'description' => 'Disposal proceeds'];
+                $lines[] = ['account_id' => $cashAccountId, 'debit' => $disposalAmount, 'credit' => Money::zero(), 'description' => 'Disposal proceeds'];
             }
             if (Money::gt($accumulated, Money::zero())) {
-                $lines[] = ['account_id' => $accumAcct->id, 'debit' => $accumulated, 'credit' => Money::zero(), 'description' => 'Reverse accumulated depreciation'];
+                $lines[] = ['account_id' => $accumulatedDepreciationAccountId, 'debit' => $accumulated, 'credit' => Money::zero(), 'description' => 'Reverse accumulated depreciation'];
             }
             if (Money::lt($disposalAmount, $bookValue)) {
                 $loss = Money::sub($bookValue, $disposalAmount);
-                $lines[] = ['account_id' => $lossAcct->id, 'debit' => $loss, 'credit' => Money::zero(), 'description' => 'Loss on disposal'];
+                $lines[] = ['account_id' => $lossAccountId, 'debit' => $loss, 'credit' => Money::zero(), 'description' => 'Loss on disposal'];
             }
             if (Money::gt($cost, Money::zero())) {
-                $lines[] = ['account_id' => $assetAcct->id, 'debit' => Money::zero(), 'credit' => $cost, 'description' => 'Remove asset at cost'];
+                $lines[] = ['account_id' => $assetCostAccountId, 'debit' => Money::zero(), 'credit' => $cost, 'description' => 'Remove asset at cost'];
             }
             if (Money::gt($disposalAmount, $bookValue)) {
                 $gain = Money::sub($disposalAmount, $bookValue);
-                $lines[] = ['account_id' => $gainAcct->id, 'debit' => Money::zero(), 'credit' => $gain, 'description' => 'Gain on disposal'];
+                $lines[] = ['account_id' => $gainAccountId, 'debit' => Money::zero(), 'credit' => $gain, 'description' => 'Gain on disposal'];
             }
             if ($lines === []) {
                 // Reachable only for a zero-cost, zero-proceeds, never-depreciated

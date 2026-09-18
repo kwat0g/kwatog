@@ -3,11 +3,11 @@ import { test, expect, type Browser, type BrowserContext, type Page } from '@pla
 const PASSWORD = 'password';
 
 async function login(page: Page, email: string): Promise<void> {
-  await page.goto('/login');
+  await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).not.toHaveURL(/\/login$/, { timeout: 20_000 });
+  await expect(page).not.toHaveURL(/\/sign-in$/, { timeout: 20_000 });
   await page.locator('#main-content').waitFor({ state: 'attached', timeout: 20_000 });
 }
 

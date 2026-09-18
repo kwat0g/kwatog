@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Dashboard\Enums\KpiDirection;
 use App\Modules\Dashboard\Enums\KpiStatus;
 use App\Modules\Dashboard\Enums\KpiTrend;
@@ -20,6 +22,10 @@ use Illuminate\Support\Str;
 
 class KpiSnapshotService
 {
+    public function __construct(
+        private readonly BudgetConsumptionService $budgetConsumption,
+    ) {}
+
     /**
      * The read boundary for each KPI module.
      *
@@ -514,40 +520,24 @@ class KpiSnapshotService
     /**
      * Budgeted vs actual for the fiscal YEAR, as a percentage.
      *
-     * The budgeted column is `annual_total` — the generated-always column
-     * migration 0162 defines as jan+feb+…+dec. There is no `budgeted_amount`
-     * column, so the previous name aborted the monthly run. `annual_total` is
-     * the natural counterpart to `actual_total`, which the other half of this
-     * ratio already reads.
-     *
-     * NOTE (metric contract, not a schema issue): `$month` is deliberately
-     * unused because `actual_total` is a single annual figure, so this KPI is a
-     * year-to-date ratio and every month of a fiscal year snapshots the same
-     * value. Narrowing it to a month would need a month-resolved actuals
-     * source, which this table does not carry.
+     * The budgeted column is `annual_total`, while actuals and commitments come
+     * from the same live ledger reader used by the budget dashboard. `$month`
+     * remains part of the KPI interface; consumption is fiscal-year based.
      */
     private function computeBudgetUtilization(int $year, int $month): ?float
     {
-        if (! DB::getSchemaBuilder()->hasTable('budget_line_items')) {
-            return null;
-        }
-        $totalBudget = (float) DB::table('budget_line_items')
-            ->join('budgets', 'budget_line_items.budget_id', '=', 'budgets.id')
-            ->join('fiscal_years', 'budgets.fiscal_year_id', '=', 'fiscal_years.id')
-            ->where('fiscal_years.year', $year)
-            ->sum('budget_line_items.annual_total');
-
-        if ($totalBudget == 0) {
+        if (! DB::getSchemaBuilder()->hasTable('budget_line_items')
+            || ! DB::getSchemaBuilder()->hasTable('budgets')
+            || ! DB::getSchemaBuilder()->hasTable('fiscal_years')) {
             return null;
         }
 
-        $totalActual = (float) DB::table('budget_line_items')
-            ->join('budgets', 'budget_line_items.budget_id', '=', 'budgets.id')
-            ->join('fiscal_years', 'budgets.fiscal_year_id', '=', 'fiscal_years.id')
-            ->where('fiscal_years.year', $year)
-            ->sum('budget_line_items.actual_total');
+        $fiscalYear = FiscalYear::query()->where('year', $year)->first();
+        if (! $fiscalYear) {
+            return null;
+        }
 
-        return round(($totalActual / $totalBudget) * 100, 2);
+        return (float) $this->budgetConsumption->dashboardTotals($fiscalYear)['utilization_pct'];
     }
 
     private function computeNcrClosureDays(int $year, int $month): ?float

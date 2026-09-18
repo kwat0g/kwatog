@@ -73,6 +73,7 @@ class ChartOfAccountsSeeder extends Seeder
             // ─── Revenue ───────────────────────────────────
             ['4010', 'Sales Revenue',                'revenue', 'credit', '4000'],
             ['4020', 'Other Income',                 'revenue', 'credit', '4000'],
+            ['4040', 'Sales Discounts',              'revenue', 'debit',  '4000'],
 
             // ─── COGS ──────────────────────────────────────
             ['5010', 'Direct Materials',             'expense', 'debit', '5000'],

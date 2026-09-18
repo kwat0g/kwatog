@@ -100,6 +100,7 @@ Use separate browser profiles. Internal authentication uses one HTTP-only sessio
 | Account | Role | Main responsibility |
 |---|---|---|
 | `crm@ogami.test` | Sales Officer | Create and confirm Sales Orders |
+| `customerservice@ogami.test` | Customer Service Officer | Maintain customers and handle complaints and returns |
 | `ppc@ogami.test` | PPC Head | View MRP plans, run MRP, review shortages |
 | `depthead@ogami.test` | Department Head | Create PRs for the user's own department |
 | `purchasing@ogami.test` | Purchasing Officer | Create PRs, submit PRs, convert PRs to POs, submit and send POs |

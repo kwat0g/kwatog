@@ -32,7 +32,7 @@ test.describe('Error pages', () => {
     await loginAs(page, 'employee', '/admin/users');
     const bp = new BasePage(page);
     await bp.expectDeniedAsNotFound();
-    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/sign-in/);
   });
 
   test('500 server error is surfaced from API response', async ({ page }) => {
@@ -60,7 +60,7 @@ test.describe('Error pages', () => {
 
 test.describe('Auth flow', () => {
 
-  test('unauthenticated user is redirected to /login', async ({ page }) => {
+  test('unauthenticated user is redirected to /sign-in', async ({ page }) => {
     // No mockAuth — the SPA's AuthGuard should redirect
     await page.route('**/sanctum/csrf-cookie', async (route) => {
       await route.fulfill({ status: 204 });
@@ -71,9 +71,9 @@ test.describe('Auth flow', () => {
     });
 
     await page.goto('/dashboard/default');
-    // AuthGuard should redirect to /login
-    await page.waitForURL('**/login', { timeout: 10000 });
-    await expect(page).toHaveURL(/\/login/);
+    // AuthGuard should redirect to /sign-in
+    await page.waitForURL('**/sign-in', { timeout: 10000 });
+    await expect(page).toHaveURL(/\/sign-in/);
   });
 
   test('login page has email and password fields', async ({ page }) => {
@@ -83,11 +83,11 @@ test.describe('Auth flow', () => {
     await page.route('**/api/v1/auth/user', async (route) => {
       await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Unauthenticated.' }) });
     });
-    await page.route('**/api/v1/auth/login', async (route) => {
+    await page.route('**/api/v1/auth/sign-in', async (route) => {
       await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ message: 'Invalid credentials.' }) });
     });
 
-    await page.goto('/login');
+    await page.goto('/sign-in');
     await page.waitForLoadState('networkidle');
 
     // The password input — use getByPlaceholder or input[type=password] to avoid
@@ -147,7 +147,7 @@ test.describe('HashID obfuscation', () => {
 
     await loginAs(page, 'hr', '/hr/employees/1');
     // The page should NOT redirect to login (it's still an authenticated page)
-    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/sign-in/);
     // Wait for the actual query error state rather than inspecting a lazy-load
     // fallback whose text length varies with bundle timing.
     await expect(page.getByRole('heading', { name: 'Employee not found' })).toBeVisible();

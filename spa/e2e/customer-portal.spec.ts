@@ -22,6 +22,9 @@ async function mockCustomerSession(page: import('@playwright/test').Page, mustCh
   await page.route('**/sanctum/csrf-cookie', async (route) => {
     await route.fulfill({ status: 204 });
   });
+  await page.route('**/api/v1/auth/user', async (route) => {
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Unauthenticated.' }) });
+  });
   await page.route('**/api/v1/landing/contact', async (route) => {
     await route.fulfill({
       status: 200,
@@ -36,14 +39,12 @@ async function mockCustomerSession(page: import('@playwright/test').Page, mustCh
       body: JSON.stringify({ data: { functional_currency_code: 'PHP' } }),
     });
   });
-  await page.route('**/api/v1/b2b/customer/login', async (route) => {
+  await page.route('**/api/v1/auth/sign-in', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          user: { ...CUSTOMER, must_change_password: mustChangePassword },
-        },
+        data: { realm: 'customer', must_change_password: mustChangePassword, user: null },
       }),
     });
   });
@@ -111,7 +112,7 @@ async function mockCustomerSession(page: import('@playwright/test').Page, mustCh
 }
 
 async function signIn(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto('/portal/customer/login');
+  await page.goto('/sign-in');
   await page.getByLabel('Email').fill(CUSTOMER.email);
   await page.getByLabel('Password', { exact: true }).fill('CustomerPass-1!');
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -132,7 +133,7 @@ test.describe('customer portal', () => {
     );
 
     await page.getByRole('button', { name: 'Sign out' }).click();
-    await expect(page).toHaveURL(/\/portal\/customer\/login$/);
+    await expect(page).toHaveURL(/\/sign-in$/);
   });
 
   test('shows scheduled delivery dates and paginates customer lists', async ({ page }) => {

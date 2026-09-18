@@ -14,9 +14,9 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
+use App\Common\Exceptions\ForbiddenActionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -121,7 +121,11 @@ class PoVendorSodTest extends TestCase
         $po = $this->makePo($svc, $poMaker, $vendor);
         $submitted = $svc->submit($po);
 
-        $this->expectException(HttpException::class);
+        // 2026-09-18 — the guard now throws the module's named
+        // ForbiddenActionException instead of abort(403). The message is
+        // unchanged; the type is what matters: a RuntimeException the
+        // bulk-approve skip arm and the shared 403 renderer both recognise.
+        $this->expectException(ForbiddenActionException::class);
         $this->expectExceptionMessage('segregation of duties');
         $svc->approve($submitted->fresh(), $vendorCreator);
     }

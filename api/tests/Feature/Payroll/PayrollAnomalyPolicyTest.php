@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollAnomalyType;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAnomalyFlag;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollAnomalyService;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,5 +50,18 @@ class PayrollAnomalyPolicyTest extends TestCase
             ->where('payroll_id', $payroll->id)
             ->where('flag_type', $type->value)
             ->exists();
+    }
+
+    public function test_finalize_refuses_when_anomaly_detection_failed(): void
+    {
+        $period = PayrollPeriod::factory()->create([
+            'status' => 'approved',
+            'anomaly_detection_failed' => true,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('anomaly detection failed');
+
+        app(PayrollPeriodService::class)->finalize($period, User::factory()->create());
     }
 }

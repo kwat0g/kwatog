@@ -17,6 +17,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,6 +41,7 @@ class ConfiguredControlAccountTypeTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
+        $this->seed(SettingsSeeder::class);
     }
 
     public function test_each_control_account_role_declares_its_required_type(): void
@@ -51,6 +53,28 @@ class ConfiguredControlAccountTypeTest extends TestCase
         $this->assertSame(AccountType::Liability, $policy->typeFor($policy->vatOutput()));
         $this->assertSame(AccountType::Asset, $policy->typeFor($policy->vatInput()));
         $this->assertSame(AccountType::Revenue, $policy->typeFor($policy->discount()));
+    }
+
+    public function test_sales_discount_uses_a_dedicated_revenue_account(): void
+    {
+        $policy = app(AccountingAccountPolicyService::class);
+
+        $this->assertNotSame($policy->revenue(), $policy->discount());
+        $this->assertSame(
+            Account::query()->where('code', $policy->discount())->value('id'),
+            $policy->controlAccountIdForSetting('accounting.accounts.discount_code'),
+        );
+    }
+
+    public function test_configured_account_resolution_rejects_a_wrongly_typed_payroll_mapping(): void
+    {
+        app(SettingsService::class)->set('accounting.accounts.salary_expense_code', '1010', 'accounting');
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('Account 1010 must be of type expense.');
+
+        app(AccountingAccountPolicyService::class)
+            ->controlAccountIdForSetting('accounting.accounts.salary_expense_code');
     }
 
     public function test_a_code_this_policy_does_not_own_has_no_required_type(): void

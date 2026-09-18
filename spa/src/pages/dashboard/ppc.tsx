@@ -354,8 +354,8 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
  </tr>
  </thead>
  <tbody>
- {shortages.map((s) => (
- <tr key={s.item_code} className={trCls}>
+  {shortages.map((s, index) => (
+  <tr key={`${s.item_code}-${index}`} className={trCls}>
  <Td>
  <span className="font-mono text-xs">{s.item_code}</span>
  <span className="text-muted ml-1">{s.item_name}</span>

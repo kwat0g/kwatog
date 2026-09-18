@@ -6,6 +6,12 @@ namespace App\Modules\Production\Listeners;
 
 use App\Common\Services\ChainListenerRunService;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SystemActorService;
+use App\Modules\Maintenance\Enums\MaintenancePriority;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
+use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Models\Machine;
@@ -17,6 +23,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 6 — Task 56. Fires on machine status transitions.
@@ -129,6 +136,12 @@ class HandleMachineBreakdown implements ShouldQueue
                 ),
             );
 
+            // Enter the breakdown into the maintenance queue. Previously a
+            // breakdown only paused the WO, opened a downtime row and notified;
+            // no corrective work order was ever created, so the notification was
+            // the only artefact and the machine downtime carried no MWO link.
+            $this->openCorrectiveWorkOrder($machine->fresh(), $pausedWo, $event->reason);
+
             $outcomeCode .= '_and_alert_staged';
         });
 
@@ -144,6 +157,56 @@ class HandleMachineBreakdown implements ShouldQueue
                 ? "Paused work order {$pausedWo->wo_number} for machine breakdown."
                 : 'Recorded machine breakdown and staged the recovery alert.',
         );
+    }
+
+    /**
+     * Open a corrective maintenance work order for the breakdown, idempotently.
+     *
+     * Runs inside the breakdown transaction so the MWO and the paused WO/downtime
+     * are committed together. Best-effort: a missing automation actor is logged,
+     * not fatal, because the pause + alert must not be lost over it.
+     */
+    private function openCorrectiveWorkOrder(Machine $machine, ?WorkOrder $wo, ?string $reason): void
+    {
+        if (! class_exists(MaintenanceWorkOrderService::class)) {
+            return;
+        }
+
+        $existing = MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $machine->id)
+            ->where('type', MaintenanceWorkOrderType::Corrective->value)
+            ->whereIn('status', [
+                MaintenanceWorkOrderStatus::Open->value,
+                MaintenanceWorkOrderStatus::Assigned->value,
+                MaintenanceWorkOrderStatus::InProgress->value,
+            ])
+            ->where('description', 'like', '%[Breakdown]%')
+            ->exists();
+        if ($existing) {
+            return;
+        }
+
+        $actor = app(SystemActorService::class)->resolve();
+        if (! $actor) {
+            Log::warning('Machine breakdown: no automation actor to open a corrective MWO', [
+                'machine_id' => $machine->id,
+            ]);
+
+            return;
+        }
+
+        app(MaintenanceWorkOrderService::class)->create([
+            'maintainable_type' => 'machine',
+            'maintainable_id'   => $machine->id,
+            'type'              => MaintenanceWorkOrderType::Corrective->value,
+            'priority'          => MaintenancePriority::High->value,
+            'description'       => sprintf(
+                '[Breakdown] %s%s',
+                $reason !== null && trim($reason) !== '' ? $reason : 'Machine breakdown',
+                $wo ? " — work order {$wo->wo_number}" : '',
+            ),
+        ], $actor);
     }
 
     private function handleRestoration(MachineStatusChanged $event): void

@@ -319,7 +319,7 @@ export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string
   // shell is therefore the stable readiness signal for both fresh and reused
   // sessions.
   await page.locator('#main-content').waitFor({ state: 'attached', timeout: 10_000 });
-  if (new URL(page.url()).pathname === '/login') {
+  if (new URL(page.url()).pathname === '/sign-in') {
     throw new Error(`Mock authentication failed (auth responses: ${authResponses.join(', ') || 'none'}; unauthorized: ${unauthorizedUrls.join(', ') || 'none'})${pageErrors.length > 0 ? `: ${pageErrors.join('; ')}` : ''}`);
   }
 }

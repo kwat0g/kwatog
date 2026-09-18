@@ -45,6 +45,27 @@ class UserAdminController
         ]]);
     }
 
+    /**
+     * Employee picker source for account creation — department-first: the
+     * admin selects a department, then employees WITHOUT a user account in
+     * that department are listed, searchable by employee number / last name /
+     * first name within it.
+     */
+    public function employeeCandidates(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'department_id' => ['required', 'string', 'max:64'],
+            'search'        => ['nullable', 'string', 'max:120'],
+            'limit'         => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return response()->json(['data' => $this->service->employeeCandidates(
+            search: $validated['search'] ?? null,
+            departmentHash: $validated['department_id'],
+            limit: (int) ($validated['limit'] ?? 100),
+        )]);
+    }
+
     public function show(User $user): AdminUserDetailResource
     {
         return new AdminUserDetailResource($this->service->show($user));
@@ -53,8 +74,8 @@ class UserAdminController
     public function store(CreateUserRequest $request): JsonResponse
     {
         $payload = $request->payload();
-        $created = $this->service->createStandalone([
-            'name' => $payload['name'],
+        $created = $this->service->createForEmployee([
+            'employee_id' => $payload['employee_id'],
             'email' => $payload['email'],
             'role_id' => $payload['role_id'],
         ], $request->user());

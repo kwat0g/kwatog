@@ -308,7 +308,7 @@ export default function CustomerDetailPage() {
                       <Td>
                         <Chip
                           variant={
-                            so.status === 'delivered' || so.status === 'invoiced'
+                            so.status === 'delivered' || so.status === 'invoiced' || so.status === 'paid' || so.status === 'closed'
                               ? 'success'
                               : so.status === 'cancelled'
                                 ? 'danger'

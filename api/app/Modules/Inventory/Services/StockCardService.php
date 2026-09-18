@@ -62,14 +62,24 @@ class StockCardService
         $rows = [];
         foreach ($movements as $m) {
             $direction = $this->direction($m, $locationId);
-            $signed = $direction === 'in' ? (float) $m->quantity : -1.0 * (float) $m->quantity;
+            // A transfer viewed WITHOUT a location filter is a movement between
+            // two internal locations: it is simultaneously an in and an out and
+            // must net to zero. The old code fell through to 'in', inflating the
+            // running balance by the transfer quantity.
+            $isTransfer = $direction === 'transfer';
+            $signed = match ($direction) {
+                'in'    => (float) $m->quantity,
+                'out'   => -1.0 * (float) $m->quantity,
+                default => 0.0,
+            };
             $balance += $signed;
 
-            // Recompute weighted avg only on receipts (movement IN). Other
-            // movement types preserve the existing weighted-avg cost.
-            if ($direction === 'in' && (float) $m->quantity > 0) {
+            // Recompute weighted avg only on genuine receipts (movement IN).
+            // Transfers, issues and other movement types preserve the existing
+            // weighted-avg cost.
+            if (! $isTransfer && $direction === 'in' && (float) $m->quantity > 0) {
                 $totalValue += (float) $m->quantity * (float) $m->unit_cost;
-            } elseif ($direction === 'out' && $balance >= 0) {
+            } elseif (! $isTransfer && $direction === 'out' && $balance >= 0) {
                 $avg = $balance > 0 ? $totalValue / max($balance + (float) $m->quantity, 0.0001) : 0.0;
                 $totalValue -= (float) $m->quantity * $avg;
                 if ($totalValue < 0) $totalValue = 0;
@@ -87,8 +97,8 @@ class StockCardService
                     ? app('hashids')->encode((int) $m->reference_id)
                     : null,
                 'reference_url'  => $this->resolveReferenceUrl($m),
-                'in'             => $direction === 'in'  ? (string) $m->quantity : '0',
-                'out'            => $direction === 'out' ? (string) $m->quantity : '0',
+                'in'             => in_array($direction, ['in', 'transfer'], true)  ? (string) $m->quantity : '0',
+                'out'            => in_array($direction, ['out', 'transfer'], true) ? (string) $m->quantity : '0',
                 'unit_cost'      => (string) $m->unit_cost,
                 'balance'        => number_format($balance, 3, '.', ''),
                 'weighted_avg'   => number_format($weightedAvg, 4, '.', ''),
@@ -175,6 +185,9 @@ class StockCardService
         }
         if ($m->to_location_id !== null && $m->from_location_id === null) return 'in';
         if ($m->from_location_id !== null && $m->to_location_id === null) return 'out';
+        // Unfiltered transfer between two locations: an internal move that nets
+        // to zero at item level.
+        if ($m->to_location_id !== null && $m->from_location_id !== null) return 'transfer';
         return 'in';
     }
 

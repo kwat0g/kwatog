@@ -220,7 +220,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           <button
             ref={loginRef}
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/sign-in')}
             className={cn(
               'group inline-flex h-10 items-center gap-2 rounded-full border border-accent/40 px-5',
               'font-sans text-[13px] font-medium text-accent',
@@ -232,7 +232,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               size={15}
               className="transition-transform duration-300 group-hover:translate-x-0.5"
             />
-            Staff login
+            Sign in
           </button>
 
           {/* Mobile menu toggle — 48px target on mobile */}

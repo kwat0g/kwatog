@@ -403,10 +403,15 @@ class ProductionRoutingTest extends TestCase
 
         $routing = $this->service->create($this->payload($product));
 
-        $this->assertDatabaseHas('event_outbox', [
-            'dedupe_key' => 'mrp:replan:routing:' . $routing->id . ':routing_created',
-            'event_type' => MrpReplanRequested::class,
-        ]);
+        // The key is versioned by the routing's change timestamp so repeated
+        // edits with the same reason are not swallowed by the unique dedupe key.
+        $this->assertTrue(
+            \Illuminate\Support\Facades\DB::table('event_outbox')
+                ->where('dedupe_key', 'like', 'mrp:replan:routing:' . $routing->id . ':routing_created:%')
+                ->where('event_type', MrpReplanRequested::class)
+                ->exists(),
+            'Expected a durable, versioned MRP replan for the published routing.',
+        );
     }
 
     public function test_no_replan_is_recorded_when_no_active_sales_order_needs_the_product(): void

@@ -31,7 +31,7 @@ export default function CustomerPortalLayout() {
  .catch((error: unknown) => {
  if (cancelled) return;
  if (axios.isAxiosError(error) && error.response?.status === 401) {
- navigate('/portal/customer/login', { replace: true });
+  navigate('/sign-in', { state: { realm: 'customer' }, replace: true });
  } else {
  setBootstrapError(true);
  }
@@ -41,7 +41,7 @@ export default function CustomerPortalLayout() {
  }, [navigate, retryCount]);
 
  const handleLogout = useCallback(async () => {
- try { await customerPortalApi.logout(); } finally { queryClient.clear(); navigate('/portal/customer/login', { replace: true }); }
+  try { await customerPortalApi.logout(); } finally { queryClient.clear(); navigate('/sign-in', { state: { realm: 'customer' }, replace: true }); }
  }, [navigate]);
 
  if (isLoading) return <FullPageLoader />;
@@ -50,7 +50,7 @@ export default function CustomerPortalLayout() {
  <PortalBootstrapError
  title="Customer portal unavailable"
  onRetry={() => setRetryCount((count) => count + 1)}
- onSignIn={() => navigate('/portal/customer/login', { replace: true })}
+  onSignIn={() => navigate('/sign-in', { state: { realm: 'customer' }, replace: true })}
  />
  );
  }

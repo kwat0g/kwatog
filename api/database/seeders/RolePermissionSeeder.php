@@ -115,8 +115,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.create',      'name' => 'Create Payroll Period'],
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
-                ['slug' => 'payroll.periods.request_correction', 'name' => 'Request Payroll Correction'],
-                ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
+                 ['slug' => 'payroll.periods.request_correction', 'name' => 'Request Payroll Correction'],
+                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
+                 ['slug' => 'payroll.periods.bank_file',   'name' => 'Manage Payroll Bank Files'],
+                 ['slug' => 'payroll.periods.disburse',    'name' => 'Record Payroll Disbursement'],
                 // REC-01 — void a finalized period (reverses GL posting,
                 // transitions to Voided). This is an administrator-only recovery
                 // control; operational HR and Finance roles deliberately omit it.
@@ -554,8 +556,10 @@ class RolePermissionSeeder extends Seeder
                     [
                         'payroll.periods.view',
                         'payroll.periods.approve',
-                        'payroll.periods.request_correction',
-                        'payroll.periods.finalize',
+                         'payroll.periods.request_correction',
+                         'payroll.periods.finalize',
+                         'payroll.periods.bank_file',
+                         'payroll.periods.disburse',
                     ],
                     $this->module('accounting', except: [
                         'accounting.journal.self_post_override',
@@ -646,18 +650,36 @@ class RolePermissionSeeder extends Seeder
                     ],
                 ),
             ],
-            'sales_officer' => [
-                'name' => 'Sales Officer',
-                'description' => 'Manages customer records and sales orders; does not perform Finance operations.',
+            'customer_service_officer' => [
+                'name' => 'Customer Service Officer',
+                'description' => 'Manages customer relationships, inquiries, complaints, returns, and customer records.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
                         'crm.view',
-                        // Customer master data belongs to Sales/CRM. The
-                        // underlying shared customer API retains its
-                        // accounting namespace for AR compatibility.
                         'accounting.customers.view',
                         'accounting.customers.manage',
+                        'crm.products.view',
+                        'crm.price_agreements.view',
+                        'crm.sales_orders.view',
+                        'crm.complaints.manage',
+                        'crm.inquiries.view',
+                        'crm.inquiries.manage',
+                        'return_management.view',
+                        'return_management.manage',
+                        'search.global', 'notifications.preferences.manage',
+                        'alerts.view', 'alerts.dismiss',
+                    ],
+                ),
+            ],
+            'sales_officer' => [
+                'name' => 'Sales Officer',
+                'description' => 'Creates, negotiates, and confirms sales orders; does not manage customer service records.',
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'crm.view',
+                        'accounting.customers.view',
                         'crm.products.view',
                         'crm.price_agreements.view',
                         'crm.sales_orders.view',
@@ -666,14 +688,6 @@ class RolePermissionSeeder extends Seeder
                         'crm.sales_orders.delete',
                         'crm.sales_orders.confirm',
                         'crm.sales_orders.cancel',
-                        'crm.complaints.manage',
-                        // Customer returns are Sales' post-sale surface: an RMA
-                        // originates from a customer complaint, so Sales files
-                        // and tracks it. Receiving / inspection / disposition
-                        // stay with Warehouse and QC.
-                        'return_management.view',
-                        'return_management.manage',
-                        'inventory.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                     ],

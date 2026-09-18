@@ -222,9 +222,9 @@ export default function AssetDetailPage() {
                   ))}
                 </ol>
               )}
-              {(can('assets.dispose.approve') || data.disposal_request.can_cancel) && (
+              {(data.disposal_request.can_approve || data.disposal_request.can_cancel) && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {can('assets.dispose.approve') && (
+                  {data.disposal_request.can_approve && (
                     <>
                       <Button variant="secondary" size="xs" onClick={() => setRejectDisposalOpen(true)} loading={rejectDisposal.isPending}>
                         Reject

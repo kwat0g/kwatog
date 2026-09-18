@@ -24,11 +24,13 @@ use Illuminate\Support\Facades\Log;
  * previously-created approved PRs. New approvals with an explicit `direct_po`
  * choice continue here; RFQ and unset choices stop before conversion.
  *
- * Rules (2026-08-08):
- * - Every PR line must already carry a `suggested_vendor_id` (pre-filled from
- *   the preferred approved supplier on submit) AND a unit price. If ANY line
- *   is missing either, the whole PR is skipped — it stays `approved` for the
- *   manual convert-to-PO flow rather than being partially converted.
+ * Rules (2026-08-08, revised 2026-09-18 — partial conversion):
+ * - Lines are resolved per line by VendorSourcingService (suggested vendor →
+ *   preferred ASL → qualified ASL → listing → PO history). Lines that resolve
+ *   convert now; unresolvable lines do NOT block the rest — the PR becomes
+ *   `partial` with a note and a purchasing notification. Only when NO line
+ *   resolves does the whole PR hand off to the manual conversion flow
+ *   (`manual_required`, PR stays `approved`).
  * - Lines are grouped by vendor, so a PR spanning two suppliers yields two POs
  *   (reuses PurchaseOrderService::convertFromPr).
  * - The resulting POs are created in `draft` — the normal PO approval chain

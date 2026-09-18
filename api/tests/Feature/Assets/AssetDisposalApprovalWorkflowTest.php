@@ -88,7 +88,10 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
     {
         $svc = app(AssetService::class);
         $svc->approveDisposal($asset, $this->user('finance_officer'));
-        $svc->approveDisposal($asset, $this->user('system_admin'));
+        // 2026-09-10 — the chain is finance_officer → vice_president (the
+        // business executive tier); system_admin is IT-only and is never a
+        // business-process approver.
+        $svc->approveDisposal($asset, $this->user('vice_president'));
     }
 
     private function disposalJeCount(Asset $asset): int
@@ -148,7 +151,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
 
         $next = app(ApprovalService::class)->nextStep($asset->fresh());
         $this->assertNotNull($next);
-        $this->assertSame('system_admin', $next->role_slug);
+        $this->assertSame('vice_president', $next->role_slug);
     }
 
     public function test_rejection_leaves_the_asset_untouched_and_a_new_request_can_be_made(): void
@@ -179,11 +182,11 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
 
         $board = app(ApprovalBoardService::class);
         $finance = $this->user('finance_officer');
-        $admin = $this->user('system_admin');
+        $vp = $this->user('vice_president');
         $employee = $this->user('employee');
 
         // Step 1 (finance_officer) pending: finance sees an actionable card,
-        // admin sees it as awaiting their step, employee (no assets.view)
+        // the VP sees it as awaiting their step, employee (no assets.view)
         // sees nothing at all.
         $financeBoard = $board->board($finance);
         $this->assertSame([$asset->asset_code], array_map(fn (array $c) => $c['number'], $financeBoard['my_action']));
@@ -196,12 +199,12 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         // acting user was the one the card was for.
         app(AssetService::class)->approveDisposal($asset, $finance);
 
-        $adminBoard = $board->board($admin);
-        $this->assertSame([$asset->asset_code], array_map(fn (array $c) => $c['number'], $adminBoard['my_action']));
+        $vpBoard = $board->board($vp);
+        $this->assertSame([$asset->asset_code], array_map(fn (array $c) => $c['number'], $vpBoard['my_action']));
         $this->assertSame([], $board->board($finance)['my_action']);
 
         // Step 2 approved by its role holder: execution follows.
-        app(AssetService::class)->approveDisposal($asset, $admin);
+        app(AssetService::class)->approveDisposal($asset, $vp);
         $this->assertSame(AssetStatus::Disposed, $asset->fresh()->status);
         $this->assertSame(1, $this->disposalJeCount($asset));
     }
@@ -350,7 +353,7 @@ class AssetDisposalApprovalWorkflowTest extends TestCase
         app(AssetService::class)->approveDisposal($asset, $this->user('finance_officer'));
 
         try {
-            app(AssetService::class)->approveDisposal($asset, $this->user('system_admin'));
+            app(AssetService::class)->approveDisposal($asset, $this->user('vice_president'));
             $this->fail('The final approval must refuse a disposal with nothing to journalise.');
         } catch (\App\Common\Exceptions\BusinessRuleException $e) {
             $this->assertStringContainsString('no cost, proceeds or accumulated depreciation', $e->getMessage());

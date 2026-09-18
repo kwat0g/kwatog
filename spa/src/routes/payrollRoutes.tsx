@@ -10,7 +10,8 @@ const PayrollPeriodDetailPage = lazy(() => import('@/pages/payroll/periods/detai
 const PayrollEmployeeDetailPage = lazy(() => import('@/pages/payroll/periods/employee-detail'));
 const PayrollAdjustmentsPage = lazy(() => import('@/pages/payroll/adjustments'));
 const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustments/create'));
-// /payroll/pipeline removed 2026-08-08 (scope cut — page file kept)
+// The full-year payroll pipeline was removed from scope; the periods list and
+// Finance dashboard provide the required operational summaries.
 // /payroll/de-minimis removed 2026-08-08 (scope cut — now a modal on /payroll/periods)
 const StatutoryExportsPage = lazy(() => import('@/pages/payroll/statutory'));
 

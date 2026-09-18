@@ -31,7 +31,7 @@ export default function SupplierPortalLayout() {
  .catch((error: unknown) => {
  if (cancelled) return;
  if (axios.isAxiosError(error) && error.response?.status === 401) {
- navigate('/portal/supplier/login', { replace: true });
+  navigate('/sign-in', { state: { realm: 'supplier' }, replace: true });
  } else {
  setBootstrapError(true);
  }
@@ -41,7 +41,7 @@ export default function SupplierPortalLayout() {
  }, [navigate, retryCount]);
 
  const handleLogout = useCallback(async () => {
- try { await supplierPortalApi.logout(); } finally { queryClient.clear(); navigate('/portal/supplier/login', { replace: true }); }
+  try { await supplierPortalApi.logout(); } finally { queryClient.clear(); navigate('/sign-in', { state: { realm: 'supplier' }, replace: true }); }
  }, [navigate]);
 
  if (isLoading) return <FullPageLoader />;
@@ -50,7 +50,7 @@ export default function SupplierPortalLayout() {
  <PortalBootstrapError
  title="Supplier portal unavailable"
  onRetry={() => setRetryCount((count) => count + 1)}
- onSignIn={() => navigate('/portal/supplier/login', { replace: true })}
+  onSignIn={() => navigate('/sign-in', { state: { realm: 'supplier' }, replace: true })}
  />
  );
  }

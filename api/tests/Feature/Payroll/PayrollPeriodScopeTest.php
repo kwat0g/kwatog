@@ -7,6 +7,8 @@ namespace Tests\Feature\Payroll;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\EmployeeStatus;
+use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -98,6 +100,38 @@ class PayrollPeriodScopeTest extends TestCase
         $this->assertTrue($period->isCompanyWide());
         $this->assertNull($period->scopeLabel());
         $this->assertCount(2, $this->periods->availableEmployees($period));
+    }
+
+    public function test_future_dated_on_leave_employee_remains_payroll_eligible(): void
+    {
+        $futureLeaver = $this->employee($this->production, 'regular');
+        $pastLeaver = $this->employee($this->production, 'regular');
+        $futureLeaver->forceFill(['status' => EmployeeStatus::OnLeave->value])->save();
+        $pastLeaver->forceFill(['status' => EmployeeStatus::OnLeave->value])->save();
+        $actor = $this->hrUser();
+
+        Clearance::create([
+            'clearance_no'      => 'CLR-FUT-'.substr(uniqid(), -5),
+            'employee_id'       => $futureLeaver->id,
+            'separation_date'   => '2026-04-10',
+            'separation_reason' => 'resigned',
+            'clearance_items'   => [],
+            'status'            => 'in_progress',
+            'initiated_by'      => $actor->id,
+        ]);
+        Clearance::create([
+            'clearance_no'      => 'CLR-OLD-'.substr(uniqid(), -5),
+            'employee_id'       => $pastLeaver->id,
+            'separation_date'   => '2026-03-31',
+            'separation_reason' => 'resigned',
+            'clearance_items'   => [],
+            'status'            => 'in_progress',
+            'initiated_by'      => $actor->id,
+        ]);
+
+        $period = $this->makePeriod([], '2026-04-01', '2026-04-15');
+
+        $this->assertSame([$futureLeaver->id], $this->periods->availableEmployees($period)->pluck('id')->all());
     }
 
     public function test_employment_type_scope_narrows_the_batch(): void

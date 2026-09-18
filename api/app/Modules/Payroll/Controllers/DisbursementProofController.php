@@ -215,7 +215,7 @@ class DisbursementProofController extends Controller
     private function authorizeFinance(Request $request): void
     {
         $user = $request->user();
-        if (! $user?->can('payroll.periods.finalize')) {
+        if (! $user?->can('payroll.periods.disburse')) {
             abort(403, 'Only Finance officers can manage disbursement proofs.');
         }
     }

@@ -26,7 +26,7 @@ class ProfileUpdateReviewController
     public function index(Request $request): AnonymousResourceCollection
     {
         return ProfileUpdateRequestResource::collection(
-            $this->service->listForReview($request->query()),
+            $this->service->listForReview($request->query(), $request->user()),
         );
     }
 

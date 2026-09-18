@@ -8,11 +8,11 @@ async function newContext(browser: Browser): Promise<{ context: BrowserContext; 
 }
 
 async function login(page: Page, email: string, portal = false): Promise<void> {
-  await page.goto(portal ? '/portal/supplier/login' : '/login');
+  await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).not.toHaveURL(portal ? /\/portal\/supplier\/login$/ : /\/login$/, { timeout: 20_000 });
+  await expect(page).not.toHaveURL(/\/sign-in$/, { timeout: 20_000 });
   await page.locator(portal ? '#portal-main-content' : '#main-content').waitFor({ state: 'attached', timeout: 20_000 });
 }
 

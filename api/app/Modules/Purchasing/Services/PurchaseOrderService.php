@@ -431,6 +431,16 @@ class PurchaseOrderService
                 'po_conversion_at' => now(),
             ])->save();
 
+            // The PR chain's terminal step (§7.5): conversion completes the
+            // PR's own journey; the downstream stages live on the PO/GRN/Bill
+            // chains. Idempotent — syncConversionStatus is also the reopen
+            // path, but a re-converted PR is still 'converted' so a replay
+            // re-stages an identical (deduped) event at worst.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $pr->fresh(),
+                PurchaseRequestStatus::Converted->value,
+            );
+
             return;
         }
 
@@ -780,7 +790,14 @@ class PurchaseOrderService
             return; // explicit override.
         }
 
-        abort(403, 'You cannot approve a purchase order to a vendor you created (segregation of duties).');
+        // Named exception, not abort(403): a refusal must be visible to the
+        // catch arms that treat "expected business failure" differently from
+        // "infrastructure failure", and render through the shared 403 arm
+        // without a Log::error per refusal. See ForbiddenActionException's
+        // docblock for the two defects abort() already caused here.
+        throw new ForbiddenActionException(
+            'You cannot approve a purchase order to a vendor you created (segregation of duties).'
+        );
     }
 
     public function reject(PurchaseOrder $po, User $by, string $reason): PurchaseOrder

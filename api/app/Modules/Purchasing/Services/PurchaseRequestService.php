@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
@@ -145,6 +146,12 @@ class PurchaseRequestService
                 'pr_number' => $this->sequences->generate('pr'),
                 'requested_by' => $by->id,
                 'department_id' => $requestedDepartmentId ?? $by->employee?->department_id ?? null,
+                // 2026-09-18 — trace gap §7.4: only MRP's own engine wrote this
+                // link directly, so a PR raised through the API could never be
+                // attributed to a plan. Metadata only; the plan is not mutated.
+                // Callers pass the raw int — StorePurchaseRequestRequest
+                // resolves the SPA's HashID before validation.
+                'mrp_plan_id' => $data['mrp_plan_id'] ?? null,
                 'template_id' => $data['template_id'] ?? null,
                 'date' => $data['date'] ?? now()->toDateString(),
                 'reason' => $data['reason'] ?? null,
@@ -389,6 +396,15 @@ class PurchaseRequestService
                 'submitted_at' => now(),
             ])->save();
 
+            // Chain 2 realtime progress (§7.5 trace gap): the PR is the
+            // Procure-to-Pay opener, so its submission stages a durable
+            // ChainStepAdvanced exactly like the PO/GRN/Bill transitions do.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked->fresh(),
+                PurchaseRequestStatus::Pending->value,
+                $by,
+            );
+
             return $locked->fresh();
         });
     }
@@ -480,6 +496,11 @@ class PurchaseRequestService
                     'p2p',
                     'purchase_request',
                     PurchaseRequestStatus::Approved->value,
+                );
+                app(ChainBroadcaster::class)->broadcastFor(
+                    $fresh,
+                    PurchaseRequestStatus::Approved->value,
+                    $by,
                 );
             }
 
@@ -593,6 +614,13 @@ class PurchaseRequestService
             $this->approvals->reject($locked, $by, $reason);
             $locked->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
 
+            // Terminal status on the PR chain (mirrors cancel()).
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked->fresh(),
+                PurchaseRequestStatus::Rejected->value,
+                $by,
+            );
+
             return $locked->fresh();
         });
     }
@@ -614,6 +642,14 @@ class PurchaseRequestService
                 throw new ForbiddenActionException('You do not have permission to cancel this purchase request.');
             }
             $locked->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
+
+            // Terminal status on the PR chain; mirrors reject() so the chain
+            // board never shows a cancelled request as still pending.
+            app(ChainBroadcaster::class)->broadcastFor(
+                $locked->fresh(),
+                PurchaseRequestStatus::Cancelled->value,
+                $by,
+            );
 
             return $locked->fresh();
         });

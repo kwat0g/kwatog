@@ -520,9 +520,16 @@ class ProductionRoutingService
             return;
         }
 
+        // `event_outbox.dedupe_key` is unique and rows are never pruned, so a
+        // key of (routing id, reason) alone let the SAME routing be edited
+        // twice with the same reason and silently dropped the second replan
+        // forever. Version the key by the change timestamp: a replay of the
+        // same write still dedupes, but a later edit is a distinct event.
+        $version = $routing->updated_at?->getTimestamp() ?? (int) microtime(true);
+
         app(OutboxService::class)->record(
             new MrpReplanRequested($salesOrderIds, $reason, auth()->id()),
-            'mrp:replan:routing:'.$routing->getKey().':'.$reason,
+            'mrp:replan:routing:'.$routing->getKey().':'.$reason.':'.$version,
         );
     }
 

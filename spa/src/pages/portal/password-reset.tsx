@@ -25,7 +25,7 @@ export default function PortalPasswordResetPage() {
   const [confirmation, setConfirmation] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
-  const loginPath = `/portal/${portalType}/login`;
+  const loginPath = '/sign-in';
   const { data: policy } = useQuery({ queryKey: ['auth', 'password-policy'], queryFn: authApi.passwordPolicy, staleTime: 300_000 });
   const minimumLength = passwordMinimumLength(policy);
   const validPassword = isStrongPassword(password, policy);
@@ -70,7 +70,7 @@ export default function PortalPasswordResetPage() {
             <LuCircleCheck size={32} className="mx-auto text-success-fg" strokeWidth={1.5} />
             <h2 className="mt-3 font-display text-lg text-primary">Password updated</h2>
             <p className="mt-1 text-[13px] text-secondary">Your portal password was updated successfully.</p>
-            <Link to={loginPath} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+             <Link to={loginPath} state={{ realm: portalType }} className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
               Go to sign in
             </Link>
           </div>

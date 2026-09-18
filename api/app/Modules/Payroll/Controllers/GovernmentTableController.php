@@ -57,14 +57,13 @@ class GovernmentTableController
 
     public function destroy(GovernmentContributionTable $govTable): JsonResponse
     {
-        // Hard delete only allowed for unused rows (defensive — check audit log usage in service later if needed).
-        $govTable->delete();
+        $this->service->delete($govTable);
         return response()->json(null, 204);
     }
 
     public function restore(GovernmentContributionTable $govTable): JsonResponse
     {
-        $govTable->restore();
+        $this->service->restore($govTable);
         return response()->json(['message' => 'Government contribution table restored.']);
     }
 

@@ -160,67 +160,73 @@ class SettingsService
             ]);
         }
 
-        $setting = DB::table('settings')
-            ->where('key', $key)
-            ->lockForUpdate()
-            ->first();
+        // The lock, the write, and the audit row must share one transaction.
+        // Previously the `lockForUpdate()` ran in autocommit (so it held
+        // nothing) and the audit insert was a separate statement: a failed
+        // audit could leave a security-relevant setting changed with no record.
+        DB::transaction(function () use ($key, $value, $actor, $reason): void {
+            $setting = DB::table('settings')
+                ->where('key', $key)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $setting) {
-            throw ValidationException::withMessages([
-                'key' => ['Unknown setting key.'],
+            if (! $setting) {
+                throw ValidationException::withMessages([
+                    'key' => ['Unknown setting key.'],
+                ]);
+            }
+
+            try {
+                $oldValue = json_decode((string) $setting->value, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $exception) {
+                throw new \RuntimeException("Setting {$key} contains invalid JSON.", 0, $exception);
+            }
+
+            if (! self::valueKeepsStoredJsonType($oldValue, $value)) {
+                throw ValidationException::withMessages([
+                    'value' => ['The new value must keep the setting’s existing JSON type.'],
+                ]);
+            }
+
+            try {
+                $encoded = json_encode($value, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $exception) {
+                throw ValidationException::withMessages([
+                    'value' => ['The value could not be encoded as JSON.'],
+                ]);
+            }
+
+            $now = now();
+            DB::table('settings')->where('id', $setting->id)->update([
+                'value' => $encoded,
+                'updated_by' => $actor->id,
+                'updated_at' => $now,
             ]);
-        }
 
-        try {
-            $oldValue = json_decode((string) $setting->value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $exception) {
-            throw new \RuntimeException("Setting {$key} contains invalid JSON.", 0, $exception);
-        }
-
-        if (! self::valueKeepsStoredJsonType($oldValue, $value)) {
-            throw ValidationException::withMessages([
-                'value' => ['The new value must keep the setting’s existing JSON type.'],
+            $request = request();
+            AuditLog::create([
+                'user_id' => $actor->id,
+                'actor_type' => 'user',
+                'action' => 'settings.updated',
+                'model_type' => 'settings',
+                'model_id' => $setting->id,
+                'old_values' => [
+                    'key' => $key,
+                    'value' => self::redactSettingValue($key, $oldValue),
+                ],
+                'new_values' => [
+                    'key' => $key,
+                    'value' => self::redactSettingValue($key, $value),
+                ],
+                'ip_address' => $request?->ip(),
+                'user_agent' => $request?->userAgent(),
+                'source_command' => 'admin.settings.update',
+                'correlation_id' => $request?->attributes->get('request_id')
+                    ?? $request?->header('X-Request-ID'),
+                'reason' => mb_substr(trim($reason ?? '') ?: 'Admin settings update', 0, 2000),
+                'created_at' => $now,
             ]);
-        }
-
-        try {
-            $encoded = json_encode($value, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $exception) {
-            throw ValidationException::withMessages([
-                'value' => ['The value could not be encoded as JSON.'],
-            ]);
-        }
-
-        $now = now();
-        DB::table('settings')->where('id', $setting->id)->update([
-            'value' => $encoded,
-            'updated_by' => $actor->id,
-            'updated_at' => $now,
-        ]);
-
-        $request = request();
-        AuditLog::create([
-            'user_id' => $actor->id,
-            'actor_type' => 'user',
-            'action' => 'settings.updated',
-            'model_type' => 'settings',
-            'model_id' => $setting->id,
-            'old_values' => [
-                'key' => $key,
-                'value' => self::redactSettingValue($key, $oldValue),
-            ],
-            'new_values' => [
-                'key' => $key,
-                'value' => self::redactSettingValue($key, $value),
-            ],
-            'ip_address' => $request?->ip(),
-            'user_agent' => $request?->userAgent(),
-            'source_command' => 'admin.settings.update',
-            'correlation_id' => $request?->attributes->get('request_id')
-                ?? $request?->header('X-Request-ID'),
-            'reason' => mb_substr(trim($reason ?? '') ?: 'Admin settings update', 0, 2000),
-            'created_at' => $now,
-        ]);
+        });
 
         try {
             Cache::forget("settings:{$key}");

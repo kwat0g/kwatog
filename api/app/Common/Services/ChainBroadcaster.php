@@ -30,6 +30,7 @@ class ChainBroadcaster
     private const CLASS_TO_TYPE = [
         \App\Modules\CRM\Models\SalesOrder::class           => 'sales_order',
         \App\Modules\Production\Models\WorkOrder::class     => 'work_order',
+        \App\Modules\Purchasing\Models\PurchaseRequest::class => 'purchase_request',
         \App\Modules\Purchasing\Models\PurchaseOrder::class => 'purchase_order',
         \App\Modules\SupplyChain\Models\Delivery::class     => 'delivery',
         \App\Modules\Inventory\Models\GoodsReceiptNote::class => 'grn',
@@ -41,6 +42,7 @@ class ChainBroadcaster
     private const DOC_NUMBER_FIELD = [
         \App\Modules\CRM\Models\SalesOrder::class           => 'so_number',
         \App\Modules\Production\Models\WorkOrder::class     => 'wo_number',
+        \App\Modules\Purchasing\Models\PurchaseRequest::class => 'pr_number',
         \App\Modules\Purchasing\Models\PurchaseOrder::class => 'po_number',
         \App\Modules\SupplyChain\Models\Delivery::class     => 'delivery_number',
         \App\Modules\Inventory\Models\GoodsReceiptNote::class => 'grn_number',
@@ -89,7 +91,7 @@ class ChainBroadcaster
                 actorName:      $actor?->name,
             );
 
-            $chain = in_array($type, ['purchase_order', 'grn', 'bill'], true)
+            $chain = in_array($type, ['purchase_request', 'purchase_order', 'grn', 'bill'], true)
                 ? 'p2p'
                 : 'o2c';
             $version = (string) ($entity->getRawOriginal('updated_at') ?? microtime(true));

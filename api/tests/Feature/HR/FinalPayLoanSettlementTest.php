@@ -108,8 +108,8 @@ class FinalPayLoanSettlementTest extends TestCase
         ]);
     }
 
-    /** Open period covering the separation date; 1 DTR day ≈ 20000/22 = 909.09. */
-    private function seedOpenPayrollPeriod(): void
+    /** Disbursed covering period plus 13th-month earnings of 909.09. */
+    private function seedDisbursedPayrollPeriod(Employee $employee): void
     {
         DB::table('payroll_periods')->insert([
             'period_start'        => '2026-05-16',
@@ -117,10 +117,19 @@ class FinalPayLoanSettlementTest extends TestCase
             'payroll_date'        => '2026-06-05',
             'is_first_half'       => false,
             'is_thirteenth_month' => false,
-            'status'              => 'draft',
+            'status'              => 'disbursed',
             'created_by'          => User::query()->firstOrFail()->id,
             'created_at'          => now(),
             'updated_at'          => now(),
+        ]);
+        DB::table('thirteenth_month_accruals')->insert([
+            'employee_id'        => $employee->id,
+            'year'               => 2026,
+            'total_basic_earned' => '10909.08',
+            'accrued_amount'     => '909.09',
+            'is_paid'            => false,
+            'created_at'         => now(),
+            'updated_at'         => now(),
         ]);
     }
 
@@ -172,7 +181,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
         $loan = $this->makeActiveLoan($employee, '500.00');
 
@@ -198,7 +207,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
         $loan = $this->makeActiveLoan($employee, '500.00');
 
@@ -215,7 +224,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
 
         $advance = EmployeeLoan::factory()->create([
@@ -250,7 +259,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
         $this->makeActiveLoan($employee, '500.00');
 
@@ -285,7 +294,7 @@ class FinalPayLoanSettlementTest extends TestCase
 
         $employee = $this->makeEmployee();
         $actor    = $this->makePoster();
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
         $loan = $this->makeActiveLoan($employee, '500.00');
 
@@ -325,7 +334,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
         $loan = $this->makeActiveLoan($employee, '5000.00');
 
@@ -348,6 +357,7 @@ class FinalPayLoanSettlementTest extends TestCase
 
         // The LN-02 remedy: HR settles the residue outside payroll.
         $this->actingAs(User::factory()->create(['role_id' => Role::where('slug', 'hr_officer')->value('id')]))
+            ->withHeaders(['Idempotency-Key' => 'LN-'.substr(uniqid(), -5)])
             ->postJson("/api/v1/loans/{$loan->hash_id}/payments", [
                 'amount'       => '4090.91',
                 'payment_date' => now()->toDateString(),
@@ -376,7 +386,7 @@ class FinalPayLoanSettlementTest extends TestCase
     {
         $employee  = $this->makeEmployee();
         $clearance = $this->makeClearance($employee);
-        $this->seedOpenPayrollPeriod();
+        $this->seedDisbursedPayrollPeriod($employee);
         $this->seedAttendanceDay($employee);
 
         $loan = EmployeeLoan::factory()->pending()->create([

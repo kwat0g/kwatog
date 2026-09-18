@@ -69,9 +69,31 @@ export interface AdminUserListFilters {
 
 export type AdminUserListResponse = PaginatedResponse<AdminUserListItem>;
 
+/**
+ * Employee candidate for account creation — an employee WITHOUT a user
+ * account, eligible by employment type (regular / probationary).
+ */
+export interface EmployeeCandidate {
+ id: string;
+ employee_no: string;
+ full_name: string;
+ first_name: string;
+ last_name: string;
+ email: string | null;
+ department: string | null;
+ position: string | null;
+ employment_type: string;
+}
+
+export interface EmployeeCandidateFilters {
+ search?: string;
+ department_id?: string;
+ limit?: number;
+}
+
 export interface CreateAdminUserData {
- name: string;
- email: string;
+ employee_id: string;
+ email?: string | null;
  role_id: string;
  send_welcome?: boolean;
 }

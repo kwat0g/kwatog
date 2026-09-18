@@ -127,6 +127,29 @@ class GovernmentContributionTableService
         });
     }
 
+    public function delete(GovernmentContributionTable $row): void
+    {
+        DB::transaction(function () use ($row): void {
+            $locked = GovernmentContributionTable::query()->lockForUpdate()->findOrFail($row->id);
+            $agency = $locked->agency;
+            $locked->delete();
+            DB::afterCommit(fn () => $this->bust($agency));
+        });
+    }
+
+    public function restore(GovernmentContributionTable $row): GovernmentContributionTable
+    {
+        return DB::transaction(function () use ($row): GovernmentContributionTable {
+            $locked = GovernmentContributionTable::withTrashed()
+                ->lockForUpdate()
+                ->findOrFail($row->id);
+            $locked->restore();
+            DB::afterCommit(fn () => $this->bust($locked->agency));
+
+            return $locked->fresh();
+        });
+    }
+
     private function assertNoOverlap(GovernmentContributionTable $candidate): void
     {
         if (bccomp((string) $candidate->bracket_max, (string) $candidate->bracket_min, 2) < 0) {

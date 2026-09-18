@@ -108,6 +108,11 @@ class StockAdjustmentQueueTest extends TestCase
         $pending   = $this->pendingAdjustment($warehouse);
 
         $this->actingAs($finance)
+            ->getJson('/api/v1/inventory/stock-adjustments?status=pending')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $pending->hash_id);
+
+        $this->actingAs($finance)
             ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
             ->assertOk()
             ->assertJsonPath('data.status', 'approved');

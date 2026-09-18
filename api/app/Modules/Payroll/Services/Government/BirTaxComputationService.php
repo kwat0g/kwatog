@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services\Government;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
 use Illuminate\Support\Carbon;
@@ -28,6 +29,10 @@ class BirTaxComputationService
      */
     public function compute(string|float|int $taxablePay, string $periodType = 'semi_monthly', ?Carbon $effectiveDate = null): string
     {
+        if ($periodType !== 'semi_monthly') {
+            throw new BusinessRuleException("BIR withholding tables do not support '{$periodType}' payroll periods.");
+        }
+
         $taxable = (string) $taxablePay;
         if (bccomp($taxable, '0', 2) <= 0) {
             return '0.00';

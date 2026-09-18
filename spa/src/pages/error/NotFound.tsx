@@ -6,10 +6,10 @@ import { useEffect } from 'react';
 
 export function NotFoundState({ fullPage = true }: { fullPage?: boolean }) {
  // Sending an anonymous visitor to /dashboard just bounces them through the
- // auth guard to /login, which reads as a second failure. Send them somewhere
+  // auth guard to /sign-in, which reads as a second failure. Send them somewhere
  // that exists for them.
  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
- const destination = isAuthenticated ? '/dashboard' : '/login';
+  const destination = isAuthenticated ? '/dashboard' : '/sign-in';
  const label = isAuthenticated ? 'Return home' : 'Go to sign in';
 
  useEffect(() => {

@@ -10,6 +10,9 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\SupplyChain\Models\Delivery;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -189,6 +192,54 @@ class InvoiceDraftNumberingTest extends TestCase
         $this->assertNull($row->invoice_number);
         $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'invoice')->count());
         $this->assertSame(0, DB::table('document_sequences')->where('document_type', 'invoice')->count());
+    }
+
+    public function test_cancelling_an_invoice_releases_its_delivery_and_reconciles_the_sales_order(): void
+    {
+        $user = $this->newUser();
+        $customer = Customer::create(['name' => 'Reinvoice Customer', 'payment_terms_days' => 30]);
+        $salesOrder = SalesOrder::create([
+            'so_number' => 'SO-CANCEL-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'date' => '2026-04-01',
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'status' => SalesOrderStatus::Confirmed,
+            'created_by' => $user->id,
+        ]);
+        $delivery = Delivery::create([
+            'delivery_number' => 'DEL-CANCEL-'.substr(uniqid(), -5),
+            'sales_order_id' => $salesOrder->id,
+            'status' => 'scheduled',
+            'scheduled_date' => '2026-04-01',
+            'created_by' => $user->id,
+        ]);
+
+        $service = app(InvoiceService::class);
+        $invoice = $service->finalize($service->create([
+            'customer_id' => $customer->hash_id,
+            'sales_order_id' => $salesOrder->hash_id,
+            'delivery_id' => $delivery->hash_id,
+            'lifecycle_type' => 'prebill',
+            'prebill_reason' => 'Cancellation reconciliation',
+            'date' => '2026-04-01',
+            'due_date' => '2026-04-30',
+            'is_vatable' => false,
+            'items' => [[
+                'revenue_account_id' => $this->accountHashId('4010'),
+                'description' => 'Reinvoiceable goods',
+                'quantity' => '1',
+                'unit_price' => '100.00',
+            ]],
+        ], $user), $user);
+        $delivery->forceFill(['invoice_id' => $invoice->id])->save();
+
+        $service->cancel($invoice, $user);
+
+        $this->assertSame(InvoiceStatus::Cancelled, $invoice->fresh()->status);
+        $this->assertSame(SalesOrderStatus::Confirmed, $salesOrder->fresh()->status);
+        $this->assertNull($delivery->fresh()->invoice_id);
     }
 
     public function test_finalize_calculates_from_the_locked_invoice_and_items_when_caller_is_stale(): void

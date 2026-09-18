@@ -164,30 +164,23 @@ class FinalPayTest extends TestCase
     // 1. Last-salary component — covering-period guard (HR-01) + HR-02 parity
     // ──────────────────────────────────────────────────────────────────────
 
-    public function test_final_period_salary_monthly_uses_payroll_calendar_day_proration(): void
+    public function test_final_pay_refuses_an_undisbursed_covering_period_for_monthly_employee(): void
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee, ['separation_date' => '2026-05-20']);
         $this->seedOpenPayrollPeriod();
-        // Persisted DTR hours must NOT move the number — the fallback mirrors
-        // payroll's flat calendar-day basis (HR-02), not an attendance-day one.
         $this->seedAttendanceHours($employee, [
             '2026-05-16' => 8.0,
             '2026-05-17' => 8.0,
             '2026-05-18' => 4.0,
         ]);
 
-        $result = $this->service()->compute($clearance);
-
-        $breakdown = $result->final_pay_breakdown;
-        $this->assertNotNull($breakdown, 'Breakdown must be set after compute()');
-
-        // Half-month basic 11000 × 5/16 calendar days = 3437.50.
-        $this->assertSame('3437.50', $breakdown['last_salary_pro_rated'],
-            '₱22,000 ÷ 2 × 5 of 16 calendar days covered by employment.');
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        $this->service()->compute($clearance);
     }
 
-    public function test_final_period_salary_semi_monthly_uses_payroll_calendar_day_proration(): void
+    public function test_final_pay_refuses_an_undisbursed_covering_period_for_semi_monthly_employee(): void
     {
         // 7,150 per cutoff → 14,300 monthly equivalent.
         $employee  = $this->makeEmployee([
@@ -203,15 +196,12 @@ class FinalPayTest extends TestCase
             '2026-05-18' => 4.0,
         ]);
 
-        $result = $this->service()->compute($clearance);
-
-        $breakdown = $result->final_pay_breakdown;
-        // Separation on the period's last day = full flat cutoff basic.
-        $this->assertSame('7150.00', $breakdown['last_salary_pro_rated'],
-            'A semi-monthly leaver employed to the cutoff end banks the flat per-cutoff rate.');
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        $this->service()->compute($clearance);
     }
 
-    public function test_final_period_salary_prefers_computed_payroll_result(): void
+    public function test_final_pay_refuses_a_computed_but_undisbursed_covering_period(): void
     {
         $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
         $clearance = $this->makeClearance($employee);
@@ -230,9 +220,9 @@ class FinalPayTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
-
-        $this->assertSame('6850.00', $breakdown['last_salary_pro_rated']);
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has not been disbursed');
+        $this->service()->compute($clearance);
     }
 
     public function test_disbursed_period_is_not_paid_again_in_final_pay(): void
@@ -291,6 +281,48 @@ class FinalPayTest extends TestCase
         // 5 days × 1.00 conversion_rate = 5 convertible days × 1000/day = 5000.00
         $this->assertSame('5000.00', $breakdown['unused_convertible_leave_value'],
             'Unused convertible leave: 5 days × (22000/22) = 5000.00');
+    }
+
+    public function test_final_pay_caps_and_consumes_convertible_leave_once(): void
+    {
+        $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
+        $clearance = $this->makeClearance($employee);
+        $leaveTypeId = DB::table('leave_types')->insertGetId([
+            'name'                         => 'Legacy Service Leave',
+            'code'                         => 'LSL',
+            'default_balance'              => 5.0,
+            'is_paid'                      => true,
+            'requires_document'            => false,
+            'is_convertible_on_separation' => true,
+            'is_convertible_year_end'      => false,
+            'conversion_rate'              => 2.00,
+            'is_active'                    => true,
+            'created_at'                   => now(),
+            'updated_at'                   => now(),
+        ]);
+        DB::table('employee_leave_balances')->insert([
+            'employee_id'   => $employee->id,
+            'leave_type_id' => $leaveTypeId,
+            'year'          => 2026,
+            'total_credits' => 5.0,
+            'used'          => 0.0,
+            'remaining'     => 5.0,
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ]);
+
+        $service = $this->service();
+        $first = $service->compute($clearance);
+        $second = $service->compute($first->fresh());
+
+        $this->assertSame('5000.00', $first->final_pay_breakdown['unused_convertible_leave_value']);
+        $this->assertSame('5000.00', $second->final_pay_breakdown['unused_convertible_leave_value']);
+        $this->assertDatabaseHas('employee_leave_balances', [
+            'employee_id'   => $employee->id,
+            'leave_type_id' => $leaveTypeId,
+            'used'          => '5.0',
+            'remaining'     => '0.0',
+        ]);
     }
 
     /**
@@ -720,6 +752,37 @@ class FinalPayTest extends TestCase
 
         $this->assertSame('10000.00', $breakdown['pro_rated_13th_month'],
             '13th month must use accrued_amount from accruals table when present');
+    }
+
+    public function test_paid_thirteenth_month_accrual_is_not_added_to_final_pay(): void
+    {
+        $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
+        $clearance = $this->makeClearance($employee);
+        $periodId = $this->seedOpenPayrollPeriod('computed', '2026-05-01', '2026-05-15');
+
+        DB::table('payrolls')->insert([
+            'payroll_period_id' => $periodId,
+            'employee_id'       => $employee->id,
+            'pay_type'          => 'monthly',
+            'basic_pay'         => '120000.00',
+            'computed_at'       => now(),
+            'created_at'        => now(),
+            'updated_at'        => now(),
+        ]);
+        DB::table('thirteenth_month_accruals')->insert([
+            'employee_id'        => $employee->id,
+            'year'               => 2026,
+            'total_basic_earned' => '120000.00',
+            'accrued_amount'     => '10000.00',
+            'is_paid'            => true,
+            'paid_date'          => '2026-12-31',
+            'created_at'         => now(),
+            'updated_at'         => now(),
+        ]);
+
+        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
+
+        $this->assertSame('0.00', $breakdown['pro_rated_13th_month']);
     }
 
     /**

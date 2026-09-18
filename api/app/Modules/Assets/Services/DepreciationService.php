@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Assets\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\Asset;
@@ -46,7 +45,7 @@ class DepreciationService
 {
     public function __construct(
         private readonly JournalEntryService $journals,
-        private readonly SettingsService $settings,
+        private readonly AccountingAccountPolicyService $accountPolicies,
     ) {}
 
     /**
@@ -356,8 +355,10 @@ class DepreciationService
             return;
         }
 
-        $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
-        $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+        $depreciationExpenseAccountId = $this->accountPolicies
+            ->controlAccountIdForSetting('accounting.accounts.depreciation_expense_code');
+        $accumulatedDepreciationAccountId = $this->accountPolicies
+            ->controlAccountIdForSetting('accounting.accounts.asset_accumulated_depreciation_code');
         $periodLabel = sprintf('%04d-%02d', $year, $month);
         $je = $this->journals->create([
             'date' => $periodStart->endOfMonth()->toDateString(),
@@ -365,8 +366,8 @@ class DepreciationService
             'reference_type' => 'asset_depreciation',
             'reference_id' => null,
             'lines' => [
-                ['account_id' => $depExp->id, 'debit' => $row['amount'], 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
-                ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
+                ['account_id' => $depreciationExpenseAccountId, 'debit' => $row['amount'], 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                ['account_id' => $accumulatedDepreciationAccountId, 'debit' => Money::zero(), 'credit' => $row['amount'], 'description' => 'Monthly depreciation'],
             ],
         ], $by);
         $this->journals->post($je, $by);
@@ -538,8 +539,10 @@ class DepreciationService
         $je = null;
 
         if (Money::gt($totalAmount, Money::zero())) {
-            $depExp = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
-            $accDep = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+            $depreciationExpenseAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.depreciation_expense_code');
+            $accumulatedDepreciationAccountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.accounts.asset_accumulated_depreciation_code');
             $periodLabel = sprintf('%04d-%02d', $year, $month);
             $je = $this->journals->create([
                 'date' => $periodEnd->toDateString(),
@@ -547,8 +550,8 @@ class DepreciationService
                 'reference_type' => 'asset_depreciation',
                 'reference_id' => null,
                 'lines' => [
-                    ['account_id' => $depExp->id, 'debit' => $totalAmount, 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
-                    ['account_id' => $accDep->id, 'debit' => Money::zero(), 'credit' => $totalAmount, 'description' => 'Monthly depreciation'],
+                    ['account_id' => $depreciationExpenseAccountId, 'debit' => $totalAmount, 'credit' => Money::zero(), 'description' => 'Monthly depreciation'],
+                    ['account_id' => $accumulatedDepreciationAccountId, 'debit' => Money::zero(), 'credit' => $totalAmount, 'description' => 'Monthly depreciation'],
                 ],
             ], $by);
             $this->journals->post($je, $by);

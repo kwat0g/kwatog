@@ -52,7 +52,7 @@ function AppLayoutInner() {
  const onLogout = async () => {
  await logout();
  toast.success('Signed out.');
- navigate('/login', { replace: true });
+  navigate('/sign-in', { replace: true });
  };
 
  return (

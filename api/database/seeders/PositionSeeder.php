@@ -23,7 +23,10 @@ class PositionSeeder extends Seeder
         'MAINT' => ['Maintenance Head', 'Maintenance Technician'],
         'MOLD'  => ['Mold Manager', 'Mold Technician'],
         'IMPEX' => ['ImpEx Officer', 'ImpEx Staff'],
+        'SALES' => ['Sales Officer', 'Sales Manager'],
+        'CS'    => ['Customer Service Officer', 'Customer Service Manager'],
         'ADMIN' => ['Admin Staff'],
+        'IT'    => ['System Administrator', 'IT Staff'],
     ];
 
     public function run(): void

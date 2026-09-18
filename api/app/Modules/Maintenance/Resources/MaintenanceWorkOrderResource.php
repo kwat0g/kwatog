@@ -91,12 +91,14 @@ class MaintenanceWorkOrderResource extends JsonResource
     /** @return list<string> */
     private function availableActions(?MaintenanceWorkOrderStatus $status, Request $request): array
     {
-        $actions = match ($status) {
-            MaintenanceWorkOrderStatus::Open,
-            MaintenanceWorkOrderStatus::Assigned => ['start', 'cancel'],
-            MaintenanceWorkOrderStatus::InProgress => ['complete', 'cancel'],
-            default => [],
-        };
+        $actions = $request->user()?->can('maintenance.wo.complete')
+            ? match ($status) {
+                MaintenanceWorkOrderStatus::Open,
+                MaintenanceWorkOrderStatus::Assigned => ['start', 'cancel'],
+                MaintenanceWorkOrderStatus::InProgress => ['complete', 'cancel'],
+                default => [],
+            }
+            : [];
 
         if ($status === MaintenanceWorkOrderStatus::Open && $request->user()?->can('maintenance.wo.assign')) {
             array_unshift($actions, 'assign');

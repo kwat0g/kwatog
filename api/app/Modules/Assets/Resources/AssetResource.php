@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Resources;
 
+use App\Common\Services\ApprovalService;
 use App\Modules\Assets\Models\Asset;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -47,13 +48,14 @@ class AssetResource extends JsonResource
             'disposal_request'         => $this->disposal_requested_by !== null ? [
                 'amount'       => $this->disposal_request_amount !== null ? (string) $this->disposal_request_amount : null,
                 'date'         => optional($this->disposal_request_date)?->toDateString(),
-                'reason'       => $this->disposal_request_reason,
+                 'reason'       => $this->disposal_request_reason,
                 'requested_by' => $this->disposalRequester ? [
                     'id'   => $this->disposalRequester->hash_id,
                     'name' => $this->disposalRequester->name,
                 ] : null,
-                'can_cancel'   => $request->user() !== null
-                    && (int) $this->disposal_requested_by === (int) $request->user()->id,
+                 'can_cancel'   => $request->user() !== null
+                     && (int) $this->disposal_requested_by === (int) $request->user()->id,
+                 'can_approve'  => $this->canApproveDisposal($request),
             ] : null,
             'approval_records'         => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
                 'step_order' => (int) $r->step_order,
@@ -83,5 +85,19 @@ class AssetResource extends JsonResource
             'created_at'               => optional($this->created_at)?->toISOString(),
             'updated_at'               => optional($this->updated_at)?->toISOString(),
         ];
+    }
+
+    private function canApproveDisposal(Request $request): bool
+    {
+        $user = $request->user();
+        $next = $this->relationLoaded('approvalRecords')
+            ? $this->approvalRecords->first(fn ($record): bool => $record->action === 'pending')
+            : null;
+
+        return $user !== null
+            && $next !== null
+            && $user->can('assets.dispose.approve')
+            && app(ApprovalService::class)->canUserActFor($user, (string) $next->role_slug)
+            && (int) $this->disposal_requested_by !== (int) $user->id;
     }
 }

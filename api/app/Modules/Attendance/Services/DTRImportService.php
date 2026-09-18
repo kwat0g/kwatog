@@ -6,6 +6,7 @@ namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Enums\DtrImportRowOutcome;
+use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\HR\Models\Employee;
 use Carbon\Exceptions\InvalidFormatException;
@@ -373,7 +374,7 @@ class DTRImportService
      */
     private function manualCorrectionGuard(Attendance $a, ?string $tIn, ?string $tOut): ?DtrImportRowOutcome
     {
-        if (! $a->exists || ! $a->is_manual_entry) {
+        if (! $a->exists) {
             return null;
         }
 
@@ -382,6 +383,17 @@ class DTRImportService
 
         if ($storedIn === $tIn && $storedOut === $tOut) {
             return DtrImportRowOutcome::Noop;
+        }
+
+        // Leave approval owns the whole attendance day even though it is not
+        // marked as a manual correction. A later biometric file must not turn
+        // an approved leave day back into worked/absent time.
+        if ($a->status === AttendanceStatus::OnLeave) {
+            return DtrImportRowOutcome::SkippedManual;
+        }
+
+        if (! $a->is_manual_entry) {
+            return null;
         }
 
         return DtrImportRowOutcome::SkippedManual;

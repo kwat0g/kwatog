@@ -497,6 +497,14 @@ class ThirteenthMonthTest extends TestCase
         $this->assertTrue($period->is_thirteenth_month);
     }
 
+    public function test_13th_month_rejects_a_payroll_date_outside_the_configured_window(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('13th-month payroll date');
+
+        $this->svc->computeAndPay(2025, $this->adminUser, '2027-01-01');
+    }
+
     /**
      * A deduction detail line with type 'thirteenth_month' is created for the
      * payslip, containing the same amount as gross/net pay.

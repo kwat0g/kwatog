@@ -125,7 +125,7 @@ export default function PayrollPeriodsPage() {
  ];
 
  const canCreate = can('payroll.periods.create');
- const canRunThirteenth = can('payroll.thirteenth_month.run') || can('payroll.periods.create');
+  const canRunThirteenth = can('payroll.thirteenth_month.run');
 
  return (
  <div>

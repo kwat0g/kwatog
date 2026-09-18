@@ -9,6 +9,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\PayrollAdjustment;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -33,6 +34,25 @@ class PayrollAuthorizationTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/payroll-periods')
             ->assertOk();
+    }
+
+    public function test_payroll_operational_actions_use_separate_permissions(): void
+    {
+        $period = PayrollPeriod::factory()->create();
+        $periodId = $period->hash_id;
+        $finalizer = $this->userWithPermissions(['payroll.periods.finalize']);
+        $this->actingAs($finalizer)
+            ->getJson("/api/v1/payroll-periods/{$periodId}/bank-file")
+            ->assertForbidden();
+
+        $bankOperator = $this->userWithPermissions(['payroll.periods.bank_file']);
+        $this->actingAs($bankOperator)
+            ->patchJson("/api/v1/payroll-periods/{$periodId}/finalize")
+            ->assertForbidden();
+
+        $this->actingAs($finalizer)
+            ->patchJson("/api/v1/payroll-periods/{$periodId}/mark-disbursed")
+            ->assertForbidden();
     }
 
     public function test_own_payslip_permission_does_not_expose_de_minimis_records(): void
@@ -102,11 +122,10 @@ class PayrollAuthorizationTest extends TestCase
         ]);
 
         foreach ($slugs as $slug) {
-            $permission = Permission::create([
-                'slug' => $slug,
-                'name' => $slug,
-                'module' => 'payroll',
-            ]);
+            $permission = Permission::firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $slug, 'module' => 'payroll'],
+            );
             $role->permissions()->attach($permission);
         }
 

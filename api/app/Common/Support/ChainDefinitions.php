@@ -72,6 +72,31 @@ final class ChainDefinitions
         'cancelled'   => 'closed',
     ];
 
+    /**
+     * Purchase Request (Chain 2 opener). The PR's own lifecycle is
+     * draft → pending → approved/converted; the downstream PO → GRN → Bill
+     * stages belong to the purchase_order / grn / bill chains, so this chain
+     * is intentionally short. "pending" carries the finance → VP approval
+     * workflow; "converted" is the terminal step (mirrors the SPA's
+     * statusVariant where converted renders as a neutral terminal state).
+     */
+    private const STEPS_PURCHASE_REQUEST = [
+        'draft',
+        'pending',
+        'approved',
+        'converted',
+    ];
+
+    private const STATUS_MAP_PURCHASE_REQUEST = [
+        'draft'     => 'draft',
+        'pending'   => 'pending',
+        'approved'  => 'approved',
+        'partial'   => 'approved', // partially converted stays approved
+        'converted' => 'converted',
+        'rejected'  => 'converted', // terminal; chain board renders closure
+        'cancelled' => 'converted', // terminal; chain board renders closure
+    ];
+
     /** @var array<int,string> Purchase Order (Chain 2). */
     private const STEPS_PURCHASE_ORDER = [
         'draft',
@@ -179,6 +204,7 @@ final class ChainDefinitions
         return [
             'sales_order' => ['steps' => self::STEPS_SALES_ORDER, 'status_map' => self::STATUS_MAP_SALES_ORDER],
             'work_order' => ['steps' => self::STEPS_WORK_ORDER, 'status_map' => self::STATUS_MAP_WORK_ORDER],
+            'purchase_request' => ['steps' => self::STEPS_PURCHASE_REQUEST, 'status_map' => self::STATUS_MAP_PURCHASE_REQUEST],
             'purchase_order' => ['steps' => self::STEPS_PURCHASE_ORDER, 'status_map' => self::STATUS_MAP_PURCHASE_ORDER],
             'delivery' => ['steps' => self::STEPS_DELIVERY, 'status_map' => self::STATUS_MAP_DELIVERY],
             'grn' => ['steps' => self::STEPS_GRN, 'status_map' => self::STATUS_MAP_GRN],
@@ -312,6 +338,7 @@ final class ChainDefinitions
         return match ($entityType) {
             'sales_order'    => 'crm.sales_orders.view',
             'work_order'     => 'production.work_orders.view',
+            'purchase_request' => 'purchasing.view',
             'purchase_order' => 'purchasing.view',
             'delivery'       => 'supply_chain.view',
             'grn'            => 'inventory.view',

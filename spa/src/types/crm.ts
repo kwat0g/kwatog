@@ -65,8 +65,8 @@ export type UpdatePriceAgreementData = Partial<CreatePriceAgreementData>;
 // ─── Sales orders (Task 48) ─────────────────────────────────────────────
 
 export type SalesOrderStatus =
- | 'draft' | 'confirmed' | 'in_production' | 'partially_delivered'
- | 'delivered' | 'invoiced' | 'cancelled';
+  | 'draft' | 'confirmed' | 'in_production' | 'partially_delivered'
+  | 'delivered' | 'invoiced' | 'paid' | 'closed' | 'cancelled';
 
 export interface SalesOrderItem {
  id: string;

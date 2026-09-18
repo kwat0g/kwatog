@@ -1,15 +1,14 @@
 import { lazy } from 'react';
-import { Route } from 'react-router-dom';
+import { Navigate, Route } from 'react-router-dom';
 import { AuthLayout } from '@/layouts/AuthLayout';
 
 // ADV10 — B2B Portals (Supplier + Customer)
 // SECURITY CONTRACT: All protected portal pages MUST be nested inside their
 // respective layout route (<SupplierPortalLayout /> or <CustomerPortalLayout />).
 // Those layouts perform their own auth bootstrap and redirect to login on failure.
-// Public portal auth pages stay outside the protected portal layouts so they
-// remain reachable, but share AuthLayout with the internal ERP sign-in flow.
+// Public portal recovery pages stay outside the protected portal layouts so
+// they remain reachable. Portal login URLs redirect to the unified sign-in.
 const SupplierPortalLayout = lazy(() => import('@/layouts/SupplierPortalLayout'));
-const SupplierPortalLoginPage = lazy(() => import('@/pages/portal/supplier/login'));
 const PortalForgotPasswordPage = lazy(() => import('@/pages/portal/forgot-password'));
 const PortalPasswordResetPage = lazy(() => import('@/pages/portal/password-reset'));
 const PortalChangePasswordPage = lazy(() => import('@/pages/portal/change-password'));
@@ -26,7 +25,6 @@ const SupplierRfqsPage = lazy(() => import('@/pages/portal/supplier/rfqs'));
 const SupplierRfqDetailPage = lazy(() => import('@/pages/portal/supplier/rfqs/detail'));
 const SupplierRfqQuotePage = lazy(() => import('@/pages/portal/supplier/rfqs/quote'));
 const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout'));
-const CustomerPortalLoginPage = lazy(() => import('@/pages/portal/customer/login'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
 const CustomerOrdersPage = lazy(() => import('@/pages/portal/customer/orders'));
 const CustomerPlaceOrderPage = lazy(() => import('@/pages/portal/customer/orders/new'));
@@ -43,9 +41,9 @@ export const portalRoutes = (
  <>
  {/* ADV10 — B2B Supplier Portal */}
  <Route element={<AuthLayout />}>
- <Route path="/portal/supplier/login" element={<SupplierPortalLoginPage />} />
+ <Route path="/portal/supplier/login" element={<Navigate to="/sign-in" state={{ realm: 'supplier' }} replace />} />
  <Route path="/portal/supplier/forgot-password" element={<PortalForgotPasswordPage portalType="supplier" />} />
- <Route path="/portal/customer/login" element={<CustomerPortalLoginPage />} />
+ <Route path="/portal/customer/login" element={<Navigate to="/sign-in" state={{ realm: 'customer' }} replace />} />
  <Route path="/portal/customer/forgot-password" element={<PortalForgotPasswordPage portalType="customer" />} />
   <Route path="/portal/password-reset" element={<PortalPasswordResetPage />} />
   <Route path="/portal/:type/change-password" element={<PortalChangePasswordPage />} />

@@ -205,9 +205,22 @@ class SalesOrderResponseService
             ->flip();
 
         foreach ($items as $item) {
-            $itemId = HashIdFilter::decode($item['sales_order_item_id'] ?? '', SalesOrderItem::class)
-                ?? (int) ($item['sales_order_item_id'] ?? 0);
-            if ($itemId === 0 || ! $lineIds->has($itemId)) {
+            $raw = $item['sales_order_item_id'] ?? null;
+
+            // Customer-facing payloads carry an opaque HashID. A numeric string
+            // is NOT accepted: HashIdFilter::decode() returns the integer for any
+            // ctype_digit string, so the old `?? (int)` fallback let a portal
+            // customer enumerate sales-order lines by raw primary key. A real
+            // int is only trusted from an internal caller passing the PHP type.
+            if (is_int($raw)) {
+                $itemId = $raw;
+            } elseif (is_string($raw) && $raw !== '' && ! ctype_digit($raw)) {
+                $itemId = SalesOrderItem::tryDecodeHash($raw);
+            } else {
+                $itemId = null;
+            }
+
+            if ($itemId === null || ! $lineIds->has($itemId)) {
                 throw new BusinessRuleException('Each proposed line must reference an item on the sales order.');
             }
 

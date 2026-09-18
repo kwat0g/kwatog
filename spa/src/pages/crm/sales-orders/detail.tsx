@@ -33,6 +33,8 @@ const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | '
  partially_delivered: 'warning',
  delivered: 'success',
  invoiced: 'success',
+ paid: 'success',
+ closed: 'success',
  cancelled: 'danger',
 };
 

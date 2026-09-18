@@ -58,7 +58,7 @@ class PartialEmploymentProrationTest extends TestCase
 
     private function employee(string $dateHired = '2025-01-01'): Employee
     {
-        $pos = Position::create(['title' => 'Operator', 'department_id' => $this->dept->id]);
+        $pos = Position::create(['title' => 'Operator-'.substr(uniqid(), -5), 'department_id' => $this->dept->id]);
 
         return Employee::factory()->create([
             'department_id'         => $this->dept->id,

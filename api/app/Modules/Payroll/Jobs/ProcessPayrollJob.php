@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Compute payroll for every active employee in a period.
+ * Compute payroll for every eligible employee in a period.
  *
  * Per-employee transactions live in PayrollCalculatorService — one bad row
  * never breaks the batch. Errors are persisted to payrolls.error_message so
@@ -213,8 +213,23 @@ class ProcessPayrollJob implements ShouldQueue
                 // Task A9 — detect anomalies on completed period.
                 try {
                     app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($period);
+                    PayrollPeriod::query()
+                        ->whereKey($period->id)
+                        ->update(['anomaly_detection_failed' => false]);
                 } catch (\Throwable $e) {
-                    Log::warning('PayrollAnomalyService::detect failed after job', [
+                    try {
+                        PayrollPeriod::query()
+                            ->whereKey($period->id)
+                            ->update(['anomaly_detection_failed' => true]);
+                    } catch (\Throwable $markingError) {
+                        Log::error('Payroll anomaly failure could not be recorded', [
+                            'period_id' => $period->id,
+                            'error' => $markingError->getMessage(),
+                        ]);
+                        throw $markingError;
+                    }
+
+                    Log::error('PayrollAnomalyService::detect failed after job', [
                         'period_id' => $period->id,
                         'error'     => $e->getMessage(),
                     ]);

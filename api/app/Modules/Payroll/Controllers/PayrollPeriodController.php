@@ -107,17 +107,6 @@ class PayrollPeriodController
         return response()->json(['data' => $this->service->scopePreview($validated)]);
     }
 
-    /**
-     * CA3 — Pipeline view: all 24 half-month slots for the year with
-     * auto-schedule status and summary data.
-     */
-    public function pipeline(Request $request): JsonResponse
-    {
-        $year = (int) ($request->query('year') ?? now()->year);
-
-        return response()->json(['data' => $this->service->pipeline($year)]);
-    }
-
     public function store(CreatePayrollPeriodRequest $request): JsonResponse
     {
         $period = $this->service->create($request->validated(), $request->user());

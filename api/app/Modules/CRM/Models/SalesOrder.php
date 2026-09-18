@@ -35,7 +35,7 @@ class SalesOrder extends Model
         'notes', 'submission_source', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
         'customer_confirmation_requested_at',
         'in_production_at', 'partially_delivered_at', 'delivered_at',
-        'invoiced_at', 'cancelled_at',
+        'invoiced_at', 'paid_at', 'closed_at', 'cancelled_at',
     ];
 
     protected $casts = [
@@ -54,6 +54,8 @@ class SalesOrder extends Model
         'partially_delivered_at' => 'datetime',
         'delivered_at'       => 'datetime',
         'invoiced_at'        => 'datetime',
+        'paid_at'            => 'datetime',
+        'closed_at'          => 'datetime',
         'cancelled_at'       => 'datetime',
     ];
 

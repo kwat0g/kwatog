@@ -22,6 +22,7 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Support\EmployeeStateMachine;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Enums\LoanStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +177,11 @@ class SeparationService
                 'initiated_by'      => $by->id,
                 'remarks'           => $data['remarks'] ?? null,
             ]);
+
+            // Reserve outstanding loans before the employee can enter a later
+            // payroll run. Final pay owns these balances once separation starts;
+            // ordinary payroll must not amortize them in the meantime.
+            $this->reserveLoansForFinalPay($lockedEmployee->id);
 
             $fromStatus = $lockedEmployee->status instanceof EmployeeStatus
                 ? $lockedEmployee->status->value
@@ -565,6 +571,7 @@ class SeparationService
 
             $restoreTo = $this->preInitiationStatus($employee->id);
             $this->stateMachine->transition($employee, $restoreTo);
+            $this->releaseLoansFromFinalPay($employee->id);
 
             $remarks = trim('Separation cancelled.'.($reason !== null ? ' Reason: '.trim($reason) : ''));
             $previousRemarks = trim((string) $lockedClearance->remarks);
@@ -621,5 +628,33 @@ class SeparationService
         $status = is_array($row?->from_value) ? ($row->from_value['status'] ?? null) : null;
 
         return EmployeeStatus::tryFrom((string) $status) ?? EmployeeStatus::Active;
+    }
+
+    private function reserveLoansForFinalPay(int $employeeId): void
+    {
+        EmployeeLoan::query()
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', [LoanStatus::Active->value, LoanStatus::Pending->value])
+            ->where('balance', '>', 0)
+            ->lockForUpdate()
+            ->get()
+            ->each(function (EmployeeLoan $loan): void {
+                if (! $loan->is_final_pay_deduction) {
+                    $loan->forceFill(['is_final_pay_deduction' => true])->save();
+                }
+            });
+    }
+
+    private function releaseLoansFromFinalPay(int $employeeId): void
+    {
+        EmployeeLoan::query()
+            ->where('employee_id', $employeeId)
+            ->whereIn('status', [LoanStatus::Active->value, LoanStatus::Pending->value])
+            ->where('is_final_pay_deduction', true)
+            ->lockForUpdate()
+            ->get()
+            ->each(function (EmployeeLoan $loan): void {
+                $loan->forceFill(['is_final_pay_deduction' => false])->save();
+            });
     }
 }

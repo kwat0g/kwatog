@@ -7,6 +7,7 @@ namespace Tests\Feature\Admin;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -56,10 +57,11 @@ class UserAdministrationEscalationTest extends TestCase
         $target = $this->withRole('employee');
         $administrator = $this->systemAdmin();
 
+        $createEmployee = Employee::factory()->create(['email' => 'escalation-create@t.test']);
+
         // create with role=system_admin
         $this->actingAs($manager)->postJson('/api/v1/admin/users', [
-            'name' => 'Escalation Attempt',
-            'email' => 'escalation-create@t.test',
+            'employee_id' => $createEmployee->hash_id,
             'role_id' => $systemRole->hash_id,
             'send_welcome' => false,
         ])->assertForbidden();

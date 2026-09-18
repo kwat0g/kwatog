@@ -21,7 +21,7 @@ namespace App;
  *     securitySchemeId="sanctum",
  *     type="http",
  *     scheme="bearer",
- *     description="Laravel Sanctum session-based authentication. Obtain session via POST /auth/login."
+ *     description="Laravel Sanctum session-based authentication. Obtain session via POST /auth/sign-in."
  * )
  *
  * @OA\Tag(name="Authentication", description="Login, logout, session management")

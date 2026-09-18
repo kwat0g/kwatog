@@ -23,6 +23,28 @@ trait HasAuditLog
         static::deleted(fn (Model $m)  => static::writeAudit($m, 'deleted', $m->getOriginal(), null));
     }
 
+    /**
+     * Let a model replace raw column values with decrypted/array values for the
+     * audit trail. Needed when a model uses a custom encrypted cast whose class
+     * name `redactValue()` cannot recognise: without this the audit stored the
+     * ciphertext string and nested redaction (e.g. changes.bank_account) never
+     * ran. Only keys already present in the snapshot are replaced.
+     */
+    private static function auditSnapshot(Model $model, ?array $values): ?array
+    {
+        if ($values === null || ! method_exists($model, 'auditAttributeSnapshot')) {
+            return $values;
+        }
+
+        foreach ($model->auditAttributeSnapshot() as $key => $value) {
+            if (array_key_exists($key, $values)) {
+                $values[$key] = $value;
+            }
+        }
+
+        return $values;
+    }
+
     private static function writeAudit(Model $model, string $action, ?array $old, ?array $new): void
     {
         $request = request();
@@ -44,8 +66,8 @@ trait HasAuditLog
             'action'     => $action,
             'model_type' => $model->getMorphClass(),
             'model_id'   => $model->getKey(),
-            'old_values' => $old ? static::redactSensitive($model, $old) : null,
-            'new_values' => $new ? static::redactSensitive($model, $new) : null,
+            'old_values' => $old ? static::redactSensitive($model, static::auditSnapshot($model, $old)) : null,
+            'new_values' => $new ? static::redactSensitive($model, static::auditSnapshot($model, $new)) : null,
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
             'source_command' => (string) $source,

@@ -40,7 +40,7 @@ export default function PortalChangePasswordPage() {
       toast.success('Password updated. Please sign in again.');
       // The portal session is invalidated by the password-change endpoint;
       // calling logout again would correctly return 401 and mask the success.
-      navigate(`/portal/${type}/login`, { replace: true });
+       navigate('/sign-in', { state: { realm: type }, replace: true });
     } catch (error) {
       const body = (error as AxiosError<{ message?: string }>).response?.data;
       toast.error(body?.message ?? 'Could not update your password.');

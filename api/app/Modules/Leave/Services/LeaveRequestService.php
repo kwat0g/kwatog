@@ -6,6 +6,7 @@ namespace App\Modules\Leave\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Models\ApprovalRecord;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
@@ -456,11 +457,23 @@ class LeaveRequestService
                 throw new BusinessRuleException('Already finalized.');
             }
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
+            $wasPending = in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true);
             $req->forceFill([
                 'status'       => LeaveRequestStatus::Cancelled->value,
                 'cancelled_by' => $user->id,
                 'cancelled_at' => now(),
             ])->save();
+
+            // Retire any open approval step. Without this a cancelled request
+            // stayed on the approval board as a live card that 422s on action.
+            if ($wasPending) {
+                ApprovalRecord::query()
+                    ->where('approvable_type', $req->getMorphClass())
+                    ->where('approvable_id', $req->getKey())
+                    ->where('is_current', true)
+                    ->whereIn('action', ['pending', 'skipped'])
+                    ->update(['action' => 'superseded', 'is_current' => false]);
+            }
 
             if ($wasApproved) {
                 $year = (int) $req->start_date->format('Y');

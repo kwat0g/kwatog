@@ -227,7 +227,7 @@ export default function MobileWorkOrderDetail() {
       )}
 
       {/* Parts Used section */}
-      {!isTerminal && (
+      {!isTerminal && canComplete && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">Parts used</h2>

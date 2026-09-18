@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Support\DepartmentScope;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\ProfileUpdateRequest;
@@ -81,12 +82,29 @@ class ProfileUpdateRequestService
     /**
      * HR-side review queue. Returns paginated list scoped by status.
      *
+     * Row visibility is permission-derived (REC-11): a reviewer who holds the
+     * view-all grant sees every request; otherwise they see only requests for
+     * employees in their own department. The queue carries sensitive fields
+     * (bank details), so it must never be a company-wide read for a
+     * department-scoped `hr.employees.view` holder.
+     *
      * @param  array<string, mixed>  $filters
      */
-    public function listForReview(array $filters = []): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    public function listForReview(array $filters = [], ?User $user = null): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
         $query = ProfileUpdateRequest::query()
             ->with(['employee.department', 'requester']);
+
+        DepartmentScope::apply(
+            $query,
+            $user,
+            viewAllPermission: 'hr.employees.view_sensitive',
+            departmentPermission: 'hr.employees.view',
+            deptColumn: 'department_id',
+            selfColumn: null,
+            selfId: null,
+            deptRelation: 'employee',
+        );
 
         $status = $filters['status'] ?? 'pending';
         if (in_array($status, ProfileUpdateStatus::values(), true)) {

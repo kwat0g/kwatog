@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Resources;
 
+use App\Common\Services\ApprovalService;
 use App\Modules\Loans\Support\LoanRate;
+use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Policies\LoanAccessPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +15,10 @@ class EmployeeLoanResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        /** @var EmployeeLoan $loan */
+        $loan = $this->resource;
+        $actions = $this->actions($request, $loan);
+
         return [
             'id'                     => $this->hash_id,
             'loan_no'                => $this->loan_no,
@@ -54,8 +61,36 @@ class EmployeeLoanResource extends JsonResource
                 'is_overdue'    => (bool) $r->is_overdue,
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
+            'actions'                => $actions,
             'created_at'             => optional($this->created_at)->toIso8601String(),
             'updated_at'             => optional($this->updated_at)->toIso8601String(),
+        ];
+    }
+
+    /** @return array{can_approve:bool,can_reject:bool,can_cancel:bool} */
+    private function actions(Request $request, EmployeeLoan $loan): array
+    {
+        $user = $request->user();
+        $next = $loan->relationLoaded('approvalRecords')
+            ? $loan->approvalRecords->first(fn ($record): bool => $record->action === 'pending')
+            : null;
+        $submitterId = $loan->relationLoaded('employee') && $loan->employee?->relationLoaded('user')
+            ? $loan->employee->user?->id
+            : $loan->approvalSubmitterId();
+        $canDecide = $user !== null
+            && $next !== null
+            && $user->can('loans.approve')
+            && app(LoanAccessPolicy::class)->canDecide($user, $loan)
+            && app(ApprovalService::class)->canUserActFor($user, (string) $next->role_slug)
+            && (int) $submitterId !== (int) $user->id;
+
+        return [
+            'can_approve' => $canDecide,
+            'can_reject' => $canDecide,
+            'can_cancel' => $user !== null
+                && $loan->status?->value === 'pending'
+                && $user->can('loans.write_off')
+                && app(LoanAccessPolicy::class)->canDecide($user, $loan),
         ];
     }
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\HR\Models\Department;
+use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
@@ -27,6 +28,7 @@ class StorePurchaseRequestRequest extends FormRequest
         return [
             'department_id' => Department::class,
             'template_id' => PurchaseRequestTemplate::class,
+            'mrp_plan_id' => MrpPlan::class,
             'items.*.item_id' => Item::class,
         ];
     }
@@ -36,6 +38,9 @@ class StorePurchaseRequestRequest extends FormRequest
         return [
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
             'template_id' => ['nullable', 'integer', 'exists:purchase_request_templates,id'],
+            // Optional provenance link to the MRP run that motivated this
+            // request (trace §7.4). Resolved from a HashID by hashIdFields().
+            'mrp_plan_id' => ['nullable', 'integer', 'exists:mrp_plans,id'],
             'date' => ['nullable', 'date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'priority' => ['nullable', Rule::in(PurchaseRequestPriority::values())],

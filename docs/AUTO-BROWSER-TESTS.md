@@ -46,9 +46,11 @@ shared test password.
 
 | Profile | Email | Role slug | Employee link | Perm count |
 |---|---|---|---|---|
-| P_ADMIN | admin@ogami.test | system_admin | none | 201 (wildcard) |
+| P_ADMIN | admin@ogami.test | system_admin | yes | 201 (wildcard) |
 | P_HR | hr@ogami.test | hr_officer | yes | 60 |
 | P_FINANCE | finance@ogami.test | finance_officer | yes | 72 |
+| P_SALES | crm@ogami.test | sales_officer | yes | 24 |
+| P_CUSTSERV | customerservice@ogami.test | customer_service_officer | yes | 25 |
 | P_PROD | production@ogami.test | production_manager | yes | 43 |
 | P_PPC | ppc@ogami.test | ppc_head | yes | 39 |
 | P_PURCH | purchasing@ogami.test | purchasing_officer | yes | 30 |
@@ -61,8 +63,9 @@ shared test password.
 | P_SUPPLIER | portal@supp.test | supplier_portal guard | (vendor) | token |
 | P_CUSTOMER | portal@cust.test | customer_portal guard | (customer) | token |
 
-> `crm@ogami.test` maps to the scoped **sales_officer** role. There is only one
-> `employee`-role user seeded;
+> `crm@ogami.test` maps to the scoped **sales_officer** role and
+> `customerservice@ogami.test` maps to **customer_service_officer**. There is
+> only one `employee`-role user seeded;
 > horizontal-leakage tests use the admin-visible payroll list to find a *second*
 > employee's record as the target.
 

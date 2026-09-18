@@ -7,7 +7,7 @@
  * In E2E there is no backend: `playwright.config.ts` mocks everything and the
  * Vite proxy has nothing behind it. An endpoint a spec has not mocked therefore
  * answers 401 — and the axios interceptor correctly treats a 401 as an expired
- * session, clears the query cache and navigates to /login. So a single endpoint
+ * session, clears the query cache and navigates to /sign-in. So a single endpoint
  * a page acquired *after* its spec was written blanked the page and failed every
  * assertion in that spec, with an error message pointing at whichever locator
  * happened to be checked first. That is what had happened to the chain, payroll

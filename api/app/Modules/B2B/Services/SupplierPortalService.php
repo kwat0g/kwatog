@@ -6,16 +6,15 @@ namespace App\Modules\B2B\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\AuditLog;
-use App\Common\Services\SettingsService;
 use App\Common\Services\SystemUserResolver;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Enums\SupplierAgingBucket;
@@ -114,7 +113,7 @@ class SupplierPortalService
         private readonly PurchaseOrderService $purchaseOrders,
         private readonly SupplierResponseService $supplierResponses,
         private readonly SystemUserResolver $systemUser,
-        private readonly SettingsService $settings,
+        private readonly AccountingAccountPolicyService $accountPolicies,
         private readonly TaxPolicyService $taxPolicy,
     ) {}
 
@@ -641,18 +640,21 @@ class SupplierPortalService
      */
     private function defaultExpenseAccountHashId(): string
     {
-        $account = Account::query()
-            ->where('code', $this->settings->requiredString('accounting.default_expense_account_code'))
-            ->first();
-
-        if (! $account) {
+        try {
+            $accountId = $this->accountPolicies
+                ->controlAccountIdForSetting('accounting.default_expense_account_code');
+        } catch (\RuntimeException $e) {
             // Never infer an account from a display name: chart-of-accounts
             // labels are deployment data and may vary by tenant or locale.
             // The configured code is the authoritative mapping.
-            throw new BusinessRuleException('Configured supplier-portal expense account was not found. Please contact the administrator.');
+            throw new BusinessRuleException(
+                'Configured supplier-portal expense account was not found. Please contact the administrator.',
+                0,
+                $e,
+            );
         }
 
-        return $account->hash_id;
+        return app('hashids')->encode($accountId);
     }
 
     /* ─── Invoices / Bills ───────────────────────────────────────── */

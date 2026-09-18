@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
  login: async (creds) => {
  // A new identity may take over without a page reload (e.g. previous
- // session expired and AuthGuard soft-navigated to /login) — drop any
+  // session expired and AuthGuard soft-navigated to /sign-in) — drop any
  // cache left behind by the prior user before authenticating.
  queryClient.clear();
  const user = await authApi.login(creds);

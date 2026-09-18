@@ -16,6 +16,7 @@ use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Services\FinalPayService;
 use App\Modules\HR\Services\SeparationService;
+use App\Modules\Loans\Models\EmployeeLoan;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -130,6 +131,20 @@ class SeparationCancelTest extends TestCase
         $this->assertSame(ClearanceStatus::InProgress, $replacement->fresh()->status);
         $this->assertNotSame($clearance->id, $replacement->id);
         $this->assertSame(EmployeeStatus::OnLeave, $employee->fresh()->status);
+    }
+
+    public function test_initiation_reserves_loans_and_cancellation_releases_them(): void
+    {
+        $employee = Employee::factory()->create();
+        $loan = EmployeeLoan::factory()->create(['employee_id' => $employee->id]);
+
+        $clearance = $this->initiate($employee);
+
+        $this->assertTrue((bool) $loan->fresh()->is_final_pay_deduction);
+
+        $this->service()->cancel($clearance->fresh(), $this->actor());
+
+        $this->assertFalse((bool) $loan->fresh()->is_final_pay_deduction);
     }
 
     // ── (c) cancel refused once money is in play ───────────────────────────

@@ -85,7 +85,7 @@ export const purchasingRoutes = (
       <Route
         path="/purchasing/approved-suppliers"
         element={
-          <PermissionGuard permission="purchasing.view">
+          <PermissionGuard permission="purchasing.po.create">
             <ApprovedSuppliersPage />
           </PermissionGuard>
         }
@@ -95,7 +95,7 @@ export const purchasingRoutes = (
       <Route
         path="/purchasing/supplier-listings"
         element={
-          <PermissionGuard permission="purchasing.view">
+          <PermissionGuard permission="purchasing.supplier_listings.review">
             <SupplierListingsReviewPage />
           </PermissionGuard>
         }

@@ -193,6 +193,28 @@ class ImportManualCorrectionGuardTest extends TestCase
         $this->assertFalse((bool) $row->is_manual_entry);
     }
 
+    public function test_biometric_reimport_cannot_overwrite_approved_leave(): void
+    {
+        $emp = $this->employee();
+        Attendance::create([
+            'employee_id' => $emp->id,
+            'date' => '2026-06-08',
+            'status' => 'on_leave',
+            'is_manual_entry' => false,
+            'regular_hours' => 0,
+            'overtime_hours' => 0,
+            'night_diff_hours' => 0,
+        ]);
+
+        $result = app(DTRImportService::class)->import($this->csv(
+            "employee_no,date,time_in,time_out\n{$emp->employee_no},2026-06-08,08:00,17:00\n"
+        ));
+
+        $this->assertSame(0, $result['imported']);
+        $this->assertSame(1, $result['skipped_manual']);
+        $this->assertSame('on_leave', $this->day($emp, '2026-06-08')->fresh()->status->value);
+    }
+
     public function test_a_guarded_day_does_not_fail_the_rest_of_the_file(): void
     {
         $emp = $this->employee();

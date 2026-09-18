@@ -19,6 +19,8 @@ use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\SalesOrder;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -106,6 +108,82 @@ class CreditNoteTest extends TestCase
         $this->assertSame('1120.00', (string) $je->total_debit);
     }
 
+    public function test_customer_credit_note_inherits_vat_treatment_from_source_invoice(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Exempt Customer', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-EXEMPT-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'is_vatable' => false,
+            'subtotal' => '1000.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '1000.00',
+            'amount_paid' => '0.00',
+            'balance' => '1000.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+
+        $creditNote = $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            // A caller must not make an exempt source taxable by supplying true.
+            'is_vatable' => true,
+            'customer_id' => $customer->id,
+            'invoice_id' => $invoice->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Exempt return',
+                'amount' => '100.00',
+            ]],
+        ], $by);
+
+        $this->assertFalse($creditNote->is_vatable);
+        $this->assertSame('0.00', (string) $creditNote->vat_amount);
+        $this->assertSame('100.00', (string) $creditNote->total_amount);
+    }
+
+    public function test_customer_credit_note_cannot_reference_another_customers_invoice(): void
+    {
+        $by = $this->admin();
+        $declaredCustomer = Customer::create(['name' => 'Declared Customer', 'payment_terms_days' => 30]);
+        $sourceCustomer = Customer::create(['name' => 'Source Customer', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-PARTY-'.substr(uniqid(), -5),
+            'customer_id' => $sourceCustomer->id,
+            'status' => 'finalized',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('different customer');
+
+        $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'customer_id' => $declaredCustomer->id,
+            'invoice_id' => $invoice->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Cross-party credit',
+                'amount' => '50.00',
+            ]],
+        ], $by);
+    }
+
     public function test_applying_customer_credit_reduces_invoice_balance(): void
     {
         $by = $this->admin();
@@ -143,6 +221,42 @@ class CreditNoteTest extends TestCase
         // CN total = 500 + 12% VAT = 560; fully applied → balance 0, status applied.
         $this->assertSame('0.00', (string) $cn->balance);
         $this->assertSame('applied', $cn->status->value);
+    }
+
+    public function test_fully_applying_customer_credit_promotes_linked_sales_order_to_paid(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Acme', 'payment_terms_days' => 30]);
+        $so = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'created_by' => $by->id,
+            'status' => SalesOrderStatus::Invoiced->value,
+        ]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-PAID-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'sales_order_id' => $so->id,
+            'status' => 'finalized',
+            'subtotal' => '500.00',
+            'vat_amount' => '60.00',
+            'total_amount' => '560.00',
+            'amount_paid' => '0.00',
+            'balance' => '560.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+
+        $cn = $this->svc->finalize($this->svc->create([
+            'type' => 'customer', 'date' => now()->toDateString(), 'is_vatable' => true,
+            'customer_id' => $customer->id, 'invoice_id' => $invoice->id,
+            'lines' => [['account_id' => $this->revenueAccountId(), 'description' => 'Credit', 'amount' => '500.00']],
+        ], $by), $by);
+
+        $this->svc->apply($cn, ['amount' => '560.00', 'invoice_id' => $invoice->id], $by);
+
+        $this->assertSame(SalesOrderStatus::Paid, $so->fresh()->status);
     }
 
     public function test_applying_a_stale_credit_note_cannot_be_replayed(): void

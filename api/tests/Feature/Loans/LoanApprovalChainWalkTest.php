@@ -165,6 +165,27 @@ class LoanApprovalChainWalkTest extends TestCase
             ->assertStatus(403);
     }
 
+    public function test_loan_detail_actions_follow_the_current_approval_step(): void
+    {
+        $requester = Employee::factory()->create();
+        $loan = $this->pendingLoanFor($requester, 'cash_advance');
+        $vp = $this->userWithRole('vice_president');
+        $deptHead = $this->userWithRole('department_head');
+        $deptHead->employee->update(['department_id' => $requester->department_id]);
+
+        $this->actingAs($vp)
+            ->getJson("/api/v1/loans/{$loan->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.actions.can_approve', false)
+            ->assertJsonPath('data.actions.can_reject', false);
+
+        $this->actingAs($deptHead)
+            ->getJson("/api/v1/loans/{$loan->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.actions.can_approve', true)
+            ->assertJsonPath('data.actions.can_reject', true);
+    }
+
     public function test_requester_cannot_approve_own_loan(): void
     {
         // Self-approval guard via a requester who WOULD pass every other
