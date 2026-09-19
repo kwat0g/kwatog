@@ -1,10 +1,18 @@
 # Production (Work Orders, OEE, Scheduling, Maintenance) Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- Breakdown MWO creation, summary SQL, initial operation windows, machine/mold guards, and schedule constraints are present.
+- Remaining risks: resume while the machine is still down, pause/complete clearing another WO's machine, false material-lot lineage, independent operation output limits, downtime interval math, dashboard invalidation, dead notification routes, and missing audit coverage.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/Production/` plus the machine/mold/scheduling/maintenance machinery it
 depends on (`api/app/Modules/MRP/` machine+mold+capacity services, `api/app/Modules/Maintenance/`).
 `WorkOrderService` and `WorkOrderOutputService` were audited in
-`SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; summarized here, not re-traced.
+`FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; summarized here, not re-traced.
 Claims are marked **[confirmed]** (file:line, grep, or code read) or **[assumption/unverified]**.
 
 **Audit status as of 2026-09-19:** **FINISHED** for the production audit scope. Source remediation

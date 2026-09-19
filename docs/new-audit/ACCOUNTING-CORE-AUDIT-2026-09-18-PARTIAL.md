@@ -2,10 +2,18 @@
 
 Date: 2026-09-18
 Status: PARTIAL
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **partial remains accurate**.
+
+- Current high-risk gaps: duplicate delivery invoice consumption, source-state validation for credit notes, changed-payload bill-payment replay, budget bypass at bill posting, ambiguous account-policy collisions, fiscal-year lifecycle, and raw numeric IDs.
+- Several historical fixes are current: discount-account separation, invoice active/credit gates, invoice cancellation reconciliation, live budget KPI, and canonical GL writer policy coverage.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/Accounting/` — chart of accounts, journal entries, accounting
 periods/fiscal years, posting rules, financial statements, AR (customers, invoices,
 collections, official receipts, credit notes, statements, dunning), AP (bills/payments
-already traced in `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18.md`), and the budgeting feature. This is the
+already traced in `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md`), and the budgeting feature. This is the
 hub all three business chains post into.
 Claims are marked **[confirmed]** (file:line, or a grep/seed check) or
 **[assumption/unverified]**.

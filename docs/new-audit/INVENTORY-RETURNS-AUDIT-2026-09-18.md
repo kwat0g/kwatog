@@ -1,6 +1,15 @@
 # Inventory + Return Management Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **open**.
+
+- Search imports and stock-card transfer direction are fixed, but stock-card WAC arithmetic remains wrong/float-based.
+- Current Inventory risks: zone reclassification with stock, incomplete/self-approved counts, fractional incoming QC, non-idempotent GRN/material issue creation, non-authoritative lots, inactive-location use, and item restore binding.
+- Return Management risks: internal product/item mismatch, duplicate NCRs, Finance-only approval role, source-status enforcement, supplier bill provenance, replacement VAT, and per-line supplier movement traceability.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/Inventory/` (stock ledger, locations/zones, transfers, adjustments,
 counts, material issues, picking, barcode, quarantine/MRB, GL, item master, receiving) and
 `api/app/Modules/ReturnManagement/` (RMA).

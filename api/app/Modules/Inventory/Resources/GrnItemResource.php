@@ -29,6 +29,8 @@ class GrnItemResource extends JsonResource
             'quantity_received' => (string) $this->quantity_received,
             'quantity_accepted' => (string) $this->quantity_accepted,
             'unit_cost' => (string) $this->unit_cost,
+            'landed_cost_unit' => $this->landed_cost_unit !== null ? (string) $this->landed_cost_unit : null,
+            'landed_cost_total' => $this->landed_cost_total !== null ? (string) $this->landed_cost_total : null,
             'received_uom_code' => $this->received_uom_code,
             'lot_number' => $this->material_lot_number,
             'supplier_lot_reference' => $this->supplier_lot_reference,

@@ -13,9 +13,12 @@ use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,15 +31,9 @@ use Tests\TestCase;
  * Strategy: call handle() twice on the same WorkOrderCompleted event (same WO).
  * The second call must be a no-op — only one outgoing inspection must exist.
  *
- * Covers the fix at two levels:
- *   1. Application layer — firstOrCreate on guard columns in fallback path +
- *      QueryException catch in the InspectionService path.
- *   2. DB layer — unique index on (stage, entity_type, entity_id) in migration 0169.
- *
- * We intentionally have NO active InspectionSpec so the listener falls through
- * to the fallback Inspection::firstOrCreate() path — this avoids needing
- * InspectionSpec/InspectionSpecItem fixtures while still exercising the
- * race-safe insert logic.
+ * Covers the application and database idempotency guards while requiring a real
+ * inspection spec. A missing spec is a quality configuration failure and must
+ * fail closed rather than creating an uncompletable bare inspection.
  *
  * Test inventory:
  *  1. test_handling_work_order_completed_twice_creates_one_outgoing_inspection
@@ -110,6 +107,8 @@ class OutgoingQcIdempotencyTest extends TestCase
             'batch_code' => 'BATCH-002',
         ]);
 
+        $this->createActiveSpec();
+
         $this->listener = app(TriggerOutgoingQC::class);
     }
 
@@ -119,8 +118,8 @@ class OutgoingQcIdempotencyTest extends TestCase
      * Calling handle() twice for the same WO must produce exactly ONE outgoing
      * inspection row. The second call must silently no-op.
      *
-     * No active InspectionSpec exists → listener always falls through to the
-     * firstOrCreate fallback path — exercises the race-safe bare-insert logic.
+     * The active spec provides the measurement scaffold required by the
+     * inspection engine.
      */
     public function test_handling_work_order_completed_twice_creates_one_outgoing_inspection(): void
     {
@@ -153,9 +152,28 @@ class OutgoingQcIdempotencyTest extends TestCase
         $this->assertSame(
             2,
             $countAfterSecond,
-            'Second handle() call must NOT create duplicate output inspections. '.
-            'The unique constraint + firstOrCreate guard must suppress the duplicate.'
+            'Second handle() call must NOT create duplicate output inspections.'
         );
+    }
+
+    public function test_missing_active_spec_fails_closed_without_a_bare_inspection(): void
+    {
+        InspectionSpec::query()
+            ->where('product_id', $this->product->id)
+            ->update(['is_active' => false]);
+
+        try {
+            $this->listener->handle(new WorkOrderCompleted($this->workOrder));
+            $this->fail('Outgoing QC must fail when the product has no active inspection spec.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('no active inspection spec', strtolower($e->getMessage()));
+        }
+
+        $this->assertSame(0, Inspection::query()
+            ->where('stage', InspectionStage::Outgoing->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $this->workOrder->id)
+            ->count());
     }
 
     // ─── Test 2: WO without sales_order_id skipped ───────────────────────────
@@ -360,5 +378,23 @@ class OutgoingQcIdempotencyTest extends TestCase
             ->where('entity_type', InspectionEntityType::WorkOrder->value)
             ->where('entity_id', $this->workOrder->id)
             ->count());
+    }
+
+    private function createActiveSpec(): void
+    {
+        $spec = InspectionSpec::create([
+            'product_id' => $this->product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $this->user->id,
+        ]);
+
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Visual condition',
+            'parameter_type' => InspectionParameterType::Visual->value,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
     }
 }

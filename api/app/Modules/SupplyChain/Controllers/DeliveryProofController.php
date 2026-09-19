@@ -56,6 +56,11 @@ class DeliveryProofController
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $status = $delivery->status instanceof \BackedEnum ? $delivery->status->value : (string) $delivery->status;
+        if ($status === 'confirmed' && $validated['proof_type'] === DeliveryProofType::CertificateOfConformance->value) {
+            throw new BusinessRuleException('A Certificate of Conformance cannot be replaced after delivery confirmation.');
+        }
+
         $file = $request->file('file');
         $dir = "deliveries/{$delivery->id}/proofs";
         $path = $file->store($dir, 'local');
@@ -151,7 +156,7 @@ class DeliveryProofController
         }
 
         try {
-            $path = DB::transaction(function () use ($delivery, $proof): string {
+            DB::transaction(function () use ($delivery, $proof): void {
                 // M044 — the "is this the last proof" count used to be taken
                 // BEFORE the transaction and without a lock, so two concurrent
                 // deletes against two proofs each saw one proof remaining, each
@@ -172,15 +177,14 @@ class DeliveryProofController
                 // would leave the confirmation undefensible.
                 $remaining = $locked->proofs()->where('id', '!=', $target->id)->count();
                 $status = $locked->status instanceof \BackedEnum ? $locked->status->value : $locked->status;
+                if ($status === 'confirmed' && $target->proof_type === DeliveryProofType::CertificateOfConformance->value) {
+                    throw new BusinessRuleException('The Certificate of Conformance cannot be deleted from a confirmed delivery.');
+                }
                 if ($status === 'confirmed' && $remaining === 0) {
                     throw new BusinessRuleException('Cannot delete the only proof of a confirmed delivery.');
                 }
 
-                $path = (string) $target->file_path;
                 $target->delete();
-                DB::afterCommit(fn () => Storage::disk('local')->delete($path));
-
-                return $path;
             });
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -196,7 +200,18 @@ class DeliveryProofController
             throw new RuntimeException('Proof does not belong to this delivery.');
         }
 
-        $proof->restore();
+        DB::transaction(function () use ($delivery, $proof): void {
+            $lockedDelivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $lockedProof = DeliveryProof::withTrashed()->lockForUpdate()->findOrFail($proof->id);
+            if (! Storage::disk('local')->exists((string) $lockedProof->file_path)) {
+                throw new BusinessRuleException('The archived delivery proof file is missing and cannot be restored.');
+            }
+            if ($lockedDelivery->status === 'confirmed' && $lockedProof->proof_type === DeliveryProofType::CertificateOfConformance->value) {
+                $lockedProof->restore();
+                return;
+            }
+            $lockedProof->restore();
+        });
         return response()->json(['message' => 'Delivery proof restored.']);
     }
 }

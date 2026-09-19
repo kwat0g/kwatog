@@ -30,6 +30,7 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Services\ThreeWayMatchService;
+use App\Modules\SupplyChain\Models\Shipment;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,7 @@ class BillService
             // 2026-08-08 — source receipt for auto-created draft bills (status
             // feeds the P2P stepper's GRN step).
             'goodsReceiptNote:id,grn_number,status',
+            'landedCostShipment:id,shipment_number,purchase_order_id',
         ]);
     }
 
@@ -138,10 +140,19 @@ class BillService
             );
             $provenance = (string) ($data['provenance_type'] ?? 'stock');
             $this->assertBillProvenance($provenance, $data, $by);
+            $landedCostShipmentId = $provenance === 'landed_cost'
+                ? $this->resolveLandedCostShipment($data, (int) $vendor->id)
+                : null;
+            $landedCostClearingAccountId = $landedCostShipmentId !== null
+                ? $this->accounts->controlAccountIdForSetting('accounting.accounts.landed_cost_clearing_code')
+                : null;
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             // Build items + totals.
-            [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
+            [$items, $subtotal] = $this->normalizeItems($data['items'] ?? [], $landedCostClearingAccountId);
+            if ($landedCostShipmentId !== null) {
+                $this->assertLandedCostBillAmount($landedCostShipmentId, $subtotal);
+            }
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
@@ -232,6 +243,7 @@ class BillService
                 'vendor_id' => $vendor->id,
                 'purchase_order_id' => $poId,
                 'goods_receipt_note_id' => $provenance === 'stock' ? (HashIdFilter::decode($data['goods_receipt_note_id'], GoodsReceiptNote::class) ?? (int) $data['goods_receipt_note_id']) : null,
+                'landed_cost_shipment_id' => $landedCostShipmentId,
                 'provenance_type' => $provenance,
                 'exception_evidence' => $provenance === 'service' ? trim((string) $data['exception_evidence']) : null,
                 'exception_owner_id' => $provenance === 'service' ? $by->id : null,
@@ -951,6 +963,12 @@ class BillService
      */
     private function assertBillProvenance(string $type, array $data, User $by): void
     {
+        if ($type === 'landed_cost') {
+            if (empty($data['landed_cost_shipment_id'])) {
+                throw new BusinessRuleException('Landed-cost bills require a source shipment.');
+            }
+            return;
+        }
         if ($type === 'service') {
             if (empty($data['exception_evidence']) || ! ($data['exception_approved'] ?? false)) {
                 throw new BusinessRuleException('Service/non-stock bills require evidence, an owner, and explicit approval.');
@@ -988,6 +1006,17 @@ class BillService
 
     private function assertPersistedBillProvenance(Bill $bill): void
     {
+        if ($bill->provenance_type === 'landed_cost') {
+            if (! $bill->landed_cost_shipment_id) {
+                throw new BusinessRuleException('Landed-cost bills require a source shipment.');
+            }
+            $this->assertLandedCostBillAmount(
+                (int) $bill->landed_cost_shipment_id,
+                (string) $bill->subtotal,
+                (int) $bill->id,
+            );
+            return;
+        }
         if ($bill->provenance_type === 'service') {
             if (! $bill->exception_evidence || ! $bill->exception_owner_id || ! $bill->exception_approved_by) throw new BusinessRuleException('Service/non-stock bill exception evidence is incomplete.');
             return;
@@ -1005,6 +1034,48 @@ class BillService
         }
     }
 
+    private function resolveLandedCostShipment(array $data, int $vendorId): int
+    {
+        $shipmentId = HashIdFilter::decode($data['landed_cost_shipment_id'] ?? null, Shipment::class)
+            ?? (int) ($data['landed_cost_shipment_id'] ?? 0);
+        $shipment = Shipment::query()
+            ->with('purchaseOrder:id,vendor_id')
+            ->lockForUpdate()
+            ->find($shipmentId);
+        if (! $shipment || ! $shipment->purchaseOrder) {
+            throw new BusinessRuleException('The selected landed-cost shipment no longer exists.');
+        }
+        if ((int) $shipment->purchaseOrder->vendor_id !== $vendorId) {
+            throw new BusinessRuleException('The landed-cost bill vendor must match the shipment purchase-order vendor.');
+        }
+        if (Money::lte((string) $shipment->landed_cost_total, '0')) {
+            throw new BusinessRuleException('The shipment has no capitalized landed cost available to clear.');
+        }
+
+        return (int) $shipment->id;
+    }
+
+    private function assertLandedCostBillAmount(int $shipmentId, string $subtotal, ?int $excludeBillId = null): void
+    {
+        $shipment = Shipment::query()->lockForUpdate()->find($shipmentId);
+        if (! $shipment) {
+            throw new BusinessRuleException('The landed-cost source shipment no longer exists.');
+        }
+
+        $capitalized = Money::round2((string) ($shipment->landed_cost_total ?? '0'));
+        $used = Bill::query()
+            ->where('landed_cost_shipment_id', $shipmentId)
+            ->where('status', '<>', BillStatus::Cancelled->value)
+            ->when($excludeBillId !== null, fn ($query) => $query->whereKeyNot($excludeBillId))
+            ->sum('subtotal');
+        $available = Money::sub($capitalized, (string) $used);
+        if (Money::gt($subtotal, $available)) {
+            throw new BusinessRuleException(
+                "Landed-cost bill subtotal {$subtotal} exceeds the uncleared shipment balance {$available}."
+            );
+        }
+    }
+
     /**
      * BusinessRuleException rather than ValidationException even though these
      * read like field errors: createDraft() and createDraftForGrn() are reached
@@ -1019,7 +1090,7 @@ class BillService
      * SupplierPortalController happening to wrap the call in
      * `catch (\RuntimeException)`.
      */
-    private function normalizeItems(array $rawItems): array
+    private function normalizeItems(array $rawItems, ?int $forcedAccountId = null): array
     {
         if (count($rawItems) === 0) {
             throw new BusinessRuleException('A bill must have at least one line item.');
@@ -1028,7 +1099,7 @@ class BillService
         $rows = [];
         $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
-            $accountId = $this->expenseAccountId($raw['expense_account_id'] ?? null);
+            $accountId = $forcedAccountId ?? $this->expenseAccountId($raw['expense_account_id'] ?? null);
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
 
@@ -1069,7 +1140,16 @@ class BillService
         $vatInputId = $this->accountId($this->accounts->vatInput());
 
         $lines = [];
-        if ($bill->provenance_type === 'stock' || $bill->goods_receipt_note_id !== null) {
+        if ($bill->provenance_type === 'landed_cost') {
+            $clearingId = $this->accounts
+                ->controlAccountIdForSetting('accounting.accounts.landed_cost_clearing_code');
+            $lines[] = [
+                'account_id' => $clearingId,
+                'debit' => (string) $bill->subtotal,
+                'credit' => '0.00',
+                'description' => "Landed cost clearing for {$bill->bill_number}",
+            ];
+        } elseif ($bill->provenance_type === 'stock' || $bill->goods_receipt_note_id !== null) {
             $grniCode = $this->settings->requiredString('accounting.accounts.grni_code');
             $grniId = $this->postingAccounts->configuredIdByCode($grniCode, AccountType::Liability);
             $lines[] = [

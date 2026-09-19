@@ -1,6 +1,14 @@
 # B2B Portal + Maintenance Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **B2B open; Maintenance open**. Historical claims were rechecked against current code.
+
+- B2B: supplier password expiry is still missing; customer invitation audit/active-state checks, reset-token pruning, supplier RFQ-document download, portal write throttles, customer response/RMA SPA reachability, and order idempotency remain open.
+- Maintenance: breakdown MWO creation exists but no-actor handling is still fail-open; predictive duplicate/freshness, downtime mismatch/double-counting, due-widget visibility, dead notification route, and audit/integrity gaps remain.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
 
 ---

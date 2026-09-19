@@ -1,9 +1,17 @@
 # MRP / BOM Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- Inactive-component consistency, duplicate BOM constraints, MRP summary wiring, stale-run metadata, and retirement audit behavior are current.
+- Remaining risks: soft-deleted highest-version collision, PO in-transit UOM, manual/daily overlap, plan-history loss, missing-BOM alert/status, MOQ precision, and untested Redis/two-worker behavior.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/MRP/` BOM/planning core. The MRP engine was traced in
-`SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; machines, molds, and `CapacityPlanningService` in
-`PRODUCTION-AUDIT-2026-09-18.md`. This covers the remaining BOM/costing/run surface.
+`FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; machines, molds, and `CapacityPlanningService` in
+`PRODUCTION-AUDIT-2026-09-18-FINISHED.md`. This covers the remaining BOM/costing/run surface.
 Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
 
 ---

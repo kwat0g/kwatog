@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Models;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Quality\Enums\InspectionParameterType;
@@ -34,6 +35,20 @@ class InspectionSpecItem extends Model
             $spec = InspectionSpec::withTrashed()->find((int) $item->inspection_spec_id);
             if ($spec) {
                 $item->inspection_spec_revision_id = $spec->ensureCurrentRevision()->id;
+            }
+        });
+
+        static::updating(static function (self $item): void {
+            $immutableFields = [
+                'inspection_spec_id', 'inspection_spec_revision_id', 'parameter_name',
+                'parameter_type', 'unit_of_measure', 'nominal_value', 'tolerance_min',
+                'tolerance_max', 'is_critical', 'sort_order', 'notes',
+            ];
+
+            if ($item->isDirty($immutableFields)) {
+                throw new BusinessRuleException(
+                    'Inspection-spec items are immutable. Create a new revision instead.',
+                );
             }
         });
     }

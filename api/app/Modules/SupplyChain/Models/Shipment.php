@@ -7,6 +7,7 @@ namespace App\Modules\SupplyChain\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /** Sprint 7 — Task 65. Inbound shipment for an imported PO. */
@@ -57,6 +59,11 @@ class Shipment extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function goodsReceiptNote(): HasOne
+    {
+        return $this->hasOne(GoodsReceiptNote::class);
     }
 
     public function creator(): BelongsTo

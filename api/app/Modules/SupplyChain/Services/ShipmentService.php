@@ -15,6 +15,9 @@ use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
+use App\Modules\SupplyChain\Models\Container;
+use App\Modules\Inventory\Services\GrnService;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
@@ -34,6 +37,7 @@ class ShipmentService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly GrnService $grns,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -75,7 +79,9 @@ class ShipmentService
             // ShipmentLandedCostResource is exposed via whenLoaded('landedCosts'),
             // so without this the detail endpoint always returned it as null and
             // the allocated costs were invisible to the UI.
-            'landedCosts',
+            'landedCosts.shipment',
+            'landedCosts.purchaseOrderItem',
+            'goodsReceiptNote:id,grn_number,shipment_id,status,received_date',
         ]);
     }
 
@@ -88,6 +94,11 @@ class ShipmentService
      *   bl_number?: string|null,
      *   etd?: string|null,
      *   eta?: string|null,
+     *   freight_cost?: string|null,
+     *   insurance_cost?: string|null,
+     *   duties_amount?: string|null,
+     *   brokerage_fee?: string|null,
+     *   other_charges?: string|null,
      *   notes?: string|null
      * } $data
      */
@@ -116,6 +127,11 @@ class ShipmentService
             'incoterm' => $data['incoterm'] ?? null,
             'etd' => $data['etd'] ?? null,
             'eta' => $data['eta'] ?? null,
+            'freight_cost' => $data['freight_cost'] ?? '0.00',
+            'insurance_cost' => $data['insurance_cost'] ?? '0.00',
+            'duties_amount' => $data['duties_amount'] ?? '0.00',
+            'brokerage_fee' => $data['brokerage_fee'] ?? '0.00',
+            'other_charges' => $data['other_charges'] ?? '0.00',
             'notes' => $data['notes'] ?? null,
             'created_by' => $by->id,
         ])));
@@ -131,6 +147,9 @@ class ShipmentService
             $current = $locked->status instanceof ShipmentStatus ? $locked->status : ShipmentStatus::from((string) $locked->status);
             if (! $current->canTransitionTo($next)) {
                 throw new BusinessRuleException("Cannot transition shipment {$locked->shipment_number} from {$current->value} to {$next->value}.");
+            }
+            if ($next === ShipmentStatus::Cleared && $current === ShipmentStatus::Customs) {
+                $this->assertClearanceEvidence($locked);
             }
             $patch = ['status' => $next->value];
             // Auto-stamp date columns at known transitions.
@@ -149,6 +168,10 @@ class ShipmentService
             }
             $locked->forceFill($patch)->save();
 
+            if ($next === ShipmentStatus::Received) {
+                $this->grns->stageForShipment($locked);
+            }
+
             return $this->show($locked);
         });
     }
@@ -159,14 +182,35 @@ class ShipmentService
      */
     public function updateMeta(Shipment $s, array $data): Shipment
     {
-        $allowed = ['carrier', 'vessel', 'container_number', 'bl_number', 'etd', 'eta', 'notes'];
-        $patch = array_intersect_key($data, array_flip($allowed));
-        if (empty($patch)) {
-            return $this->show($s);
-        }
-        $s->forceFill($patch)->save();
+        return DB::transaction(function () use ($s, $data): Shipment {
+            $locked = Shipment::query()->lockForUpdate()->findOrFail($s->id);
+            $allowed = [
+                'carrier', 'vessel', 'container_number', 'bl_number', 'etd', 'eta', 'notes',
+                'freight_cost', 'insurance_cost', 'duties_amount', 'brokerage_fee', 'other_charges',
+            ];
+            $patch = array_intersect_key($data, array_flip($allowed));
+            $landedKeys = [
+                'freight_cost', 'insurance_cost', 'duties_amount', 'brokerage_fee', 'other_charges',
+            ];
+            $costPatch = array_intersect(array_keys($patch), $landedKeys);
+            $identityPatch = array_diff(array_keys($patch), $landedKeys);
+            if ($identityPatch !== [] && $this->isEvidenceFrozen($locked)) {
+                throw new BusinessRuleException('Shipment metadata is frozen after customs clearance.');
+            }
+            if ($costPatch !== [] && GoodsReceiptNote::query()
+                ->where('shipment_id', $locked->id)
+                ->whereHas('items', fn ($q) => $q->where('quantity_accepted', '>', 0))
+                ->exists()) {
+                throw new BusinessRuleException(
+                    'Landed cost cannot be changed after this shipment has an accepted receipt.'
+                );
+            }
+            if ($patch !== []) {
+                $locked->forceFill($patch)->save();
+            }
 
-        return $this->show($s);
+            return $this->show($locked);
+        });
     }
 
     /**
@@ -188,17 +232,47 @@ class ShipmentService
         }
 
         try {
-            return DB::transaction(fn () => ShipmentDocument::create([
-                'shipment_id' => $s->id,
-                'document_type' => $type->value,
-                'file_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'file_size_bytes' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-                'notes' => $notes,
-                'uploaded_by' => $by->id,
-                'uploaded_at' => now(),
-            ])->load('uploader:id,name,role_id'));
+            return DB::transaction(function () use ($s, $file, $type, $by, $notes, $path): ShipmentDocument {
+                $lockedShipment = Shipment::query()->lockForUpdate()->findOrFail($s->id);
+                $this->assertDocumentsMutable($lockedShipment);
+                $existing = ShipmentDocument::query()
+                    ->where('shipment_id', $lockedShipment->id)
+                    ->where('document_type', $type->value)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existing) {
+                    $oldPath = $existing->file_path;
+                    $existing->forceFill([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'file_size_bytes' => $file->getSize(),
+                        'mime_type' => $file->getMimeType(),
+                        'notes' => $notes,
+                        'uploaded_by' => $by->id,
+                        'uploaded_at' => now(),
+                    ])->save();
+                    DB::afterCommit(function () use ($oldPath, $path): void {
+                        if ($oldPath && $oldPath !== $path) {
+                            Storage::disk('local')->delete($oldPath);
+                        }
+                    });
+
+                    return $existing->load('uploader:id,name,role_id');
+                }
+
+                return ShipmentDocument::create([
+                    'shipment_id' => $lockedShipment->id,
+                    'document_type' => $type->value,
+                    'file_path' => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'file_size_bytes' => $file->getSize(),
+                    'mime_type' => $file->getMimeType(),
+                    'notes' => $notes,
+                    'uploaded_by' => $by->id,
+                    'uploaded_at' => now(),
+                ])->load('uploader:id,name,role_id');
+            });
         } catch (\Throwable $e) {
             Storage::disk('local')->delete($path);
             throw $e;
@@ -207,26 +281,106 @@ class ShipmentService
 
     public function deleteDocument(ShipmentDocument $doc): void
     {
-        $path = $doc->file_path;
-        DB::transaction(function () use ($doc, $path) {
-            $doc->delete();
-            DB::afterCommit(function () use ($path): void {
-                if ($path) {
-                    Storage::disk('local')->delete($path);
-                }
-            });
+        DB::transaction(function () use ($doc): void {
+            $locked = ShipmentDocument::query()->lockForUpdate()->findOrFail($doc->id);
+            $shipment = Shipment::query()->lockForUpdate()->findOrFail($locked->shipment_id);
+            $this->assertDocumentsMutable($shipment);
+            // Soft-delete is recoverable archive. The private blob remains
+            // available for the restore route and audit evidence.
+            $locked->delete();
         });
     }
 
     public function delete(Shipment $s): void
     {
-        if ($s->status === ShipmentStatus::Received) {
-            throw new BusinessRuleException('Cannot delete a received shipment.');
-        }
         DB::transaction(function () use ($s) {
-            $paths = $s->documents->pluck('file_path')->filter()->values()->all();
-            $s->delete();
-            DB::afterCommit(fn () => Storage::disk('local')->delete($paths));
+            $locked = Shipment::query()->lockForUpdate()->findOrFail($s->id);
+            if ($this->isArchiveBlocked($locked)) {
+                throw new BusinessRuleException('Cannot archive a customs or received shipment; preserve the customs record instead.');
+            }
+            $locked->delete();
         });
+    }
+
+    public function restore(Shipment $shipment): Shipment
+    {
+        return DB::transaction(function () use ($shipment): Shipment {
+            $locked = Shipment::withTrashed()->lockForUpdate()->findOrFail($shipment->id);
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Shipment is not archived.');
+            }
+            if ($this->isArchiveBlocked($locked)) {
+                throw new BusinessRuleException('Archived customs and terminal shipments cannot be restored.');
+            }
+            $locked->restore();
+
+            return $this->show($locked);
+        });
+    }
+
+    public function restoreDocument(ShipmentDocument $document): ShipmentDocument
+    {
+        return DB::transaction(function () use ($document): ShipmentDocument {
+            $locked = ShipmentDocument::withTrashed()->lockForUpdate()->findOrFail($document->id);
+            $shipment = Shipment::withTrashed()->lockForUpdate()->findOrFail($locked->shipment_id);
+            $this->assertDocumentsMutable($shipment);
+            if (! Storage::disk('local')->exists((string) $locked->file_path)) {
+                throw new BusinessRuleException('The archived shipment document file is missing and cannot be restored.');
+            }
+            $locked->restore();
+
+            return $locked->load('uploader:id,name,role_id');
+        });
+    }
+
+    private function isEvidenceFrozen(Shipment $shipment): bool
+    {
+        $status = $shipment->status instanceof ShipmentStatus
+            ? $shipment->status
+            : ShipmentStatus::from((string) $shipment->status);
+
+        return in_array($status, [ShipmentStatus::Cleared, ShipmentStatus::Received, ShipmentStatus::Cancelled], true);
+    }
+
+    private function isArchiveBlocked(Shipment $shipment): bool
+    {
+        $status = $shipment->status instanceof ShipmentStatus
+            ? $shipment->status
+            : ShipmentStatus::from((string) $shipment->status);
+
+        return in_array($status, [ShipmentStatus::Customs, ShipmentStatus::Cleared, ShipmentStatus::Received, ShipmentStatus::Cancelled], true);
+    }
+
+    private function assertDocumentsMutable(Shipment $shipment): void
+    {
+        if ($this->isEvidenceFrozen($shipment)) {
+            throw new BusinessRuleException('Shipment documents are frozen after customs clearance.');
+        }
+    }
+
+    private function assertClearanceEvidence(Shipment $shipment): void
+    {
+        $required = [
+            ShipmentDocumentType::BillOfLading->value,
+            ShipmentDocumentType::CommercialInvoice->value,
+            ShipmentDocumentType::PackingList->value,
+            ShipmentDocumentType::ImportEntry->value,
+            ShipmentDocumentType::BocRelease->value,
+        ];
+        $present = $shipment->documents()
+            ->whereNull('deleted_at')
+            ->whereIn('document_type', $required)
+            ->pluck('document_type')
+            ->map(static fn ($type): string => $type instanceof \BackedEnum ? $type->value : (string) $type)
+            ->all();
+        $missing = array_values(array_diff($required, $present));
+        if ($missing !== []) {
+            throw new BusinessRuleException(
+                'Cannot clear shipment customs: required documents are missing ('.implode(', ', $missing).').'
+            );
+        }
+        if (! Container::query()->where('shipment_id', $shipment->id)->whereNull('deleted_at')->exists()) {
+            throw new BusinessRuleException('Cannot clear shipment customs: at least one active container is required.');
+        }
     }
 }

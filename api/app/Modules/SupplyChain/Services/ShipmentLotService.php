@@ -35,6 +35,16 @@ class ShipmentLotService
         }
 
         return DB::transaction(function () use ($delivery, $data, $by) {
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $existing = ShipmentLot::query()
+                ->where('delivery_id', $delivery->id)
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                return $this->show($existing);
+            }
+
             // Resolve WO hash_ids to ints + verify each WO has a batch_number.
             $workOrders = collect($data['work_order_ids'])
                 ->map(fn (string $hashId) => WorkOrder::query()->findOrFail(
@@ -74,6 +84,59 @@ class ShipmentLotService
             ]);
 
             return $lot->fresh(['delivery', 'customer', 'product']);
+        });
+    }
+
+    /**
+     * Ensure every confirmed delivery has one shipment lot. Production-linked
+     * deliveries carry their work-order output provenance; legacy/manual rows
+     * still receive a delivery-level lot so the CoC has a durable shipment key.
+     */
+    public function ensureForDelivery(Delivery $delivery, User $by): ShipmentLot
+    {
+        return DB::transaction(function () use ($delivery, $by): ShipmentLot {
+            $locked = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $existing = ShipmentLot::query()
+                ->where('delivery_id', $locked->id)
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                return $this->show($existing);
+            }
+
+            $locked->loadMissing([
+                'salesOrder',
+                'items.salesOrderItem',
+                'items.inspection.workOrderOutput.workOrder',
+            ]);
+            $workOrders = $locked->items
+                ->map(fn ($item) => $item->inspection?->workOrderOutput?->workOrder)
+                ->filter()
+                ->unique('id')
+                ->values();
+            $productIds = $workOrders->pluck('product_id')
+                ->merge($locked->items->pluck('salesOrderItem.product_id'))
+                ->filter()
+                ->unique()
+                ->values();
+            $quantity = '0';
+            foreach ($locked->items as $item) {
+                $quantity = bcadd($quantity, (string) $item->quantity, 3);
+            }
+
+            $lot = ShipmentLot::create([
+                'lot_number' => $this->sequences->generate('shipment_lot'),
+                'delivery_id' => $locked->id,
+                'customer_id' => $locked->salesOrder?->customer_id,
+                'product_id' => $productIds->count() === 1 ? (int) $productIds->first() : null,
+                'work_order_ids' => $workOrders->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'quantity' => (int) $quantity,
+                'lot_date' => now()->toDateString(),
+                'created_by' => $by->id,
+            ]);
+
+            return $this->show($lot->fresh());
         });
     }
 

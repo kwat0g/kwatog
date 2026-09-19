@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -233,6 +234,37 @@ class InspectionSpecBoundaryTest extends TestCase
         // The excluded draft/in-progress/cancelled readings sit far from the
         // completed five, so a leaked row would move the mean measurably.
         $this->assertSame(-1.0, $result[$newItem->hash_id]['mean']);
+    }
+
+    public function test_revision_and_historical_item_content_cannot_be_mutated(): void
+    {
+        $product = Product::factory()->create();
+        $spec = $this->createSpec($product, $this->manager);
+        $revision = $spec->revisions()->firstOrFail();
+        $item = $spec->items()->firstOrFail();
+
+        try {
+            $revision->update(['notes' => 'tampered revision']);
+            $this->fail('Revision model updates must be rejected.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('immutable', strtolower($exception->getMessage()));
+        }
+
+        try {
+            $item->update(['parameter_name' => 'tampered parameter']);
+            $this->fail('Revision item content updates must be rejected.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('immutable', strtolower($exception->getMessage()));
+        }
+
+        try {
+            DB::table('inspection_spec_revisions')
+                ->where('id', $revision->id)
+                ->update(['notes' => 'direct SQL tamper']);
+            $this->fail('Database revision updates must be rejected.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('immutable', strtolower($exception->getMessage()));
+        }
     }
 
     public function test_spc_reports_nothing_when_the_current_revision_has_no_measurable_variation(): void

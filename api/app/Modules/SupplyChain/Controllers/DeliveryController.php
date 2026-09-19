@@ -82,7 +82,11 @@ class DeliveryController
 
     public function store(CreateDeliveryRequest $request): DeliveryResource
     {
-        return new DeliveryResource($this->service->create($request->validated(), $request->user()));
+        return new DeliveryResource($this->service->create(
+            $request->validated(),
+            $request->user(),
+            $request->idempotencyKey(),
+        ));
     }
 
     public function assign(AssignDeliveryRequest $request, Delivery $delivery): DeliveryResource
@@ -135,6 +139,15 @@ class DeliveryController
             'delivery_remarks'  => ['nullable', 'string', 'max:1000'],
         ]);
         return new DeliveryResource($this->service->confirm($delivery, $request->user(), $data));
+    }
+
+    public function retryCoc(Request $request, Delivery $delivery): DeliveryResource
+    {
+        try {
+            return new DeliveryResource($this->service->retryCocHandoff($delivery, $request->user()));
+        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
     }
 
     /**

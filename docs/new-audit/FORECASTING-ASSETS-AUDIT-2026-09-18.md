@@ -1,6 +1,14 @@
 # Forecasting + Assets Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **open**.
+
+- Forecasting remains advisory-only for MRP; generation is not scheduled, reconciliation is not safely rerunnable, accuracy can double-count scopes, and invalid hashes can broaden queries.
+- Assets still lack operational machine/mold/vehicle links; the disposal workflow is current in fresh seeds but existing workflow rows are deployment-untestable; depreciation responses need HashIDs and failure visibility.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
 
 ---

@@ -3,6 +3,12 @@
 Single severity-ranked backlog distilled from the 15 module audit documents in this folder.
 Covers all 26 modules.
 
+## Current-status notice - 2026-09-19
+
+This register is historical remediation evidence and is superseded for current status by
+`RE-AUDIT-REGISTER-2026-09-19.md`. Several locations and P0 statuses in this file describe the
+pre-remediation tree; use the dated re-audit register for current open/fixed classifications.
+
 **Status legend**
 - **OPEN** — reproduced against the working tree on 2026-09-18.
 - **FIXED** — an uncommitted fix pass by another session is present and verified (working tree).

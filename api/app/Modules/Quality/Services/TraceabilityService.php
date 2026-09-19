@@ -7,6 +7,7 @@ namespace App\Modules\Quality\Services;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Production\Models\WorkOrder;
+use App\Common\Support\HashId;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
@@ -47,7 +48,10 @@ class TraceabilityService
             $woIds->push($wo->id);
         }
 
-        $lot = ShipmentLot::with(['delivery', 'customer:id,name'])
+        $lot = ShipmentLot::with([
+            'delivery' => fn ($query) => $query->withTrashed(),
+            'customer:id,name',
+        ])
             ->where('lot_number', $lotNumber)
             ->first();
         if ($lot) {
@@ -64,7 +68,10 @@ class TraceabilityService
             return ['found' => false, 'lot_number' => $lotNumber, 'affected_customers' => [], 'affected_deliveries' => [], 'total_affected_qty' => 0];
         }
 
-        $affectedLots = ShipmentLot::with(['delivery', 'customer:id,name'])
+        $affectedLots = ShipmentLot::with([
+            'delivery' => fn ($query) => $query->withTrashed(),
+            'customer:id,name',
+        ])
             ->where(function ($q) use ($woIds, $lot) {
                 foreach ($woIds->unique()->all() as $woId) {
                     $q->orWhereJsonContains('work_order_ids', (int) $woId);
@@ -91,6 +98,7 @@ class TraceabilityService
                     'delivered_at' => optional($sl->delivery->delivered_at)->toIso8601String(),
                     'lot_number' => $sl->lot_number,
                     'quantity' => (int) $sl->quantity,
+                    'archived' => (bool) $sl->delivery?->trashed(),
                 ];
             }
             if ($sl->customer) {
@@ -131,7 +139,11 @@ class TraceabilityService
 
         // Try lot_number (ShipmentLot).
         $lot = ShipmentLot::query()
-            ->with(['delivery', 'customer:id,name', 'product:id,part_number,name'])
+            ->with([
+                'delivery' => fn ($query) => $query->withTrashed(),
+                'customer:id,name',
+                'product:id,part_number,name',
+            ])
             ->where('lot_number', $term)
             ->first();
         if ($lot) {
@@ -170,10 +182,21 @@ class TraceabilityService
     private function traceFromLot(ShipmentLot $lot): array
     {
         $woIds = $lot->work_order_ids ?? [];
+        $workOrderIds = collect($woIds)
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
         $workOrders = WorkOrder::query()
             ->with(['product:id,part_number,name', 'machine:id,machine_code,name', 'mold:id,mold_code,name'])
-            ->whereIn('id', $woIds)
+            ->whereIn('id', $workOrderIds->all())
             ->get();
+        $foundWorkOrderIds = $workOrders->pluck('id')->map(static fn ($id): int => (int) $id);
+        $missingWorkOrderIds = $workOrderIds
+            ->diff($foundWorkOrderIds)
+            ->map(static fn (int $id): string => HashId::encode($id))
+            ->values()
+            ->all();
 
         // Batch-load all inspections for all WOs in one query, grouped by entity_id.
         $inspectionsByWo = $this->batchInspectionsForWorkOrders($woIds);
@@ -186,6 +209,7 @@ class TraceabilityService
                     'materials'  => $this->materialsForWorkOrder($wo),
                     'inspections'=> $inspectionsByWo[$wo->id] ?? [],
                 ])->all(),
+                'missing_work_order_ids' => $missingWorkOrderIds,
             ],
             'forward' => [
                 'delivery' => $lot->delivery ? [
@@ -195,6 +219,7 @@ class TraceabilityService
                     'status_label'    => DeliveryStatus::tryFrom((string) ($lot->delivery->status?->value ?? $lot->delivery->status))?->label() ?? (string) ($lot->delivery->status?->value ?? $lot->delivery->status),
                     'delivered_at'    => optional($lot->delivery->delivered_at)->toIso8601String(),
                     'confirmed_at'    => optional($lot->delivery->confirmed_at)->toIso8601String(),
+                    'archived'        => (bool) $lot->delivery->trashed(),
                 ] : null,
                 'customer' => $lot->customer ? [
                     'id'   => $lot->customer->hash_id,
@@ -374,7 +399,10 @@ class TraceabilityService
     {
         return ShipmentLot::query()
             ->whereJsonContains('work_order_ids', $wo->id)
-            ->with(['delivery', 'customer:id,name'])
+            ->with([
+                'delivery' => fn ($query) => $query->withTrashed(),
+                'customer:id,name',
+            ])
             ->get()
             ->map(fn (ShipmentLot $lot) => [
                 'id'         => $lot->hash_id,
@@ -383,6 +411,7 @@ class TraceabilityService
                 'delivery'   => $lot->delivery ? [
                     'id'              => $lot->delivery->hash_id,
                     'delivery_number' => $lot->delivery->delivery_number,
+                    'archived'        => (bool) $lot->delivery->trashed(),
                 ] : null,
                 'customer'   => $lot->customer ? [
                     'id'   => $lot->customer->hash_id,

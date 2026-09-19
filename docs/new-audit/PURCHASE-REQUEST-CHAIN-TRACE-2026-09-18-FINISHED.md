@@ -1,6 +1,14 @@
 # Internal Purchase Request → Procure-to-Pay Trace (non-Sales-Order)
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- The resolution log fixes remain visible: PR chain entity, `mrp_plan_id`, CoA verification, incoming-QC retry, and vendor-SoD exception handling.
+- Current critical P2P risks: cancelled PO/draft GRN resurrection, RFQ partial quantity converted as full line, duplicate manual PO coverage, posted partial-bill continuation, fractional/archived incoming QC, PO submission ownership, and missing GRN-GL recovery.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: a Purchase Request raised for internal need (not derived from a Sales Order),
 followed all the way to the last process (payment / GL / closure). Discovered by reading
 `api/`. Claims are marked **[confirmed]** (file:line given) or **[assumption/unverified]**.

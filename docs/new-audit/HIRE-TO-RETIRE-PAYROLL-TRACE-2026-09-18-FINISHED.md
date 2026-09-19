@@ -1,6 +1,14 @@
 # Hire-to-Retire (Payroll) Chain Trace
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- Historical fixes for final pay, 13th-month GL, leaver eligibility, reservation flags, anomaly failure markers, and permission separation are present.
+- Current Payroll gaps: mutable inputs after compute/approval, incomplete eligible employee reconciliation, anomaly detection/recompute race, inactive statutory-table selection, malformed ordinary 13th periods, negative tax correction handling, SSS-R3 completeness, reporting-month policy, and BIR taxable-basis certification.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: the third business chain — employee setup → attendance/DTR → payroll period →
 compute → approve → finalize → bank file / GL → disbursement → statutory exports, plus
 the separation → final-pay path. Discovered by reading `api/`.

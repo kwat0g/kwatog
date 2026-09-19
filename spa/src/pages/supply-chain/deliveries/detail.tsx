@@ -162,7 +162,7 @@ const removeProof = useMutation({
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to confirm'),
  });
 
- const finalizeInvoice = useMutation({
+  const finalizeInvoice = useMutation({
  mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
  onSuccess: () => {
  toast.success('Draft invoice finalized to AR + GL.');
@@ -171,7 +171,16 @@ const removeProof = useMutation({
  qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
  },
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
- });
+  });
+
+  const retryCoc = useMutation({
+   mutationFn: () => deliveriesApi.retryCoc(id),
+   onSuccess: () => {
+   toast.success('Certificate of Conformance handoff retried.');
+   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+   },
+   onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to retry CoC handoff.'),
+  });
 
  const assign = useMutation({
   mutationFn: () => deliveriesApi.assign(id, {
@@ -539,7 +548,7 @@ const removeProof = useMutation({
  )}
  </div>
  )}
- {data.invoice && (
+  {data.invoice && (
  <Panel title="Invoice">
  <dl className="text-sm space-y-2">
  <div className="flex justify-between">
@@ -555,9 +564,23 @@ const removeProof = useMutation({
  <dd><Chip variant="neutral">{data.invoice.status}</Chip></dd>
  </div>
  </dl>
- </Panel>
- )}
- {data.notes && (
+  </Panel>
+  )}
+  {data.coc_handoff?.status === 'manual_required' && (
+  <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
+  <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+  <div className="flex-1">
+  <div className="font-medium">Certificate of Conformance needs Quality action</div>
+  <div className="text-muted">{data.coc_handoff.message ?? 'The certificate could not be attached automatically.'}</div>
+  </div>
+  {can('supply_chain.deliveries.confirm') && (
+  <Button variant="secondary" size="sm" onClick={() => retryCoc.mutate()} loading={retryCoc.isPending}>
+  Retry CoC
+  </Button>
+  )}
+  </div>
+  )}
+  {data.notes && (
  <Panel title="Notes">
  <p className="whitespace-pre-line text-sm">{data.notes}</p>
  </Panel>

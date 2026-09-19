@@ -13,6 +13,7 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\IncomingQcHandoffStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\SupplyChain\Models\Shipment;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,6 +32,7 @@ class GoodsReceiptNote extends Model
 
     protected $fillable = [
         'grn_number', 'purchase_order_id', 'vendor_id',
+        'shipment_id',
         'received_date', 'received_by', 'status',
         'qc_inspection_id', 'accepted_by', 'accepted_at',
         'incoming_qc_handoff_status', 'incoming_qc_handoff_message', 'incoming_qc_handoff_at',
@@ -48,6 +50,11 @@ class GoodsReceiptNote extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function shipment(): BelongsTo
+    {
+        return $this->belongsTo(Shipment::class);
     }
 
     public function vendor(): BelongsTo

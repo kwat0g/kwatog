@@ -63,7 +63,14 @@ class NcrResource extends JsonResource
                 'wo_number'       => $this->replacementWorkOrder->wo_number,
                 'status'          => $this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status,
                 'status_label'    => WorkOrderStatus::tryFrom((string) ($this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status))?->label() ?? (string) ($this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status),
-                'quantity_target' => (int) $this->replacementWorkOrder->quantity_target,
+                 'quantity_target' => (int) $this->replacementWorkOrder->quantity_target,
+             ] : null),
+            'rework_work_order' => $this->whenLoaded('reworkWorkOrder', fn () => $this->reworkWorkOrder ? [
+                'id'              => $this->reworkWorkOrder->hash_id,
+                'wo_number'       => $this->reworkWorkOrder->wo_number,
+                'status'          => $this->reworkWorkOrder->status instanceof \BackedEnum ? $this->reworkWorkOrder->status->value : $this->reworkWorkOrder->status,
+                'status_label'    => WorkOrderStatus::tryFrom((string) ($this->reworkWorkOrder->status instanceof \BackedEnum ? $this->reworkWorkOrder->status->value : $this->reworkWorkOrder->status))?->label() ?? (string) ($this->reworkWorkOrder->status instanceof \BackedEnum ? $this->reworkWorkOrder->status->value : $this->reworkWorkOrder->status),
+                'quantity_target' => (int) $this->reworkWorkOrder->quantity_target,
             ] : null),
             'actions'            => $this->whenLoaded('actions', fn () => NcrActionResource::collection($this->actions)->resolve()),
             // CAPA effectiveness rollup.

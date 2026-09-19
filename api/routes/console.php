@@ -335,6 +335,12 @@ Schedule::command('calibration:check-due')
     ->withoutOverlapping(120)
     ->onOneServer();
 
+// Quality PPAP lifecycle — keep approved submission status aligned with expiry.
+Schedule::command('quality:expire-ppaps')
+    ->dailyAt('06:55')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
 // OGAMI-016 — batch unread notifications into a per-user email digest at 07:05.
 Schedule::command('notifications:send-digest')
     ->dailyAt('07:05')

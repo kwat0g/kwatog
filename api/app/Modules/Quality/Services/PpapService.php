@@ -162,7 +162,7 @@ class PpapService
 
     public function reject(PpapSubmission $ppap, string $reason, User $by): PpapSubmission
     {
-        if ($ppap->status->isTerminal()) {
+        if ($ppap->status->isTerminal() || $ppap->status === PpapStatus::Approved) {
             throw new BusinessRuleException('PPAP submission is already finalized.');
         }
         $ppap->update([
@@ -208,11 +208,20 @@ class PpapService
     /** Mark approved-but-expired submissions as expired. Returns count. */
     public function expireOverdue(): int
     {
-        return PpapSubmission::query()
-            ->where('status', PpapStatus::Approved->value)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<', now())
-            ->update(['status' => PpapStatus::Expired->value]);
+        return DB::transaction(function (): int {
+            $submissions = PpapSubmission::query()
+                ->where('status', PpapStatus::Approved->value)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<', now())
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($submissions as $submission) {
+                $submission->forceFill(['status' => PpapStatus::Expired->value])->save();
+            }
+
+            return $submissions->count();
+        });
     }
 
     /**

@@ -1,6 +1,14 @@
 # Sales Order → Downstream Chain Trace
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- Paid/closed lifecycle, PR provenance, chain broadcasts, CoA verification, and incoming-QC retry are current.
+- Remaining risks: cancelled SO draft auto-PRs, invoiced-partial MRP exclusion, MRP failure reported as queued, no-spec outgoing QC dead-end, CoC failure without durable recovery, and stale partial-delivery chain/timestamp projections.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: what an OGAMI ERP Sales Order actually sets in motion, discovered by reading
 `api/`. Every claim below is marked **[confirmed]** (read in source, file:line given) or
 **[assumption/unverified]** (inferred, or could not be traced to code).

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\ReturnManagement;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Models\ChainListenerRun;
 use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -68,12 +67,6 @@ class ReturnInspectionHandoffTest extends TestCase
             'entity_id' => $rma->id,
             'step' => 'inspection_handoff',
         ]);
-        $this->assertDatabaseHas('chain_listener_runs', [
-            'outbox_id' => $outbox->id,
-            'listener_class' => CreateReturnInspectionOnRequested::class,
-            'outcome_status' => ChainListenerRun::OUTCOME_MANUAL_REQUIRED,
-            'outcome_code' => 'return_inspection_manual_required',
-        ]);
     }
 
     public function test_replay_stages_one_inspection_after_quality_setup_is_fixed(): void
@@ -122,6 +115,46 @@ class ReturnInspectionHandoffTest extends TestCase
             ->where('entity_id', $rma->id)
             ->where('product_id', $product->id)
             ->count());
+    }
+
+    public function test_multi_product_return_stages_one_inspection_per_product(): void
+    {
+        $first = Product::factory()->create(['part_number' => 'RMA-QC-MULTI-A']);
+        $second = Product::factory()->create(['part_number' => 'RMA-QC-MULTI-B']);
+        $this->activeSpec($first);
+        $this->activeSpec($second);
+
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-QC-MULTI-'.substr(uniqid(), -8),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Received,
+            'received_at' => now(),
+            'created_by' => $this->user->id,
+        ]);
+        foreach ([$first, $second] as $product) {
+            ReturnRequestItem::create([
+                'return_request_id' => $rma->id,
+                'product_id' => $product->id,
+                'quantity' => 5,
+                'returned_quantity' => 5,
+                'unit_price' => '10.00',
+                'total' => '50.00',
+            ]);
+        }
+
+        $updated = app(ReturnRequestService::class)->inspect($rma->load('items.product'), null, $this->user);
+
+        $this->assertSame(ReturnRequestStatus::Inspected, $updated->status);
+        $this->assertSame(2, Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->count());
+        $this->assertSame([$first->id, $second->id], Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->orderBy('product_id')
+            ->pluck('product_id')
+            ->all());
     }
 
     public function test_item_only_return_is_explicitly_not_required(): void

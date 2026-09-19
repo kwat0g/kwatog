@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
@@ -16,6 +17,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Enums\PpapStatus;
 use App\Modules\Quality\Models\PpapSubmission;
+use App\Modules\Quality\Services\PpapService;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Database\Seeders\RolePermissionSeeder;
@@ -34,12 +36,14 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
     use RefreshDatabase;
 
     private User $qc;
+    private User $approver;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->qc = User::factory()->withRole('qc_inspector')->create(['is_active' => true]);
+        $this->approver = User::factory()->withRole('qc_inspector')->create(['is_active' => true]);
     }
 
     /**
@@ -228,7 +232,7 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
                 ['status' => 'accepted', 'document_path' => 'ppap/original-psw.pdf'],
             )->assertOk();
         }
-        $this->actingAs($this->qc)->patchJson("/api/v1/quality/ppap/{$p->hash_id}/approve")->assertOk();
+        $this->actingAs($this->approver)->patchJson("/api/v1/quality/ppap/{$p->hash_id}/approve")->assertOk();
         $this->assertSame(PpapStatus::Approved, $p->fresh()->status);
     }
 
@@ -266,6 +270,56 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
         )->assertOk();
 
         $this->assertSame('ppap/psw-rev-b.pdf', $el->fresh()->document_path);
+    }
+
+    public function test_approved_ppap_cannot_be_rejected(): void
+    {
+        $ppap = PpapSubmission::create([
+            'ppap_number' => 'PP-REJECT-'.substr(uniqid(), -8),
+            'vendor_id' => Vendor::factory()->create()->id,
+            'item_id' => Item::factory()->create()->id,
+            'ppap_level' => '3',
+            'submission_date' => now()->toDateString(),
+            'status' => PpapStatus::Approved->value,
+            'approved_by' => $this->approver->id,
+            'approved_at' => now(),
+            'expires_at' => now()->addYear(),
+        ]);
+
+        try {
+            app(PpapService::class)->reject($ppap, 'late rejection', $this->qc);
+            $this->fail('An approved PPAP must not be rejected in place.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('finalized', strtolower($exception->getMessage()));
+        }
+
+        $this->assertSame(PpapStatus::Approved, $ppap->fresh()->status);
+    }
+
+    public function test_expire_overdue_marks_approved_ppaps_and_leaves_active_ones_untouched(): void
+    {
+        $expired = PpapSubmission::create([
+            'ppap_number' => 'PP-EXPIRED-'.substr(uniqid(), -8),
+            'vendor_id' => Vendor::factory()->create()->id,
+            'item_id' => Item::factory()->create()->id,
+            'ppap_level' => '3',
+            'submission_date' => now()->toDateString(),
+            'status' => PpapStatus::Approved->value,
+            'expires_at' => now()->subMinute(),
+        ]);
+        $active = PpapSubmission::create([
+            'ppap_number' => 'PP-ACTIVE-'.substr(uniqid(), -8),
+            'vendor_id' => Vendor::factory()->create()->id,
+            'item_id' => Item::factory()->create()->id,
+            'ppap_level' => '3',
+            'submission_date' => now()->toDateString(),
+            'status' => PpapStatus::Approved->value,
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->assertSame(1, app(PpapService::class)->expireOverdue());
+        $this->assertSame(PpapStatus::Expired, $expired->fresh()->status);
+        $this->assertSame(PpapStatus::Approved, $active->fresh()->status);
     }
 
     /**
@@ -339,15 +393,8 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
         $this->assertSame(0, PpapSubmission::query()->count());
     }
 
-    /**
-     * Documents the measured trace-erasure blast radius (audit R8). This asserts the
-     * CURRENT behaviour so the numbers are pinned; the guards themselves are deferred
-     * to a dedicated session because they need migrations in Inventory/SupplyChain/CRM
-     * and an IATF policy decision on whether archival is recoverable.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT — green here does NOT mean healthy.
-     */
-    public function test_documents_that_archiving_a_delivery_silently_drops_it_from_the_trace(): void
+    /** Archived delivery evidence remains visible in the trace with an explicit marker. */
+    public function test_archived_delivery_remains_in_the_trace_with_an_archive_marker(): void
     {
         $c = $this->chain();
         $lot = ShipmentLot::findOrFail($c['lot']->id);
@@ -358,9 +405,9 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        // Still reports success, but the shipment is gone from the answer.
         $this->assertTrue($data['found']);
-        $this->assertNull($data['trace']['forward']['delivery'], 'AUDIT R8: known defect');
+        $this->assertNotNull($data['trace']['forward']['delivery']);
+        $this->assertTrue($data['trace']['forward']['delivery']['archived']);
 
         $recall = $this->actingAs($this->qc)
             ->getJson('/api/v1/quality/traceability/recall-simulation?lot='.$c['lot']->lot_number)
@@ -369,16 +416,12 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
 
         $this->assertTrue($recall['found']);
         $this->assertSame(500, $recall['total_affected_qty']);
-        $this->assertCount(0, $recall['affected_deliveries'], 'AUDIT R8: known defect');
+        $this->assertCount(1, $recall['affected_deliveries']);
+        $this->assertTrue($recall['affected_deliveries'][0]['archived']);
     }
 
-    /**
-     * Documents that a dangling work-order id in the JSON list yields a partial trace
-     * that is indistinguishable from a complete one (audit R5).
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
-     */
-    public function test_documents_that_a_partial_trace_looks_complete(): void
+    /** Dangling work-order references remain visible as incomplete provenance. */
+    public function test_dangling_work_order_references_are_reported_as_incomplete(): void
     {
         $c = $this->chain();
         $wo2 = WorkOrder::factory()->create([
@@ -397,8 +440,9 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
 
         $this->assertTrue($data['found']);
         $this->assertSame(800, $data['trace']['lot']['quantity']);
-        // one of the two batches vanished, with no flag anywhere in the payload
-        $this->assertCount(1, $data['trace']['backward']['work_orders'], 'AUDIT R5: known defect');
+        $this->assertCount(1, $data['trace']['backward']['work_orders']);
+        $this->assertSame(1, count($data['trace']['backward']['missing_work_order_ids']));
+        $this->assertSame($wo2->hash_id, $data['trace']['backward']['missing_work_order_ids'][0]);
     }
 
     /** Unauthenticated access is refused on every route in this surface. */

@@ -1,4 +1,5 @@
  /** Sprint 7 — Delivery Create Form. Outbound delivery from a deliverable sales order. */
+import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -87,7 +88,8 @@ export default function CreateDeliveryPage() {
  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
  // Watch SO selection to populate line item options.
- const selectedSoId = watch('sales_order_id');
+  const selectedSoId = watch('sales_order_id');
+  const idempotencyKey = useRef(`delivery-${crypto.randomUUID()}`).current;
 
  // When SO changes, fetch the SO detail to get its line items.
  const { data: selectedSo, isLoading: soDetailLoading } = useQuery({
@@ -107,7 +109,7 @@ export default function CreateDeliveryPage() {
  // ── Mutation ──
  const mutation = useMutation({
  mutationFn: (data: FormValues) =>
- deliveriesApi.create({
+  deliveriesApi.create({
  sales_order_id: data.sales_order_id,
  vehicle_id: data.vehicle_id || undefined,
  scheduled_date: data.scheduled_date,
@@ -117,7 +119,7 @@ export default function CreateDeliveryPage() {
  quantity: i.quantity,
  inspection_id: i.inspection_id,
  })),
- }),
+  }, idempotencyKey),
  onSuccess: (delivery) => {
  qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
  toast.success('Delivery created');

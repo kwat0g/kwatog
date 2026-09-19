@@ -71,11 +71,12 @@ class ZzM044AuditProbeTest extends TestCase
         // MEASURED: confirmation succeeds anyway.
         $this->assertSame('confirmed', $confirmed->status->value,
             'PROBE: confirm() succeeds even when the CoC cannot be issued.');
-        $this->assertSame(0, DeliveryProof::query()
+        $this->assertSame(1, DeliveryProof::query()
             ->where('delivery_id', $ctx['delivery']->id)->where('proof_type', 'coc')->count(),
             'PROBE: no CoC is attached.');
-        // And the delivery carries NO field recording that the certificate was refused.
+        // The delivery carries a durable recovery state for the failed handoff.
         $row = DB::table('deliveries')->where('id', $ctx['delivery']->id)->first();
+        $this->assertSame('manual_required', $row->coc_handoff_status);
         $this->assertNotNull($row->invoice_id,
             'PROBE: an invoice is still raised for the uncertified shipment.');
     }
@@ -93,23 +94,23 @@ class ZzM044AuditProbeTest extends TestCase
 
         $officer = $this->userWith(['supply_chain.deliveries.create', 'supply_chain.view']);
 
-        // Delete the certificate — another proof remains, so the "last proof"
-        // guard does not fire.
-        $this->actingAs($officer)->deleteJson(
+        // Delete the certificate — confirmed CoC evidence is immutable.
+        $deleteCoc = $this->actingAs($officer)->deleteJson(
             "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs/{$coc->hash_id}"
-        )->assertStatus(204);
-        $this->assertSame(0, DeliveryProof::query()
+        );
+        $deleteCoc->assertStatus(422);
+        $this->assertSame(1, DeliveryProof::query()
             ->where('delivery_id', $ctx['delivery']->id)->where('proof_type', 'coc')->count(),
-            'PROBE: a CoC can be deleted from a confirmed delivery.');
+            'the original CoC remains attached.');
 
-        // Replace it with arbitrary operator-supplied bytes under proof_type=coc.
+        // Arbitrary operator-supplied bytes cannot replace a confirmed CoC.
         $this->actingAs($officer)->post(
             "/api/v1/supply-chain/deliveries/{$ctx['delivery']->hash_id}/proofs",
             ['proof_type' => 'coc', 'file' => UploadedFile::fake()->create('anything.pdf', 4, 'application/pdf')]
-        )->assertStatus(201);
+        )->assertStatus(422);
         $this->assertSame(1, DeliveryProof::query()
             ->where('delivery_id', $ctx['delivery']->id)->where('proof_type', 'coc')->count(),
-            'PROBE: an arbitrary file can be posted as the replacement CoC after confirmation.');
+            'the confirmed CoC remains the only CoC.');
     }
 
     // ── P3. Proof mutation after confirmation ────────────────────────────────

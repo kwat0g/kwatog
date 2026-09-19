@@ -302,6 +302,7 @@ class UpdateSettingRequest extends FormRequest
             'accounting.accounts.vat_input_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.discount_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.grni_code' => ['value' => ['required', 'string', 'max:20']],
+            'accounting.accounts.landed_cost_clearing_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_raw_material_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_finished_goods_code' => ['value' => ['required', 'string', 'max:20']],
             'accounting.accounts.inventory_packaging_code' => ['value' => ['required', 'string', 'max:20']],

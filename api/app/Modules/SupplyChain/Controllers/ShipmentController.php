@@ -97,6 +97,11 @@ class ShipmentController
             'container_number' => ['nullable', 'string', 'max:32'],
             'bl_number'        => ['nullable', 'string', 'max:32'],
             'etd'              => ['nullable', 'date'],
+            'freight_cost'     => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'insurance_cost'   => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'duties_amount'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'brokerage_fee'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'other_charges'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             // CreateShipmentRequest enforces ETA >= ETD; this path did not, so a
             // patch could leave a shipment arriving before it departed. Compare
             // against the submitted ETD when one is present, otherwise against
@@ -217,7 +222,7 @@ class ShipmentController
 
     public function restoreDocument(ShipmentDocument $document): JsonResponse
     {
-        $document->restore();
+        $this->service->restoreDocument($document);
         return response()->json(['message' => 'Shipment document restored.']);
     }
 
@@ -243,7 +248,7 @@ class ShipmentController
 
     public function restore(Shipment $shipment): JsonResponse
     {
-        $shipment->restore();
+        $this->service->restore($shipment);
         return response()->json(['message' => 'Shipment restored.']);
     }
 }

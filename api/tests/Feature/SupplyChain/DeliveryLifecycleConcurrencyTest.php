@@ -135,4 +135,38 @@ class DeliveryLifecycleConcurrencyTest extends TestCase
         $this->assertSame(DeliveryStatus::Scheduled, $second->fresh()->status);
         $this->assertSame('in_use', $vehicle->fresh()->status);
     }
+
+    public function test_driver_cannot_enter_two_active_deliveries_at_once(): void
+    {
+        $user = $this->makeUser();
+        $driver = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'driver')->value('id'),
+            'is_active' => true,
+        ]);
+        $vehicle = Vehicle::create([
+            'plate_number' => 'DRV-'.substr(uniqid(), -6),
+            'name' => 'Driver concurrency truck',
+            'vehicle_type' => 'truck',
+            'capacity_kg' => '1000.00',
+            'status' => 'available',
+        ]);
+        $first = $this->makeDelivery($user, DeliveryStatus::Loading->value);
+        $second = $this->makeDelivery($user, DeliveryStatus::Scheduled->value);
+        $first->forceFill(['driver_id' => $driver->id])->save();
+        $second->forceFill(['driver_id' => $driver->id, 'vehicle_id' => $vehicle->id])->save();
+        $first->forceFill(['vehicle_id' => $vehicle->id])->save();
+
+        $service = app(DeliveryService::class);
+        $service->updateStatus($first->fresh(), DeliveryStatus::InTransit);
+
+        try {
+            $service->updateStatus($second->fresh(), DeliveryStatus::Loading);
+            $this->fail('A driver already on an active delivery must not be double-booked.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('already assigned to another active delivery', $e->getMessage());
+        }
+
+        $this->assertSame(DeliveryStatus::InTransit, $first->fresh()->status);
+        $this->assertSame(DeliveryStatus::Scheduled, $second->fresh()->status);
+    }
 }

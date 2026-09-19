@@ -39,6 +39,11 @@ class CreateShipmentRequest extends FormRequest
                     $fail('ETA cannot be before ETD.');
                 }
             }],
+            'freight_cost'      => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'insurance_cost'    => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'duties_amount'     => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'brokerage_fee'     => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'other_charges'     => ['nullable', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             'notes'             => ['nullable', 'string', 'max:2000'],
         ];
     }

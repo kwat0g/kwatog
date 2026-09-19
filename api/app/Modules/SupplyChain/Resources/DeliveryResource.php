@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Resources;
 
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -48,6 +49,16 @@ class DeliveryResource extends JsonResource
                     : DeliveryInvoiceHandoffStatus::tryFrom((string) $this->invoice_handoff_status))?->label(),
                 'message' => $this->invoice_handoff_message,
                 'attempted_at' => optional($this->invoice_handoff_at)?->toISOString(),
+            ],
+            'coc_handoff'         => [
+                'status' => $this->coc_handoff_status instanceof DeliveryCocHandoffStatus
+                    ? $this->coc_handoff_status->value
+                    : (string) $this->coc_handoff_status,
+                'status_label' => ($coc = $this->coc_handoff_status instanceof DeliveryCocHandoffStatus
+                    ? $this->coc_handoff_status
+                    : DeliveryCocHandoffStatus::tryFrom((string) $this->coc_handoff_status))?->label(),
+                'message' => $this->coc_handoff_message,
+                'attempted_at' => optional($this->coc_handoff_at)?->toISOString(),
             ],
             'receipt_photo_url'   => $this->receipt_photo_path ? "/api/v1/supply-chain/deliveries/{$this->hash_id}/receipt-photo" : null,
             'notes'               => $this->notes,
@@ -119,6 +130,7 @@ class DeliveryResource extends JsonResource
             'items'               => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id'                  => $i->hash_id,
                 'sales_order_item_id' => optional($i->salesOrderItem)?->hash_id,
+                'stock_movement_id'   => optional($i->stockMovement)?->hash_id,
                 'inspection'          => $i->relationLoaded('inspection') && $i->inspection ? [
                     'id'                => $i->inspection->hash_id,
                     'inspection_number' => $i->inspection->inspection_number,

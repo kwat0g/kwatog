@@ -95,7 +95,7 @@ class ContainerController
 
     public function restore(Container $container): JsonResponse
     {
-        $container->restore();
+        $this->service->restore($container);
         return response()->json(['message' => 'Container restored.']);
     }
 }

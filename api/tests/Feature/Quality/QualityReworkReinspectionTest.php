@@ -11,9 +11,12 @@ use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -42,6 +45,19 @@ class QualityReworkReinspectionTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
         $this->product = Product::factory()->create();
+        $spec = InspectionSpec::create([
+            'product_id' => $this->product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $this->user->id,
+        ]);
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Visual rework condition',
+            'parameter_type' => InspectionParameterType::Visual->value,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
         $this->listener = app(TriggerOutgoingQC::class);
     }
 

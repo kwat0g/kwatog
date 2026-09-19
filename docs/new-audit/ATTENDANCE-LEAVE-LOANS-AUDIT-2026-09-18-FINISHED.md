@@ -1,6 +1,15 @@
 # Attendance + Leave + Loans Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **historical FINISHED label is not release closure**.
+
+- Attendance: payroll scope drift after employee transfer, overnight OT, ceiling disagreement, stale OT after punch correction, break/rest/recurring-holiday math, shift validity, duplicate manual OT, bulk error/ID disclosure, and stale DTR after master-data changes remain.
+- Leave: detail/options contract, document retrieval, archived balances, negative days, half-day/holiday semantics, conversion-rate parity, calendar fractions, and long maternity precision remain.
+- Loans: partial final-pay replay, as-of aggregate rewind, terminal chain visibility, absent write-off workflow, workflow migration, notification handoffs, feature toggle, disbursement accounting, and provenance gaps remain.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/{Attendance,Leave,Loans}`. DTR computation/import, OT, leave requests,
 and loan amortization were partly covered by the H2R payroll trace; this adds full routes and new
 findings. Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.

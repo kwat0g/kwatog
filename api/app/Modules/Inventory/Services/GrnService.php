@@ -11,6 +11,7 @@ use App\Common\Services\OutboxService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -37,6 +38,9 @@ use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Services\InspectionService;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Models\Shipment;
+use App\Modules\SupplyChain\Models\ShipmentLandedCost;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -92,6 +96,7 @@ class GrnService
             'vendor',
             // 2026-08-08 — compact P2P stepper: PR → PO → GRN → Bill → Paid.
             'purchaseOrder.purchaseRequest:id,pr_number',
+            'shipment:id,shipment_number,status',
             'items.item' => fn ($item) => $item->select('id', 'code', 'name', 'unit_of_measure')
                 ->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]),
             'items.location.zone.warehouse',
@@ -345,6 +350,81 @@ class GrnService
     }
 
     /**
+     * Stage the receiving work item for a shipment that physically arrived.
+     *
+     * Shipment receipt is a logistics fact; it does not invent quantities or
+     * warehouse bins. It links the shipment to an existing expected GRN, or
+     * creates one when the PO is still receivable. Repeated calls return the
+     * same GRN and never create a second receiving obligation.
+     */
+    public function stageForShipment(Shipment $shipment): GoodsReceiptNote
+    {
+        return DB::transaction(function () use ($shipment): GoodsReceiptNote {
+            $lockedShipment = Shipment::query()
+                ->lockForUpdate()
+                ->findOrFail($shipment->id);
+            if ($lockedShipment->status !== ShipmentStatus::Received) {
+                throw new BusinessRuleException('Only received shipments can be handed off to receiving.');
+            }
+
+            $linked = GoodsReceiptNote::query()
+                ->where('shipment_id', $lockedShipment->id)
+                ->lockForUpdate()
+                ->first();
+            if ($linked) {
+                return $this->show($linked);
+            }
+
+            $po = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedShipment->purchase_order_id);
+            if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
+                throw new BusinessRuleException(
+                    "PO {$po->po_number} is not open for receiving (status={$po->status->value})."
+                );
+            }
+
+            $grn = GoodsReceiptNote::query()
+                ->where('purchase_order_id', $po->id)
+                ->where('status', GrnStatus::Draft->value)
+                ->lockForUpdate()
+                ->first();
+
+            if ($grn) {
+                $grn->forceFill(['shipment_id' => $lockedShipment->id])->save();
+
+                return $this->show($grn->fresh());
+            }
+
+            $grn = GoodsReceiptNote::create([
+                'grn_number' => $this->sequences->generate('grn'),
+                'purchase_order_id' => $po->id,
+                'vendor_id' => $po->vendor_id,
+                'shipment_id' => $lockedShipment->id,
+                'received_date' => null,
+                'received_by' => null,
+                'status' => GrnStatus::Draft,
+                'remarks' => 'Expected receipt — staged when shipment arrived.',
+            ]);
+
+            $po->load('items');
+            foreach ($po->items as $line) {
+                GrnItem::create([
+                    'goods_receipt_note_id' => $grn->id,
+                    'purchase_order_item_id' => $line->id,
+                    'item_id' => $line->item_id,
+                    'location_id' => null,
+                    'quantity_received' => '0',
+                    'quantity_accepted' => '0',
+                    'unit_cost' => (string) $line->unit_price,
+                ]);
+            }
+
+            return $this->show($grn->fresh());
+        });
+    }
+
+    /**
      * 2026-08-08 — The warehouse completes a draft (expected) GRN: assigns a
      * bin + actual received quantity per line, then the GRN flips to
      * pending_qc and the normal flow takes over (incoming QC, stock on
@@ -554,6 +634,7 @@ class GrnService
                 ->where('goods_receipt_note_id', $lockedGrn->id)
                 ->lockForUpdate()
                 ->get();
+            $this->snapshotLandedCosts($lockedGrn, $rows);
 
             foreach ($rows as $row) {
                 $delta = bcsub((string) $row->quantity_received, (string) $row->quantity_accepted, 3);
@@ -624,6 +705,7 @@ class GrnService
                 ->where('goods_receipt_note_id', $lockedGrn->id)
                 ->lockForUpdate()
                 ->get();
+            $this->snapshotLandedCosts($lockedGrn, $rows);
             $allFull = true;
             $hasDelta = false;
             foreach ($rows as $row) {
@@ -1242,6 +1324,7 @@ class GrnService
             ->where('goods_receipt_note_id', $grn->id)
             ->lockForUpdate()
             ->get();
+        $this->snapshotLandedCosts($grn, $rows);
 
         foreach ($rows as $row) {
             $row->quantity_accepted = $row->quantity_received;
@@ -1256,7 +1339,7 @@ class GrnService
                 fromLocationId: null,
                 toLocationId: $locationId,
                 quantity: (string) $row->quantity_received,
-                unitCost: (string) $row->unit_cost,
+                unitCost: $this->effectiveUnitCost($row),
                 referenceType: 'goods_receipt_note',
                 referenceId: $grn->id,
                 remarks: "GRN {$grn->grn_number}",
@@ -1366,7 +1449,7 @@ class GrnService
             fromLocationId: null,
             toLocationId: $locationId,
             quantity: $quantity,
-            unitCost: (string) $row->unit_cost,
+            unitCost: $this->effectiveUnitCost($row),
             referenceType: 'goods_receipt_note',
             referenceId: $row->goods_receipt_note_id,
             remarks: $remarks,
@@ -1374,6 +1457,72 @@ class GrnService
             lotNumber: $row->material_lot_number,
             expiryDate: $row->expiry_date?->toDateString(),
         ));
+    }
+
+    /**
+     * Freeze each GRN line's share of the shipment allocation before the first
+     * accepted quantity moves. The snapshot is based on physically received
+     * quantity, so later partial acceptance uses the same unit cost and only
+     * posts the newly accepted delta.
+     */
+    private function snapshotLandedCosts(GoodsReceiptNote $grn, Collection $rows): void
+    {
+        if ($rows->every(static fn (GrnItem $row): bool => $row->landed_cost_total !== null)) {
+            return;
+        }
+
+        $allocations = $grn->shipment_id
+            ? ShipmentLandedCost::query()
+                ->where('shipment_id', $grn->shipment_id)
+                ->pluck('total_allocated', 'purchase_order_item_id')
+            : collect();
+
+        foreach ($rows->groupBy('purchase_order_item_id') as $purchaseOrderItemId => $lineRows) {
+            $allocation = Money::round2((string) ($allocations[$purchaseOrderItemId] ?? '0'));
+            $receivedTotal = '0';
+            foreach ($lineRows as $line) {
+                $receivedTotal = bcadd($receivedTotal, (string) $line->quantity_received, 8);
+            }
+
+            $remaining = $allocation;
+            $lastIndex = $lineRows->count() - 1;
+            foreach ($lineRows->values() as $index => $line) {
+                $lineCost = $index === $lastIndex || bccomp($receivedTotal, '0', 8) === 0
+                    ? $remaining
+                    : Money::round2(bcmul(
+                        $allocation,
+                        bcdiv((string) $line->quantity_received, $receivedTotal, 12),
+                        6,
+                    ));
+                $remaining = Money::sub($remaining, $lineCost);
+                $unit = bccomp((string) $line->quantity_received, '0', 8) > 0
+                    ? $this->round4(bcdiv($lineCost, (string) $line->quantity_received, 8))
+                    : '0.0000';
+
+                $line->forceFill([
+                    'landed_cost_unit' => $unit,
+                    'landed_cost_total' => $lineCost,
+                ])->save();
+            }
+        }
+    }
+
+    private function effectiveUnitCost(GrnItem $row): string
+    {
+        return bcadd(
+            (string) $row->unit_cost,
+            (string) ($row->landed_cost_unit ?? '0.0000'),
+            4,
+        );
+    }
+
+    private function round4(string $value): string
+    {
+        $negative = bccomp($value, '0', 8) < 0;
+        $absolute = $negative ? ltrim($value, '-') : $value;
+        $rounded = bcadd($absolute, '0.00005', 4);
+
+        return $negative ? bcmul($rounded, '-1', 4) : $rounded;
     }
 
     /**

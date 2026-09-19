@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ShipmentLandedCost extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog;
 
     protected $table = 'shipment_landed_costs';
 

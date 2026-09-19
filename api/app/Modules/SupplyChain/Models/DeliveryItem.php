@@ -7,6 +7,7 @@ namespace App\Modules\SupplyChain\Models;
 use App\Common\Traits\HasHashId;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,7 @@ class DeliveryItem extends Model
 
     protected $fillable = [
         'delivery_id', 'sales_order_item_id', 'inspection_id',
+        'stock_movement_id',
         'quantity', 'unit_price',
     ];
 
@@ -38,5 +40,10 @@ class DeliveryItem extends Model
     public function inspection(): BelongsTo
     {
         return $this->belongsTo(Inspection::class);
+    }
+
+    public function stockMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class);
     }
 }

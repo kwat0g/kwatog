@@ -3,6 +3,21 @@
 > Claude Code reads this automatically on every command. Read completely before executing any task.
 > References: `docs/README.md`, `docs/DESIGN-SYSTEM.md`, `docs/SCHEMA.md`, `docs/SEEDS.md`
 
+## DEFAULT TYPESAFE WORKFLOW
+
+The installed `typesafe-ai` skill is enabled by default for this project. Load it
+before acting on each task and assess whether a TypeSafe judgment improves the
+workflow. Use it for semantic routing, ranking, extraction, verification, or
+bounded interpretation; keep permissions, calculations, deterministic rules,
+control flow, and side effects in application code. Read the live TypeSafe docs
+before changing an integration, keep credentials server-side, and confidence-gate
+consequential decisions.
+
+For repository audits, collect deterministic evidence first, then use the
+read-only `audit:verify-scenarios --live` command one scenario at a time. Jev
+corroborates evidence; it does not replace tests, permissions, calculations, or
+code review.
+
 ## PROJECT
 
 Production-grade ERP for **Philippine Ogami Corporation** — Japanese-owned plastic injection molding manufacturer (200+ employees, FCIE Dasmariñas, Cavite). Makes wiper bushings, pivot caps, relay covers for Toyota, Nissan, Honda, Suzuki, Yamaha. IATF 16949 certified. Thesis project, 8 months, solo developer.

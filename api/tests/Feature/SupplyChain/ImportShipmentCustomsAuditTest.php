@@ -15,7 +15,9 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Models\Container;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Resources\ShipmentLandedCostResource;
@@ -61,14 +63,14 @@ class ImportShipmentCustomsAuditTest extends TestCase
     /**
      * INVARIANT: apportionment sums EXACTLY to the total charged.
      *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT — asserts the measured residual.
+     * Regression coverage for exact reconciliation after allocation rounding.
      */
-    public function test_probe_landed_cost_allocation_does_not_sum_to_the_total(): void
+    public function test_landed_cost_allocation_sums_to_the_total(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
 
-        // 7 equal lines and 100.00 freight: 100/7 = 14.2857…, round(2) = 14.29,
-        // x7 = 100.03 — three cents MORE than was charged.
+        // The residual cent(s) belong to the final line, not to an unallocated
+        // rounding bucket.
         $shipment = $this->seedShipment($user, lineCount: 7, lineTotal: '1000.00');
         $shipment->forceFill(['freight_cost' => '100.00'])->save();
 
@@ -84,16 +86,14 @@ class ImportShipmentCustomsAuditTest extends TestCase
             .bcsub($sum, $total, 2)."\n");
 
         $this->assertSame('100.00', $total, 'header total');
-        $this->assertSame('100.03', $sum, 'MEASURED: rounded lines over-allocate by 0.03');
-        $this->assertNotSame($total, $sum, 'DEFECT: allocation does not reconcile to the charged total');
+        $this->assertSame('100.00', $sum, 'allocated lines must reconcile to the charged total');
+        $this->assertSame($total, $sum);
     }
 
     /**
-     * Same defect in the losing direction: 3 lines under-allocate by a cent.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * A three-line allocation also preserves the residual cent.
      */
-    public function test_probe_landed_cost_three_line_residual_is_lost(): void
+    public function test_landed_cost_three_line_residual_is_preserved(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 3, lineTotal: '1000.00');
@@ -106,16 +106,13 @@ class ImportShipmentCustomsAuditTest extends TestCase
             $sum = bcadd($sum, (string) $row->total_allocated, 2);
         }
         fwrite(STDERR, "[M043 landed-cost 3-line] total=100.00 sum={$sum}\n");
-        $this->assertSame('99.99', $sum, 'MEASURED: one cent parked on no line');
+        $this->assertSame('100.00', $sum);
     }
 
     /**
-     * Every component rounds independently, so the per-component columns are
-     * also unreconciled — the error compounds across five charge types.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * Every component reconciles independently, including the aggregate column.
      */
-    public function test_probe_landed_cost_each_component_rounds_independently(): void
+    public function test_landed_cost_each_component_reconciles_independently(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 3, lineTotal: '1000.00');
@@ -141,8 +138,12 @@ class ImportShipmentCustomsAuditTest extends TestCase
             ." header={$out->landed_cost_total}\n");
 
         $this->assertSame('500.00', (string) $out->landed_cost_total);
-        $this->assertSame('499.95', $sums['total_allocated'],
-            'MEASURED: five components x one lost cent x three lines');
+        $this->assertSame('100.00', $sums['allocated_freight']);
+        $this->assertSame('100.00', $sums['allocated_insurance']);
+        $this->assertSame('100.00', $sums['allocated_duties']);
+        $this->assertSame('100.00', $sums['allocated_brokerage']);
+        $this->assertSame('100.00', $sums['allocated_other']);
+        $this->assertSame('500.00', $sums['total_allocated']);
     }
 
     /**
@@ -300,13 +301,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
 
     /**
      * INVARIANT: the operator can enter duty / freight / insurance / brokerage.
-     * MEASURED: no endpoint accepts them. Create and the metadata patch validate
-     * a fixed allow-list and drop the cost keys, so the columns stay 0.00 and the
-     * whole feature computes zero for every real shipment.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * Both create and metadata patch accept non-negative peso cost components.
      */
-    public function test_probe_no_http_path_can_enter_a_landed_cost(): void
+    public function test_http_paths_can_enter_landed_cost_components(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 2, lineTotal: '1000.00');
@@ -326,17 +323,16 @@ class ImportShipmentCustomsAuditTest extends TestCase
         ])->assertCreated();
 
         $shipment->refresh();
-        fwrite(STDERR, "[M043 no-input-path] freight={$shipment->freight_cost} duties={$shipment->duties_amount}"
+        fwrite(STDERR, "[landed-cost input] freight={$shipment->freight_cost} duties={$shipment->duties_amount}"
             .' landed_total='.json_encode($shipment->landed_cost_total)."\n");
 
-        $this->assertSame('0.00', (string) $shipment->freight_cost, 'MEASURED: freight unreachable over HTTP');
-        $this->assertSame('0.00', (string) $shipment->duties_amount, 'MEASURED: duty unreachable over HTTP');
-        $this->assertNull($shipment->landed_cost_total, 'MEASURED: never calculated because it cannot be entered');
-        $this->assertSame('0.00', (string) Shipment::query()->latest('id')->first()->freight_cost);
+        $this->assertSame('5000.00', (string) $shipment->freight_cost);
+        $this->assertSame('1200.00', (string) $shipment->duties_amount);
+        $this->assertSame('5000.00', (string) Shipment::query()->latest('id')->first()->freight_cost);
 
-        // The whole feature therefore computes zero for a real shipment.
+        // The entered components now reach the allocation and its total.
         $out = app(LandedCostService::class)->calculate($shipment->fresh(), 'by_value');
-        $this->assertSame('0.00', (string) $out->landed_cost_total);
+        $this->assertSame('6207.00', (string) $out->landed_cost_total);
     }
 
     /**
@@ -365,13 +361,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
     }
 
     /**
-     * INVARIANT: the cost reaching the GRN equals the cost computed.
-     * MEASURED (static): nothing in Inventory or Accounting references landed
-     * cost at all, so the computed figure never reaches GRN unit cost or
-     * weighted-average cost. Asserted here structurally so the gap is a test,
-     * not just a grep — without calling into the LIVE Inventory module.
+     * INVARIANT: the computed cost reaches the receiving and accounting paths.
      */
-    public function test_probe_landed_cost_is_referenced_by_no_downstream_module(): void
+    public function test_landed_cost_is_referenced_by_downstream_modules(): void
     {
         $hits = [];
         foreach (['Inventory', 'Accounting', 'Purchasing'] as $module) {
@@ -388,8 +380,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
             }
         }
         fwrite(STDERR, '[M043 downstream] modules referencing landed cost='.json_encode($hits)."\n");
-        $this->assertSame([], $hits,
-            'MEASURED: landed cost is computed and stored but consumed by nothing downstream');
+        $this->assertNotSame([], $hits);
+        $this->assertContains('Inventory/GrnService.php', $hits);
+        $this->assertContains('Inventory/GrnGlPostingService.php', $hits);
     }
 
     /**
@@ -428,14 +421,10 @@ class ImportShipmentCustomsAuditTest extends TestCase
     // ─────────────────────── customs evidence gate ─────────────────────────
 
     /**
-     * INVARIANT: clearance is blocked when mandatory import documents are
-     * missing. MEASURED: an entirely empty shipment — no B/L, no commercial
-     * invoice, no packing list, no import entry, no BOC release, no container —
-     * walks ordered → received over HTTP with six 200s.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * Clearance is blocked when mandatory import documents or a container are
+     * missing; the shipment remains at customs until the evidence is complete.
      */
-    public function test_probe_an_empty_shipment_clears_customs_and_is_received(): void
+    public function test_an_empty_shipment_cannot_clear_customs(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '1000.00');
@@ -454,22 +443,16 @@ class ImportShipmentCustomsAuditTest extends TestCase
             ." final={$shipment->status->value} clearance_date={$shipment->customs_clearance_date}\n");
 
         $this->assertSame(['shipped' => 200, 'in_transit' => 200, 'customs' => 200,
-            'cleared' => 200, 'received' => 200], $codes,
-            'MEASURED: no document is required at any customs or receipt transition');
+            'cleared' => 422, 'received' => 422], $codes);
         $this->assertSame(0, $shipment->documents()->count());
-        $this->assertSame(ShipmentStatus::Received, $shipment->status);
-        $this->assertNotNull($shipment->customs_clearance_date,
-            'a clearance date was stamped with zero customs evidence behind it');
+        $this->assertSame(ShipmentStatus::Customs, $shipment->status);
+        $this->assertNull($shipment->customs_clearance_date);
     }
 
     /**
-     * INVARIANT: a document cannot be swapped after clearance.
-     * MEASURED: after `received`, the API still accepts a new upload of the
-     * same type and a delete of the B/L that customs was cleared against.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * A document cannot be swapped or deleted after clearance.
      */
-    public function test_probe_documents_are_swappable_after_clearance_and_receipt(): void
+    public function test_documents_are_immutable_after_clearance_and_receipt(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '1000.00');
@@ -495,8 +478,8 @@ class ImportShipmentCustomsAuditTest extends TestCase
             ." delete_original={$del->getStatusCode()}"
             .' bl_rows_now='.$shipment->documents()->where('document_type', 'bill_of_lading')->count()."\n");
 
-        $this->assertSame(201, $second->getStatusCode(), 'MEASURED: no terminal-state guard on upload');
-        $this->assertSame(204, $del->getStatusCode(), 'MEASURED: the cleared B/L can be deleted after receipt');
+        $this->assertSame(422, $second->getStatusCode());
+        $this->assertSame(422, $del->getStatusCode());
     }
 
     /**
@@ -529,8 +512,8 @@ class ImportShipmentCustomsAuditTest extends TestCase
                 fn (string $c) => str_contains($c, 'handoff'),
             )))."\n");
 
-        $this->assertSame([], $handoff,
-            'MEASURED: no shipment→GRN handoff state, while deliveries carry invoice_handoff_status');
+        $this->assertSame([], $handoff);
+        $this->assertSame(1, GoodsReceiptNote::query()->where('shipment_id', $shipment->id)->count());
     }
 
     // ───────────────────────── status machine ──────────────────────────────
@@ -550,6 +533,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
                 $cells++;
                 $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
                 $shipment->forceFill(['status' => $from->value])->save();
+                if ($from === ShipmentStatus::Customs) {
+                    $this->seedClearanceEvidence($shipment);
+                }
                 try {
                     $svc->updateStatus($shipment->fresh(), $to);
                     $legal[] = "{$from->value}->{$to->value}";
@@ -582,6 +568,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
         $shipment->forceFill(['status' => ShipmentStatus::Customs->value])->save();
+        $this->seedClearanceEvidence($shipment);
 
         $first = $this->actingAs($user)->patchJson(
             "/api/v1/supply-chain/shipments/{$shipment->hash_id}/status", ['status' => 'cleared']);
@@ -621,19 +608,10 @@ class ImportShipmentCustomsAuditTest extends TestCase
     }
 
     /**
-     * INVARIANT: cost / quantity / trade metadata cannot be edited after
-     * clearance and receipt. MEASURED: it still can — `PATCH /shipments/{id}`
-     * rewrites the B/L number, carrier, vessel, container number and dates of a
-     * RECEIVED shipment, and its containers are editable too. That is action-plan
-     * item B5 (terminal-state immutability), deliberately NOT fixed here: what is
-     * frozen at `cleared` versus `received` is a business decision.
-     *
-     * The ETA-before-ETD half IS fixed: the create request's cross-field rule now
-     * applies on update, including when only ETA is patched.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT (the mutability half).
+     * Cost, quantity, trade metadata, and containers cannot be edited after
+     * clearance and receipt.
      */
-    public function test_probe_a_received_shipment_is_still_fully_editable(): void
+    public function test_a_received_shipment_rejects_metadata_and_container_edits(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
@@ -656,9 +634,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
         fwrite(STDERR, "[M043 post-receipt edit] meta={$meta->getStatusCode()} container={$cont->getStatusCode()}"
             ." bl={$shipment->bl_number}\n");
 
-        $this->assertSame(200, $meta->getStatusCode(), 'MEASURED: no terminal-state guard on updateMeta');
-        $this->assertSame('REWRITTEN', $shipment->bl_number);
-        $this->assertSame(200, $cont->getStatusCode(), 'MEASURED: containers of a received shipment are editable');
+        $this->assertSame(422, $meta->getStatusCode());
+        $this->assertNotSame('REWRITTEN', $shipment->bl_number);
+        $this->assertSame(422, $cont->getStatusCode());
 
         // The date invariant, however, is now enforced on update as well.
         $bad = $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}", [
@@ -669,7 +647,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
 
         // …and when only ETA is patched, against the ETD already on the record.
         $this->actingAs($user)->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}",
-            ['etd' => '2026-09-10', 'eta' => '2026-09-20'])->assertOk();
+            ['etd' => '2026-09-10', 'eta' => '2026-09-20'])->assertStatus(422);
         $etaOnly = $this->actingAs($user)
             ->patchJson("/api/v1/supply-chain/shipments/{$shipment->hash_id}", ['eta' => '2026-09-01']);
         fwrite(STDERR, "[M043 post-receipt edit] eta-only against stored etd = {$etaOnly->getStatusCode()}\n");
@@ -681,14 +659,10 @@ class ImportShipmentCustomsAuditTest extends TestCase
     }
 
     /**
-     * INVARIANT: the record is immutable after receipt (Eloquent / raw SQL /
-     * delete / pg_trigger). MEASURED: fully mutable, zero triggers. Only a
-     * service-level guard blocks `DELETE /shipments/{id}` for `received`;
-     * Eloquent and SQL bypass it.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * The record is immutable after receipt at both application and database
+     * boundaries.
      */
-    public function test_probe_a_received_shipment_is_not_immutable(): void
+    public function test_a_received_shipment_is_immutable(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
@@ -696,23 +670,40 @@ class ImportShipmentCustomsAuditTest extends TestCase
         $id = $shipment->id;
 
         // 1. Eloquent update of the identity column.
-        $shipment->forceFill(['shipment_number' => 'SHP-HACKED'])->save();
-        $this->assertSame('SHP-HACKED', (string) Shipment::query()->find($id)->shipment_number,
-            'MEASURED: Eloquent rewrote the shipment number of a received shipment');
+        try {
+            DB::transaction(function () use ($shipment): void {
+                $shipment->forceFill(['shipment_number' => 'SHP-HACKED'])->save();
+            });
+            $this->fail('A received shipment must reject Eloquent mutation.');
+        } catch (\Throwable) {
+            $this->assertNotSame('SHP-HACKED', (string) Shipment::query()->find($id)->shipment_number);
+        }
 
         // 2. Raw SQL rewrite of the customs record.
-        DB::table('shipments')->where('id', $id)->update([
-            'shipment_number' => 'HACKED',
-            'customs_clearance_date' => '1999-01-01',
-            'status' => 'cleared',
-        ]);
-        $row = DB::table('shipments')->where('id', $id)->first();
-        $this->assertSame('HACKED', $row->shipment_number, 'MEASURED: raw SQL rewrote the compliance record');
-        $this->assertSame('cleared', $row->status, 'MEASURED: raw SQL walked the status backwards');
+        try {
+            DB::transaction(function () use ($id): void {
+                DB::table('shipments')->where('id', $id)->update([
+                    'shipment_number' => 'HACKED',
+                    'customs_clearance_date' => '1999-01-01',
+                    'status' => 'cleared',
+                ]);
+            });
+            $this->fail('A received shipment must reject raw SQL mutation.');
+        } catch (\Throwable) {
+            $row = DB::table('shipments')->where('id', $id)->first();
+            $this->assertNotSame('HACKED', $row->shipment_number);
+            $this->assertSame('received', $row->status);
+        }
 
         // 3. Hard delete.
-        $deleted = DB::table('shipments')->where('id', $id)->delete();
-        $this->assertSame(1, $deleted, 'MEASURED: the row can be hard-deleted');
+        try {
+            DB::transaction(function () use ($id): void {
+                DB::table('shipments')->where('id', $id)->delete();
+            });
+            $this->fail('A received shipment must reject hard delete.');
+        } catch (\Throwable) {
+            $this->assertNotNull(Shipment::query()->find($id));
+        }
 
         // 4. pg_trigger count.
         $triggers = DB::selectOne("
@@ -722,7 +713,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
               and c.relname in ('shipments','shipment_documents','containers','shipment_landed_costs')
         ");
         fwrite(STDERR, "[M043 immutability] pg_trigger count on shipment tables={$triggers->n}\n");
-        $this->assertSame(0, (int) $triggers->n, 'MEASURED: no database-level protection at all');
+        $this->assertGreaterThan(0, (int) $triggers->n);
     }
 
     /** MEASURED: the ONE guard that does exist — the service refuses to archive a received shipment. */
@@ -736,13 +727,12 @@ class ImportShipmentCustomsAuditTest extends TestCase
         fwrite(STDERR, "[M043 archive received] = {$r->getStatusCode()}\n");
         $this->assertSame(422, $r->getStatusCode());
 
-        // But a CLEARED shipment — a completed customs record — can be archived.
+        // A CLEARED shipment is also a completed customs record and cannot be archived.
         $cleared = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
         $this->advance($cleared, ShipmentStatus::Cleared);
         $r2 = $this->actingAs($user)->deleteJson("/api/v1/supply-chain/shipments/{$cleared->hash_id}");
         fwrite(STDERR, "[M043 archive cleared] = {$r2->getStatusCode()}\n");
-        $this->assertSame(204, $r2->getStatusCode(),
-            'MEASURED: a cleared customs record can be archived; only `received` is protected');
+        $this->assertSame(422, $r2->getStatusCode());
     }
 
     // ─────────────────────────── attachments ───────────────────────────────
@@ -842,15 +832,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
     }
 
     /**
-     * INVARIANT: a document survives its shipment being archived.
-     * MEASURED: it does NOT. `ShipmentService::delete()` soft-deletes the
-     * shipment and then destroys every document FILE after commit, while the
-     * document ROWS stay live — the exact inverse of the delivery-proof defect,
-     * and unrecoverable because restore cannot bind anyway.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
+     * A recoverable shipment archive preserves the document row and private blob.
      */
-    public function test_probe_archiving_a_shipment_orphans_its_document_rows(): void
+    public function test_archiving_a_shipment_preserves_its_document_blob(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
@@ -872,7 +856,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
 
         $this->assertTrue(Shipment::withTrashed()->find($shipment->id)->trashed());
         $this->assertFalse($doc->trashed(), 'MEASURED: document metadata stays ACTIVE');
-        $this->assertTrue($fileGone, 'MEASURED: but its file was destroyed — live row, dead file');
+        $this->assertFalse($fileGone, 'archiving must preserve the private document blob');
     }
 
     /**
@@ -890,6 +874,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
         $shipment = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
+        Storage::disk('local')->put("shipments/{$shipment->id}/x.pdf", "%PDF-1.4\n%%EOF\n");
         $doc = ShipmentDocument::create([
             'shipment_id' => $shipment->id, 'document_type' => 'bill_of_lading',
             'file_path' => "shipments/{$shipment->id}/x.pdf", 'original_filename' => 'x.pdf',
@@ -920,7 +905,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
         // A live row is still not a restore target, and a bad hash is still a 404.
         $live = $this->seedShipment($user, lineCount: 1, lineTotal: '100.00');
         $this->actingAs($user)
-            ->patchJson("/api/v1/supply-chain/shipments/{$live->hash_id}/restore")->assertOk();
+            ->patchJson("/api/v1/supply-chain/shipments/{$live->hash_id}/restore")->assertStatus(422);
         $this->actingAs($user)
             ->patchJson('/api/v1/supply-chain/shipments/zzzznope/restore')->assertStatus(404);
     }
@@ -1324,7 +1309,7 @@ class ImportShipmentCustomsAuditTest extends TestCase
         $steps['create'] = $create->getStatusCode();
         $sid = $create->json('data.id');
 
-        foreach (['bill_of_lading', 'commercial_invoice', 'packing_list'] as $type) {
+        foreach (['bill_of_lading', 'commercial_invoice', 'packing_list', 'import_entry', 'boc_release'] as $type) {
             $steps['upload_'.$type] = $this->actingAs($impex)->postJson(
                 "/api/v1/supply-chain/shipments/{$sid}/documents",
                 ['document_type' => $type, 'file' => $this->realPdf($type.'.pdf')],
@@ -1340,14 +1325,15 @@ class ImportShipmentCustomsAuditTest extends TestCase
         $steps['list_containers'] = $this->actingAs($impex)
             ->getJson("/api/v1/supply-chain/shipments/{$sid}/containers")->getStatusCode();
 
+        $steps['landed_cost'] = $this->actingAs($impex)->postJson(
+            "/api/v1/supply-chain/shipments/{$sid}/calculate-landed-cost",
+            ['allocation_method' => 'by_value'])->getStatusCode();
+
         foreach (['shipped', 'in_transit', 'customs', 'cleared', 'received'] as $next) {
             $steps['status_'.$next] = $this->actingAs($impex)->patchJson(
                 "/api/v1/supply-chain/shipments/{$sid}/status", ['status' => $next])->getStatusCode();
         }
 
-        $steps['landed_cost'] = $this->actingAs($impex)->postJson(
-            "/api/v1/supply-chain/shipments/{$sid}/calculate-landed-cost",
-            ['allocation_method' => 'by_value'])->getStatusCode();
         $steps['packing_list_pdf'] = $this->actingAs($impex)
             ->get("/api/v1/supply-chain/shipments/{$sid}/packing-list")->getStatusCode();
         $steps['commercial_invoice_pdf'] = $this->actingAs($impex)
@@ -1526,6 +1512,9 @@ class ImportShipmentCustomsAuditTest extends TestCase
     /** Walk a shipment to a target status through the service, bypassing HTTP. */
     private function advance(Shipment $shipment, ShipmentStatus $target): void
     {
+        if (in_array($target, [ShipmentStatus::Cleared, ShipmentStatus::Received], true)) {
+            $this->seedClearanceEvidence($shipment);
+        }
         $svc = app(ShipmentService::class);
         $path = [ShipmentStatus::Shipped, ShipmentStatus::InTransit, ShipmentStatus::Customs,
             ShipmentStatus::Cleared, ShipmentStatus::Received];
@@ -1536,6 +1525,31 @@ class ImportShipmentCustomsAuditTest extends TestCase
             }
         }
         $shipment->refresh();
+    }
+
+    private function seedClearanceEvidence(Shipment $shipment): void
+    {
+        foreach ([
+            ShipmentDocumentType::BillOfLading,
+            ShipmentDocumentType::CommercialInvoice,
+            ShipmentDocumentType::PackingList,
+            ShipmentDocumentType::ImportEntry,
+            ShipmentDocumentType::BocRelease,
+        ] as $type) {
+            ShipmentDocument::firstOrCreate(
+                ['shipment_id' => $shipment->id, 'document_type' => $type->value],
+                [
+                    'file_path' => "shipments/{$shipment->id}/{$type->value}.pdf",
+                    'original_filename' => $type->value.'.pdf',
+                    'uploaded_by' => $shipment->created_by,
+                    'uploaded_at' => now(),
+                ],
+            );
+        }
+        Container::firstOrCreate(
+            ['shipment_id' => $shipment->id, 'container_number' => 'AUTO'.substr((string) $shipment->id, -8)],
+            ['size' => '40ft', 'type' => 'dry'],
+        );
     }
 
     /** A real UploadedFile with real bytes on disk (NOT UploadedFile::fake()). */

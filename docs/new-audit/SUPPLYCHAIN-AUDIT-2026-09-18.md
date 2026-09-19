@@ -1,6 +1,14 @@
 # Supply Chain Audit
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **open**.
+
+- Landed-cost detail visibility is fixed, but capitalization into inventory WAC/GL remains absent.
+- Current high-risk gaps: no shipment-to-GRN handoff, weak customs/terminal immutability, duplicate documents, lot provenance, CoC recovery, no finished-goods decrement on delivery, active delivery deletion, driver double-booking, and manual-delivery idempotency.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/SupplyChain/`. `DeliveryService` was traced in the O2C doc; summarized here.
 Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
 

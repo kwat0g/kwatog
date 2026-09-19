@@ -12,6 +12,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CreateDeliveryRequest extends FormRequest
 {
@@ -68,5 +69,20 @@ class CreateDeliveryRequest extends FormRequest
             // provenance and remaining accepted quantity.
             'items.*.inspection_id'       => ['required', 'integer', 'exists:inspections,id'],
         ];
+    }
+
+    public function idempotencyKey(): ?string
+    {
+        $key = trim((string) $this->header('Idempotency-Key', ''));
+        if ($key === '') {
+            return null;
+        }
+        if (strlen($key) > 128 || ! preg_match('/^[A-Za-z0-9._:-]+$/D', $key)) {
+            throw ValidationException::withMessages([
+                'idempotency_key' => ['Idempotency-Key must contain only letters, numbers, dot, underscore, colon, or hyphen and be at most 128 characters.'],
+            ]);
+        }
+
+        return $key;
     }
 }

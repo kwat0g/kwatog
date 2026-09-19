@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,6 +81,24 @@ class DeliveryDeleteGuardsTest extends TestCase
 
         $this->assertNull(Delivery::find($id),
             'Scheduled delivery without an invoice link must delete cleanly.');
+    }
+
+    public function test_delete_refuses_loading_and_in_transit_deliveries(): void
+    {
+        $user = $this->makeUser();
+
+        foreach ([DeliveryStatus::Loading, DeliveryStatus::InTransit] as $status) {
+            $delivery = $this->seedDelivery($user, status: $status->value);
+
+            try {
+                $this->svc->delete($delivery);
+                $this->fail("A {$status->value} delivery must not be deleted.");
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('active delivery', $e->getMessage());
+            }
+
+            $this->assertNotNull(Delivery::find($delivery->id));
+        }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

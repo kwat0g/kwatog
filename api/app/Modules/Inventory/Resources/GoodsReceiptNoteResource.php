@@ -61,6 +61,11 @@ class GoodsReceiptNoteResource extends JsonResource
                     ]
                     : null,
             ]),
+            'shipment'        => $this->whenLoaded('shipment', fn () => $this->shipment ? [
+                'id'              => $this->shipment->hash_id,
+                'shipment_number' => $this->shipment->shipment_number,
+                'status'          => $this->shipment->status?->value,
+            ] : null),
             'receiver'        => $this->whenLoaded('receiver', fn () => $this->receiver ? [
                 'id'   => $this->receiver->hash_id,
                 'name' => $this->receiver->name,

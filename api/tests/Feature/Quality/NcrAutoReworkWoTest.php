@@ -15,6 +15,7 @@ use App\Modules\Quality\Enums\NcrDisposition;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
 use Database\Seeders\RolePermissionSeeder;
 use App\Common\Services\SettingsService;
@@ -113,5 +114,24 @@ class NcrAutoReworkWoTest extends TestCase
         // Existing Scrap path still creates a replacement WO; rework field stays null.
         $this->assertNull($closed->rework_work_order_id);
         $this->assertNotNull($closed->replacement_work_order_id);
+    }
+
+    public function test_rework_work_order_link_is_exposed_by_ncr_detail(): void
+    {
+        $by = $this->user();
+        $ncr = $this->ncrFromOutgoingInspection();
+        $this->addBothActions($ncr, $by);
+
+        $closed = app(NcrService::class)->close($ncr, $by);
+        $payload = (new NcrResource(app(NcrService::class)->show($closed)))->resolve();
+
+        $this->assertSame(
+            $closed->reworkWorkOrder->hash_id,
+            $payload['rework_work_order']['id'],
+        );
+        $this->assertSame(
+            $closed->reworkWorkOrder->wo_number,
+            $payload['rework_work_order']['wo_number'],
+        );
     }
 }

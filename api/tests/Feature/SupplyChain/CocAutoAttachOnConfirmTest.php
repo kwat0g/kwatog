@@ -149,6 +149,31 @@ class CocAutoAttachOnConfirmTest extends TestCase
         $this->assertSame(0, $cocCount, 'Without a linked inspection, no CoC should be created.');
     }
 
+    public function test_failed_coc_handoff_is_persisted_and_retryable(): void
+    {
+        $user = $this->makeUser();
+        [$delivery, , $inspection] = $this->seedDeliveryWithInspection(
+            $user,
+            stage: InspectionStage::Outgoing,
+            status: InspectionStatus::Passed,
+        );
+        InspectionMeasurement::query()->where('inspection_id', $inspection->id)->delete();
+        $this->addProof($delivery, $user);
+
+        $confirmed = $this->svc->confirm($delivery, $user);
+        $this->assertSame('manual_required', $confirmed->coc_handoff_status->value);
+        $this->assertSame(1, $delivery->fresh()->shipmentLot()->count());
+
+        $this->seedResolvedMeasurements($inspection->fresh(), 8, InspectionStatus::Passed);
+        $retried = $this->svc->retryCocHandoff($delivery->fresh(), $user);
+
+        $this->assertSame('generated', $retried->coc_handoff_status->value);
+        $this->assertSame(1, DeliveryProof::query()
+            ->where('delivery_id', $delivery->id)
+            ->where('proof_type', 'coc')
+            ->count());
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private function makeUser(): User

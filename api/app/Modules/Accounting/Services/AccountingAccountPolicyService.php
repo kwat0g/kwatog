@@ -34,6 +34,7 @@ final class AccountingAccountPolicyService
         'accounting.accounts.vat_input_code' => AccountType::Asset,
         'accounting.accounts.discount_code' => AccountType::Revenue,
         'accounting.accounts.grni_code' => AccountType::Liability,
+        'accounting.accounts.landed_cost_clearing_code' => AccountType::Liability,
         'accounting.accounts.inventory_raw_material_code' => AccountType::Asset,
         'accounting.accounts.inventory_finished_goods_code' => AccountType::Asset,
         'accounting.accounts.inventory_packaging_code' => AccountType::Asset,

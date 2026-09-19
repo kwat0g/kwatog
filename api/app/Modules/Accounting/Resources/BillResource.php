@@ -27,6 +27,10 @@ class BillResource extends JsonResource
             'cancelled_at'   => optional($this->cancelled_at)->toIso8601String(),
             // 2026-08-08 — source receipt for auto-created draft bills.
             'goods_receipt_note_id' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? $this->goodsReceiptNote->hash_id : null),
+            'landed_cost_shipment' => $this->whenLoaded('landedCostShipment', fn () => $this->landedCostShipment ? [
+                'id' => $this->landedCostShipment->hash_id,
+                'shipment_number' => $this->landedCostShipment->shipment_number,
+            ] : null),
             'is_overdue'     => $this->isOverdue(),
             'aging_bucket'   => $this->agingBucket(),
             'remarks'        => $this->remarks,

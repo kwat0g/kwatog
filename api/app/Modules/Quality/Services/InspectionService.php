@@ -339,7 +339,11 @@ class InspectionService
                 fn ($query) => $query
                     ->where('stage', $stage->value)
                     ->where('entity_type', $data['entity_type'] ?? null)
-                    ->where('entity_id', $data['entity_id'] ?? null),
+                    ->where('entity_id', $data['entity_id'] ?? null)
+                    ->when(
+                        in_array($stage, [InspectionStage::CustomerReturn, InspectionStage::SupplierReturn], true),
+                        fn ($query) => $query->where('product_id', $product->id),
+                    ),
             )
             ->first();
         if ($existing) {
@@ -580,6 +584,14 @@ class InspectionService
             $unresolved = $rows->whereNull('is_pass')->count();
             if ($unresolved > 0) {
                 throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
+            }
+
+            $sampledUnits = $rows->pluck('sample_index')->unique()->count();
+            $declaredSample = (int) $lockedInspection->sample_size;
+            if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
+                throw new BusinessRuleException(
+                    "Cannot complete: inspection declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
+                );
             }
 
             $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);

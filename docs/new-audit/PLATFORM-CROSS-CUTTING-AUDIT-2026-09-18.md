@@ -1,6 +1,15 @@
 # Platform / Cross-Cutting Audit (Dashboard, Admin, Auth, Edge, Landing, Common)
 
 Date: 2026-09-18
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **open**.
+
+- Fixed/stable: cookie auth core, reset consumption, outbox leases, chain broadcaster failure handling, notification transaction insertion, scoped search/approval board, and settings transaction.
+- Current platform risks: approval escalation health, direct bottleneck alert writes, recovery audit entity IDs, approval-board pagination, business-policy disclosure, outbox model-version ignoring, sequence first-use race, vault checksum verification, notification idempotency, dashboard badge scopes, supplier expiry, auth timing/current-password reuse, and Landing PII/feature-gate gaps.
+- Edge is removed; only stale `/api/v1/edge/*` middleware/docs references remain.
+- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Claims are **[confirmed]** (file:line/grep) or **[assumption/unverified]**.
 
 ---

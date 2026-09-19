@@ -6,7 +6,6 @@ namespace App\Modules\Quality\Listeners;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainListenerRunService;
-use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -16,9 +15,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
-use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
-use App\Modules\Quality\Services\AqlSampleSizeService;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\QueryException;
@@ -34,8 +31,8 @@ use Illuminate\Support\Facades\Log;
  * from the product's active inspection spec.
  *
  * Idempotent: if an outgoing inspection already exists for an output batch,
- * skip that batch silently. Falls back to a bare Inspection record when no
- * active spec exists for the product.
+ * skip that batch silently. A missing active spec is rethrown so the queue
+ * records a failed handoff instead of creating an uncompletable inspection.
  *
  * Stateful failures are rethrown for queue retry; notification delivery is
  * best-effort. The listener runs after the WO transition is committed.
@@ -139,41 +136,6 @@ class TriggerOutgoingQC implements ShouldQueue
                             continue;
                         }
                         throw $e;
-                    } catch (BusinessRuleException $e) {
-                        Log::debug('TriggerOutgoingQC fallback — no active spec', [
-                            'product_id' => $productId,
-                            'output_id' => $output->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                        $aql = AqlSampleSizeService::forBatch($batchQty);
-                        try {
-                            DB::transaction(function () use ($guardColumns, $productId, $batchQty, $aql, $output, $lockedWo): void {
-                                Inspection::firstOrCreate(
-                                    $guardColumns,
-                                    [
-                                        'inspection_number' => app(DocumentSequenceService::class)->generate('inspection'),
-                                        'status' => InspectionStatus::Draft->value,
-                                        'product_id' => $productId,
-                                        'entity_type' => InspectionEntityType::WorkOrder->value,
-                                        'entity_id' => $lockedWo->id,
-                                        'work_order_output_id' => $output->id,
-                                        'batch_quantity' => $batchQty,
-                                        'accepted_quantity' => 0,
-                                        'sample_size' => (int) $aql['sample_size'],
-                                        'aql_code' => (string) $aql['code'],
-                                        'accept_count' => (int) $aql['accept'],
-                                        'reject_count' => (int) $aql['reject'],
-                                        'defect_count' => 0,
-                                    ]
-                                );
-                            });
-                            $createdAny = true;
-                        } catch (QueryException $qe) {
-                            if ($this->isUniqueViolation($qe) && Inspection::query()->where($guardColumns)->exists()) {
-                                continue;
-                            }
-                            throw $qe;
-                        }
                     }
                 }
 

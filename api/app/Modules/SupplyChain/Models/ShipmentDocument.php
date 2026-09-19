@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ShipmentDocument extends Model
 {
-    use HasFactory, HasHashId, SoftDeletes;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'shipment_id', 'document_type', 'file_path',

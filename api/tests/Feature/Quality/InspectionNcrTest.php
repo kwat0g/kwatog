@@ -189,7 +189,7 @@ class InspectionNcrTest extends TestCase
             'product_id'         => $this->product->id,
             'inspection_spec_id' => $this->spec->id,
             'batch_quantity'     => 50,
-            'sample_size'        => 8,  // AQL for batch 50
+            'sample_size'        => 1,  // This fixture contains one measured unit.
             'aql_code'           => 'F',
             'accept_count'       => 0,
             'reject_count'       => 1,
@@ -231,7 +231,7 @@ class InspectionNcrTest extends TestCase
             'product_id'         => $this->product->id,
             'inspection_spec_id' => $this->spec->id,
             'batch_quantity'     => 100,
-            'sample_size'        => 13,
+            'sample_size'        => 1,
             'aql_code'           => 'G',
             'accept_count'       => 2,
             'reject_count'       => 3,
@@ -804,7 +804,7 @@ class InspectionNcrTest extends TestCase
             'product_id'         => $this->product->id,
             'inspection_spec_id' => $this->spec->id,
             'batch_quantity'     => 10,
-            'sample_size'        => 2,
+            'sample_size'        => 1,
             'aql_code'           => null,
             'accept_count'       => 0,
             'reject_count'       => 1,

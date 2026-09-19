@@ -47,6 +47,12 @@ class ShipmentResource extends JsonResource
                 'id'   => $this->creator->hash_id,
                 'name' => $this->creator->name,
             ] : null),
+            'goods_receipt_note'       => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? [
+                'id'            => $this->goodsReceiptNote->hash_id,
+                'grn_number'    => $this->goodsReceiptNote->grn_number,
+                'status'        => $this->goodsReceiptNote->status?->value,
+                'received_date' => optional($this->goodsReceiptNote->received_date)?->toDateString(),
+            ] : null),
             'documents'                => $this->whenLoaded('documents', fn () =>
                 ShipmentDocumentResource::collection($this->documents)->resolve()),
             'created_at'               => optional($this->created_at)?->toISOString(),

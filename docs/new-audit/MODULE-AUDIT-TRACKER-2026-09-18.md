@@ -1,22 +1,30 @@
 # Module / Feature Audit Tracker
 
 Purpose: audit every module and feature in the OGAMI ERP one by one, from code.
+ 
+## Re-audit status 2026-09-19
+
+Every tracker row and every artifact in this directory has been rechecked against current source. The current canonical result is `RE-AUDIT-REGISTER-2026-09-19.md`; the row statuses below are historical inventory labels, not closure evidence.
 Status values: **audited** (deep trace document written), **partial** (touched by another
 chain's trace), **queued**.
 
 **Cross-cutting backlog:** `FINDINGS-REGISTER-2026-09-18.md` — all findings ranked P0/P1/P2
 with verified status (the working tree carries an uncommitted fix pass).
 
+**Current full re-audit:** `RE-AUDIT-REGISTER-2026-09-19.md` — all 26 rows and all current
+audit artifacts were rechecked against the current code; historical `FINISHED`/`PARTIAL`
+labels are not treated as closure.
+
 | # | Module | Status | Document / notes |
 |---|---|---|---|
 | 1 | CRM — Sales Order (O2C) | audited | `FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md` |
 | 2 | Purchasing — PR (P2P) | audited | `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md` (fix pass 2026-09-18: §9 resolution log) |
-| 3 | Payroll / HR separation (H2R) | audited | `HIRE-TO-RETIRE-PAYROLL-TRACE-2026-09-18.md` |
-| 4 | Accounting core (COA, JE, AR, AP, VAT, statements) | audited | `ACCOUNTING-CORE-AUDIT-2026-09-18.md` |
+| 3 | Payroll / HR separation (H2R) | audited | `HIRE-TO-RETIRE-PAYROLL-TRACE-2026-09-18-FINISHED.md` |
+| 4 | Accounting core (COA, JE, AR, AP, VAT, statements) | audited | `ACCOUNTING-CORE-AUDIT-2026-09-18-PARTIAL.md` |
 | 5 | Budgeting (budgets, revisions, transfers, fiscal year) | audited | same doc, §3.7/§8 |
 | 6 | Inventory (stock, valuation, transfers, counts, warehouse) | audited | `INVENTORY-RETURNS-AUDIT-2026-09-18.md` |
 | 7 | Quality (specs, inspections, NCR, CoC, PPAP, SPC) | audited | `QUALITY-AUDIT-2026-09-18.md` |
-| 8 | Production (WO, output, OEE, downtime, routing) | audited | `PRODUCTION-AUDIT-2026-09-18.md` |
+| 8 | Production (WO, output, OEE, downtime, routing) | audited | `PRODUCTION-AUDIT-2026-09-18-FINISHED.md` |
 | 9 | MRP / MRP II (BOM, capacity, molds, machines) | audited | `MRP-AUDIT-2026-09-18-FINISHED.md` (missing follow-up coverage: `MRP-AUDIT-2026-09-18-MISSING-TESTS.md`) |
 | 10 | SupplyChain (shipments, impex, fleet, landed cost) | audited | `SUPPLYCHAIN-AUDIT-2026-09-18.md` |
 | 11 | CRM — complaints / 8D / price agreements / products | audited | `CRM-AUDIT-2026-09-18.md` (complaints/8D in `QUALITY-AUDIT-2026-09-18.md`) |

@@ -132,6 +132,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.view');
     Route::post('/deliveries/{delivery}/confirm',           [DeliveryController::class, 'confirm'])
         ->middleware('permission:supply_chain.deliveries.confirm');
+    Route::post('/deliveries/{delivery}/retry-coc',          [DeliveryController::class, 'retryCoc'])
+        ->middleware('permission:supply_chain.deliveries.confirm');
     Route::delete('/deliveries/{delivery}',                 [DeliveryController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/restore',          [DeliveryController::class, 'restore'])

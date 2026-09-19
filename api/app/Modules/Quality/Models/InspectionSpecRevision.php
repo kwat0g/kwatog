@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Models;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
@@ -16,6 +17,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class InspectionSpecRevision extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
+
+    protected static function booted(): void
+    {
+        static::updating(static function (): void {
+            throw new BusinessRuleException(
+                'Inspection-spec revisions are immutable. Create a new revision instead.',
+            );
+        });
+
+        static::deleting(static function (): void {
+            throw new BusinessRuleException('Inspection-spec revisions cannot be deleted.');
+        });
+    }
 
     protected $fillable = [
         'inspection_spec_id', 'version', 'created_by', 'notes',

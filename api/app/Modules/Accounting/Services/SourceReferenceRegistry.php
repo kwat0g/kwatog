@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\TransferOrder;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
@@ -54,6 +55,7 @@ final class SourceReferenceRegistry
         'stock_transfer' => ['model' => TransferOrder::class],
         'stock_adjustment' => ['model' => StockAdjustment::class],
         'stock_count_session' => ['model' => StockCountSession::class],
+        'delivery_item' => ['model' => DeliveryItem::class],
         'material_review_record' => ['model' => MaterialReviewRecord::class],
         'work_order' => ['model' => WorkOrder::class],
         'work_order_output' => ['model' => WorkOrderOutput::class],

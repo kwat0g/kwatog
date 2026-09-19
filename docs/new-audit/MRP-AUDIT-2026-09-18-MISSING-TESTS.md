@@ -1,6 +1,14 @@
 # MRP Audit Missing Tests
 
 Date: 2026-09-19
+ 
+## Re-audit 2026-09-19
+
+Current verdict: **test-gap inventory remains valid**.
+
+- Current source now has focused tests for inactive components, duplicate BOM components, plan summary wiring, sorted job identity, daily partial semantics, reaper metadata, and retirement audit behavior.
+- Missing proof remains for BOM HTTP lifecycle, same-reason routing edits, deleted-version recreation, depth/UOM/MOQ boundaries, manual/daily MRP overlap, plan-history reconstruction, missing-BOM alerts, and Redis/two-worker behavior.
+- Do not treat this file as a passing test report; use `RE-AUDIT-REGISTER-2026-09-19.md` for current module status.
 Related audit: `MRP-AUDIT-2026-09-18-FINISHED.md`
 
 The MRP implementation and focused regression coverage are finished. The items

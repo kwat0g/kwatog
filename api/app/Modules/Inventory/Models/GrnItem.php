@@ -20,7 +20,7 @@ class GrnItem extends Model
     protected $fillable = [
         'goods_receipt_note_id', 'purchase_order_item_id', 'item_id',
         'location_id', 'received_uom_code', 'quantity_received', 'quantity_accepted',
-        'unit_cost', 'remarks',
+        'unit_cost', 'landed_cost_unit', 'landed_cost_total', 'remarks',
         // ADV3 — IATF 16949 incoming material lot tracking (line-level).
         'material_lot_number', 'supplier_lot_reference',
         // OGAMI-012 — lot expiry capture (null-safe; optional).
@@ -33,6 +33,8 @@ class GrnItem extends Model
         'quantity_received' => 'decimal:3',
         'quantity_accepted' => 'decimal:3',
         'unit_cost'         => 'decimal:4',
+        'landed_cost_unit'  => 'decimal:4',
+        'landed_cost_total' => 'decimal:2',
         'expiry_date'       => 'date',
         'moisture_percentage' => 'decimal:3',
         'coa_verified'      => 'boolean',

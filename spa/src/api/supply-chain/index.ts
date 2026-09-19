@@ -115,8 +115,10 @@ export const deliveriesApi = {
   client.get<{ data: DeliveryInspectionOption[] }>('/supply-chain/deliveries/inspection-options', { params: { sales_order_id: salesOrderId } }).then((r) => r.data.data),
  driverOptions: () =>
   client.get<{ data: DeliveryDriverOption[] }>('/supply-chain/deliveries/driver-options').then((r) => r.data.data),
- create: (data: CreateDeliveryData) =>
- client.post<ApiSuccess<Delivery>>('/supply-chain/deliveries', data).then((r) => r.data.data),
+  create: (data: CreateDeliveryData, idempotencyKey?: string) =>
+  client.post<ApiSuccess<Delivery>>('/supply-chain/deliveries', data, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+  }).then((r) => r.data.data),
  list: (params?: DeliveryListParams) =>
  client.get<PaginatedResponse<Delivery>>('/supply-chain/deliveries', { params }).then((r) => r.data),
  show: (id: string) =>
@@ -130,8 +132,10 @@ export const deliveriesApi = {
  fd.append('file', file);
  return client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/receipt`, fd).then((r) => r.data.data);
  },
- confirm: (id: string, data?: { receiver_name?: string; receiver_position?: string; delivery_remarks?: string }) =>
- client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/confirm`, data ?? {}).then((r) => r.data.data),
+  confirm: (id: string, data?: { receiver_name?: string; receiver_position?: string; delivery_remarks?: string }) =>
+  client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/confirm`, data ?? {}).then((r) => r.data.data),
+  retryCoc: (id: string) =>
+  client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/retry-coc`).then((r) => r.data.data),
 };
 
 /** ADV7 — Proof of Delivery file management. */

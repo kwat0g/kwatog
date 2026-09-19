@@ -55,6 +55,7 @@ class NcrService
             'inspection:id,inspection_number,stage,status',
             'creator:id,name,role_id',
             'assignee:id,name',
+            'reworkWorkOrder:id,wo_number,status,quantity_target',
         ]);
 
         foreach (['source', 'severity', 'status', 'disposition'] as $f) {
@@ -83,6 +84,7 @@ class NcrService
             'closer:id,name',
             'recurrenceOf:id,ncr_number',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
+            'reworkWorkOrder:id,wo_number,status,quantity_target',
             'actions' => fn ($q) => $q->with([
                 'performer:id,name,role_id',
                 'owner:id,name',
@@ -360,9 +362,8 @@ class NcrService
             // Return to supplier → open the shared supplier-return RMA so the
             // receipt reversal, supplier credit note and optional replacement
             // PO are handled by the ONE engine, then still notify Purchasing.
-            // Without GRN/PO lineage there is nothing to reverse or credit, so
-            // this falls back to the historical notify-only behaviour and logs
-            // why (see openSupplierReturnRmaForNcr()).
+            // Without GRN/PO lineage there is no safe stock or credit action, so
+            // the close must roll back and remain operator-actionable.
             if ($locked->disposition === NcrDisposition::ReturnToSupplier) {
                 $this->openSupplierReturnRmaForNcr($locked, $by);
                 $this->notifyPurchasing($locked);
@@ -449,28 +450,24 @@ class NcrService
     {
         $inspection = $ncr->inspection_id ? Inspection::find($ncr->inspection_id) : null;
         if (! $inspection) {
-            Log::info('NcrService: return_to_supplier NCR has no linked inspection; purchasing notified only.', [
-                'ncr_id' => $ncr->id,
-            ]);
-            return;
+            throw new BusinessRuleException(
+                'Cannot close return_to_supplier NCR without a linked inspection and receipt lineage.',
+            );
         }
 
         $grnItem = $this->resolveGrnItemForReturn($inspection);
         $grn = $grnItem?->grn;
         if (! $grnItem || ! $grn || ! $grn->vendor_id) {
-            Log::info('NcrService: return_to_supplier NCR has no GRN/PO lineage; purchasing notified only.', [
-                'ncr_id'        => $ncr->id,
-                'inspection_id' => $inspection->id,
-            ]);
-            return;
+            throw new BusinessRuleException(
+                'Cannot close return_to_supplier NCR without complete GRN, vendor, and purchase-lineage data.',
+            );
         }
 
         $quantity = $this->ncrReturnQuantity($ncr, $grnItem);
         if (bccomp($quantity, '0', 3) <= 0) {
-            Log::info('NcrService: return_to_supplier NCR resolved to a zero return quantity; purchasing notified only.', [
-                'ncr_id' => $ncr->id,
-            ]);
-            return;
+            throw new BusinessRuleException(
+                'Cannot close return_to_supplier NCR because the resolved return quantity is zero.',
+            );
         }
 
         $poItem = $grnItem->purchaseOrderItem;
@@ -501,14 +498,17 @@ class NcrService
                     dedupeKey: 'grn-rejection:'.$grn->id,
                 );
         } catch (\Throwable $e) {
-            // The NCR is already persisted; a lineage/accounting configuration
-            // failure must be visible, but rolling back the close here would
-            // leave the NCR unfinishable. Surface it and keep the notification.
             Log::error('NcrService: failed to open a supplier-return RMA for return_to_supplier NCR.', [
                 'ncr_id'    => $ncr->id,
                 'error'     => $e->getMessage(),
                 'exception' => $e::class,
             ]);
+
+            throw new BusinessRuleException(
+                'The supplier-return RMA could not be created; the NCR remains open.',
+                0,
+                $e,
+            );
         }
     }
 

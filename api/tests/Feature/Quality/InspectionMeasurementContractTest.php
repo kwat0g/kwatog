@@ -101,6 +101,25 @@ class InspectionMeasurementContractTest extends TestCase
         $this->assertSame('Cycle test passed.', $measurement->fresh()->notes);
     }
 
+    public function test_completion_rejects_when_declared_sample_units_are_missing(): void
+    {
+        $inspection = $this->makeInspection();
+        $inspection->update(['sample_size' => 2]);
+        $measurement = $this->makeMeasurement($inspection, [
+            'sample_index' => 1,
+            'parameter_type' => 'visual',
+        ]);
+
+        $this->service->recordMeasurements($inspection, [
+            $measurement->id => ['is_pass' => true],
+        ], $this->user);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('declares a sample of 2 unit(s) but only 1 were measured');
+
+        $this->service->complete($inspection->fresh(), $this->user);
+    }
+
     public function test_coc_eligibility_errors_have_stable_codes(): void
     {
         $inspection = $this->makeInspection();

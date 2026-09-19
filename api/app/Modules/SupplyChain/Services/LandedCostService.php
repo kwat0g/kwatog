@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\Money;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\SupplyChain\Models\Shipment;
@@ -59,6 +61,16 @@ class LandedCostService
         $this->assertMethodIsSupported($method);
 
         return DB::transaction(function () use ($shipment, $method) {
+            $shipment = Shipment::query()->lockForUpdate()->findOrFail($shipment->id);
+            if (GoodsReceiptNote::query()
+                ->where('shipment_id', $shipment->id)
+                ->whereHas('items', fn ($q) => $q->where('quantity_accepted', '>', 0))
+                ->exists()) {
+                throw new BusinessRuleException(
+                    'Landed cost cannot be recalculated after this shipment has an accepted receipt.'
+                );
+            }
+
             $shipment->load([
                 'purchaseOrder.items.item',
                 'landedCosts',
@@ -69,13 +81,19 @@ class LandedCostService
                 throw new BusinessRuleException('Shipment has no purchase order items to allocate costs against.');
             }
 
-            $freightCost   = (float) ($shipment->freight_cost ?? 0);
-            $insuranceCost = (float) ($shipment->insurance_cost ?? 0);
-            $dutiesAmount  = (float) ($shipment->duties_amount ?? 0);
-            $brokerageFee  = (float) ($shipment->brokerage_fee ?? 0);
-            $otherCharges  = (float) ($shipment->other_charges ?? 0);
+            $freightCost   = Money::round2((string) ($shipment->freight_cost ?? 0));
+            $insuranceCost = Money::round2((string) ($shipment->insurance_cost ?? 0));
+            $dutiesAmount  = Money::round2((string) ($shipment->duties_amount ?? 0));
+            $brokerageFee  = Money::round2((string) ($shipment->brokerage_fee ?? 0));
+            $otherCharges  = Money::round2((string) ($shipment->other_charges ?? 0));
 
-            $totalAddCosts = $freightCost + $insuranceCost + $dutiesAmount + $brokerageFee + $otherCharges;
+            foreach ([$freightCost, $insuranceCost, $dutiesAmount, $brokerageFee, $otherCharges] as $cost) {
+                if (Money::lt($cost, '0')) {
+                    throw new BusinessRuleException('Landed cost components cannot be negative.');
+                }
+            }
+
+            $totalAddCosts = Money::add($freightCost, $insuranceCost, $dutiesAmount, $brokerageFee, $otherCharges);
 
             // Handle edge case: no additional costs — zero-out allocations.
             if ($totalAddCosts <= 0) {
@@ -94,15 +112,19 @@ class LandedCostService
             // Delete existing allocations and re-insert fresh ones.
             $shipment->landedCosts()->delete();
 
-            foreach ($poItems as $i => $item) {
-                $ratio = $ratios[$i] ?? 0;
+            $freight = $this->allocate($poItems, $ratios, $freightCost);
+            $insurance = $this->allocate($poItems, $ratios, $insuranceCost);
+            $duties = $this->allocate($poItems, $ratios, $dutiesAmount);
+            $brokerage = $this->allocate($poItems, $ratios, $brokerageFee);
+            $other = $this->allocate($poItems, $ratios, $otherCharges);
 
-                $af = round($freightCost * $ratio, 2);
-                $ai = round($insuranceCost * $ratio, 2);
-                $ad = round($dutiesAmount * $ratio, 2);
-                $ab = round($brokerageFee * $ratio, 2);
-                $ao = round($otherCharges * $ratio, 2);
-                $ta = $af + $ai + $ad + $ab + $ao;
+            foreach ($poItems as $i => $item) {
+                $af = $freight[$i] ?? Money::zero();
+                $ai = $insurance[$i] ?? Money::zero();
+                $ad = $duties[$i] ?? Money::zero();
+                $ab = $brokerage[$i] ?? Money::zero();
+                $ao = $other[$i] ?? Money::zero();
+                $ta = Money::add($af, $ai, $ad, $ab, $ao);
 
                 ShipmentLandedCost::create([
                     'shipment_id'           => $shipment->id,
@@ -117,7 +139,7 @@ class LandedCostService
             }
 
             $shipment->forceFill([
-                'landed_cost_total'         => (string) round($totalAddCosts, 2),
+                    'landed_cost_total'         => $totalAddCosts,
                 'allocation_method'         => $method,
                 'landed_cost_calculated_at' => now(),
             ])->save();
@@ -157,33 +179,36 @@ class LandedCostService
      * Compute allocation ratios for each PO line based on the method.
      *
      * @param Collection<int, PurchaseOrderItem> $poItems
-     * @return float[]  Ratios summing to 1.0 (or 0 for empty totals).
+     * @return array<int, string> Ratios summing to 1.0 (or 0 for empty totals).
      */
     private function computeRatios(Collection $poItems, string $method): array
     {
         if ($method === 'manual') {
             // Manual allocation: equal split (user enters amounts directly).
             $count = $poItems->count();
-            $ratio = $count > 0 ? 1.0 / $count : 0;
+            $ratio = $count > 0 ? bcdiv('1', (string) $count, 12) : '0';
             return array_fill(0, $count, $ratio);
         }
 
         $denominators = match ($method) {
-            'by_value'   => $poItems->map(fn (PurchaseOrderItem $i) => (float) ($i->total ?? 0)),
-            'by_quantity' => $poItems->map(fn (PurchaseOrderItem $i) => (float) ($i->quantity ?? 0)),
+            'by_value'   => $poItems->map(fn (PurchaseOrderItem $i) => (string) ($i->total ?? 0)),
+            'by_quantity' => $poItems->map(fn (PurchaseOrderItem $i) => (string) ($i->quantity ?? 0)),
             'by_weight'   => $this->getItemWeights($poItems),
             default       => throw new InvalidArgumentException("Unknown method: {$method}"),
         };
 
-        $total = $denominators->sum();
-        if ($total <= 0) {
+        $total = '0';
+        foreach ($denominators as $denominator) {
+            $total = bcadd($total, (string) $denominator, 12);
+        }
+        if (bccomp($total, '0', 12) <= 0) {
             // Fall back to equal split if there's no weight/value/quantity data.
             $count = $poItems->count();
-            $equal = $count > 0 ? 1.0 / $count : 0;
+            $equal = $count > 0 ? bcdiv('1', (string) $count, 12) : '0';
             return array_fill(0, $count, $equal);
         }
 
-        return $denominators->map(fn (float $d) => $d / $total)->values()->all();
+        return $denominators->map(fn (string $d) => bcdiv($d, $total, 12))->values()->all();
     }
 
     /**
@@ -197,19 +222,37 @@ class LandedCostService
      * unhandled 500. `by_weight` had therefore never once completed.
      *
      * @param Collection<int, PurchaseOrderItem> $poItems
-     * @return SupportCollection<int, float>
+     * @return SupportCollection<int, string>
      */
     private function getItemWeights(Collection $poItems): SupportCollection
     {
         return $poItems->map(function (PurchaseOrderItem $item) {
             $item->loadMissing('item');
-            $weight = (float) ($item->item->net_weight ?? $item->item->weight ?? 0);
+            $weight = (string) ($item->item->net_weight ?? $item->item->weight ?? 0);
             // Scale weight by ordered quantity for proportional allocation.
             // Purchase-order quantity is required for new lines. Treat an
             // incomplete legacy line as zero rather than inventing one unit
             // and skewing landed-cost allocation.
-            return $weight * (float) ($item->quantity ?? 0);
+            return bcmul($weight, (string) ($item->quantity ?? 0), 12);
         })->toBase();
+    }
+
+    /** @return array<int, string> */
+    private function allocate(Collection $items, array $ratios, string $total): array
+    {
+        $values = [];
+        $allocated = Money::zero();
+        $last = $items->count() - 1;
+
+        foreach ($items as $index => $item) {
+            $value = $index === $last
+                ? Money::sub($total, $allocated)
+                : Money::mul($total, (string) ($ratios[$index] ?? '0'));
+            $values[$index] = $value;
+            $allocated = Money::add($allocated, $value);
+        }
+
+        return $values;
     }
 
     /**
