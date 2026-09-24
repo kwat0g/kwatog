@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Common;
 
 use App\Common\Models\ImportBatch;
+use App\Common\Services\Import\MasterDataImportService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -17,8 +18,10 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Inventory\Models\Item;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -245,13 +248,42 @@ class MasterDataImportTest extends TestCase
 
         $this->actingAs($this->admin())
             ->postJson("/api/v1/imports/batches/{$commit->json('data.batch_id')}/rollback")
-            ->assertUnprocessable()
+            ->assertStatus(409)
             ->assertExactJson([
                 'message' => 'Cannot roll back — some imported records are already referenced by other data.',
             ]);
 
         $this->assertDatabaseHas('accounts', ['id' => $account->id]);
         $this->assertDatabaseHas('import_batches', ['id' => ImportBatch::query()->value('id'), 'status' => 'committed']);
+    }
+
+    public function test_database_failure_during_preview_is_sanitized_and_logged(): void
+    {
+        $exception = new QueryException(
+            'pgsql',
+            'select * from private_import_table',
+            [],
+            new \PDOException('SQLSTATE[08006]: connection failure: private database detail'),
+        );
+        $service = \Mockery::mock(MasterDataImportService::class);
+        $service->shouldReceive('dryRun')->once()->andThrow($exception);
+        $this->app->instance(MasterDataImportService::class, $service);
+        Log::spy();
+
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/coa/dry-run', [
+                'file' => $this->csv("code,name,type,normal_balance\n9100,Cash,asset,debit\n"),
+            ])
+            ->assertStatus(500)
+            ->assertExactJson([
+                'message' => 'The import preview could not be completed. Try again later or contact support.',
+            ])
+            ->assertDontSee('private_import_table')
+            ->assertDontSee('private database detail');
+
+        Log::shouldHaveReceived('error')->once()->withArgs(
+            static fn (string $message, array $context): bool => ($context['exception'] ?? null) === $exception,
+        );
     }
 
     public function test_import_routes_are_permission_gated(): void
