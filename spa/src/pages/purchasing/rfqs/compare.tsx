@@ -1,69 +1,384 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { rfqsApi } from '@/api/purchasing/rfqs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { usePermission } from '@/hooks/usePermission';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatDate } from '@/lib/formatDate';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import type { SupplierQuote } from '@/types/purchasing';
 
-type Allocation = Record<string, Record<string, string>>;
+const errMsg = (e: unknown, fallback: string) =>
+  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
-// Quotes carry 4dp quantities but awards accept 3dp (PO lines are 3dp), so a
-// pre-filled "600.0000" was refused on submit. Drop the trailing zeros.
-const awardQuantity = (quantity: string | null): string => (quantity ?? '0').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+const VAT_LABEL: Record<SupplierQuote['vat_treatment'], string> = {
+  exclusive: 'VAT exclusive',
+  inclusive: 'VAT inclusive',
+  none: 'No VAT',
+};
 
+const DOC_LABEL: Record<string, string> = {
+  quotation_pdf: 'Quotation',
+  certificate_of_analysis: 'CoA',
+  resin_datasheet: 'Datasheet',
+  safety_document: 'Safety',
+};
+
+/**
+ * Sealed-bid comparison, available once the RFQ closes. One winner per line:
+ * the lowest delivered cost (freight and VAT shared by goods value, expired
+ * quotes excluded) is preselected, and the buyer can change or skip any line.
+ */
 export default function RfqComparisonPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { can } = usePermission();
-  const query = useQuery({ queryKey: ['purchasing', 'rfqs', id, 'comparison'], queryFn: () => rfqsApi.comparison(id), enabled: !!id });
-  const [allocations, setAllocations] = useState<Allocation>({});
-  const [reason, setReason] = useState('Best compliant delivered-cost and delivery balance.');
-  const [singleJustification, setSingleJustification] = useState('');
-  const [qualityStatus, setQualityStatus] = useState<Record<string, 'compliant' | 'exception' | 'blocking'>>({});
-  const [qualityNotes, setQualityNotes] = useState<Record<string, string>>({});
+  const qc = useQueryClient();
+  const [reason, setReason] = useState('');
+  const [picked, setPicked] = useState<Record<string, string>>({}); // RFQ line → quote line ('' = do not award)
+  const [seeded, setSeeded] = useState(false);
+
+  const query = useQuery({
+    queryKey: ['purchasing', 'rfqs', id, 'comparison'],
+    queryFn: () => rfqsApi.comparison(id),
+    enabled: !!id,
+  });
   const rfq = query.data;
-  const awardRows = useMemo(() => Object.entries(allocations).flatMap(([lineId, suppliers]) => Object.entries(suppliers).filter(([, quantity]) => Number(quantity) > 0).map(([quoteItemId, quantity]) => ({ request_for_quote_item_id: lineId, supplier_quote_item_id: quoteItemId, awarded_quantity: quantity, award_reason: reason, single_response_justification: singleJustification || undefined }))), [allocations, reason, singleJustification]);
-  const invalidQuantity = useMemo(() => (rfq?.items ?? []).some((item) => {
-    const selected = Object.values(allocations[item.id] ?? {});
-    const total = selected.reduce((sum, quantity) => sum + Number(quantity || 0), 0);
-    return total > Number(item.quantity);
-  }), [allocations, rfq]);
+  const quotes = useMemo(() => rfq?.quotes ?? [], [rfq?.quotes]);
+  const canAward = !!rfq?.actions.can_award;
+  // Ogami recovers input VAT, so suppliers are ranked on cost excluding it.
+  const exVat = rfq?.ranking_basis === 'ex_vat';
+
+  // Preselect the recommended quote per line, once.
+  useEffect(() => {
+    if (seeded || !rfq) return;
+    const initial: Record<string, string> = {};
+    for (const quote of rfq.quotes) {
+      for (const line of quote.items) {
+        if (line.is_recommended) initial[line.request_for_quote_item_id] = line.id;
+      }
+    }
+    setPicked(initial);
+    setSeeded(true);
+  }, [seeded, rfq]);
+
   const award = useMutation({
-    mutationFn: () => rfqsApi.award(id, awardRows),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['purchasing', 'rfqs', id] });
-      await queryClient.invalidateQueries({ queryKey: ['purchasing', 'rfqs'] });
-      toast.success('RFQ awarded and draft POs generated.');
+    mutationFn: () =>
+      rfqsApi.award(id, {
+        award_reason: reason.trim(),
+        lines: Object.entries(picked)
+          .filter(([, quoteLineId]) => quoteLineId)
+          .map(([rfqLineId, quoteLineId]) => ({
+            request_for_quote_item_id: rfqLineId,
+            supplier_quote_item_id: quoteLineId,
+          })),
+      }),
+    onSuccess: async (result) => {
+      await qc.invalidateQueries({ queryKey: ['purchasing', 'rfqs'] });
+      if (rfq?.purchase_request?.id) {
+        await qc.invalidateQueries({
+          queryKey: ['purchasing', 'purchase-requests', rfq.purchase_request.id],
+        });
+      }
+      toast.success(`Awarded. ${result.purchase_orders.length} draft purchase order(s) created.`);
       navigate(`/purchasing/rfqs/${id}`);
     },
-    onError: () => toast.error('Award could not be completed. Check quantities, quality exceptions, and justifications.'),
-  });
-  const qualityReview = useMutation({
-    mutationFn: ({ quoteItemId, status }: { quoteItemId: string; status: 'compliant' | 'exception' | 'blocking' }) => rfqsApi.reviewQuality(id, quoteItemId, { compliance_status: status, compliance_notes: qualityNotes[quoteItemId] }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['purchasing', 'rfqs', id, 'comparison'] }); toast.success('Quality review saved.'); },
-    onError: () => toast.error('Quality review could not be saved.'),
+    onError: (e) => toast.error(errMsg(e, 'The award could not be saved.')),
   });
 
   if (query.isLoading) return <SkeletonTable columns={5} rows={6} />;
-  if (query.isError || !rfq) return <EmptyState icon="alert-circle" title="Comparison unavailable" action={<Button onClick={() => query.refetch()}>Retry</Button>} />;
-  const canAward = can('purchasing.rfq.award');
-  const canQuality = can('purchasing.rfq.quality_review');
-  const canEvaluate = can('purchasing.rfq.evaluate');
-  if (!canAward && !canQuality && !canEvaluate) return <EmptyState icon="lock" title="Evaluation authority required" description="This role cannot open commercial or quality quotation evidence." />;
-  if (!canAward && canQuality && !canEvaluate) return <div><PageHeader title="Quality evidence review" subtitle={rfq.rfq_number} backTo={`/purchasing/rfqs/${id}`} backLabel="RFQ detail" /><div className="px-5 py-4 space-y-4"><Panel title="Commercial fields redacted"><p className="text-sm text-muted">Supplier prices and charges remain hidden from QC. Review technical evidence and record only the quality disposition.</p>{rfq.quotes?.map((quote) => <div key={quote.id} className="border-b border-subtle py-3 last:border-0"><div className="font-medium">{quote.vendor?.name ?? 'Supplier'} · v{quote.version}</div>{quote.items.map((line) => line.rfq_item && <div key={line.id} className="mt-2 grid sm:grid-cols-[1fr_auto] gap-2 items-end"><div><div className="text-sm">{line.rfq_item.description}</div><Input className="mt-1" label="Evidence notes" value={qualityNotes[line.id] ?? line.compliance_notes ?? ''} onChange={(event) => setQualityNotes((current) => ({ ...current, [line.id]: event.target.value }))} /></div><div><select aria-label={`Quality status for ${line.rfq_item.description}`} className="h-10 border border-default rounded-md bg-canvas px-3" value={qualityStatus[line.id] ?? (line.compliance_status as 'compliant' | 'exception' | 'blocking')} onChange={(event) => setQualityStatus((current) => ({ ...current, [line.id]: event.target.value as 'compliant' | 'exception' | 'blocking' }))}><option value="pending">Pending</option><option value="compliant">Compliant</option><option value="exception">Exception</option><option value="blocking">Blocking</option></select><Button className="mt-2 w-full" size="sm" variant="secondary" onClick={() => qualityReview.mutate({ quoteItemId: line.id, status: qualityStatus[line.id] ?? 'exception' })} loading={qualityReview.isPending}>Save review</Button></div></div>)}</div>)}</Panel></div></div>;
-  const singleResponse = (rfq.items ?? []).some((item) => rfq.quotes?.filter((quote) => quote.items.some((line) => line.rfq_item?.id === item.id && line.response_status === 'quoted')).length === 1 && Object.keys(allocations[item.id] ?? {}).length > 0);
+  if (query.isError || !rfq) {
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Comparison unavailable"
+        description={errMsg(query.error, 'Quotations can be compared once the RFQ closes.')}
+        action={<Button onClick={() => navigate(`/purchasing/rfqs/${id}`)}>Back to RFQ</Button>}
+      />
+    );
+  }
+  if (quotes.length === 0) {
+    return (
+      <EmptyState
+        icon="inbox"
+        title="No submitted quotations"
+        action={<Button onClick={() => navigate(`/purchasing/rfqs/${id}`)}>Back to RFQ</Button>}
+      />
+    );
+  }
 
-  return <div><PageHeader title="Quotation comparison" subtitle={rfq.rfq_number} backTo={`/purchasing/rfqs/${id}`} backLabel="RFQ detail" /><div className="px-5 py-4 space-y-4">
-    <Panel title="Sealed bid comparison" meta="Prices are visible only after server-side closure"><div className="overflow-x-auto"><table className="min-w-[980px] w-full text-sm"><caption className="sr-only">Supplier quotation comparison</caption><thead><tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-muted"><th scope="col" className="py-2">Line</th>{rfq.quotes?.map((quote) => <th scope="col" key={quote.id} className="py-2 min-w-[220px]">{quote.vendor?.name}<div className="font-mono normal-case">v{quote.version} · {formatPeso(quote.total_delivered_cost ?? '0')}</div>{quote.supplier_performance && <div className="text-xs normal-case text-muted">History: Tier {quote.supplier_performance.tier ?? '—'} · Score {quote.supplier_performance.overall_score ?? '—'} · On-time {quote.supplier_performance.on_time_delivery_rate ?? '—'}%</div>}</th>)}</tr></thead><tbody>{rfq.items?.map((item) => <tr key={item.id} className="border-b border-subtle align-top"><th scope="row" className="py-3 pr-4 text-left"><div>{item.description}</div><div className="font-mono text-xs text-muted">Requested {item.quantity} {item.unit ?? ''}</div></th>{rfq.quotes?.map((quote) => { const line = quote.items.find((row) => row.rfq_item?.id === item.id); const checked = !!line && !!allocations[item.id]?.[line.id]; const blocked = line?.compliance_status === 'blocking'; return <td key={quote.id} className="py-3 pr-3">{line?.response_status === 'quoted' ? <div className={`space-y-2 ${blocked ? 'opacity-60' : ''}`}><label className="flex gap-2"><input type="checkbox" disabled={blocked} checked={checked} onChange={(event) => setAllocations((current) => { const next = { ...current, [item.id]: { ...(current[item.id] ?? {}) } }; if (event.target.checked) next[item.id][line.id] = awardQuantity(line.offered_quantity); else delete next[item.id][line.id]; return next; })} /><span><span className="block font-mono">{formatPeso(line.unit_price ?? '0')} / {item.unit ?? 'unit'}</span><span className="text-xs text-muted">{line.offered_quantity} offered · {line.lead_time_days ?? '—'} days · {line.proposed_delivery_date ?? 'no date'}</span><span className="block text-xs text-muted" title="Includes this line's share of quote freight, charges and VAT">Delivered {formatPeso(line.allocated_delivered_cost ?? line.line_total_delivered_cost ?? '0')} · {line.compliance_status}</span>{line.is_recommended && <Chip variant="success" className="mt-1">Lowest delivered cost</Chip>}</span></label>{blocked && <div className="text-xs text-danger-fg">Blocking QC exception</div>}{checked && <Input aria-label={`Award quantity from ${quote.vendor?.name ?? 'supplier'}`} inputMode="decimal" value={allocations[item.id][line.id]} onChange={(event) => setAllocations((current) => ({ ...current, [item.id]: { ...(current[item.id] ?? {}), [line.id]: event.target.value } }))} />}</div> : <span className="text-muted">No quote</span>}</td>; })}</tr>)}</tbody></table></div></Panel>
-    {canAward ? <Panel title="Award rationale"><div className="space-y-3"><label className="block text-sm">Award reason<textarea className="mt-1 w-full min-h-20 border border-default rounded-md bg-canvas p-3" value={reason} onChange={(event) => setReason(event.target.value)} aria-label="Award reason" /></label>{singleResponse && <label className="block text-sm">Single-response justification<textarea className="mt-1 w-full min-h-20 border border-default rounded-md bg-canvas p-3" value={singleJustification} onChange={(event) => setSingleJustification(event.target.value)} aria-label="Single-response justification" /></label>}<div className="flex flex-wrap justify-between gap-3"><div className="text-sm text-muted">{invalidQuantity ? 'Award quantities exceed an RFQ line.' : awardRows.length ? `${awardRows.length} allocation(s) selected.` : 'Select at least one supplier allocation.'}</div><Button variant="primary" disabled={!awardRows.length || invalidQuantity || !reason.trim() || (singleResponse && !singleJustification.trim())} onClick={() => award.mutate()} loading={award.isPending}>Award selected lines</Button></div></div></Panel> : <Panel title="Review only"><p className="text-sm text-muted">Finance may review the sealed quotations. Award decisions remain with Purchasing.</p></Panel>}
-  </div></div>;
+  const pickedCount = Object.values(picked).filter(Boolean).length;
+  const responses = (lineId: string) =>
+    quotes.filter((quote) =>
+      quote.items.some(
+        (line) => line.request_for_quote_item_id === lineId && line.response_status === 'quoted',
+      ),
+    ).length;
+  const singleResponse = rfq.items.some((item) => picked[item.id] && responses(item.id) === 1);
+
+  return (
+    <div>
+      <PageHeader
+        title="Compare & award"
+        subtitle={<span className="font-mono">{rfq.rfq_number}</span>}
+        backTo={`/purchasing/rfqs/${id}`}
+        backLabel="RFQ"
+      />
+
+      <div className="px-5 py-4 space-y-4">
+        {rfq.status === 'awarded' && (
+          <div className="rounded-md border border-default bg-subtle px-4 py-3 text-sm">
+            This RFQ has been awarded. The comparison is shown for reference.
+          </div>
+        )}
+
+        {exVat && (
+          <p className="text-xs text-muted">
+            Suppliers are ranked on cost excluding VAT, because Ogami recovers the VAT it pays as input VAT. Totals
+            below include VAT as quoted.
+          </p>
+        )}
+
+        <Panel title="Suppliers" meta={`${quotes.length} submitted`}>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {quotes.map((quote) => (
+              <div key={quote.id} className="rounded-md border border-default p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-medium">{quote.vendor?.name ?? 'Supplier'}</span>
+                  {quote.is_expired && <Chip variant="danger">Expired</Chip>}
+                </div>
+                <div className="mt-1 font-mono tabular-nums text-base">
+                  {formatPeso(quote.total_delivered_cost)}
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <dt className="text-muted">VAT</dt>
+                  <dd>{VAT_LABEL[quote.vat_treatment]}</dd>
+                  <dt className="text-muted">Freight</dt>
+                  <dd className="font-mono tabular-nums">{formatPeso(quote.freight_amount)}</dd>
+                  <dt className="text-muted">Valid until</dt>
+                  <dd className="font-mono">
+                    {quote.quote_valid_until ? formatDate(quote.quote_valid_until) : '—'}
+                  </dd>
+                  <dt className="text-muted">Payment terms</dt>
+                  <dd>{quote.payment_terms || '—'}</dd>
+                  <dt className="text-muted">Quality history</dt>
+                  <dd>
+                    {quote.supplier_performance ? (
+                      <span className="font-mono tabular-nums">
+                        {quote.supplier_performance.quality_pass_rate ?? '—'}% pass ·{' '}
+                        {quote.supplier_performance.ncr_rate ?? '—'}% NCR ·{' '}
+                        {quote.supplier_performance.on_time_delivery_rate ?? '—'}% on time
+                      </span>
+                    ) : (
+                      <span className="text-muted">No history</span>
+                    )}
+                  </dd>
+                </dl>
+                {quote.documents.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {quote.documents.map((doc) => (
+                      <a
+                        key={doc.id}
+                        href={rfqsApi.documentDownloadUrl(doc.id)}
+                        className="text-link hover:underline"
+                      >
+                        {DOC_LABEL[doc.document_type] ?? doc.original_filename}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {quote.captured_manually && (
+                  <div className="mt-2 text-xs text-muted">Entered by purchasing</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        {rfq.items.map((item) => (
+          <Panel
+            key={item.id}
+            title={item.description}
+            meta={`${formatQuantity(item.quantity)} ${item.unit ?? ''}${item.required_delivery_date ? ` · needed by ${formatDate(item.required_delivery_date)}` : ''}${item.specification ? ` · ${item.specification}` : ''}`}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <caption className="sr-only">Quotations for {item.description}</caption>
+                <thead>
+                  <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-muted">
+                    {canAward && <th scope="col" className="py-2 w-8" />}
+                    <th scope="col" className="py-2">
+                      Supplier
+                    </th>
+                    <th scope="col" className="py-2 text-right">
+                      Unit price
+                    </th>
+                    <th scope="col" className="py-2 text-right">
+                      Offered
+                    </th>
+                    <th scope="col" className="py-2 text-right">
+                      {exVat ? 'Cost / unit ex-VAT' : 'Delivered / unit'}
+                    </th>
+                    <th scope="col" className="py-2 text-right">
+                      Delivered total
+                    </th>
+                    <th scope="col" className="py-2 pl-4">
+                      Delivery
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotes.map((quote) => {
+                    const line = quote.items.find(
+                      (row) => row.request_for_quote_item_id === item.id,
+                    );
+                    const quoted = line?.response_status === 'quoted';
+                    const radioName = `line-${item.id}`;
+                    return (
+                      <tr key={quote.id} className="border-b border-subtle align-top">
+                        {canAward && (
+                          <td className="py-2">
+                            <input
+                              type="radio"
+                              name={radioName}
+                              aria-label={`Award ${item.description} to ${quote.vendor?.name ?? 'supplier'}`}
+                              disabled={!quoted || quote.is_expired}
+                              checked={!!line && picked[item.id] === line.id}
+                              onChange={() =>
+                                line && setPicked((cur) => ({ ...cur, [item.id]: line.id }))
+                              }
+                            />
+                          </td>
+                        )}
+                        <td className="py-2">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span>{quote.vendor?.name ?? 'Supplier'}</span>
+                            {line?.is_recommended && (
+                              <Chip variant="success">Lowest cost</Chip>
+                            )}
+                          </div>
+                        </td>
+                        {quoted && line ? (
+                          <>
+                            <td className="py-2 text-right font-mono tabular-nums">
+                              {formatPeso(line.unit_price ?? '0')}
+                            </td>
+                            <td className="py-2 text-right font-mono tabular-nums">
+                              {formatQuantity(line.offered_quantity ?? '0')}
+                            </td>
+                            <td className="py-2 text-right font-mono tabular-nums">
+                              {(exVat ? line.unit_net_cost : line.unit_delivered_cost)
+                                ? formatPeso((exVat ? line.unit_net_cost : line.unit_delivered_cost) ?? '0')
+                                : '—'}
+                            </td>
+                            <td className="py-2 text-right font-mono tabular-nums">
+                              {line.allocated_delivered_cost
+                                ? formatPeso(line.allocated_delivered_cost)
+                                : '—'}
+                            </td>
+                            <td className="py-2 pl-4">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="font-mono text-xs">
+                                  {line.proposed_delivery_date
+                                    ? formatDate(line.proposed_delivery_date)
+                                    : line.lead_time_days !== null
+                                      ? `${line.lead_time_days} d lead time`
+                                      : '—'}
+                                </span>
+                                {line.meets_required_date === true && (
+                                  <Chip variant="success">On time</Chip>
+                                )}
+                                {line.meets_required_date === false && (
+                                  <Chip variant="warning">Late</Chip>
+                                )}
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <td colSpan={5} className="py-2 text-muted">
+                            No quote
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {canAward && (
+                    <tr>
+                      <td className="py-2">
+                        <input
+                          type="radio"
+                          name={`line-${item.id}`}
+                          aria-label={`Do not award ${item.description}`}
+                          checked={!picked[item.id]}
+                          onChange={() => setPicked((cur) => ({ ...cur, [item.id]: '' }))}
+                        />
+                      </td>
+                      <td colSpan={6} className="py-2 text-muted">
+                        Don&apos;t award — the quantity goes back to the purchase request
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        ))}
+
+        {canAward && (
+          <Panel title="Award">
+            <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="block text-2xs uppercase tracking-wider text-muted mb-1">
+                  Reason for this award
+                </span>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full min-h-20 border border-default rounded-md bg-canvas p-3 text-sm"
+                  placeholder="Lowest delivered cost with an acceptable lead time and quality history."
+                />
+              </label>
+              {singleResponse && (
+                <p className="text-xs text-warning-fg">
+                  Only one supplier quoted at least one of the chosen lines — say why the price is
+                  acceptable.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm text-muted">
+                  <span className="font-mono tabular-nums">{pickedCount}</span> of{' '}
+                  <span className="font-mono tabular-nums">{rfq.items.length}</span> lines chosen.
+                  One draft PO is created per winning supplier; lines left unawarded return to{' '}
+                  {rfq.purchase_request ? (
+                    <Link
+                      className="text-link font-mono"
+                      to={`/purchasing/purchase-requests/${rfq.purchase_request.id}`}
+                    >
+                      {rfq.purchase_request.pr_number}
+                    </Link>
+                  ) : (
+                    'the purchase request'
+                  )}
+                  .
+                </span>
+                <Button
+                  variant="primary"
+                  disabled={pickedCount === 0 || !reason.trim() || award.isPending}
+                  loading={award.isPending}
+                  onClick={() => award.mutate()}
+                >
+                  {award.isPending ? 'Awarding…' : 'Award & create draft POs'}
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        )}
+      </div>
+    </div>
+  );
 }

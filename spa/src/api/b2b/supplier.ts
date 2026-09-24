@@ -106,10 +106,6 @@ export const supplierPortalApi = {
  const { data } = await portalClient.post<{ data: PortalPoDetail }>(`/b2b/supplier/purchase-orders/${id}/respond`, payload);
  return data.data;
   },
-  confirmRfqReconfirmation: async (poId: string, reconfirmationId: string) => {
-  const { data } = await portalClient.post(`/b2b/supplier/purchase-orders/${poId}/rfq-reconfirmation/${reconfirmationId}/confirm`);
-  return data.data;
-  },
 
  // ── Shipments ──────────────────────────────────────
  createShipment: async (poId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {

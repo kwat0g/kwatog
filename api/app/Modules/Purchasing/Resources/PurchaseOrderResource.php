@@ -26,12 +26,6 @@ class PurchaseOrderResource extends JsonResource
                 'freight_amount' => $this->rfq_freight_amount !== null ? (string) $this->rfq_freight_amount : null,
                 'other_charges' => $this->rfq_other_charges !== null ? (string) $this->rfq_other_charges : null,
             ] : null,
-            'rfq_reconfirmation' => $this->whenLoaded('rfqQuoteReconfirmation', fn () => $this->rfqQuoteReconfirmation ? [
-                'id' => $this->rfqQuoteReconfirmation->hash_id,
-                'status' => $this->rfqQuoteReconfirmation->status,
-                'requested_at' => optional($this->rfqQuoteReconfirmation->requested_at)->toIso8601String(),
-                'quote_valid_until' => $this->rfqQuoteReconfirmation->terms_snapshot['quote_valid_until'] ?? null,
-            ] : null),
             'is_vatable' => (bool) $this->is_vatable,
             'status' => (string) $this->status?->value,
             'status_label' => $this->status?->label() ?? (string) $this->status,

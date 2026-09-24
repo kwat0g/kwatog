@@ -20,6 +20,7 @@ import { ConvertPrToPoModal } from '@/components/purchasing/ConvertPrToPoModal';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { rfqStatus } from '@/lib/rfqStatus';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -213,16 +214,15 @@ export default function PurchaseRequestDetailPage() {
                 </Button>
               </>
             )}
-            {data.status === 'approved' &&
-              (data.actions?.can_start_rfq ?? can('purchasing.rfq.create')) && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => navigate(`/purchasing/rfqs/create?purchase_request=${data.id}`)}
-                >
-                  Start RFQ
-                </Button>
-              )}
+            {data.status === 'approved' && data.actions?.can_start_rfq && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => navigate(`/purchasing/rfqs/create?purchase_request=${data.id}`)}
+              >
+                Start RFQ
+              </Button>
+            )}
             {data.actions?.can_print && (
               <Button
                 size="sm"
@@ -418,6 +418,29 @@ export default function PurchaseRequestDetailPage() {
             </div>
           </div>
         )}
+        {data.rfqs && data.rfqs.length > 0 && (
+          <Panel title="Supplier RFQs">
+            {data.status === 'approved' &&
+              data.po_conversion_status !== 'sourcing_pending' &&
+              data.po_conversion_note && (
+                <p className="mb-2 text-sm text-muted">{data.po_conversion_note}</p>
+              )}
+            <div className="space-y-2">
+              {data.rfqs.map((rfq) => (
+                <Link
+                  key={rfq.id}
+                  to={`/purchasing/rfqs/${rfq.id}`}
+                  className="flex justify-between items-center gap-3 border-b border-subtle py-2 last:border-0"
+                >
+                  <span className="font-mono">{rfq.rfq_number}</span>
+                  <span className="flex gap-3">
+                    <Chip variant={rfqStatus(rfq.status).variant}>{rfqStatus(rfq.status).label}</Chip>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Panel>
+        )}
         {data.purchase_orders && data.purchase_orders.length > 0 && (
           <Panel title="Procure-to-pay chain">
             {/* 2026-08-08 — compact cross-document stepper: PR → PO → GRN → Bill → Paid,
@@ -497,6 +520,19 @@ export default function PurchaseRequestDetailPage() {
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt>
                 <dd>{data.requester?.name ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Sourcing</dt>
+                <dd>
+                  {data.sourcing_method === 'rfq'
+                    ? 'Competitive RFQ'
+                    : data.sourcing_method === 'direct_po'
+                      ? 'Direct PO'
+                      : 'Not chosen yet'}
+                  {data.status === 'approved' && data.po_conversion_status === 'sourcing_pending' && (
+                    <span className="text-xs text-muted"> · waiting for the RFQ</span>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Total estimate</dt>

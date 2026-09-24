@@ -92,17 +92,9 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
   'supplier.po_responded': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
   'portal.order_awaiting_review': { icon: LuFileText, group: 'approvals', label: 'Portal' },
-  'purchasing.rfq_published': { icon: LuFileText, group: 'approvals', label: 'Purchasing' },
-  'purchasing.rfq_extended': { icon: LuCalendar, group: 'system', label: 'Purchasing' },
-  'purchasing.rfq_addendum': { icon: LuFileText, group: 'system', label: 'Purchasing' },
-  'purchasing.rfq_closed': { icon: LuFileText, group: 'system', label: 'Purchasing' },
+  'purchasing.rfq_closed': { icon: LuFileText, group: 'approvals', label: 'Purchasing' },
   'purchasing.rfq_awarded': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
-  'purchasing.rfq_no_award': { icon: LuFileWarning, group: 'alerts', label: 'Purchasing' },
   'purchasing.rfq_cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Purchasing' },
-  'purchasing.rfq_quote_submitted': { icon: LuFileText, group: 'approvals', label: 'Purchasing' },
-  'purchasing.rfq_quote_withdrawn': { icon: LuFileWarning, group: 'alerts', label: 'Purchasing' },
-  'purchasing.rfq_quote_reconfirmation': { icon: LuTriangleAlert, group: 'alerts', label: 'Purchasing' },
-  'purchasing.rfq_updated': { icon: LuFileText, group: 'system', label: 'Purchasing' },
   'purchasing.po_pending_approval': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
 
  // ── Chain 3 · Hire to Retire ─────────────────────────────────────────

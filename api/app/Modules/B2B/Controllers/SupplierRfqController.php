@@ -8,14 +8,11 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Requests\Supplier\StoreSupplierQuoteRequest;
 use App\Modules\B2B\Requests\Supplier\UploadRfqDocumentRequest;
-use App\Modules\B2B\Requests\Supplier\WithdrawSupplierQuoteRequest;
 use App\Modules\B2B\Resources\SupplierRfqInvitationResource;
-use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
-use App\Modules\Purchasing\Models\RfqQuoteReconfirmation;
-use App\Modules\Purchasing\Models\SupplierQuote;
 use App\Modules\Purchasing\Resources\SupplierQuoteResource;
+use App\Modules\Purchasing\Services\RequestForQuoteService;
 use App\Modules\Purchasing\Services\SupplierQuoteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +21,10 @@ use Illuminate\Support\Facades\Storage;
 
 class SupplierRfqController
 {
-    public function __construct(private readonly SupplierQuoteService $quotes) {}
+    public function __construct(
+        private readonly SupplierQuoteService $quotes,
+        private readonly RequestForQuoteService $rfqs,
+    ) {}
 
     private function user(Request $request): SupplierPortalUser
     {
@@ -36,55 +36,36 @@ class SupplierRfqController
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        // No scheduler in some environments: close anything past its deadline
+        // so the supplier sees the true state.
+        $this->rfqs->closeAllDue();
+
         return SupplierRfqInvitationResource::collection($this->quotes->list($this->user($request)->vendor_id, $request->query()));
     }
 
     public function show(Request $request, RequestForQuote $rfq): SupplierRfqInvitationResource
     {
-        try {
-            return new SupplierRfqInvitationResource($this->quotes->invitation($this->user($request)->vendor_id, $rfq));
-        } catch (BusinessRuleException $e) {
-            abort(404, 'RFQ invitation not found.');
-        }
+        return new SupplierRfqInvitationResource($this->quotes->invitation($this->user($request)->vendor_id, $this->rfqs->closeDue($rfq)));
     }
 
-    public function store(StoreSupplierQuoteRequest $request, RequestForQuote $rfq): JsonResponse
+    /** Save the supplier's quotation; submit=true saves and submits in one step. */
+    public function saveQuote(StoreSupplierQuoteRequest $request, RequestForQuote $rfq): SupplierQuoteResource
     {
         $user = $this->user($request);
+        $data = $request->validated();
         try {
-            $quote = $this->quotes->createDraft($rfq, $user->vendor_id, $user, $request->validated());
+            $quote = $this->quotes->save($rfq, $user->vendor_id, $data, (bool) $data['submit'], $user);
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
 
-        return (new SupplierQuoteResource($quote))->response()->setStatusCode(201);
+        return new SupplierQuoteResource($quote);
     }
 
-    public function update(StoreSupplierQuoteRequest $request, RequestForQuote $rfq, SupplierQuote $quote): SupplierQuoteResource
+    public function withdraw(Request $request, RequestForQuote $rfq): SupplierQuoteResource
     {
-        abort_unless((int) $quote->request_for_quote_id === (int) $rfq->id, 404);
         try {
-            return new SupplierQuoteResource($this->quotes->update($quote, $this->user($request)->vendor_id, $request->validated()));
-        } catch (BusinessRuleException $e) {
-            abort(422, $e->getMessage());
-        }
-    }
-
-    public function submit(Request $request, RequestForQuote $rfq, SupplierQuote $quote): SupplierQuoteResource
-    {
-        abort_unless((int) $quote->request_for_quote_id === (int) $rfq->id, 404);
-        try {
-            return new SupplierQuoteResource($this->quotes->submit($quote, $this->user($request)->vendor_id));
-        } catch (BusinessRuleException $e) {
-            abort(422, $e->getMessage());
-        }
-    }
-
-    public function withdraw(WithdrawSupplierQuoteRequest $request, RequestForQuote $rfq, SupplierQuote $quote): SupplierQuoteResource
-    {
-        abort_unless((int) $quote->request_for_quote_id === (int) $rfq->id, 404);
-        try {
-            return new SupplierQuoteResource($this->quotes->withdraw($quote, $this->user($request)->vendor_id, $request->validated()['reason']));
+            return new SupplierQuoteResource($this->quotes->withdraw($rfq, $this->user($request)->vendor_id));
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());
         }
@@ -93,25 +74,17 @@ class SupplierRfqController
     public function uploadDocument(UploadRfqDocumentRequest $request, RequestForQuote $rfq): JsonResponse
     {
         $user = $this->user($request);
-        $validated = $request->validated();
-        $quote = ! empty($validated['quote_id'])
-            ? SupplierQuote::query()->findOrFail((int) $validated['quote_id'])
-            : null;
         try {
-            $document = $this->quotes->uploadDocument($rfq, $user->vendor_id, $user, $request->file('file'), $validated['document_type'], $quote);
+            $document = $this->quotes->uploadDocument($rfq, $user->vendor_id, $user, $request->file('file'), (string) $request->validated('document_type'));
         } catch (BusinessRuleException $e) {
-            abort(404, 'RFQ invitation not found.');
+            abort(422, $e->getMessage());
         }
 
-        return response()->json(['data' => ['id' => $document->hash_id, 'document_type' => $document->document_type, 'original_filename' => $document->original_filename]], 201);
-    }
-
-    public function versions(Request $request, RequestForQuote $rfq, SupplierQuote $quote): AnonymousResourceCollection
-    {
-        $user = $this->user($request);
-        abort_unless((int) $quote->vendor_id === (int) $user->vendor_id && (int) $quote->request_for_quote_id === (int) $rfq->id, 404);
-
-        return SupplierQuoteResource::collection(SupplierQuote::query()->where('request_for_quote_id', $rfq->id)->where('vendor_id', $user->vendor_id)->with('items.rfqItem')->orderByDesc('version')->get());
+        return response()->json(['data' => [
+            'id' => $document->hash_id,
+            'document_type' => $document->document_type,
+            'original_filename' => $document->original_filename,
+        ]], 201);
     }
 
     public function downloadDocument(Request $request, RequestForQuote $rfq, RfqDocument $document)
@@ -124,17 +97,5 @@ class SupplierRfqController
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
         return Storage::disk('local')->download($document->file_path, $document->original_filename);
-    }
-
-    public function confirmReconfirmation(Request $request, PurchaseOrder $purchaseOrder, RfqQuoteReconfirmation $reconfirmation): JsonResponse
-    {
-        abort_unless((int) $reconfirmation->purchase_order_id === (int) $purchaseOrder->id, 404);
-        try {
-            $confirmed = $this->quotes->confirmReconfirmation($reconfirmation, $this->user($request)->vendor_id, $this->user($request));
-        } catch (BusinessRuleException $e) {
-            abort(422, $e->getMessage());
-        }
-
-        return response()->json(['data' => ['id' => $confirmed->hash_id, 'status' => $confirmed->status]]);
     }
 }

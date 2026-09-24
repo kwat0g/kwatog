@@ -247,12 +247,7 @@ class RolePermissionSeeder extends Seeder
                 // Supplier Item Listings — supplier-submitted offers reviewed here.
                 ['slug' => 'purchasing.supplier_listings.review', 'name' => 'Review Supplier Item Listings'],
                 ['slug' => 'purchasing.rfq.view',       'name' => 'View Supplier RFQs'],
-                ['slug' => 'purchasing.rfq.create',     'name' => 'Create Supplier RFQs'],
-                ['slug' => 'purchasing.rfq.publish',    'name' => 'Publish Supplier RFQs'],
-                ['slug' => 'purchasing.rfq.evaluate',   'name' => 'Evaluate Supplier Quotations'],
-                ['slug' => 'purchasing.rfq.award',      'name' => 'Award Supplier RFQ Lines'],
-                ['slug' => 'purchasing.rfq.manage',     'name' => 'Manage Supplier RFQs'],
-                ['slug' => 'purchasing.rfq.quality_review', 'name' => 'Review RFQ Quality Evidence'],
+                ['slug' => 'purchasing.rfq.manage',     'name' => 'Run Supplier RFQs (create, publish, award)'],
                 // Undelete tier. The /restore routes were gated on these slugs
                 // but they were never seeded, so restore was 403 for everyone
                 // except system_admin (wildcard).
@@ -592,7 +587,7 @@ class RolePermissionSeeder extends Seeder
                         // approve routes 403 the only role the steps accept and
                         // every PR/PO stalls (same defect class as M036 and L-37).
                         'purchasing.view',
-                        'purchasing.rfq.view', 'purchasing.rfq.evaluate',
+                        'purchasing.rfq.view',
                         'purchasing.pr.approve',
                         'purchasing.po.approve',
                         // Separation clearance — Finance is step 4 of the
@@ -806,6 +801,9 @@ class RolePermissionSeeder extends Seeder
                         'accounting.vendors.view', 'accounting.bills.view',
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
+                        // Buyers look up POs, vendors and RFQs by number all day;
+                        // each search group still applies its module's row scope.
+                        'search.global',
                         'return_management.receive', 'return_management.inspect',
                         'return_management.dispose', 'return_management.complete',
                         'dashboard.purchasing.view',
@@ -857,7 +855,7 @@ class RolePermissionSeeder extends Seeder
                     [
                         'return_management.view',
                         'return_management.inspect',
-                        'purchasing.rfq.view', 'purchasing.rfq.quality_review',
+                        'purchasing.rfq.view',
                         'dashboard.quality.view',
                         'crm.view', 'crm.complaints.view',
                         // REC-08 — QC can quarantine/release nonconforming stock via MRB.

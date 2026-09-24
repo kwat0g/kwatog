@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderResponse;
+use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\SupplierResponseService;
 use App\Modules\Quality\Enums\PpapStatus;
@@ -110,7 +111,7 @@ class SupplierPortalService
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->where(fn ($query) => $this->whereSupplierVisible($query))
-            ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items', 'rfqQuoteReconfirmation'])
+            ->with(['items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
             ->withExists(['goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q)])
             ->orderByDesc('created_at')->limit(5)->get();
 
@@ -119,8 +120,16 @@ class SupplierPortalService
             ->with('purchaseOrder:id,po_number')
             ->orderByDesc('created_at')->limit(5)->get();
 
+        // RFQs still waiting for this supplier's quotation.
+        $openRfqCount = RequestForQuoteInvitation::query()
+            ->where('vendor_id', $vendorId)
+            ->whereIn('status', ['invited', 'viewed'])
+            ->whereHas('rfq', fn ($q) => $q->where('status', 'open')->where('closes_at', '>', now()))
+            ->count();
+
         return [
             'open_po_count' => $openPoCount,
+            'open_rfq_count' => $openRfqCount,
             'pending_delivery_count' => $pendingDeliveryCount,
             'unpaid_invoice_count' => $unpaidInvoiceCount,
             'total_unpaid_amount' => $totalUnpaid,
@@ -134,13 +143,10 @@ class SupplierPortalService
     public function purchaseOrders(int $vendorId, array $filters): LengthAwarePaginator
     {
         $query = PurchaseOrder::where('vendor_id', $vendorId)
-            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items', 'rfqQuoteReconfirmation'])
+            ->with(['vendor:id,name', 'items.item:id,code,name,unit_of_measure', 'latestResponse.items'])
             ->withCount('goodsReceiptNotes')
             ->withExists(['goodsReceiptNotes as has_invoiceable_receipt' => fn ($q) => SupplierPoCapabilities::constrainInvoiceable($q)])
-            ->where(function ($query): void {
-                $this->whereSupplierVisible($query);
-                $query->orWhereHas('rfqQuoteReconfirmation', fn ($reconfirmation) => $reconfirmation->where('status', 'pending'));
-            });
+            ->where(fn ($query) => $this->whereSupplierVisible($query));
 
         if (! empty($filters['status'])) {
             $status = PurchaseOrderStatus::tryFrom((string) $filters['status']);
@@ -171,8 +177,7 @@ class SupplierPortalService
         abort_if($purchaseOrder->vendor_id !== $vendorId, 403);
         $visible = in_array($purchaseOrder->status, self::SUPPLIER_VISIBLE_PO_STATUSES, true)
             || ($purchaseOrder->status === PurchaseOrderStatus::Cancelled && $purchaseOrder->sent_to_supplier_at !== null);
-        abort_if(! $visible
-            && ! $purchaseOrder->rfqQuoteReconfirmation()->where('status', 'pending')->exists(), 404);
+        abort_if(! $visible, 404);
 
         $purchaseOrder->load([
             'vendor:id,name,contact_person,email,phone,address',
@@ -202,7 +207,6 @@ class SupplierPortalService
             'purchaseRequest:id,pr_number',
             'supplierShipment',
             'supplierShipments',
-            'rfqQuoteReconfirmation',
         ]);
 
         // The `status_label` this used to setAttribute() here is already derived

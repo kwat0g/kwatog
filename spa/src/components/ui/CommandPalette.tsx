@@ -40,6 +40,7 @@ type GroupType =
   | 'employee'
   | 'sales_order'
   | 'purchase_order'
+  | 'rfq'
   | 'work_order'
   | 'invoice'
   | 'bill'
@@ -85,6 +86,7 @@ const ICONS: Record<GroupType, IconType> = {
   employee: LuUser,
   sales_order: LuShoppingCart,
   purchase_order: LuPackage,
+  rfq: LuFileText,
   work_order: LuWrench,
   invoice: LuReceipt,
   bill: LuFileText,

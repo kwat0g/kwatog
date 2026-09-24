@@ -211,9 +211,6 @@ final class PurchaseOrderAccessPolicy
     {
         $canView = $this->canView($user, $po);
         $canManageDraft = $this->canManageDraft($user, $po);
-        $reconfirmationRequired = $po->relationLoaded('rfqQuoteReconfirmation')
-            ? $po->rfqQuoteReconfirmation?->status === 'pending'
-            : $po->rfqQuoteReconfirmation()->where('status', 'pending')->exists();
 
         $isPendingApproval = $po->status === PurchaseOrderStatus::PendingApproval;
         $selfSubmitted = (int) $po->created_by === (int) $user->id;
@@ -243,9 +240,10 @@ final class PurchaseOrderAccessPolicy
 
         return [
             'can_view' => $canView,
-            'can_update' => $canManageDraft,
+            // An RFQ PO carries the awarded terms; the service refuses edits.
+            'can_update' => $canManageDraft && $po->request_for_quote_id === null,
             'can_delete' => $canManageDraft,
-            'can_submit' => $canManageDraft && ! $reconfirmationRequired,
+            'can_submit' => $canManageDraft,
             'can_approve' => $canApprove,
             'can_reject' => $canReject,
             'can_send' => $this->canSend($user, $po),
@@ -253,7 +251,6 @@ final class PurchaseOrderAccessPolicy
             'can_close' => $this->canClose($user, $po),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $po),
             'can_print' => $canView,
-            'reconfirmation_required' => $reconfirmationRequired,
             // Lets the SPA say why Approve is missing instead of showing Reject alone.
             'approve_blocked_by_vendor_sod' => $vendorSodBlocked,
         ];

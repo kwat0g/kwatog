@@ -23,7 +23,6 @@ class SupplierPurchaseOrderResource extends JsonResource
     {
         // One action matrix, shared with the service guards.
         $capabilities = SupplierPoCapabilities::forPurchaseOrder($this->resource);
-        $capabilities['can_reconfirm_rfq'] = $this->rfqQuoteReconfirmation?->status === 'pending';
 
         // Detail-only figures (goodsReceiptNotes is loaded only by the detail
         // endpoint). Each costs a query, which on the list page would be one
@@ -51,12 +50,6 @@ class SupplierPurchaseOrderResource extends JsonResource
             // The API owns action availability. The SPA must not infer a
             // mutation policy from a stale status label or from hidden fields.
             'capabilities' => $capabilities,
-            'rfq_reconfirmation' => $this->whenLoaded('rfqQuoteReconfirmation', fn () => $this->rfqQuoteReconfirmation ? [
-                'id' => $this->rfqQuoteReconfirmation->hash_id,
-                'status' => $this->rfqQuoteReconfirmation->status,
-                'requested_at' => optional($this->rfqQuoteReconfirmation->requested_at)->toIso8601String(),
-                'quote_valid_until' => $this->rfqQuoteReconfirmation->terms_snapshot['quote_valid_until'] ?? null,
-            ] : null),
             'shipment' => $this->whenLoaded('supplierShipment', fn () => $this->supplierShipment ? [
                 'id' => $this->supplierShipment->hash_id,
                 'shipped_date' => optional($this->supplierShipment->shipped_date)->toDateString(),

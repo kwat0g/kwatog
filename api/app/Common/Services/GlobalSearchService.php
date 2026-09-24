@@ -17,7 +17,9 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
+use App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy;
 use App\Modules\Quality\Models\NonConformanceReport;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
@@ -124,7 +126,7 @@ class GlobalSearchService
      * group. A documented ceiling rather than a runtime guard: the point is that
      * a twelfth group is a deliberate widening of every caller's request budget.
      */
-    public const MAX_SOURCE_QUERIES = 11;
+    public const MAX_SOURCE_QUERIES = 12;
 
     /**
      * Group type => the module toggle(s) that own its records — M009-F09.
@@ -141,6 +143,7 @@ class GlobalSearchService
         'employee'       => ['hr'],
         'sales_order'    => ['crm'],
         'purchase_order' => ['purchasing'],
+        'rfq'            => ['purchasing'],
         'work_order'     => ['production'],
         'invoice'        => ['accounting'],
         'bill'           => ['accounting'],
@@ -154,6 +157,7 @@ class GlobalSearchService
     public function __construct(
         private readonly SettingsService $settings,
         private readonly PurchaseOrderAccessPolicy $purchaseOrderVisibility,
+        private readonly RequestForQuoteAccessPolicy $rfqVisibility,
     ) {}
 
     /** @return array<int, array{group:string, label:string, type:string, items:array<int, array<string,mixed>>}> */
@@ -263,6 +267,28 @@ class GlobalSearchService
                 'status'   => $this->scalar($r->status),
                 'amount'   => $this->scalar($r->total_amount),
                 'url'      => '/purchasing/purchase-orders/'.$h->encode((int) $r->id),
+            ])->all());
+        }
+
+        // Supplier RFQs -----------------------------------------------------------
+        if ($this->moduleEnabled('rfq', $enabled) && $user->hasPermission('purchasing.rfq.view') && Schema::hasTable('request_for_quotes')) {
+            $q = RequestForQuote::query()
+                ->select('request_for_quotes.id', 'request_for_quotes.rfq_number', 'request_for_quotes.title', 'request_for_quotes.status')
+                ->where(fn ($w) => $w
+                    ->where('request_for_quotes.rfq_number', $like, $term)
+                    ->orWhere('request_for_quotes.title', $like, $term));
+            // The RFQ list's own row scope, never a re-expression of it.
+            $q = $this->rfqVisibility->visibleTo($q, $user);
+
+            $rows = $this->rank($q, 'request_for_quotes.rfq_number', 'request_for_quotes.title', $normalizedQuery)
+                ->limit($perGroup)->get();
+
+            $groups[] = $this->wrap('Supplier RFQs', 'rfq', $rows->map(fn ($r) => [
+                'id'       => $h->encode((int) $r->id),
+                'label'    => $r->rfq_number,
+                'sublabel' => $r->title,
+                'status'   => $this->scalar($r->status),
+                'url'      => '/purchasing/rfqs/'.$h->encode((int) $r->id),
             ])->all());
         }
 

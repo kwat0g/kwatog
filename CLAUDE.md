@@ -57,7 +57,7 @@ Fully decoupled. API at `/api/v1/*`, SPA at `/*`, WebSocket at `/ws`. Docker Com
 | 5 | Loans (company loan + cash advance, auto-deduction) | 3 |
 | 6 | Accounting (COA, JE, AP, AR, VAT, financial statements, **budgeting + budget transfers + fiscal year**) | all |
 | 7 | Inventory (items, warehouse, GRN, issue, stock) | 1, 2 |
-| 8 | Purchasing (PR, PO, approval, 3-way match) | 2 |
+| 8 | Purchasing (PR, supplier RFQ, PO, approval, 3-way match) | 2 |
 | 9 | Supply Chain (shipments, import docs, fleet, delivery) | 1, 2 |
 | 10 | Production (work orders, output, machine downtime, OEE) | 1 |
 | 11 | MRP / MRP II (BOM, material planning, capacity, Gantt, molds) | 1, 2 |
@@ -85,7 +85,8 @@ Plus: **Quality** (specs, inspections, NCR, CoC at 4 chain touchpoints, not a mo
 - ❌ System health monitoring dashboard
 - ❌ Import center with mapping/preview (simple CSV upload is enough)
 - ❌ Activity feeds on every record (only on SO, PO, WO, NCR)
-- ❌ RFQ process, per-shot mold depreciation
+- ❌ Per-shot mold depreciation
+- ❌ RFQ extras: quote versions, split awards, quote-stage QC review, addenda, quote reconfirmation. The supplier RFQ is deliberately simple (`docs/SUPPLIER-RFQ-BIDDING-PLAN.md`): one quote per supplier, one winner per line, remainder back to the PR
 
 ## SECURITY (production-grade, mandatory)
 
@@ -505,6 +506,8 @@ So when you use this convention:
 - `App\Common\Support\ApprovalSourceScope::visibleIds()` — row visibility for approval-board cards: delegates to the owning module's own row scope.
 - `App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy::visibleTo()` — the ONE purchase-order row scope: PO list, global search and the approval board all call it.
 - `App\Modules\Loans\Policies\LoanAccessPolicy::visibleTo()` — the ONE loan row scope (global operators / dept ladder + chain-participant branch).
+- `App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy::visibleTo()` — the ONE RFQ row scope: the RFQ list and global search both call it. `actionsFor()` is the RFQ action matrix the pages render.
+- `App\Modules\Purchasing\Services\RfqCommercialCalculator` — the ONE place RFQ quote money is computed (quote totals, comparison delivered cost, PO carry-over). Keep all three on it so the comparison a buyer awards on always equals the PO total.
 - `App\Modules\B2B\Policies\SupplierPoCapabilities` — the ONE supplier-portal PO action matrix (respond / ship / documents / schedule / invoice). The portal resource renders it as `capabilities` and every supplier mutation re-checks it under the row lock; never re-list PO statuses in a portal service or page. Fulfilment requires the supplier to have ACCEPTED (`acknowledged`); an accepted GRN's auto-staged draft bill does not make it "invoiced" — only a live bill carrying `supplier_invoice_number` does.
 - `Tests\Feature\Approvals\ApprovalChainRolePermissionDriftTest` — drift guard: every seeded workflow step role must hold a permission its act route accepts, and every enforced chain must be registered in `ApprovalTypeRegistry`. Run it whenever you touch `WorkflowSeeder`, a chain's step roles, or an approve route's middleware — a chain whose step role lost its route permission stalls invisibly (the PS-01 class; it shipped in loans steps 2–4 and salary_adjustment step 2 before this test existed).
 

@@ -99,8 +99,12 @@ const isZeroDecimal = (v: string | null | undefined): boolean => !v || /^-?0*(\.
 /** Non-zero quoted freight / other charges, as [label, amount] pairs. */
 const chargeParts = (c: RfqCommercialCharges | null | undefined): Array<[string, string]> =>
   c
-    ? ([['Freight', c.freight_amount], ['Other charges', c.other_charges]] as Array<[string, string | null]>)
-        .filter((p): p is [string, string] => !isZeroDecimal(p[1]))
+    ? (
+        [
+          ['Freight', c.freight_amount],
+          ['Other charges', c.other_charges],
+        ] as Array<[string, string | null]>
+      ).filter((p): p is [string, string] => !isZeroDecimal(p[1]))
     : [];
 
 export default function PurchaseOrderDetailPage() {
@@ -416,18 +420,6 @@ export default function PurchaseOrderDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
-        {data.rfq_reconfirmation?.status === 'pending' && (
-          <div
-            className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm"
-            role="alert"
-          >
-            <div className="font-medium">Supplier reconfirmation required before approval</div>
-            <div className="text-muted">
-              The winning RFQ quotation expired. The supplier must confirm the original terms in the
-              supplier portal before this PO can be submitted.
-            </div>
-          </div>
-        )}
         {data.actions?.approve_blocked_by_vendor_sod && (
           <div
             className="rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm"
@@ -557,6 +549,19 @@ export default function PurchaseOrderDetailPage() {
                   {data.confirmed_delivery_date ? formatDate(data.confirmed_delivery_date) : '—'}
                 </dd>
               </div>
+              {data.rfq && (
+                <div className="col-span-3">
+                  <dt className="text-2xs uppercase tracking-wider text-muted">Awarded from RFQ</dt>
+                  <dd>
+                    <Link to={`/purchasing/rfqs/${data.rfq.id}`} className="font-mono text-accent">
+                      {data.rfq.rfq_number}
+                    </Link>
+                    <span className="ml-2 text-xs text-muted">
+                      Prices and freight come from the award, so the lines cannot be edited here.
+                    </span>
+                  </dd>
+                </div>
+              )}
             </dl>
             {data.status === 'draft' && actions.can_update && (
               <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
@@ -691,7 +696,10 @@ export default function PurchaseOrderDetailPage() {
                         {l.description}
                         {chargeParts(l.rfq_commercial).length > 0 && (
                           <div className="text-2xs text-muted">
-                            + {chargeParts(l.rfq_commercial).map(([label, v]) => `${label} ${formatPeso(v)}`).join(' · ')}
+                            +{' '}
+                            {chargeParts(l.rfq_commercial)
+                              .map(([label, v]) => `${label} ${formatPeso(v)}`)
+                              .join(' · ')}
                           </div>
                         )}
                       </Td>

@@ -30,7 +30,15 @@ final class SupplierRfqLifecycleMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: "Supplier RFQ {$this->rfq->rfq_number} update");
+        $subject = match ($this->kind) {
+            'published' => "Request for quotation {$this->rfq->rfq_number}",
+            'extended' => "RFQ {$this->rfq->rfq_number}: deadline extended",
+            'awarded' => "RFQ {$this->rfq->rfq_number}: result",
+            'cancelled' => "RFQ {$this->rfq->rfq_number} cancelled",
+            default => "RFQ {$this->rfq->rfq_number} update",
+        };
+
+        return new Envelope(subject: $subject);
     }
 
     public function content(): Content

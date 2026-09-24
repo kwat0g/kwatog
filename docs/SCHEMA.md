@@ -264,34 +264,28 @@ id, purchase_request_id (FK purchase_requests), item_id (FK items nullable), des
 id, po_number (string 20 unique), vendor_id (FK vendors), purchase_request_id (FK purchase_requests nullable), request_for_quote_id (FK request_for_quotes nullable), date (date), expected_delivery_date (date nullable), subtotal (decimal 15,2), vat_amount (decimal 15,2 default 0), total_amount (decimal 15,2), RFQ commercial VAT/freight/other charge snapshots (nullable decimal 15,2), status (string 20: draft/approved/sent/partially_received/received/cancelled), approved_by (FK users nullable), approved_at (timestamp nullable), sent_to_supplier_at (timestamp nullable), remarks (text nullable), created_at, updated_at
 
 ### purchase_order_items
-id, purchase_order_id (FK purchase_orders), item_id (FK items), purchase_request_item_id (FK purchase_request_items nullable), rfq_award_id (FK rfq_awards nullable), supplier_quote_version_id (FK supplier_quotes nullable), RFQ line VAT/freight/other charge snapshots (nullable decimal 15,2), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
+id, purchase_order_id (FK purchase_orders), item_id (FK items), purchase_request_item_id (FK purchase_request_items nullable), rfq_award_id (FK rfq_awards nullable), supplier_quote_version_id (FK supplier_quotes nullable — the winning quote), RFQ line VAT/freight/other charge snapshots (nullable decimal 15,2), description (string 200), quantity (decimal 10,2), unit (string 20), unit_price (decimal 15,2), total (decimal 15,2), quantity_received (decimal 10,2 default 0)
 
 ### request_for_quotes
-id, rfq_number (string 20 unique), purchase_request_id (FK purchase_requests), created_by (FK users), status (string 30: draft/open/closed/under_evaluation/awarded/partially_awarded/no_award/cancelled), title, instructions, currency (PHP), issued_at, closes_at, closed_at, evaluation_started_at, resolved_at, cancellation_reason, no_award_reason, budget warning fields, timestamps
+id, rfq_number (string 20 unique), purchase_request_id (FK purchase_requests), created_by (FK users), status (string 30: draft/open/closed/awarded/cancelled), title, instructions, issued_at, closes_at, closed_at, resolved_at, cancellation_reason, last_extension_reason, timestamps
 
 ### request_for_quote_items
-id, request_for_quote_id (FK request_for_quotes), purchase_request_item_id (FK purchase_request_items), item_id (FK items nullable), description, specification, quantity (decimal 15,4), unit, required_delivery_date, allow_partial_quantity, allow_substitute (false in MVP), timestamps
+id, request_for_quote_id (FK request_for_quotes), purchase_request_item_id (FK purchase_request_items), item_id (FK items nullable), description, specification, quantity (decimal 15,4), unit, required_delivery_date, timestamps
 
 ### request_for_quote_invitations
-id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invited_by (FK users), invited_at, viewed_at, status (invited/viewed/submitted/withdrawn/awarded/not_awarded), exception_reason, notification timestamps/errors, timestamps, UNIQUE (request_for_quote_id, vendor_id)
+id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invited_by (FK users), invited_at, viewed_at, status (invited/viewed/submitted/awarded/not_awarded), exception_reason, notification timestamps/errors, timestamps, UNIQUE (request_for_quote_id, vendor_id)
 
 ### supplier_quotes
-id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invitation_id (FK request_for_quote_invitations), portal_user_id (FK supplier_portal_users nullable), captured_by (FK users nullable), version, status (draft/submitted/superseded/withdrawn/awarded/not_awarded/disqualified), submitted_at, withdrawn_at, is_current, vat_inclusive, vat_amount, freight_amount, other_charges, total_delivered_cost, quote_valid_until, payment_terms, notes, private quotation path, timestamps, UNIQUE (request_for_quote_id, vendor_id, version)
+id, request_for_quote_id (FK request_for_quotes), vendor_id (FK vendors), invitation_id (FK request_for_quote_invitations), portal_user_id (FK supplier_portal_users nullable), captured_by (FK users nullable), status (draft/submitted/awarded/not_awarded — one row per supplier, edited in place), submitted_at, vat_treatment (string 10: exclusive/inclusive/none), vat_amount (decimal 15,2, derived), freight_amount (decimal 15,2), total_delivered_cost (decimal 15,2, derived), quote_valid_until, payment_terms, notes, quotation_path, quotation_original_filename, timestamps, UNIQUE (request_for_quote_id, vendor_id)
 
 ### supplier_quote_items
-id, supplier_quote_id (FK supplier_quotes), request_for_quote_item_id (FK request_for_quote_items), response_status (quoted/no_quote), offered_quantity, unit_price, line VAT/freight/other charges, line_total_delivered_cost, lead_time_days, proposed_delivery_date, MOQ, order multiple, compliance_status (pending/compliant/exception/blocking), compliance_notes, timestamps
+id, supplier_quote_id (FK supplier_quotes), request_for_quote_item_id (FK request_for_quote_items), response_status (quoted/no_quote), offered_quantity (decimal 15,4), unit_price (decimal 15,4), line_total_delivered_cost (decimal 15,2 = offered qty × unit price), lead_time_days, proposed_delivery_date, timestamps
 
 ### rfq_awards
-id, request_for_quote_id (FK request_for_quotes), request_for_quote_item_id, supplier_quote_id, supplier_quote_item_id, vendor_id, awarded_quantity, awarded_unit_price, awarded_total_delivered_cost, award_reason, single_response_justification, status, awarded_by, awarded_at, timestamps
+id, request_for_quote_id (FK request_for_quotes), request_for_quote_item_id, supplier_quote_id, supplier_quote_item_id, vendor_id, awarded_quantity, awarded_unit_price, awarded_total_delivered_cost (line + its share of freight and VAT), award_reason, awarded_by (FK users), awarded_at, timestamps, UNIQUE (request_for_quote_item_id) — one winner per line
 
 ### rfq_documents
-id, request_for_quote_id, supplier_quote_id nullable, vendor_id nullable, uploader identity, document_type, original_filename, MIME type, size, private file path, timestamps
-
-### rfq_addenda
-id, request_for_quote_id, published_by, sequence, title, body, material_change, published_at, timestamps, UNIQUE (request_for_quote_id, sequence)
-
-### rfq_quote_reconfirmations
-id, purchase_order_id (FK purchase_orders unique), supplier_quote_id (FK supplier_quotes), supplier_portal_user_id (FK supplier_portal_users nullable), status (pending/confirmed/rejected), terms_snapshot (json), reason, requested_at, confirmed_at, timestamps
+id, request_for_quote_id, supplier_quote_id nullable, vendor_id nullable (null = shared requirement document), uploaded_by_user / uploaded_by_portal_user, document_type (requirement_document/quotation_pdf/certificate_of_analysis/resin_datasheet/safety_document), original_filename, mime_type, size_bytes, private file path, timestamps
 
 ### approved_suppliers
 id, item_id (FK items), vendor_id (FK vendors), is_preferred (bool default false), lead_time_days (int), last_price (decimal 15,2 nullable), created_at, updated_at, UNIQUE (item_id, vendor_id)

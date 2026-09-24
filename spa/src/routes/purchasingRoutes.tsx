@@ -56,12 +56,56 @@ export const purchasingRoutes = (
           </PermissionGuard>
         }
       />
-      <Route path="/purchasing/rfqs" element={<PermissionGuard permission="purchasing.rfq.view"><RequestForQuotesPage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/create" element={<PermissionGuard permission="purchasing.rfq.create"><CreateRfqPage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/:id/compare" element={<PermissionGuard anyOf={['purchasing.rfq.evaluate', 'purchasing.rfq.quality_review']}><RfqComparisonPage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/:id/award" element={<PermissionGuard permission="purchasing.rfq.award"><RfqComparisonPage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/:id/manual-quote" element={<PermissionGuard permission="purchasing.rfq.manage"><ManualRfqQuotePage /></PermissionGuard>} />
-      <Route path="/purchasing/rfqs/:id" element={<PermissionGuard permission="purchasing.rfq.view"><RfqDetailPage /></PermissionGuard>} />
+      <Route
+        path="/purchasing/rfqs"
+        element={
+          <PermissionGuard permission="purchasing.rfq.view">
+            <RequestForQuotesPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/rfqs/create"
+        element={
+          <PermissionGuard permission="purchasing.rfq.manage">
+            <CreateRfqPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/rfqs/:id/edit"
+        element={
+          <PermissionGuard permission="purchasing.rfq.manage">
+            <CreateRfqPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/rfqs/:id/compare"
+        element={
+          <PermissionGuard permission="purchasing.rfq.view">
+            <RfqComparisonPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/rfqs/:id/manual-quote"
+        element={
+          <PermissionGuard permission="purchasing.rfq.manage">
+            <ManualRfqQuotePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/purchasing/rfqs/:id"
+        element={
+          // PR requesters (e.g. department heads) follow RFQ notices here;
+          // the API scopes them to their own requests with prices sealed.
+          <PermissionGuard anyOf={['purchasing.rfq.view', 'purchasing.rfq.manage', 'purchasing.view']}>
+            <RfqDetailPage />
+          </PermissionGuard>
+        }
+      />
 
       <Route
         path="/purchasing/purchase-orders"

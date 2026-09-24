@@ -18,30 +18,9 @@ export type PurchaseRequestConversionStatus =
   | 'converted';
 export type PurchaseRequestSourcingMethod = 'direct_po' | 'rfq';
 
-export type RfqStatus =
-  | 'draft'
-  | 'open'
-  | 'closed'
-  | 'under_evaluation'
-  | 'awarded'
-  | 'partially_awarded'
-  | 'no_award'
-  | 'cancelled';
-export type RfqInvitationStatus =
-  | 'invited'
-  | 'viewed'
-  | 'submitted'
-  | 'withdrawn'
-  | 'awarded'
-  | 'not_awarded';
-export type SupplierQuoteStatus =
-  | 'draft'
-  | 'submitted'
-  | 'superseded'
-  | 'withdrawn'
-  | 'awarded'
-  | 'not_awarded'
-  | 'disqualified';
+export type RfqStatus = 'draft' | 'open' | 'closed' | 'awarded' | 'cancelled';
+export type RfqInvitationStatus = 'invited' | 'viewed' | 'submitted' | 'awarded' | 'not_awarded';
+export type SupplierQuoteStatus = 'draft' | 'submitted' | 'awarded' | 'not_awarded';
 
 export interface RfqItem {
   id: string;
@@ -50,46 +29,45 @@ export interface RfqItem {
   quantity: string;
   unit: string | null;
   required_delivery_date: string | null;
-  allow_partial_quantity: boolean;
-  allow_substitute: boolean;
-  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
+  awarded_quantity: string;
+  remaining_quantity: string;
+  item: { id: string; code: string; name: string; unit_of_measure: string | null } | null;
 }
+
 export interface SupplierQuoteItem {
   id: string;
+  request_for_quote_item_id: string;
   response_status: 'quoted' | 'no_quote';
   offered_quantity: string | null;
   unit_price: string | null;
-  line_vat_amount: string | null;
-  line_freight_amount: string | null;
-  line_other_charges: string | null;
-  line_total_delivered_cost: string | null;
-  /** Comparison only: line cost plus its share of quote-level freight, charges and VAT. */
-  allocated_delivered_cost?: string | null;
+  line_total: string;
+  allocated_delivered_cost: string | null; // comparison only: line + share of freight/VAT
+  unit_delivered_cost: string | null; // comparison only: allocated ÷ offered quantity
+  unit_net_cost?: string | null; // comparison only: per-unit cost excluding recoverable VAT
   lead_time_days: number | null;
   proposed_delivery_date: string | null;
-  compliance_status: string;
-  compliance_notes: string | null;
-  is_recommended?: boolean;
-  rfq_item: { id: string; description: string; quantity: string; unit: string | null } | null;
+  meets_required_date: boolean | null; // comparison only
+  is_recommended: boolean;
 }
+
 export interface SupplierQuote {
   id: string;
-  version: number;
   status: SupplierQuoteStatus;
   submitted_at: string | null;
-  withdrawn_at: string | null;
-  is_current: boolean;
-  vat_inclusive: boolean;
-  vat_amount: string | null;
-  freight_amount: string | null;
-  other_charges: string | null;
-  total_delivered_cost: string | null;
+  vat_treatment: 'exclusive' | 'inclusive' | 'none';
+  goods_amount: string;
+  freight_amount: string;
+  vat_amount: string;
+  total_delivered_cost: string;
   quote_valid_until: string | null;
+  is_expired: boolean;
   payment_terms: string | null;
   notes: string | null;
   quotation_original_filename: string | null;
+  captured_manually: boolean;
   vendor: { id: string; name: string } | null;
   items: SupplierQuoteItem[];
+  documents: Array<{ id: string; document_type: string; original_filename: string }>;
   supplier_performance?: {
     overall_score: string | null;
     tier: string | null;
@@ -98,68 +76,153 @@ export interface SupplierQuote {
     ncr_rate: string | null;
     period: string;
   } | null;
-  documents?: Array<{ id: string; document_type: string; original_filename: string }>;
 }
+
 export interface RfqInvitation {
   id: string;
   status: RfqInvitationStatus;
   invited_at: string;
   viewed_at: string | null;
   exception_reason: string | null;
-  vendor: { id: string; name: string; email?: string | null } | null;
+  vendor: { id: string; name: string } | null;
+  reach: 'portal' | 'email' | 'none';
+  portal_notified_at: string | null;
+  email_notified_at: string | null;
+  last_notification_error: string | null;
 }
+
 export interface RfqAward {
   id: string;
   awarded_quantity: string;
   awarded_unit_price: string;
   awarded_total_delivered_cost: string;
   award_reason: string;
-  single_response_justification: string | null;
-  status: string;
   awarded_at: string;
   vendor: { id: string; name: string } | null;
   rfq_item: { id: string; description: string } | null;
-  quote: { id: string; version: number } | null;
+  purchase_order: { id: string; po_number: string } | null;
 }
+
+export interface RfqDocument {
+  id: string;
+  document_type: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  vendor: { id: string; name: string } | null;
+}
+
+export interface RfqSetupLine {
+  id: string;
+  description: string;
+  item_code: string | null;
+  unit: string | null;
+  /** Quantity not yet on a live PO — what an RFQ would source. */
+  remaining_quantity: string;
+  /** An award becomes a PO line, which needs an inventory item. */
+  has_item: boolean;
+}
+
+export interface RfqSetup {
+  lines: RfqSetupLine[];
+  suppliers: RfqSupplierOption[];
+}
+
+export interface RfqSupplierOption {
+  id: string;
+  name: string;
+  qualified: boolean;
+  lead_time_days: number | null;
+  reach: 'portal' | 'email' | 'none';
+  email: string | null;
+}
+
+export interface RfqWrite {
+  title: string;
+  instructions?: string | null;
+  closes_at: string; // ISO
+  invitations: Array<{ vendor_id: string; exception_reason?: string }>;
+  required_delivery_dates?: Record<string, string>; // PR item id → YYYY-MM-DD
+  specifications?: Record<string, string>; // PR item id → spec text
+}
+
+export type SupplierQuoteWrite = {
+  vat_treatment: 'exclusive' | 'inclusive' | 'none';
+  freight_amount?: string;
+  quote_valid_until?: string | null;
+  payment_terms?: string | null;
+  notes?: string | null;
+  items: Array<{
+    request_for_quote_item_id: string;
+    response_status: 'quoted' | 'no_quote';
+    offered_quantity?: string;
+    unit_price?: string;
+    lead_time_days?: number | null;
+    proposed_delivery_date?: string | null;
+  }>;
+};
+
+export type RfqActions = {
+  can_edit: boolean;
+  can_publish: boolean;
+  can_extend: boolean;
+  can_close_now: boolean;
+  can_cancel: boolean;
+  can_capture_quote: boolean;
+  can_upload_document: boolean;
+  can_compare: boolean;
+  can_award: boolean;
+};
+
 export interface RequestForQuote {
   id: string;
   rfq_number: string;
   status: RfqStatus;
-  status_label?: string;
+  status_label: string;
   title: string;
   instructions: string | null;
-  invitation_status?: RfqInvitationStatus;
-  currency: string;
   issued_at: string | null;
   closes_at: string;
   closed_at: string | null;
-  evaluation_started_at: string | null;
   resolved_at: string | null;
   cancellation_reason: string | null;
-  no_award_reason: string | null;
-  budget_warning_level: string | null;
-  budget_warning_message: string | null;
-  budget_acknowledged_at?: string | null;
+  last_extension_reason: string | null;
+  /** Comparison only: 'ex_vat' when Ogami recovers input VAT (ranking excludes it). */
+  ranking_basis?: 'ex_vat' | 'gross';
   purchase_request: { id: string; pr_number: string } | null;
   creator: { id: string; name: string } | null;
-  items?: RfqItem[];
-  invitations?: RfqInvitation[];
-  quotes?: SupplierQuote[];
-  awards?: RfqAward[];
-  addenda?: Array<{
+  invited_count: number;
+  responded_count: number;
+  items: RfqItem[];
+  invitations: RfqInvitation[];
+  quotes: SupplierQuote[];
+  awards: RfqAward[];
+  documents: RfqDocument[];
+  actions: RfqActions;
+}
+
+/** Supplier view of RFQ (portal API response). */
+export interface SupplierRfq {
+  id: string;
+  rfq_number: string;
+  title: string;
+  instructions: string | null;
+  status: RfqStatus;
+  status_label: string;
+  closes_at: string;
+  closed_at: string | null;
+  invitation_status: RfqInvitationStatus;
+  can_quote: boolean;
+  outcome: 'awarded' | 'not_awarded' | 'cancelled' | null;
+  items: Omit<RfqItem, 'awarded_quantity' | 'remaining_quantity'>[];
+  documents: Array<{ id: string; document_type: string; original_filename: string }>;
+  quote: SupplierQuote | null;
+  my_documents: Array<{ id: string; document_type: string; original_filename: string }>;
+  awards: Array<{
     id: string;
-    sequence: number;
-    title: string;
-    body: string;
-    material_change: boolean;
-    published_at: string;
-  }>;
-  documents?: Array<{
-    id: string;
-    document_type: string;
-    original_filename: string;
-    mime_type: string;
-    size_bytes: number;
+    rfq_item: { id: string; description: string } | null;
+    awarded_quantity: string;
+    awarded_unit_price: string;
   }>;
 }
 export type PurchaseRequestPriority = 'normal' | 'urgent' | 'critical';
@@ -412,6 +475,8 @@ export interface PurchaseOrder {
   id: string;
   /** Header-level supplier-quoted charges; included in subtotal, not in any line total. */
   rfq_commercial?: RfqCommercialCharges | null;
+  /** Source RFQ when the PO was generated by an award. */
+  rfq?: { id: string; rfq_number: string; status: string } | null;
   po_number: string;
   date: string;
   /** OGAMI's required delivery date. */
@@ -450,12 +515,6 @@ export interface PurchaseOrder {
   budget_warning_level?: string | null;
   budget_warning_message?: string | null;
   budget_acknowledged_at?: string | null;
-  rfq_reconfirmation?: {
-    id: string;
-    status: string;
-    requested_at: string | null;
-    quote_valid_until: string | null;
-  } | null;
   remarks: string | null;
   quantity_received_pct: number;
   quantity_accepted_pct: number;
@@ -476,7 +535,6 @@ export interface PurchaseOrder {
     can_cancel: boolean;
     can_close: boolean;
     can_print: boolean;
-    reconfirmation_required?: boolean;
     approve_blocked_by_vendor_sod?: boolean;
   } | null;
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;

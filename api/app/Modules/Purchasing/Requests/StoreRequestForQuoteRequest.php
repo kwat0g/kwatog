@@ -13,43 +13,32 @@ class StoreRequestForQuoteRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
-        $invitations = [];
-        foreach ((array) $this->input('invitations', []) as $row) {
-            $id = HashIdFilter::decode((string) ($row['vendor_id'] ?? ''), Vendor::class) ?? (int) ($row['vendor_id'] ?? 0);
-            $invitations[] = [...$row, 'vendor_id' => $id];
-        }
-        $specifications = [];
-        foreach ((array) $this->input('specifications', []) as $key => $value) {
-            $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
-            if ($id) {
-                $specifications[$id] = $value;
+        if ($this->has('invitations')) {
+            $invitations = [];
+            foreach ((array) $this->input('invitations', []) as $row) {
+                $id = HashIdFilter::decode((string) ($row['vendor_id'] ?? ''), Vendor::class) ?? (int) ($row['vendor_id'] ?? 0);
+                $invitations[] = [...(array) $row, 'vendor_id' => $id];
             }
+            $this->merge(['invitations' => $invitations]);
         }
-        $partial = [];
-        foreach ((array) $this->input('allow_partial_quantity', []) as $key => $value) {
-            $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
-            if ($id) {
-                $partial[$id] = $value;
+        foreach (['specifications', 'required_delivery_dates'] as $key) {
+            if (! $this->has($key)) {
+                continue;
             }
-        }
-        $requiredDates = [];
-        foreach ((array) $this->input('required_delivery_dates', []) as $key => $value) {
-            $id = HashIdFilter::decode((string) $key, PurchaseRequestItem::class) ?? (int) $key;
-            if ($id) {
-                $requiredDates[$id] = $value;
+            $byLine = [];
+            foreach ((array) $this->input($key, []) as $lineId => $value) {
+                $id = HashIdFilter::decode((string) $lineId, PurchaseRequestItem::class) ?? (int) $lineId;
+                if ($id) {
+                    $byLine[$id] = $value;
+                }
             }
+            $this->merge([$key => $byLine]);
         }
-        $this->merge([
-            'invitations' => $invitations,
-            'specifications' => $specifications,
-            'allow_partial_quantity' => $partial,
-            'required_delivery_dates' => $requiredDates,
-        ]);
     }
 
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('purchasing.rfq.create') ?? false;
+        return $this->user()?->hasPermission('purchasing.rfq.manage') ?? false;
     }
 
     public function rules(): array
@@ -58,11 +47,12 @@ class StoreRequestForQuoteRequest extends FormRequest
             'title' => ['required', 'string', 'max:200'],
             'instructions' => ['nullable', 'string', 'max:10000'],
             'closes_at' => ['required', 'date', 'after:now'],
+            'publish' => ['sometimes', 'boolean'],
             'invitations' => ['required', 'array', 'min:1'],
             'invitations.*.vendor_id' => ['required', 'integer', 'distinct', 'exists:vendors,id'],
             'invitations.*.exception_reason' => ['nullable', 'string', 'max:2000'],
             'specifications' => ['nullable', 'array'],
-            'allow_partial_quantity' => ['nullable', 'array'],
+            'specifications.*' => ['nullable', 'string', 'max:2000'],
             'required_delivery_dates' => ['nullable', 'array'],
             'required_delivery_dates.*' => ['nullable', 'date', 'after:today'],
         ];

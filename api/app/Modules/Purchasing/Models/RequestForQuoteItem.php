@@ -19,14 +19,11 @@ class RequestForQuoteItem extends Model
     protected $fillable = [
         'request_for_quote_id', 'purchase_request_item_id', 'item_id', 'description',
         'specification', 'quantity', 'unit', 'required_delivery_date',
-        'allow_partial_quantity', 'allow_substitute',
     ];
 
     protected $casts = [
         'quantity' => 'decimal:4',
         'required_delivery_date' => 'date',
-        'allow_partial_quantity' => 'boolean',
-        'allow_substitute' => 'boolean',
     ];
 
     public function rfq(): BelongsTo

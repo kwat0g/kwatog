@@ -153,18 +153,23 @@ final class PurchaseRequestAccessPolicy
     {
         return $user->hasPermission('purchasing.po.create')
             && $this->canView($user, $pr)
-            && $pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo;
+            && ($pr->sourcing_method === PurchaseRequestSourcingMethod::DirectPo || $pr->rfqHandedBack());
     }
 
+    /**
+     * An approved PR (status approved = something is still unordered) may go
+     * to RFQ when the buyer chose RFQ, when Direct PO could not auto-convert
+     * (no preferred supplier or price), or when a previous RFQ handed a
+     * remainder back. One RFQ at a time.
+     */
     public function canStartRfq(User $user, PurchaseRequest $pr): bool
     {
-        return $user->hasPermission('purchasing.rfq.create')
+        return $user->hasPermission('purchasing.rfq.manage')
             && $this->canView($user, $pr)
-            && $pr->is_auto_generated
             && $pr->status === PurchaseRequestStatus::Approved
-            && $pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
-            && ! $this->hasLivePurchaseOrders($pr)
-            && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists();
+            && ($pr->sourcing_method === PurchaseRequestSourcingMethod::Rfq
+                || $pr->po_conversion_status === PurchaseRequestConversionStatus::ManualRequired)
+            && ! $pr->hasActiveRfq();
     }
 
     public function canSetSourcingMethod(User $user, PurchaseRequest $pr, PurchaseRequestSourcingMethod $method): bool
@@ -173,7 +178,7 @@ final class PurchaseRequestAccessPolicy
             return false;
         }
         $hasMethodPermission = $method === PurchaseRequestSourcingMethod::Rfq
-            ? $user->hasPermission('purchasing.rfq.create')
+            ? $user->hasPermission('purchasing.rfq.manage')
             : $user->hasPermission('purchasing.po.create');
         if (! $hasMethodPermission || ! $this->canView($user, $pr)) {
             return false;
@@ -186,7 +191,7 @@ final class PurchaseRequestAccessPolicy
             && $pr->sourcing_method === null
             && $pr->po_conversion_status === PurchaseRequestConversionStatus::SourcingPending
             && ! $this->hasLivePurchaseOrders($pr)
-            && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists();
+            && ! $pr->hasActiveRfq();
     }
 
     /**
@@ -229,10 +234,12 @@ final class PurchaseRequestAccessPolicy
             // any live PO exists (including rows created before the manual
             // create path marked its source PR converted) the affordance clears
             // so the operator cannot fire a second conversion.
+            // An RFQ hand-back is the one case where a live PO (the award's)
+            // must not hide the button: the remainder is converted from here.
             'can_convert' => $this->canConvert($user, $pr)
                 && $pr->status === PurchaseRequestStatus::Approved
-                && ! $this->hasLivePurchaseOrders($pr)
-                && ! $pr->rfqs()->whereIn('status', RfqStatus::active())->exists(),
+                && (! $this->hasLivePurchaseOrders($pr) || $pr->rfqHandedBack())
+                && ! $pr->hasActiveRfq(),
             'can_start_rfq' => $this->canStartRfq($user, $pr),
             'can_set_sourcing_method' => $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::DirectPo)
                 || $this->canSetSourcingMethod($user, $pr, PurchaseRequestSourcingMethod::Rfq),

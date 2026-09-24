@@ -139,26 +139,44 @@ draft purchase orders automatically after final PR approval when supplier and
 price data are complete.
 
 Auto-generated PRs from a Sales Order/MRP material shortage appear with an amber
-**AUTO** chip. Those requests may use **Direct PO** or **Competitive RFQ**;
-RFQ holds the approved request for a sealed supplier bidding event.
+**AUTO** chip. Those requests may use **Direct PO** (one-step PO creation) or
+**Competitive RFQ** (competitive bidding event). Direct PO requires a preferred
+supplier or price; otherwise the PR falls to manual_required and must be resolved
+via the buyer's Convert to PO detail action.
 
 ### 8.2 Generating a purchase order
 
 After a PR is fully approved, choose **Convert to PO** for direct sourcing or
-**Start RFQ** to run a sealed competitive event. An RFQ snapshots the approved
-PR lines, invites selected suppliers, and keeps submitted prices hidden until
-the deadline closes. Purchasing compares delivered cost, lead time, and quality
-evidence, then awards each line explicitly with a reason. The system creates one
-draft PO per awarded supplier and preserves the RFQ → quote version → PO line
-traceability.
+**Start RFQ** for competitive bidding.
 
-Suppliers work from *Supplier Portal → Supplier RFQs*. They may save a draft,
-no-quote or partially quote a line, upload the formal quotation PDF and resin
-quality documents, revise, or withdraw before the deadline. Competitor prices
-and rankings are never shown.
+#### Direct PO
+**Convert to PO** consolidates line items by supplier and creates draft PO(s).
+The buyer(s) must hold a preferred supplier or estimated price for each line
+unless the PR is manual-entry (in which case cost is entered on the PO itself).
+If any line lacks both, conversion falls to **manual_required**; the buyer
+resolves it via **Convert to PO** on the detail page and handles each line
+separately. PO ≥ ₱50,000 (configurable) requires VP signoff.
 
-For a direct conversion, **Convert to PO** consolidates by supplier.
-PO ≥ ₱50,000 (configurable) requires VP signoff.
+#### Competitive RFQ
+Open an approved PR with `sourcing_method: Competitive RFQ` or any approved PR
+whose Direct PO conversion fell to **manual_required**. Choose **Start RFQ**
+and fill a one-page form: title, deadline, and invitee list. Select **Save draft**
+to edit later or **Publish now** to go live.
+
+Once published, suppliers log into the portal, upload a quotation PDF, then
+quote each line: quantities, unit prices, VAT treatment (exclusive/inclusive/none),
+freight amount and a deliver-by date (validity, payment terms and notes are optional, under More details). Drafts can be revised; withdrawal
+returns a quote to draft status. Competitor prices are hidden until close.
+
+The RFQ closes automatically at the deadline or when the buyer clicks **Close now**
+(only after every invited supplier has submitted). After close, the buyer opens
+**Compare & Award**. Each line shows all submitted quotes ranked by delivered cost
+(base + freight + VAT, computed server-side). The lowest-cost option (ranked excluding recoverable VAT) is
+highlighted; the buyer picks one winner per line and records the award reason.
+
+Award creates one draft PO per supplier with all commercial terms carried over.
+Unawarded quantities return to the PR for Direct PO or a new RFQ. POs then enter
+Finance/VP approval, dispatch, GRN, Incoming QC, Bill and Payment.
 
 ### 8.3 Recording a GRN
 

@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqStatus;
 use Database\Factories\PurchaseRequestFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -87,6 +88,23 @@ class PurchaseRequest extends Model
     public function rfqs(): HasMany
     {
         return $this->hasMany(RequestForQuote::class);
+    }
+
+    public function hasActiveRfq(): bool
+    {
+        return $this->rfqs()->whereIn('status', RfqStatus::active())->exists();
+    }
+
+    /**
+     * An RFQ-sourced PR whose sourcing event is over (awarded or cancelled)
+     * and none is running. Whatever the RFQ did not cover is handed back: the
+     * buyer may convert it by Direct PO or start another RFQ.
+     */
+    public function rfqHandedBack(): bool
+    {
+        return $this->sourcing_method === PurchaseRequestSourcingMethod::Rfq
+            && $this->rfqs()->whereIn('status', [RfqStatus::Awarded->value, RfqStatus::Cancelled->value])->exists()
+            && ! $this->hasActiveRfq();
     }
 
     /** The MRP plan that auto-generated this PR (null for manual PRs). */

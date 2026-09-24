@@ -9,7 +9,6 @@ enum RfqInvitationStatus: string
     case Invited = 'invited';
     case Viewed = 'viewed';
     case Submitted = 'submitted';
-    case Withdrawn = 'withdrawn';
     case Awarded = 'awarded';
     case NotAwarded = 'not_awarded';
 }

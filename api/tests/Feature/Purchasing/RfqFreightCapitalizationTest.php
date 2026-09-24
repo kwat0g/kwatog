@@ -153,15 +153,6 @@ class RfqFreightCapitalizationTest extends TestCase
     /**
      * Test 2: Non-RFQ POs return exact unit_price (backward compat).
      */
-    public function test_partial_award_prorates_charges_without_ratio_truncation(): void
-    {
-        $prorate = new \ReflectionMethod(RfqAwardService::class, 'prorateCharge');
-
-        // 1/3 as a 4 dp ratio is 0.3333 → ₱999.90 of a ₱3,000 charge.
-        $this->assertSame('1000.00', $prorate->invoke(app(RfqAwardService::class), '3000.00', '1.000', '3.000'));
-        $this->assertSame('666.67', $prorate->invoke(app(RfqAwardService::class), '2000.00', '1.000', '3.000'));
-    }
-
     public function test_non_rfq_po_returns_unit_price()
     {
         $po = PurchaseOrder::factory()->create([

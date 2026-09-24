@@ -17,6 +17,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\VendorSourcingService;
+use App\Modules\Purchasing\Services\RequestForQuoteService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -343,13 +344,15 @@ class InactiveVendorPurchasingTest extends TestCase
             'is_auto_generated' => true,
         ]);
         $pr->items()->create([
-            'description' => 'RFQ-Item-XX-T-' . substr(uniqid(), -5),
+        // An RFQ line must be linked to an inventory item (an award becomes a PO line).
+            'item_id' => Item::factory()->create()->id,
+            'description' => 'RFQ-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit' => 'pcs',
             'estimated_unit_price' => '50.00',
         ]);
 
-        $rfqService = app(\App\Modules\Purchasing\Services\RequestForQuoteService::class);
+        $rfqService = app(RequestForQuoteService::class);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('is inactive');

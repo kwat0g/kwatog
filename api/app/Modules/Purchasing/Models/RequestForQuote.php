@@ -8,6 +8,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\RfqStatus;
+use Database\Factories\RequestForQuoteFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,9 +21,7 @@ class RequestForQuote extends Model
 
     protected $fillable = [
         'rfq_number', 'purchase_request_id', 'created_by', 'title', 'instructions',
-        'currency', 'issued_at', 'closes_at', 'cancellation_reason', 'last_extension_reason', 'no_award_reason',
-        'budget_warning_level', 'budget_warning_message', 'budget_acknowledged_by',
-        'budget_acknowledged_at',
+        'issued_at', 'closes_at', 'cancellation_reason', 'last_extension_reason',
     ];
 
     protected $casts = [
@@ -30,10 +29,13 @@ class RequestForQuote extends Model
         'issued_at' => 'datetime',
         'closes_at' => 'datetime',
         'closed_at' => 'datetime',
-        'evaluation_started_at' => 'datetime',
         'resolved_at' => 'datetime',
-        'budget_acknowledged_at' => 'datetime',
     ];
+
+    protected static function newFactory(): RequestForQuoteFactory
+    {
+        return RequestForQuoteFactory::new();
+    }
 
     public function purchaseRequest(): BelongsTo
     {
@@ -43,11 +45,6 @@ class RequestForQuote extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function budgetAcknowledger(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'budget_acknowledged_by');
     }
 
     public function items(): HasMany
@@ -78,11 +75,6 @@ class RequestForQuote extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(RfqDocument::class);
-    }
-
-    public function addenda(): HasMany
-    {
-        return $this->hasMany(RfqAddendum::class);
     }
 
     public function scopeActive(Builder $query): Builder

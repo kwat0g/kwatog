@@ -18,7 +18,7 @@ class RequestForQuoteFactory extends Factory
         return [
             'rfq_number' => 'RFQ-'.now()->format('Ym').'-'.fake()->unique()->numerify('####'),
             'purchase_request_id' => PurchaseRequest::factory(), 'created_by' => User::factory(),
-            'title' => 'Production resin sourcing', 'currency' => 'PHP',
+            'title' => 'Production resin sourcing',
             'closes_at' => now()->addDays(7),
         ];
     }

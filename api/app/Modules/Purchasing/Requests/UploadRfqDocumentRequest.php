@@ -6,7 +6,9 @@ namespace App\Modules\Purchasing\Requests;
 
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Purchasing\Services\RequestForQuoteService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class UploadRfqDocumentRequest extends FormRequest
 {
@@ -14,7 +16,7 @@ final class UploadRfqDocumentRequest extends FormRequest
     {
         $vendor = $this->input('vendor_id');
         if ($vendor !== null && $vendor !== '') {
-            $this->merge(['vendor_id' => HashIdFilter::decode((string) $vendor, Vendor::class) ?? (int) $vendor]);
+            $this->merge(['vendor_id' => HashIdFilter::decode((string) $vendor, Vendor::class) ?? 0]);
         }
     }
 
@@ -27,8 +29,8 @@ final class UploadRfqDocumentRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'document_type' => ['required', 'in:requirement_document,quotation_pdf,resin_datasheet,certificate_of_analysis,safety_document,compliance_document'],
-            'vendor_id' => ['nullable', 'integer', 'exists:vendors,id'],
+            'document_type' => ['required', Rule::in(RequestForQuoteService::INTERNAL_DOCUMENT_TYPES)],
+            'vendor_id' => ['nullable', 'required_unless:document_type,requirement_document', 'integer', 'exists:vendors,id'],
         ];
     }
 }

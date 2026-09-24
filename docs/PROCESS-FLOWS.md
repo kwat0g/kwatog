@@ -531,34 +531,52 @@ status or creating records. An active RFQ blocks direct conversion, and an
 active purchase order blocks RFQ creation. This is the idempotency boundary;
 multiple draft POs remain valid when one RFQ awards lines to multiple suppliers.
 
-### Step 1b: Sealed Supplier RFQ
+### Step 1b: Competitive RFQ
 
 **Where in the app:** `/purchasing/rfqs` and supplier portal `/portal/supplier/rfqs`
 
+An approved PR with `sourcing_method: Competitive RFQ` or any approved PR whose
+Direct PO conversion fell to `manual_required` can start an RFQ.
+
 1. Open an approved PR and choose **Start RFQ**.
-2. Review the immutable PR line snapshot, select qualified suppliers, and record
-   an exception reason for any non-qualified invitation.
-3. Publish the RFQ. Invited suppliers can save draft quotations, quote partial
-   quantities or no-quote individual lines, revise, withdraw, and upload private
-   quotation/quality documents until the server-side deadline.
-4. The close command seals the event automatically. Submitted prices are not
-   returned to ordinary internal viewers before closure.
-5. Authorized evaluators compare total delivered cost, lead time, compliance
-   evidence, and supplier history. The buyer awards lines explicitly with a
-   reason; the lowest compliant option is a recommendation, never an automatic
-   award.
-6. Award creates one idempotent draft PO per supplier. Every PO and PO line keeps
-   the RFQ, award, and exact supplier quote version link before continuing through
-   Finance/VP approval, dispatch, GRN, and Incoming QC.
+2. On the one-page form, enter title, invitation deadline, and select suppliers.
+   Pick **Save draft** to edit later or **Publish now** to go straight to open.
+3. Once published (status: open), invited suppliers see the RFQ in their portal.
+   They upload a quotation PDF first, then save a draft quote (quantities, prices,
+   VAT treatment, freight amount, delivery dates, notes). Until the deadline a
+   draft can be edited, a submitted quote can be updated by resubmitting, and
+   withdrawing returns it to draft (drafts are never evaluated).
+4. Suppliers submit when ready; the buyer cannot see submitted prices until the
+   RFQ closes. Closing happens automatically at the deadline OR immediately when
+   the buyer clicks **Close now** — but only after every invited supplier has
+   submitted.
+5. After close, the buyer opens **Compare & Award**. The page shows each line
+   with all submitted quotes ranked by delivered cost (base + freight + VAT).
+   The lowest-cost option (ranked excluding recoverable VAT) is preselected; the buyer picks one winner per
+   line, records the award reason, and submits.
+6. Award creates one draft PO per winning supplier with commercial terms
+   (quantities, prices, VAT treatment, freight) carried over from the quote.
+   Anything not awarded returns to the PR for Direct PO or a new RFQ.
+7. POs proceed through Finance/VP approval, dispatch, GRN, Incoming QC, Bill
+   and Payment.
 
 **RFQ endpoints:**
-- `POST /api/v1/purchasing/purchase-requests/{purchaseRequest}/rfqs`
-- `GET /api/v1/purchasing/rfqs`
-- `POST /api/v1/purchasing/rfqs/{rfq}/publish`
-- `GET /api/v1/purchasing/rfqs/{rfq}/comparison`
-- `POST /api/v1/purchasing/rfqs/{rfq}/award`
-- `GET /api/v1/b2b/supplier/rfqs`
-- `POST /api/v1/b2b/supplier/rfqs/{rfq}/quotes`
+- `POST /api/v1/purchasing/purchase-requests/{purchaseRequest}/rfqs` — create + optional publish
+- `GET /api/v1/purchasing/rfqs` — list
+- `PUT /api/v1/purchasing/rfqs/{rfq}` — edit draft
+- `POST /api/v1/purchasing/rfqs/{rfq}/publish` — move from draft to open
+- `POST /api/v1/purchasing/rfqs/{rfq}/extend` — extend deadline with reason
+- `POST /api/v1/purchasing/rfqs/{rfq}/close` — close early once every invited supplier has submitted (unseals prices)
+- `POST /api/v1/purchasing/rfqs/{rfq}/cancel` — cancel with reason
+- `POST /api/v1/purchasing/rfqs/{rfq}/documents` — upload a shared requirement document, or a supplier's quotation PDF / CoA before a manual quote
+- `POST /api/v1/purchasing/rfqs/{rfq}/quotes/manual` — type in a supplier quote
+- `GET /api/v1/purchasing/rfqs/{rfq}/comparison` — comparison page (closed/awarded only)
+- `POST /api/v1/purchasing/rfqs/{rfq}/award` — pick winners and create POs
+- `GET /api/v1/purchasing/rfqs/{rfq}/purchase-orders` — list resulting POs
+- `GET /api/v1/b2b/supplier/rfqs` — supplier portal list
+- `GET /api/v1/b2b/supplier/rfqs/{rfq}` — supplier portal detail
+- `PUT /api/v1/b2b/supplier/rfqs/{rfq}/quote` — supplier save/submit quote
+- `POST /api/v1/b2b/supplier/rfqs/{rfq}/quote/withdraw` — supplier withdraw to draft
 
 The automatic closer is `purchasing:close-due-rfqs`, scheduled every minute.
 

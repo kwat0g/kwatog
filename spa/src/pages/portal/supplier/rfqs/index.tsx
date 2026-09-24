@@ -1,51 +1,60 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supplierRfqsApi } from '@/api/purchasing/rfqs';
 import { Button } from '@/components/ui/Button';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
+import { invitationStatus } from '@/lib/rfqStatus';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import type { RequestForQuote, RfqInvitationStatus } from '@/types/purchasing';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
+import type { SupplierRfq } from '@/types/purchasing';
 
-const formatDateTime = (value: string | null) => value ? new Date(value).toLocaleString() : '—';
+const formatRelativeTime = (closesAt: string): string => {
+  const now = new Date();
+  const deadline = new Date(closesAt);
+  if (deadline <= now) return 'Closed';
+
+  const ms = deadline.getTime() - now.getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+  if (days > 0) return `Closes in ${days}d ${hours}h`;
+  return `Closes in ${hours}h`;
+};
+
+type RfqFilters = {
+  page: number;
+  per_page: number;
+  status?: string;
+  search?: string;
+  sort?: 'closes_at' | 'rfq_number';
+  direction?: 'asc' | 'desc';
+};
 
 const statusOptions = [
-  { value: 'open', label: 'Open — quoting now' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'closed', label: 'Closed — under evaluation' },
-  { value: 'under_evaluation', label: 'Under evaluation' },
+  { value: '', label: 'All statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
   { value: 'awarded', label: 'Awarded' },
-  { value: 'partially_awarded', label: 'Partially awarded' },
-  { value: 'no_award', label: 'No award' },
-  { value: 'invited', label: 'Not yet viewed' },
-  { value: 'viewed', label: 'Viewed — not quoted' },
-  { value: 'submitted', label: 'Quotation submitted' },
-  { value: 'withdrawn', label: 'Quotation withdrawn' },
-  { value: 'not_awarded', label: 'Not awarded' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
-const columns: Column<RequestForQuote>[] = [
+const columns: Column<SupplierRfq>[] = [
   {
     key: 'rfq_number',
     header: 'RFQ #',
     sortable: true,
-    cell: (row) => (
-      <Link to={`/portal/supplier/rfqs/${row.id}`} className="font-mono text-accent hover:underline">
-        {row.rfq_number}
-      </Link>
-    ),
+    cell: (row) => <span className="font-mono">{row.rfq_number}</span>,
   },
   {
     key: 'title',
-    header: 'Sourcing event',
+    header: 'Title',
     cell: (row) => (
       <div>
         <div className="font-medium">{row.title}</div>
-        {row.purchase_request && <div className="text-xs text-muted font-mono">{row.purchase_request.pr_number}</div>}
       </div>
     ),
   },
@@ -53,66 +62,91 @@ const columns: Column<RequestForQuote>[] = [
     key: 'closes_at',
     header: 'Deadline',
     sortable: true,
-    cell: (row) => (
-      <span className="font-mono tabular-nums">{formatDateTime(row.closes_at)}</span>
-    ),
+    cell: (row) => {
+      const relative = formatRelativeTime(row.closes_at);
+      const absolute = new Date(row.closes_at).toLocaleDateString();
+      return (
+        <div className="text-sm">
+          <div className="font-mono">{absolute}</div>
+          <div className="text-2xs text-muted">{relative}</div>
+        </div>
+      );
+    },
   },
   {
     key: 'invitation_status',
     header: 'Your response',
     cell: (row) => {
-      const status = row.invitation_status as RfqInvitationStatus | undefined;
-      if (status === 'submitted') return <Chip variant="success">Quotation submitted</Chip>;
-      if (status === 'withdrawn') return <Chip variant="warning">Quotation withdrawn</Chip>;
-      if (status === 'awarded') return <Chip variant="success">Awarded to you</Chip>;
-      if (status === 'not_awarded') return <Chip variant="neutral">Not awarded</Chip>;
-      if (status === 'viewed') return <Chip variant="info">Viewed — not quoted</Chip>;
-      return <Chip variant="warning">Awaiting response</Chip>;
+      const meta = invitationStatus(row.invitation_status);
+      return <Chip variant={meta.variant}>{meta.label}</Chip>;
     },
   },
   {
-    key: 'status',
-    header: 'RFQ status',
-    cell: (row) => (
-      <Chip variant={chipVariantForStatus(row.status)}>{row.status_label ?? row.status.replace(/_/g, ' ')}</Chip>
-    ),
+    key: 'outcome',
+    header: 'Outcome',
+    cell: (row) => {
+      if (row.outcome === 'awarded') return <Chip variant="success">Awarded to you</Chip>;
+      if (row.outcome === 'not_awarded') return <Chip variant="neutral">Not selected</Chip>;
+      if (row.outcome === 'cancelled') return <Chip variant="warning">Cancelled</Chip>;
+      return <span className="text-muted">—</span>;
+    },
   },
 ];
 
 export default function SupplierRfqsPage() {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState<{ page: number; per_page: number; sort?: string; direction?: 'asc' | 'desc'; search?: string; status?: string }>({
+  const [filters, setFilters] = useUrlFilters<RfqFilters>({
     page: 1,
     per_page: 10,
+    status: undefined,
+    search: undefined,
+    sort: 'closes_at',
+    direction: 'asc',
   });
 
   const query = useQuery({
     queryKey: ['portal', 'supplier', 'rfqs', filters],
-    queryFn: () => supplierRfqsApi.list(filters),
+    queryFn: () =>
+      supplierRfqsApi.list({
+        page: filters.page,
+        per_page: filters.per_page,
+        status: filters.status,
+        search: filters.search,
+        sort: filters.sort,
+        direction: filters.direction,
+      }),
     placeholderData: (previous) => previous,
   });
-
-  const handleFilter = (key: string, value: unknown) => {
-    setFilters((current) => ({ ...current, [key]: value === '' ? undefined : value, page: 1 }));
-  };
-
-  const handleSort = (sort: string, direction: 'asc' | 'desc') => {
-    setFilters((current) => ({ ...current, sort, direction, page: 1 }));
-  };
 
   const rows = query.data?.data ?? [];
   const hasFilters = filters.search !== undefined || filters.status !== undefined;
 
   return (
     <div>
-      <PageHeader title="Supplier RFQs" subtitle={query.data ? `${query.data.meta.total} invitations` : 'Private sourcing invitations from Ogami'} />
+      <PageHeader
+        title="RFQ Invitations"
+        subtitle={
+          query.data ? `${query.data.meta.total} ${query.data.meta.total === 1 ? "invitation" : "invitations"}` : 'Private sourcing events from Ogami'
+        }
+      />
 
       <FilterBar
-        filters={[{ key: 'status', label: 'Status', type: 'select' as const, options: statusOptions }]}
+        filters={[
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select' as const,
+            options: statusOptions,
+          },
+        ]}
         values={filters}
-        onFilter={handleFilter}
-        onSearch={(search) => handleFilter('search', search)}
-        searchPlaceholder="Search by RFQ number or title…"
+        onFilter={(key, value) =>
+          setFilters((cur) => ({ ...cur, [key]: value === '' ? undefined : value, page: 1 }))
+        }
+        onSearch={(search) =>
+          setFilters((cur) => ({ ...cur, search: search || undefined, page: 1 }))
+        }
+        searchPlaceholder="Search by RFQ # or title…"
       />
 
       {query.isLoading && !query.data && <SkeletonTable columns={5} rows={8} />}
@@ -120,7 +154,7 @@ export default function SupplierRfqsPage() {
       {query.isError && !query.data && (
         <EmptyState
           icon="alert-circle"
-          title="Supplier RFQs unavailable"
+          title="RFQ invitations unavailable"
           action={<Button onClick={() => query.refetch()}>Retry</Button>}
         />
       )}
@@ -131,9 +165,16 @@ export default function SupplierRfqsPage() {
           columns={columns}
           data={rows}
           meta={query.data.meta}
-          onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
-          onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
-          onSort={handleSort}
+          onPageChange={(page) => setFilters((cur) => ({ ...cur, page }))}
+          onPageSizeChange={(per_page) => setFilters((cur) => ({ ...cur, per_page, page: 1 }))}
+          onSort={(sort, direction) =>
+            setFilters((cur) => ({
+              ...cur,
+              sort: sort === 'rfq_number' ? 'rfq_number' : 'closes_at',
+              direction,
+              page: 1,
+            }))
+          }
           currentSort={filters.sort}
           currentDirection={filters.direction}
           onRowClick={(row) => navigate(`/portal/supplier/rfqs/${row.id}`)}
@@ -142,12 +183,30 @@ export default function SupplierRfqsPage() {
             <EmptyState
               icon="file-text"
               title={hasFilters ? 'No invitations match your filters' : 'No RFQ invitations'}
-              description={hasFilters
-                ? 'Try a different search term or clear the status filter.'
-                : 'New invitations will appear here when Ogami opens a sourcing event for your company.'}
-              action={hasFilters ? (
-                <Button variant="secondary" onClick={() => setFilters({ page: 1, per_page: 10 })}>Clear filters</Button>
-              ) : undefined}
+              description={
+                hasFilters
+                  ? 'Try a different search term or clear filters.'
+                  : 'New invitations will appear here when Ogami opens a sourcing event.'
+              }
+              action={
+                hasFilters ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      setFilters({
+                        page: 1,
+                        per_page: 10,
+                        status: undefined,
+                        search: undefined,
+                        sort: 'closes_at',
+                        direction: 'asc',
+                      })
+                    }
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
             />
           }
         />

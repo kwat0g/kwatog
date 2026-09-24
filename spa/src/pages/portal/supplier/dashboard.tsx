@@ -32,11 +32,17 @@ export default function SupplierDashboardPage() {
       title="Dashboard"
       subtitle="Purchase orders, deliveries, and payment status at a glance"
       query={dashboard}
-      kpiCount={4}
+      kpiCount={5}
     >
       {(data) => (
         <>
-          <KpiGrid count={4}>
+          <KpiGrid count={5}>
+            <StatCard
+              label="RFQs to quote"
+              value={data.open_rfq_count ?? 0}
+              helper="Invitations waiting for your quotation"
+              linkTo="/portal/supplier/rfqs?status=open"
+            />
             <StatCard
               label="Open POs"
               value={data.open_po_count}

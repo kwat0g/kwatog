@@ -27,17 +27,16 @@ use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Enums\RfqStatus;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
-use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseOrderResponse;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
-use App\Modules\Purchasing\Models\RfqQuoteReconfirmation;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Quality\Services\PpapService;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
@@ -135,7 +134,7 @@ class PurchaseOrderService
     {
         return $po
             ->load([
-                'vendor', 'purchaseRequest:id,pr_number', 'rfq:id,rfq_number,status', 'rfqQuoteReconfirmation',
+                'vendor', 'purchaseRequest:id,pr_number', 'rfq:id,rfq_number,status',
                 'items.item:id,code,name,unit_of_measure', 'items.rfqAward', 'items.supplierQuoteVersion',
                 'approvalRecords.approver:id,name',
                 'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
@@ -192,9 +191,9 @@ class PurchaseOrderService
             if ($prId !== null && (! $sourcePr || (! $systemGenerated && $sourcePr->status !== PurchaseRequestStatus::Approved))) {
                 throw new BusinessRuleException('Only approved purchase requests can be converted to purchase orders.');
             }
-            if ($prId !== null && ! $systemGenerated && empty($data['request_for_quote_id']) && $sourcePr?->rfqs()->whereNotIn('status', [
-                'cancelled', 'no_award',
-            ])->exists()) {
+            // Only a live sourcing event holds the PR. An awarded or cancelled
+            // RFQ hands whatever it did not cover back to the Direct PO path.
+            if ($prId !== null && ! $systemGenerated && empty($data['request_for_quote_id']) && $sourcePr?->rfqs()->whereIn('status', RfqStatus::active())->exists()) {
                 throw new BusinessRuleException('This purchase request is already committed to an active RFQ.');
             }
 
@@ -306,7 +305,9 @@ class PurchaseOrderService
             if ($lockedPr->status !== PurchaseRequestStatus::Approved) {
                 throw new BusinessRuleException('Only approved PRs can be converted to POs.');
             }
-            if (! $systemGenerated && $lockedPr->sourcing_method !== PurchaseRequestSourcingMethod::DirectPo) {
+            if (! $systemGenerated
+                && $lockedPr->sourcing_method !== PurchaseRequestSourcingMethod::DirectPo
+                && ! $lockedPr->rfqHandedBack()) {
                 throw new BusinessRuleException('This purchase request is not marked for direct PO sourcing.');
             }
 
@@ -473,6 +474,25 @@ class PurchaseOrderService
     }
 
     /**
+     * Quantity per PR line not yet on a live PO. An RFQ for a PR that is
+     * already partly ordered sources only this remainder.
+     *
+     * @return array<int, string> purchase_request_item_id => remaining quantity (3 dp, never negative)
+     */
+    public function remainingQuantitiesByPrLine(PurchaseRequest $pr): array
+    {
+        $pr->loadMissing('items');
+        $ordered = $this->orderedQuantitiesByPrLine($pr);
+        $remaining = [];
+        foreach ($pr->items as $line) {
+            $left = bcsub((string) $line->quantity, (string) ($ordered[$line->id] ?? '0'), 3);
+            $remaining[(int) $line->id] = bccomp($left, '0', 3) > 0 ? $left : '0.000';
+        }
+
+        return $remaining;
+    }
+
+    /**
      * Reconcile `status` + `po_conversion_status` from actual line coverage:
      * every line on a live PO → converted; some → partial; none → approved and
      * not started. Idempotent, so it doubles as the reopen path when a PO is
@@ -636,15 +656,6 @@ class PurchaseOrderService
             throw new ForbiddenActionException('You do not have permission to submit this purchase order.');
         }
 
-        $reconfirmation = $this->createExpiredQuoteReconfirmation($po);
-        if ($reconfirmation !== null) {
-            app(OutboxService::class)->record(
-                new RfqLifecycleEvent((int) $reconfirmation->purchaseOrder->rfq->id, (string) $reconfirmation->purchaseOrder->rfq->hash_id, 'quote_reconfirmation_required', (int) $reconfirmation->purchase_order_id),
-                'rfq-reconfirmation:'.$reconfirmation->id,
-            );
-            throw new BusinessRuleException('The winning supplier quotation expired. Supplier reconfirmation is required before PO submission.');
-        }
-
         return DB::transaction(function () use ($po, $by) {
             // Lock and re-read before creating approval records so an update
             // cannot change the lines/amount between the state check and
@@ -673,46 +684,6 @@ class PurchaseOrderService
             );
 
             return $fresh;
-        });
-    }
-
-    private function createExpiredQuoteReconfirmation(PurchaseOrder $po): ?RfqQuoteReconfirmation
-    {
-        return DB::transaction(function () use ($po): ?RfqQuoteReconfirmation {
-            $locked = PurchaseOrder::query()->lockForUpdate()->with(['rfq', 'items.supplierQuoteVersion'])->findOrFail($po->id);
-            if ($locked->status !== PurchaseOrderStatus::Draft) {
-                return null;
-            }
-            if ($locked->request_for_quote_id === null) {
-                return null;
-            }
-            $expired = $locked->items->first(fn (PurchaseOrderItem $item): bool => $item->supplierQuoteVersion?->quote_valid_until?->isBefore(today()) ?? false);
-            if ($expired === null) {
-                return null;
-            }
-            $existing = $locked->rfqQuoteReconfirmation()->lockForUpdate()->first();
-            if ($existing?->status === RfqQuoteReconfirmation::CONFIRMED) {
-                return null;
-            }
-            if ($existing) {
-                return $existing->load(['purchaseOrder.rfq']);
-            }
-            $quote = $expired->supplierQuoteVersion;
-
-            $reconfirmation = RfqQuoteReconfirmation::create([
-                'purchase_order_id' => $locked->id,
-                'supplier_quote_id' => $quote->id,
-                'terms_snapshot' => [
-                    'quantity' => (string) $expired->quantity,
-                    'unit_price' => (string) $expired->unit_price,
-                    'total' => (string) $expired->total,
-                    'quote_valid_until' => $quote->quote_valid_until?->toDateString(),
-                ],
-                'requested_at' => now(),
-            ]);
-            $reconfirmation->forceFill(['status' => RfqQuoteReconfirmation::PENDING])->save();
-
-            return $reconfirmation->load(['purchaseOrder.rfq']);
         });
     }
 

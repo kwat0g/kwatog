@@ -83,11 +83,6 @@ class PurchaseOrder extends Model
         return $this->belongsTo(RequestForQuote::class, 'request_for_quote_id');
     }
 
-    public function rfqQuoteReconfirmation(): HasOne
-    {
-        return $this->hasOne(RfqQuoteReconfirmation::class);
-    }
-
     public function items(): HasMany
     {
         return $this->hasMany(PurchaseOrderItem::class);

@@ -76,18 +76,14 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::put('item-listings/{supplierItemListing}', [SupplierListingPortalController::class, 'update'])->middleware('throttle:sensitive');
             // PPAP submissions (read-only, scoped to this supplier).
             Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
-            // Invite-only sealed RFQ sourcing. The controller and service perform
-            // the vendor ownership check in addition to the supplier session guard.
+            // Invite-only sealed RFQs: one quotation per supplier. The service
+            // checks the invitation on top of the supplier session guard.
             Route::get('rfqs', [SupplierRfqController::class, 'index']);
             Route::get('rfqs/{rfq}', [SupplierRfqController::class, 'show']);
-            Route::post('rfqs/{rfq}/quotes', [SupplierRfqController::class, 'store'])->middleware('throttle:sensitive');
-            Route::put('rfqs/{rfq}/quotes/{quote}', [SupplierRfqController::class, 'update'])->middleware('throttle:sensitive');
-            Route::post('rfqs/{rfq}/quotes/{quote}/submit', [SupplierRfqController::class, 'submit'])->middleware('throttle:sensitive');
-            Route::post('rfqs/{rfq}/quotes/{quote}/withdraw', [SupplierRfqController::class, 'withdraw'])->middleware('throttle:sensitive');
-            Route::get('rfqs/{rfq}/quotes/{quote}/versions', [SupplierRfqController::class, 'versions']);
+            Route::put('rfqs/{rfq}/quote', [SupplierRfqController::class, 'saveQuote'])->middleware('throttle:sensitive');
+            Route::post('rfqs/{rfq}/quote/withdraw', [SupplierRfqController::class, 'withdraw'])->middleware('throttle:sensitive');
             Route::post('rfqs/{rfq}/documents', [SupplierRfqController::class, 'uploadDocument'])->middleware('throttle:sensitive');
             Route::get('rfqs/{rfq}/documents/{document}/download', [SupplierRfqController::class, 'downloadDocument']);
-            Route::post('purchase-orders/{purchaseOrder}/rfq-reconfirmation/{reconfirmation}/confirm', [SupplierRfqController::class, 'confirmReconfirmation'])->middleware('throttle:sensitive');
         });
     });
 });

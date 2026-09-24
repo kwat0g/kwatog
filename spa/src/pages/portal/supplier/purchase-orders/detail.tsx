@@ -96,16 +96,6 @@ export default function SupplierPurchaseOrderDetailPage() {
     queryKey: ['portal', 'supplier', 'shipping-document-options'],
     queryFn: () => supplierPortalApi.shippingDocumentOptions(),
   });
-  const reconfirmMut = useMutation({
-    mutationFn: () => supplierPortalApi.confirmRfqReconfirmation(id!, po!.rfq_reconfirmation!.id),
-    onSuccess: () => {
-      toast.success(
-        'Winning RFQ terms reconfirmed. Ogami can now submit the purchase order for approval.',
-      );
-      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
-    },
-    onError: () => toast.error('RFQ terms could not be reconfirmed.'),
-  });
 
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState('');
@@ -482,28 +472,6 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <p className="text-sm text-secondary">
                   OGAMI cancelled this purchase order. No further deliveries or invoices should be made against it.
                 </p>
-              </Panel>
-            )}
-            {po.capabilities.can_reconfirm_rfq && po.rfq_reconfirmation && (
-              <Panel title="RFQ terms reconfirmation">
-                <p className="text-sm text-muted">
-                  The quotation validity date has passed. Confirm that the original quantity, price,
-                  and terms remain valid so Ogami can continue PO approval.
-                </p>
-                <div className="mt-2 text-sm">
-                  Quote valid until{' '}
-                  <span className="font-mono">
-                    {po.rfq_reconfirmation.quote_valid_until ?? '—'}
-                  </span>
-                </div>
-                <Button
-                  className="mt-3"
-                  variant="primary"
-                  onClick={() => reconfirmMut.mutate()}
-                  loading={reconfirmMut.isPending}
-                >
-                  Reconfirm quoted terms
-                </Button>
               </Panel>
             )}
             <KpiGrid count={5}>

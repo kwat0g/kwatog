@@ -58,7 +58,6 @@ export interface PortalPoCapabilities {
  can_upload_document: boolean;
  can_submit_invoice: boolean;
   can_schedule_delivery: boolean;
-  can_reconfirm_rfq: boolean;
 }
 
 /** Body for POST /b2b/supplier/purchase-orders/{po}/respond. */
@@ -126,7 +125,6 @@ export interface PortalPoDetail extends PortalPoSummary {
  status_label?: string;
  due_date: string | null;
   }>;
-  rfq_reconfirmation?: { id: string; status: string; requested_at: string | null; quote_valid_until: string | null } | null;
 }
 
 export interface SupplierDeliveryLine {
@@ -610,6 +608,8 @@ export interface VendorStatementOfAccount {
 
 export interface SupplierDashboardData {
  open_po_count: number;
+ /** Open RFQ invitations still waiting for this supplier's quotation. */
+ open_rfq_count: number;
  pending_delivery_count: number;
  unpaid_invoice_count: number;
  total_unpaid_amount: string;

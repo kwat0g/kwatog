@@ -286,12 +286,11 @@ class GlobalSearchTest extends TestCase
         $a = PurchaseOrder::factory()->create(['po_number' => 'PO-999905-0001']);
         $b = PurchaseOrder::factory()->create(['po_number' => 'PO-999905-0002']);
 
+        // Purchasing officers hold search.global by seed (migration 0560).
         $officer = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'purchasing_officer')->value('id'),
         ]);
-        $officer->role->permissions()->attach(
-            Permission::query()->where('slug', 'search.global')->value('id'),
-        );
+        $this->assertTrue($officer->hasPermission('search.global'));
 
         $labels = $this->labelsFor(
             $this->actingAs($officer)->getJson('/api/v1/search?q=PO-999905')->assertOk()->json('data'),
@@ -554,6 +553,7 @@ class GlobalSearchTest extends TestCase
         'employee'       => ['hr'],
         'sales_order'    => ['crm'],
         'purchase_order' => ['purchasing'],
+        'rfq'            => ['purchasing'],
         'work_order'     => ['production'],
         'invoice'        => ['accounting'],
         'bill'           => ['accounting'],
@@ -665,6 +665,7 @@ class GlobalSearchTest extends TestCase
             'employee'       => 'hr.employees.view',
             'sales_order'    => 'crm.sales_orders.view',
             'purchase_order' => 'purchasing.view',
+            'rfq'            => 'purchasing.rfq.view',
             'work_order'     => 'production.work_orders.view',
             'invoice'        => 'accounting.invoices.view',
             'bill'           => 'accounting.bills.view',
@@ -753,6 +754,11 @@ class GlobalSearchTest extends TestCase
             'vendor_id'           => $vendor->id,
             'purchase_request_id' => PurchaseRequest::factory()->create(['department_id' => $department->id])->id,
             'created_by'          => $author->id,
+        ]);
+        \App\Modules\Purchasing\Models\RequestForQuote::factory()->create([
+            'rfq_number' => "RFQ-{$marker}{$k}",
+            'purchase_request_id' => PurchaseRequest::factory()->create(['department_id' => $department->id])->id,
+            'created_by' => $author->id,
         ]);
         WorkOrder::factory()->create(['wo_number' => "WO-{$marker}{$k}"]);
         Invoice::factory()->create(['invoice_number' => "INV-{$marker}{$k}", 'customer_id' => $customer->id]);

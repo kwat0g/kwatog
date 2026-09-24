@@ -1,424 +1,263 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { supplierRfqsApi, type SupplierQuoteDraftData } from '@/api/purchasing/rfqs';
+import { supplierRfqsApi } from '@/api/purchasing/rfqs';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
+import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { toCentavos, fromCentavos } from '@/lib/money';
-import { formatPeso } from '@/lib/formatNumber';
-import type { SupplierQuote, RfqStatus } from '@/types/purchasing';
+import { formatDate, formatDateTime, localIsoDate } from '@/lib/formatDate';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { fromCentavos, toCentavos } from '@/lib/money';
+import { lineCentavos, quoteTotals, trimQuantity } from '@/lib/quoteTotals';
+import type { SupplierQuoteWrite } from '@/types/purchasing';
 
-type LineValue = {
-  status: 'quoted' | 'no_quote';
-  quantity: string;
-  price: string;
-  lead: string;
-  delivery: string;
-};
+type VatTreatment = SupplierQuoteWrite['vat_treatment'];
+type Line = { quoting: boolean; quantity: string; price: string; deliverBy: string };
+
+const errMsg = (e: unknown, fallback: string) =>
+  (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+  (e instanceof Error ? e.message : fallback);
 
 /**
- * How the supplier declares VAT on their quotation. Mirrors the three
- * derivation branches the server enforces — the form no longer posts a
- * free-text VAT amount, because a mistyped one either misstates the tax or
- * bounces at submit.
+ * The supplier's quotation: a price, quantity and delivery date per line,
+ * VAT and freight once, the quotation PDF. Everything else is optional and
+ * folded away. Ogami recalculates the totals on submit.
  */
-type VatTreatment = 'exclusive' | 'inclusive' | 'none';
-
-const emptyLine = (): LineValue => ({
-  status: 'no_quote',
-  quantity: '',
-  price: '',
-  lead: '',
-  delivery: '',
-});
-
-function canSubmit(status: RfqStatus, closesAt: string): boolean {
-  return status === 'open' && new Date(closesAt).getTime() > Date.now();
-}
-
-type ParsedDecimal = { digits: bigint; scale: number; sign: bigint };
-
-function parseDecimal(value: string): ParsedDecimal | null {
-  const raw = value.trim().replace(/^\./, '0.').replace(/^-\./, '-0.');
-  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(raw);
-  if (!match) return null;
-  const fraction = match[3] ?? '';
-  return {
-    digits: BigInt(`${match[2]}${fraction}` || '0'),
-    scale: fraction.length,
-    sign: match[1] === '-' ? -1n : 1n,
-  };
-}
-
-function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
-  if (numerator < 0n) return -roundHalfUp(-numerator, denominator);
-  return (numerator * 2n + denominator) / (denominator * 2n);
-}
-
-/** Multiply decimal quantity and price, returning rounded whole centavos. */
-function lineTotalCentavos(quantity: string, unitPrice: string): bigint {
-  const left = parseDecimal(quantity);
-  const right = parseDecimal(unitPrice);
-  if (!left || !right) return 0n;
-
-  const scale = left.scale + right.scale;
-  const product = left.digits * right.digits * left.sign * right.sign;
-  if (scale <= 2) return product * 10n ** BigInt(2 - scale);
-
-  return roundHalfUp(product, 10n ** BigInt(scale - 2));
-}
-
-/** Apply the configured VAT rate to centavos without converting to a float. */
-function vatCentavos(baseCentavos: number, rate: string, inclusive: boolean): bigint {
-  const parsed = parseDecimal(rate);
-  if (!parsed || parsed.sign < 0n) return 0n;
-
-  const scale = 10n ** BigInt(parsed.scale);
-  const denominator = inclusive ? scale + parsed.digits : scale;
-  return roundHalfUp(BigInt(baseCentavos) * parsed.digits, denominator);
-}
-
-function formatPercent(rate: string): string | null {
-  const parsed = parseDecimal(rate);
-  if (!parsed) return null;
-
-  const digits = (parsed.digits * 100n).toString();
-  if (parsed.scale <= 2) return `${digits}${'0'.repeat(2 - parsed.scale)}`;
-
-  const padded = digits.padStart(parsed.scale - 1, '0');
-  const split = padded.length - (parsed.scale - 2);
-  const fraction = padded.slice(split).replace(/0+$/, '');
-  return fraction ? `${padded.slice(0, split)}.${fraction}` : padded.slice(0, split);
-}
-
 export default function SupplierRfqQuotePage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const query = useQuery({
+
+  const rfqQuery = useQuery({
     queryKey: ['portal', 'supplier', 'rfqs', id],
     queryFn: () => supplierRfqsApi.show(id),
     enabled: !!id,
   });
-  // Same cache key the portal layout warms, so this is usually no refetch.
+  // Same cache key the portal layout warms.
   const policies = useQuery({
     queryKey: ['portal', 'supplier', 'business-policies'],
     queryFn: () => supplierPortalApi.businessPolicies(),
     staleTime: 300_000,
   });
-  const [values, setValues] = useState<Record<string, LineValue>>({});
-  const [treatment, setTreatment] = useState<VatTreatment>('exclusive');
+  const rfq = rfqQuery.data;
+  const quote = rfq?.quote ?? null;
+
+  const [lines, setLines] = useState<Record<string, Line>>({});
+  const [vat, setVat] = useState<VatTreatment>('exclusive');
   const [freight, setFreight] = useState('0.00');
-  const [other, setOther] = useState('0.00');
-  const [terms, setTerms] = useState('');
-  const [validUntil, setValidUntil] = useState('');
+  const [validUntil, setValidUntil] = useState(() => localIsoDate(new Date(Date.now() + 30 * 86_400_000)));
+  const [paymentTerms, setPaymentTerms] = useState('');
   const [notes, setNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [qualityFiles, setQualityFiles] = useState<Record<string, File | null>>({});
-  const [withdrawReason, setWithdrawReason] = useState('');
-  const [initializedQuoteId, setInitializedQuoteId] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<File | null>(null);
+  const [coa, setCoa] = useState<File | null>(null);
+  const [seededFor, setSeededFor] = useState<string | null>(null);
 
-  const rfq = query.data;
-  const currentQuote = rfq?.quotes?.find(
-    (quote) => quote.is_current && ['draft', 'submitted'].includes(quote.status),
-  );
-  const vatRate = policies.data?.vat_rate ?? null;
-  const vatPercent = vatRate != null ? formatPercent(vatRate) : null;
-
+  // Seed once per quote so a background refetch never wipes the supplier's typing.
   useEffect(() => {
-    if (!rfq || initializedQuoteId === (currentQuote?.id ?? 'new')) return;
-    const next: Record<string, LineValue> = {};
-    rfq.items?.forEach((item) => {
-      const line = currentQuote?.items.find((entry) => entry.rfq_item?.id === item.id);
-      next[item.id] = line
-        ? {
-            status: line.response_status,
-            quantity: line.offered_quantity ?? '',
-            price: line.unit_price ?? '',
-            lead: line.lead_time_days?.toString() ?? '',
-            delivery: line.proposed_delivery_date ?? '',
-          }
-        : emptyLine();
-    });
-    setValues(next);
-    // Restore the saved treatment: inclusive flag wins, then any stored amount.
-    setTreatment(
-      currentQuote
-        ? currentQuote.vat_inclusive
-          ? 'inclusive'
-          : toCentavos(currentQuote.vat_amount ?? '0') > 0
-            ? 'exclusive'
-            : 'none'
-        : 'exclusive',
+    const key = `${rfq?.id ?? ''}:${quote?.id ?? 'new'}`;
+    if (!rfq || seededFor === key) return;
+    setSeededFor(key);
+    setLines(
+      Object.fromEntries(
+        rfq.items.map((item) => {
+          const saved = quote?.items.find((row) => row.request_for_quote_item_id === item.id);
+          return [
+            item.id,
+            saved
+              ? {
+                  quoting: saved.response_status === 'quoted',
+                  quantity: trimQuantity(saved.offered_quantity ?? item.quantity),
+                  price: saved.unit_price ?? '',
+                  deliverBy: saved.proposed_delivery_date ?? '',
+                }
+              : { quoting: true, quantity: trimQuantity(item.quantity), price: '', deliverBy: '' },
+          ];
+        }),
+      ),
     );
-    setFreight(currentQuote?.freight_amount ?? '0.00');
-    setOther(currentQuote?.other_charges ?? '0.00');
-    setTerms(currentQuote?.payment_terms ?? '');
-    setValidUntil(currentQuote?.quote_valid_until ?? '');
-    setNotes(currentQuote?.notes ?? '');
-    setInitializedQuoteId(currentQuote?.id ?? 'new');
-  }, [currentQuote, initializedQuoteId, rfq]);
+    if (quote) {
+      setVat(quote.vat_treatment);
+      setFreight(quote.freight_amount);
+      setValidUntil(quote.quote_valid_until ?? '');
+      setPaymentTerms(quote.payment_terms ?? '');
+      setNotes(quote.notes ?? '');
+    }
+  }, [rfq, quote, seededFor]);
 
-  const quotedLineIds = useMemo(
-    () =>
-      new Set(
-        Object.entries(values)
-          .filter(([, value]) => value.status === 'quoted')
-          .map(([key]) => key),
-      ),
-    [values],
-  );
+  const setLine = (itemId: string, patch: Partial<Line>) =>
+    setLines((cur) => ({ ...cur, [itemId]: { ...cur[itemId], ...patch } }));
 
-  const itemsTotal = useMemo(() => {
-    const total = (rfq?.items ?? [])
-      .filter((item) => quotedLineIds.has(item.id))
-      .reduce((sum, item) => {
-        const value = values[item.id] ?? emptyLine();
-        return sum + lineTotalCentavos(value.quantity, value.price);
-      }, 0n);
-    return fromCentavos(Number(total));
-  }, [rfq?.items, values, quotedLineIds]);
+  const totals = useMemo(() => {
+    const goods = (rfq?.items ?? []).reduce((sum, item) => {
+      const line = lines[item.id];
+      return line?.quoting ? sum + lineCentavos(line.quantity || '0', line.price || '0') : sum;
+    }, 0);
+    return quoteTotals(goods, toCentavos(freight || '0'), vat, policies.data?.vat_rate ?? null);
+  }, [rfq?.items, lines, freight, vat, policies.data?.vat_rate]);
 
-  const vatDisplay = useMemo(() => {
-    if (treatment === 'none') return '0.00';
-    if (vatRate == null || toCentavos(itemsTotal) === 0) return null;
-    const baseCentavos = toCentavos(itemsTotal) + toCentavos(freight) + toCentavos(other);
-    return fromCentavos(Number(vatCentavos(baseCentavos, vatRate, treatment === 'inclusive')));
-  }, [treatment, itemsTotal, freight, other, vatRate]);
+  const hasPdf =
+    !!pdf || !!quote?.quotation_original_filename || !!rfq?.my_documents?.some((doc) => doc.document_type === 'quotation_pdf');
+  const problems = (rfq?.items ?? []).flatMap((item) => {
+    const line = lines[item.id];
+    if (!line?.quoting) return [];
+    const issues: string[] = [];
+    if (!(Number(line.price) > 0)) issues.push(`Enter a unit price for ${item.description}.`);
+    if (!(Number(line.quantity) > 0) || Number(line.quantity) > Number(item.quantity)) {
+      issues.push(`${item.description}: quantity must be more than 0 and at most ${formatQuantity(item.quantity)}.`);
+    }
+    return issues;
+  });
+  const quotingSomething = Object.values(lines).some((line) => line.quoting);
 
-  const totalDelivered = useMemo(
-    () =>
-      fromCentavos(
-        // Inclusive prices already hold the VAT; only exclusive VAT is added on top.
-        toCentavos(itemsTotal) +
-          toCentavos(treatment === 'exclusive' ? (vatDisplay ?? '0.00') : '0.00') +
-          toCentavos(freight) +
-          toCentavos(other),
-      ),
-    [itemsTotal, vatDisplay, treatment, freight, other],
-  );
-
-  const payload = (): SupplierQuoteDraftData => ({
-    // The server derives VAT from the lines + this flag; only the explicit
-    // no-VAT declaration posts an amount (zero).
-    vat_inclusive: treatment === 'inclusive',
-    ...(treatment === 'none' ? { vat_amount: '0.00' } : {}),
-    freight_amount: freight,
-    other_charges: other,
-    quote_valid_until: validUntil || undefined,
-    payment_terms: terms || undefined,
-    notes: notes || undefined,
+  const payload = (): SupplierQuoteWrite => ({
+    vat_treatment: vat,
+    freight_amount: freight || '0.00',
+    quote_valid_until: validUntil || null,
+    payment_terms: paymentTerms.trim() || null,
+    notes: notes.trim() || null,
     items: (rfq?.items ?? []).map((item) => {
-      const value = values[item.id] ?? emptyLine();
-      return {
-        request_for_quote_item_id: item.id,
-        response_status: value.status,
-        ...(value.status === 'quoted'
-          ? {
-              offered_quantity: value.quantity,
-              unit_price: value.price,
-              lead_time_days: value.lead ? Number(value.lead) : undefined,
-              proposed_delivery_date: value.delivery || undefined,
-            }
-          : {}),
-      };
+      const line = lines[item.id];
+      return line?.quoting
+        ? {
+            request_for_quote_item_id: item.id,
+            response_status: 'quoted',
+            offered_quantity: line.quantity,
+            unit_price: line.price,
+            proposed_delivery_date: line.deliverBy || null,
+          }
+        : { request_for_quote_item_id: item.id, response_status: 'no_quote' };
     }),
   });
 
-  const saveOrUpdate = async (): Promise<SupplierQuote> => {
-    if (currentQuote) return supplierRfqsApi.updateQuote(id, currentQuote.id, payload());
-    return supplierRfqsApi.saveQuote(id, payload());
-  };
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'rfqs'] });
 
   const saveDraft = useMutation({
-    mutationFn: saveOrUpdate,
+    mutationFn: () => supplierRfqsApi.saveQuote(id, { ...payload(), submit: false }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'rfqs', id] });
-      toast.success('Draft quotation saved.');
+      await refresh();
+      toast.success('Draft saved. Ogami cannot see it until you submit.');
     },
-    onError: () => toast.error('Could not save the quotation draft.'),
+    onError: (e) => toast.error(errMsg(e, 'The draft could not be saved.')),
   });
 
   const submit = useMutation({
     mutationFn: async () => {
-      const quote = await saveOrUpdate();
-      if (!file && !quote.quotation_original_filename)
-        throw new Error('formal quotation PDF required');
-      if (file) {
+      for (const [file, type] of [
+        [pdf, 'quotation_pdf'],
+        [coa, 'certificate_of_analysis'],
+      ] as const) {
+        if (!file) continue;
         const form = new FormData();
         form.append('file', file);
-        form.append('document_type', 'quotation_pdf');
-        await supplierRfqsApi.uploadDocument(id, quote.id, form);
+        form.append('document_type', type);
+        await supplierRfqsApi.uploadDocument(id, form);
       }
-      for (const [documentType, qualityFile] of Object.entries(qualityFiles)) {
-        if (!qualityFile) continue;
-        const form = new FormData();
-        form.append('file', qualityFile);
-        form.append('document_type', documentType);
-        await supplierRfqsApi.uploadDocument(id, quote.id, form);
-      }
-      return supplierRfqsApi.submit(id, quote.id);
+      return supplierRfqsApi.saveQuote(id, { ...payload(), submit: true });
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'rfqs', id] });
-      toast.success('Quotation submitted securely.');
+      await refresh();
+      toast.success('Quotation submitted.');
       navigate(`/portal/supplier/rfqs/${id}`);
     },
-    onError: () =>
-      toast.error('Could not submit quotation. Check each line, deadline, and PDF attachment.'),
+    onError: (e) => toast.error(errMsg(e, 'The quotation could not be submitted.')),
   });
 
-  const withdraw = useMutation({
-    mutationFn: () => supplierRfqsApi.withdraw(id, currentQuote?.id ?? '', withdrawReason),
-    onSuccess: () => {
-      toast.success('Quotation withdrawn.');
-      navigate(`/portal/supplier/rfqs/${id}`);
-    },
-    onError: () => toast.error('Could not withdraw this quotation.'),
-  });
-
-  if (query.isLoading) return <SkeletonTable columns={4} rows={6} />;
-  if (query.isError || !rfq)
+  if (rfqQuery.isLoading) return <SkeletonTable columns={4} rows={6} />;
+  if (rfqQuery.isError || !rfq) {
     return (
       <EmptyState
         icon="alert-circle"
         title="RFQ unavailable"
-        action={<Button onClick={() => query.refetch()}>Retry</Button>}
+        action={<Button onClick={() => rfqQuery.refetch()}>Retry</Button>}
       />
     );
-  if (!canSubmit(rfq.status, rfq.closes_at))
+  }
+  if (!rfq.can_quote) {
     return (
       <EmptyState
         icon="lock"
-        title="This RFQ is closed"
-        description="The server deadline has passed or the sourcing event is no longer accepting submissions."
-        action={
-          <Button variant="secondary" onClick={() => navigate(`/portal/supplier/rfqs/${id}`)}>
-            Back to RFQ
-          </Button>
-        }
+        title="This RFQ is no longer accepting quotations"
+        action={<Button onClick={() => navigate(`/portal/supplier/rfqs/${id}`)}>Back to RFQ</Button>}
       />
     );
+  }
 
-  const vatHelper =
-    treatment === 'inclusive'
-      ? `Computed at ${vatPercent ?? 'the prevailing rate'} of your prices, extracted from the gross (prices already include it).`
-      : treatment === 'none'
-        ? 'Your quotation is declared without VAT. Attach your formal quotation PDF stating the VAT treatment.'
-        : `Computed at ${vatPercent ?? 'the prevailing rate'} on top of your unit prices and charges.`;
+  const pending = saveDraft.isPending || submit.isPending;
+  const submitted = quote?.status === 'submitted';
 
   return (
     <div>
       <PageHeader
-        title="Prepare quotation"
-        subtitle={rfq.rfq_number}
+        title={submitted ? 'Update quotation' : 'Prepare quotation'}
+        subtitle={
+          <span>
+            <span className="font-mono">{rfq.rfq_number}</span> · closes {formatDateTime(rfq.closes_at)}
+          </span>
+        }
         backTo={`/portal/supplier/rfqs/${id}`}
-        backLabel="RFQ invitation"
+        backLabel="RFQ"
       />
-      <div className="px-5 py-4 max-w-4xl space-y-4">
-        <Panel title="Line response">
-          <p className="text-sm text-muted mb-3">
-            Quote each requested line. Leave a line as &ldquo;No quote&rdquo; if you cannot supply
-            it — that line only is excluded, the rest of your quotation stands.
-          </p>
-          <div className="space-y-3">
-            {rfq.items?.map((item) => {
-              const value = values[item.id] ?? emptyLine();
-              const lineTotal =
-                value.status === 'quoted' && value.quantity && value.price
-                  ? fromCentavos(Number(lineTotalCentavos(value.quantity, value.price)))
-                  : null;
+
+      <div className="px-5 py-4 space-y-4 max-w-4xl">
+        <Panel title="Your prices">
+          <div className="space-y-4">
+            {rfq.items.map((item) => {
+              const line = lines[item.id];
+              if (!line) return null;
               return (
-                <div key={item.id} className="rounded border border-default p-3">
-                  <div className="flex justify-between gap-3">
+                <div key={item.id} className="border-b border-subtle pb-4 last:border-0 last:pb-0">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <div>
-                      <div className="font-medium">{item.description}</div>
-                      <div className="font-mono text-xs text-muted">
-                        Requested {item.quantity} {item.unit ?? ''}
+                      <div className="font-medium">
+                        {item.description}
+                        {item.item?.code && <span className="ml-2 font-mono text-xs text-muted">{item.item.code}</span>}
+                      </div>
+                      <div className="text-xs text-muted">
+                        Need{' '}
+                        <span className="font-mono tabular-nums">
+                          {formatQuantity(item.quantity)} {item.unit ?? ''}
+                        </span>
+                        {item.required_delivery_date && <> by {formatDate(item.required_delivery_date)}</>}
+                        {item.specification && <> · {item.specification}</>}
                       </div>
                     </div>
-                    <label className="text-sm">
-                      <input
-                        type="checkbox"
-                        checked={value.status === 'no_quote'}
-                        onChange={(event) =>
-                          setValues((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...value,
-                              status: event.target.checked ? 'no_quote' : 'quoted',
-                            },
-                          }))
-                        }
-                      />{' '}
-                      No quote
-                    </label>
+                    <button
+                      type="button"
+                      className="text-xs text-link hover:underline"
+                      onClick={() => setLine(item.id, { quoting: !line.quoting })}
+                    >
+                      {line.quoting ? "Can't supply this item" : 'Quote this item'}
+                    </button>
                   </div>
-                  {value.status === 'quoted' && (
-                    <div className="grid sm:grid-cols-3 gap-2 mt-3">
-                      <Input
-                        label={`Offered quantity (${item.unit ?? 'units'})`}
-                        inputMode="decimal"
-                        value={value.quantity}
-                        onChange={(event) =>
-                          setValues((current) => ({
-                            ...current,
-                            [item.id]: { ...value, quantity: event.target.value },
-                          }))
-                        }
-                      />
+                  {line.quoting ? (
+                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
                       <Input
                         label={`Unit price (₱ per ${item.unit ?? 'unit'})`}
                         inputMode="decimal"
-                        prefix="₱"
-                        value={value.price}
-                        onChange={(event) =>
-                          setValues((current) => ({
-                            ...current,
-                            [item.id]: { ...value, price: event.target.value },
-                          }))
-                        }
+                        value={line.price}
+                        onChange={(e) => setLine(item.id, { price: e.target.value })}
                       />
                       <Input
-                        label="Lead time days"
-                        inputMode="numeric"
-                        helper="Days from PO to delivery"
-                        value={value.lead}
-                        onChange={(event) =>
-                          setValues((current) => ({
-                            ...current,
-                            [item.id]: { ...value, lead: event.target.value },
-                          }))
-                        }
+                        label="Quantity"
+                        inputMode="decimal"
+                        value={line.quantity}
+                        onChange={(e) => setLine(item.id, { quantity: e.target.value })}
                       />
                       <Input
-                        label="Proposed delivery date"
+                        label="Can deliver by"
                         type="date"
-                        value={value.delivery}
-                        onChange={(event) =>
-                          setValues((current) => ({
-                            ...current,
-                            [item.id]: { ...value, delivery: event.target.value },
-                          }))
-                        }
+                        value={line.deliverBy}
+                        onChange={(e) => setLine(item.id, { deliverBy: e.target.value })}
                       />
-                      {lineTotal !== null && (
-                        <div className="sm:col-span-2 flex items-end justify-end">
-                          <span className="text-sm text-muted">
-                            Line total{' '}
-                            <span className="font-mono tabular-nums text-ink">
-                              {formatPeso(lineTotal)}
-                            </span>
-                          </span>
-                        </div>
-                      )}
                     </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted">Not quoting this item.</p>
                   )}
                 </div>
               );
@@ -426,206 +265,118 @@ export default function SupplierRfqQuotePage() {
           </div>
         </Panel>
 
-        <Panel title="Prices and VAT">
-          <p className="text-sm text-muted mb-3">
-            State whether your unit prices include VAT. The VAT amount is computed from your quoted
-            lines — it cannot be entered manually.
-          </p>
-          <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {(
-              [
-                ['exclusive', 'VAT-exclusive'],
-                ['inclusive', 'VAT-inclusive'],
-                ['none', 'No VAT'],
-              ] as Array<[VatTreatment, string]>
-            ).map(([optionValue, label]) => (
-              <label key={optionValue} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  name="vat_treatment"
-                  checked={treatment === optionValue}
-                  onChange={() => setTreatment(optionValue)}
-                />
-                {label}
-              </label>
-            ))}
-          </fieldset>
-          <p className="text-xs text-muted mt-1">
-            {treatment === 'exclusive'
-              ? `VAT at ${vatPercent ?? 'the prevailing rate'} will be added on top of the quoted amounts.`
-              : treatment === 'inclusive'
-                ? 'The quoted amounts already include VAT; the VAT component is extracted from them.'
-                : 'Not VAT-registered, or a VAT-exempt sale. State this in your formal quotation.'}
-          </p>
-          <div className="grid sm:grid-cols-2 gap-3 mt-3">
+        <Panel title="VAT and freight">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select label="Your prices are" value={vat} onChange={(e) => setVat(e.target.value as VatTreatment)}>
+              <option value="exclusive">VAT exclusive — add VAT on top</option>
+              <option value="inclusive">VAT inclusive — VAT already in the price</option>
+              <option value="none">No VAT — not VAT-registered</option>
+            </Select>
             <Input
-              label="VAT (computed)"
-              prefix="₱"
-              readOnly
-              value={vatDisplay ?? '—'}
-              helper={vatHelper}
-              containerClassName="[&_input]:font-mono"
-            />
-            <Input
-              label="Delivery / freight charges"
+              label="Freight to Ogami (₱, total)"
               inputMode="decimal"
-              prefix="₱"
               value={freight}
-              onChange={(event) => setFreight(event.target.value)}
-              helper="Charge to deliver to the Ogami plant (FCIE Dasmariñas). Enter 0.00 if included in your prices."
-            />
-            <Input
-              label="Other charges"
-              inputMode="decimal"
-              prefix="₱"
-              value={other}
-              onChange={(event) => setOther(event.target.value)}
-              helper="Packing, testing, or other billable extras. 0.00 if none."
+              onChange={(e) => setFreight(e.target.value)}
             />
           </div>
         </Panel>
 
-        <Panel title="Quotation summary">
-          <dl className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted">Items total</dt>
-              <dd className="font-mono tabular-nums">{formatPeso(itemsTotal)}</dd>
+        <Panel title="Documents">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Input
+                label={hasPdf && !pdf ? 'Quotation PDF (replace, optional)' : 'Quotation PDF (required)'}
+                type="file"
+                accept="application/pdf,image/png,image/jpeg"
+                onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
+              />
+              {hasPdf && !pdf && quote?.quotation_original_filename && (
+                <p className="mt-1 text-xs text-muted">On file: {quote.quotation_original_filename}</p>
+              )}
             </div>
-            <div className="flex justify-between">
-              <dt className="text-muted">VAT</dt>
-              <dd className="font-mono tabular-nums">{formatPeso(vatDisplay)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted">Delivery / freight</dt>
-              <dd className="font-mono tabular-nums">{formatPeso(freight)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-muted">Other charges</dt>
-              <dd className="font-mono tabular-nums">{formatPeso(other)}</dd>
-            </div>
-            <div className="flex justify-between border-t border-default pt-2 mt-2 font-medium">
-              <dt>Total delivered cost</dt>
-              <dd className="font-mono tabular-nums">{formatPeso(totalDelivered)}</dd>
-            </div>
-          </dl>
+            <Input
+              label="Certificate of analysis (optional)"
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              onChange={(e) => setCoa(e.target.files?.[0] ?? null)}
+            />
+          </div>
         </Panel>
 
-        <Panel title="Terms and documents">
-          <div className="grid sm:grid-cols-2 gap-3">
+        <details className="rounded-md border border-default bg-surface px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium">More details (optional)</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Input
               label="Quote valid until"
               type="date"
               value={validUntil}
-              onChange={(event) => setValidUntil(event.target.value)}
-              helper="How long this offer stands"
+              onChange={(e) => setValidUntil(e.target.value)}
             />
             <Input
               label="Payment terms"
-              value={terms}
-              onChange={(event) => setTerms(event.target.value)}
-              helper="e.g. 30 days, 50% advance"
+              value={paymentTerms}
+              onChange={(e) => setPaymentTerms(e.target.value)}
+              placeholder="e.g. Net 30"
             />
-            <Input
-              label="Formal quotation PDF"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              helper="Required before submission — your signed offer"
-            />
-          </div>
-          <label className="block text-sm mt-3">
-            Notes
-            <textarea
-              className="mt-1 w-full min-h-20 border border-default rounded-md bg-canvas p-3"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-            />
-          </label>
-        </Panel>
-
-        {currentQuote?.documents && currentQuote.documents.length > 0 && (
-          <Panel title="Your uploaded documents">
-            <ul className="space-y-2 text-sm">
-              {currentQuote.documents.map((document) => (
-                <li key={document.id}>
-                  <a
-                    className="text-link hover:underline"
-                    href={supplierRfqsApi.downloadDocumentUrl(id, document.id)}
-                  >
-                    {document.original_filename}
-                  </a>
-                  <span className="ml-2 text-xs text-muted">
-                    {document.document_type.replace(/_/g, ' ')}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-
-        <Panel title="Quality evidence">
-          <p className="text-sm text-muted mb-3">
-            Attach any available resin datasheet, certificate of analysis, safety, or compliance
-            evidence. Files remain private to this RFQ.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {[
-              ['resin_datasheet', 'Resin datasheet'],
-              ['certificate_of_analysis', 'Certificate of analysis'],
-              ['safety_document', 'Safety document'],
-              ['compliance_document', 'Compliance document'],
-            ].map(([type, label]) => (
-              <Input
-                key={type}
-                label={label}
-                type="file"
-                accept="application/pdf,.pdf,image/png,image/jpeg"
-                onChange={(event) =>
-                  setQualityFiles((current) => ({
-                    ...current,
-                    [type]: event.target.files?.[0] ?? null,
-                  }))
-                }
+            <label className="block text-sm sm:col-span-2">
+              <span className="block text-2xs uppercase tracking-wider text-muted mb-1">Notes</span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full min-h-16 border border-default rounded-md bg-canvas p-3 text-sm"
               />
-            ))}
+            </label>
           </div>
-        </Panel>
+        </details>
 
-        <div className="flex flex-wrap justify-between gap-2">
-          <Button variant="secondary" onClick={() => navigate(`/portal/supplier/rfqs/${id}`)}>
-            Cancel
-          </Button>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => saveDraft.mutate()}
-              loading={saveDraft.isPending}
-            >
-              Save draft
-            </Button>
-            <Button variant="primary" onClick={() => submit.mutate()} loading={submit.isPending}>
-              Submit sealed quotation
-            </Button>
+        <div className="rounded-md border border-default bg-surface px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs text-muted">Total delivered cost</div>
+              <div className="font-mono tabular-nums text-lg">{formatPeso(fromCentavos(totals.total))}</div>
+              <div className="text-xs text-muted">
+                Goods <span className="font-mono tabular-nums">{formatPeso(fromCentavos(totals.goods))}</span> · Freight{' '}
+                <span className="font-mono tabular-nums">{formatPeso(freight || '0')}</span> · VAT{' '}
+                <span className="font-mono tabular-nums">{formatPeso(fromCentavos(totals.vat))}</span>. Ogami confirms the
+                figures on submit.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/portal/supplier/rfqs/${id}`}>
+                <Button variant="secondary" disabled={pending}>
+                  Cancel
+                </Button>
+              </Link>
+              {!submitted && (
+                <Button
+                  variant="secondary"
+                  disabled={pending}
+                  loading={saveDraft.isPending}
+                  onClick={() => saveDraft.mutate()}
+                >
+                  Save draft
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                disabled={pending || !quotingSomething || problems.length > 0 || !hasPdf}
+                loading={submit.isPending}
+                onClick={() => submit.mutate()}
+              >
+                {submit.isPending ? 'Submitting…' : submitted ? 'Update quotation' : 'Submit quotation'}
+              </Button>
+            </div>
           </div>
+          {(problems.length > 0 || !hasPdf || !quotingSomething) && (
+            <ul className="mt-2 list-disc pl-5 text-xs text-warning-fg">
+              {!quotingSomething && <li>Quote at least one item.</li>}
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+              {!hasPdf && <li>Attach your quotation PDF.</li>}
+            </ul>
+          )}
         </div>
-        {currentQuote?.status === 'submitted' && (
-          <Panel title="Withdraw submitted quotation">
-            <Input
-              label="Withdrawal reason"
-              value={withdrawReason}
-              onChange={(event) => setWithdrawReason(event.target.value)}
-            />
-            <Button
-              className="mt-3"
-              variant="secondary"
-              disabled={!withdrawReason.trim()}
-              onClick={() => withdraw.mutate()}
-              loading={withdraw.isPending}
-            >
-              Withdraw quotation
-            </Button>
-          </Panel>
-        )}
       </div>
     </div>
   );

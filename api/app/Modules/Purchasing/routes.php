@@ -29,7 +29,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::get('/purchase-requests/{purchaseRequest}/pdf', [PurchaseRequestController::class, 'printPdf'])->middleware('permission:purchasing.view');
     Route::post('/purchase-requests', [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchasing.pr.create');
-    Route::patch('/purchase-requests/{purchaseRequest}/sourcing-method', [PurchaseRequestController::class, 'setSourcingMethod'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/sourcing-method', [PurchaseRequestController::class, 'setSourcingMethod'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.manage');
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
     Route::patch('/purchase-requests/{purchaseRequest}/restore', [PurchaseRequestController::class, 'restore'])->middleware('permission:purchasing.pr.manage')->withTrashed();
 
@@ -41,24 +41,27 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     // Sourcing suggestions for the convert modal. Declared before the wildcard
     // {purchaseRequest} show/update routes is not required (extra segment), but
     // keep it grouped with convert so the PO-creation surface is in one place.
-     Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.create');
+     Route::get('/purchase-requests/{purchaseRequest}/sourcing', [PurchaseRequestController::class, 'sourcing'])->middleware('permission_any:purchasing.po.create,purchasing.rfq.manage');
     Route::post('/purchase-requests/{purchaseRequest}/convert', [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
-    Route::post('/purchase-requests/{purchaseRequest}/rfqs', [RequestForQuoteController::class, 'store'])->middleware('permission:purchasing.rfq.create');
+    Route::get('/purchase-requests/{purchaseRequest}/rfq-setup', [RequestForQuoteController::class, 'setup'])->middleware('permission:purchasing.rfq.manage');
+    Route::post('/purchase-requests/{purchaseRequest}/rfqs', [RequestForQuoteController::class, 'store'])->middleware('permission:purchasing.rfq.manage');
 
-    /* ─── Sealed supplier RFQs ─── */
+    /* ─── Supplier RFQs (docs/SUPPLIER-RFQ-BIDDING-PLAN.md) ─── */
     Route::get('/rfqs', [RequestForQuoteController::class, 'index'])->middleware('permission:purchasing.rfq.view');
-    Route::get('/rfq-documents/{document}/download', [RequestForQuoteController::class, 'downloadDocument'])->middleware('permission:purchasing.rfq.view');
-    Route::get('/rfqs/{rfq}/purchase-orders', [RequestForQuoteController::class, 'purchaseOrders'])->middleware('permission:purchasing.rfq.view');
+    // The PR requester (e.g. a department head) follows RFQ notices here
+    // without RFQ permissions; RequestForQuoteAccessPolicy::canSee() scopes
+    // those users to their own requests and prices stay sealed for them.
+    Route::get('/rfq-documents/{document}/download', [RequestForQuoteController::class, 'downloadDocument'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
+    Route::get('/rfqs/{rfq}/purchase-orders', [RequestForQuoteController::class, 'purchaseOrders'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
+    Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/documents', [RequestForQuoteController::class, 'uploadDocument'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/quotes/manual', [RequestForQuoteController::class, 'manualQuote'])->middleware('permission:purchasing.rfq.manage');
-    Route::get('/rfqs/{rfq}/comparison', [RequestForQuoteController::class, 'comparison'])->middleware('permission_any:purchasing.rfq.evaluate,purchasing.rfq.quality_review');
-    Route::post('/rfqs/{rfq}/publish', [RequestForQuoteController::class, 'publish'])->middleware('permission:purchasing.rfq.publish');
+    Route::post('/rfqs/{rfq}/publish', [RequestForQuoteController::class, 'publish'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/extend', [RequestForQuoteController::class, 'extend'])->middleware('permission:purchasing.rfq.manage');
-    Route::post('/rfqs/{rfq}/addenda', [RequestForQuoteController::class, 'addendum'])->middleware('permission:purchasing.rfq.manage');
-    Route::post('/rfqs/{rfq}/award', [RequestForQuoteController::class, 'award'])->middleware('permission:purchasing.rfq.award');
-    Route::patch('/rfqs/{rfq}/quote-items/{quoteItem}/quality-review', [RequestForQuoteController::class, 'reviewQuality'])->middleware('permission:purchasing.rfq.quality_review');
+    Route::post('/rfqs/{rfq}/close', [RequestForQuoteController::class, 'close'])->middleware('permission:purchasing.rfq.manage');
+    Route::post('/rfqs/{rfq}/award', [RequestForQuoteController::class, 'award'])->middleware('permission:purchasing.rfq.manage');
     Route::post('/rfqs/{rfq}/cancel', [RequestForQuoteController::class, 'cancel'])->middleware('permission:purchasing.rfq.manage');
-    Route::get('/rfqs/{rfq}', [RequestForQuoteController::class, 'show'])->middleware('permission:purchasing.rfq.view');
+    Route::get('/rfqs/{rfq}', [RequestForQuoteController::class, 'show'])->middleware('permission_any:purchasing.rfq.view,purchasing.rfq.manage,purchasing.view');
     Route::put('/rfqs/{rfq}', [RequestForQuoteController::class, 'update'])->middleware('permission:purchasing.rfq.manage');
 
     /*

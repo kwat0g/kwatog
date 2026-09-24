@@ -13,7 +13,7 @@ final class SetPurchaseRequestSourcingMethodRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()?->hasPermission('purchasing.po.create')
-            || $this->user()?->hasPermission('purchasing.rfq.create')
+            || $this->user()?->hasPermission('purchasing.rfq.manage')
             || false;
     }
 

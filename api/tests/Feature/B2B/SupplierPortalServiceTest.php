@@ -234,11 +234,8 @@ class SupplierPortalServiceTest extends TestCase
 
     public function test_dashboard_renders_recent_pos_without_lazy_loading(): void
     {
-        // Regression: SupplierPurchaseOrderResource reads
-        // rfqQuoteReconfirmation for the can_reconfirm_rfq capability, but the
-        // dashboard query never eager-loaded it. Lazy loading is disabled, so
-        // ANY recent PO — with or without a reconfirmation row — violated and
-        // 500'd the whole dashboard for suppliers that had purchase orders.
+        // Verify that the dashboard query eager-loads all required relationships
+        // and does not trigger N+1 queries or lazy loading errors.
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
 
@@ -249,8 +246,7 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->getJson('/api/v1/b2b/supplier/dashboard')
             ->assertOk()
-            ->assertJsonPath('data.recent_pos.0.id', $po->hash_id)
-            ->assertJsonPath('data.recent_pos.0.capabilities.can_reconfirm_rfq', false);
+            ->assertJsonPath('data.recent_pos.0.id', $po->hash_id);
     }
 
     /* ─── Purchase Orders ────────────────────────────────────────── */

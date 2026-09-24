@@ -7,52 +7,70 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
-use App\Common\Support\Money;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\RfqInvitationStatus;
 use App\Modules\Purchasing\Enums\RfqStatus;
+use App\Modules\Purchasing\Enums\SupplierQuoteResponseStatus;
 use App\Modules\Purchasing\Enums\SupplierQuoteStatus;
 use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\RequestForQuote;
 use App\Modules\Purchasing\Models\RfqDocument;
 use App\Modules\Purchasing\Models\SupplierQuote;
+use App\Modules\Purchasing\Models\SupplierQuoteItem;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
+use App\Modules\Purchasing\Policies\RequestForQuoteAccessPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * RFQ lifecycle: draft → open → closed → awarded, or cancelled. Award lives
+ * in RfqAwardService, supplier quotations in SupplierQuoteService, money in
+ * RfqCommercialCalculator. See docs/SUPPLIER-RFQ-BIDDING-PLAN.md.
+ */
 class RequestForQuoteService
 {
+    public const INTERNAL_DOCUMENT_TYPES = ['requirement_document', 'quotation_pdf', 'certificate_of_analysis', 'resin_datasheet'];
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly VendorSourcingService $sourcing,
         private readonly PurchaseRequestAccessPolicy $purchaseRequestAccess,
+        private readonly RequestForQuoteAccessPolicy $access,
         private readonly PurchaseOrderService $purchaseOrders,
         private readonly OutboxService $outbox,
         private readonly SupplierPerformanceService $performance,
+        private readonly RfqCommercialCalculator $calculator,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     public function list(array $filters, User $user): LengthAwarePaginator
     {
-        $query = RequestForQuote::query()->with(['purchaseRequest:id,pr_number', 'creator:id,name']);
-        if (! $user->hasPermission('purchasing.rfq.manage') && ! $user->hasPermission('purchasing.rfq.evaluate') && ! $user->hasPermission('purchasing.rfq.quality_review')) {
-            $query->where(function ($q) use ($user): void {
-                $q->where('created_by', $user->id)
-                    ->orWhereHas('purchaseRequest', fn ($pr) => $pr->where('requested_by', $user->id));
-            });
-        }
+        $query = RequestForQuote::query()
+            ->with(['purchaseRequest:id,pr_number', 'creator:id,name'])
+            ->withCount([
+                'invitations',
+                'invitations as responded_count' => fn ($q) => $q->whereIn('status', self::respondedStatuses()),
+            ]);
+        $this->access->visibleTo($query, $user);
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
         if (! empty($filters['search'])) {
-            $query->where('rfq_number', SearchOperator::like(), SearchOperator::contains($filters['search']));
+            $term = SearchOperator::contains((string) $filters['search']);
+            $query->where(fn ($q) => $q
+                ->where('rfq_number', SearchOperator::like(), $term)
+                ->orWhere('title', SearchOperator::like(), $term));
         }
 
         return $query->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
@@ -60,49 +78,135 @@ class RequestForQuoteService
 
     public function show(RequestForQuote $rfq, ?User $user = null): RequestForQuote
     {
-        if ($user && ! $this->canSee($rfq, $user)) {
+        if ($user && ! $this->access->canSee($user, $rfq)) {
             throw new BusinessRuleException('You do not have access to this RFQ.');
         }
 
-        return $rfq->load([
-            'purchaseRequest:id,pr_number,department_id',
-            'purchaseRequest.department:id,name,code',
+        $rfq->load([
+            'purchaseRequest:id,pr_number,department_id,required_delivery_date',
             'creator:id,name',
-            // Unordered, Postgres returns an updated row last, so a supplier
-            // that responded jumped to the end of every list and select.
             'items' => fn ($q) => $q->orderBy('id'),
             'items.item:id,code,name,unit_of_measure',
+            'items.awards',
             'invitations' => fn ($q) => $q->orderBy('id'),
             'invitations.vendor:id,name,email',
-            'quotes' => fn ($q) => $q->where('is_current', true)->orderBy('id')->with(['vendor:id,name', 'items.rfqItem']),
+            // Drafts are the supplier's private workspace; only submitted or
+            // resolved quotes are ever shown internally.
+            'quotes' => fn ($q) => $q->evaluable()->orderBy('id')->with(['vendor:id,name', 'items', 'documents']),
             'awards' => fn ($q) => $q->orderBy('id'),
             'awards.vendor:id,name',
             'awards.rfqItem',
-            'awards.quote',
-            'documents',
-            'addenda.publisher:id,name',
+            'awards.purchaseOrderItem.purchaseOrder:id,po_number',
+            'documents' => fn ($q) => $q->orderBy('id')->with('vendor:id,name'),
+        ])->loadCount([
+            'invitations',
+            'invitations as responded_count' => fn ($q) => $q->whereIn('status', self::respondedStatuses()),
         ]);
+
+        // How each invited supplier can be reached, so the buyer sees who
+        // needs a manually entered quote.
+        $portalVendorIds = SupplierPortalUser::query()
+            ->where('is_active', true)
+            ->whereIn('vendor_id', $rfq->invitations->pluck('vendor_id'))
+            ->pluck('vendor_id')
+            ->flip();
+        foreach ($rfq->invitations as $invitation) {
+            $invitation->setAttribute('reach', $invitation->vendor
+                ? $this->reach($invitation->vendor, $portalVendorIds->has($invitation->vendor_id))
+                : 'none');
+        }
+
+        return $rfq;
+    }
+
+    /**
+     * What the RFQ form needs from a PR: the lines with the quantity still
+     * to source, and the suppliers to choose from.
+     *
+     * @return array{lines: list<array<string, mixed>>, suppliers: list<array<string, mixed>>}
+     */
+    public function setup(PurchaseRequest $pr): array
+    {
+        $pr->loadMissing('items.item');
+        $remaining = $this->purchaseOrders->remainingQuantitiesByPrLine($pr);
+
+        return [
+            'lines' => $pr->items->map(fn ($line): array => [
+                'id' => (string) $line->hash_id,
+                'description' => (string) $line->description,
+                'item_code' => $line->item?->code,
+                'unit' => $line->unit,
+                'remaining_quantity' => $remaining[(int) $line->id] ?? '0.000',
+                'has_item' => $line->item_id !== null,
+            ])->values()->all(),
+            'suppliers' => array_map(static fn (array $row): array => [
+                ...$row,
+                'id' => app('hashids')->encode($row['id']),
+            ], $this->supplierOptions($pr)),
+        ];
+    }
+
+    /**
+     * Every active vendor, qualified ones first, with how Ogami can reach
+     * them — so the buyer sees before publishing who needs a manual quote.
+     *
+     * @return list<array{id:int, name:string, qualified:bool, lead_time_days:?int, reach:string, email:?string}>
+     */
+    public function supplierOptions(PurchaseRequest $pr): array
+    {
+        $pr->loadMissing('items');
+        $candidatesByLine = $pr->items->map(fn ($line) => $line->item_id === null
+            ? collect()
+            : collect($this->sourcing->candidatesForItem((int) $line->item_id))->keyBy('vendor_id'));
+        $portalVendorIds = SupplierPortalUser::query()->where('is_active', true)->distinct()->pluck('vendor_id')->flip();
+
+        return Vendor::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(function (Vendor $vendor) use ($candidatesByLine, $portalVendorIds): array {
+                $qualified = $candidatesByLine->isNotEmpty() && $candidatesByLine->every(
+                    fn ($candidates): bool => (bool) ($candidates->get($vendor->id)['qualified'] ?? false),
+                );
+                $leadTimes = $candidatesByLine->map(fn ($candidates) => $candidates->get($vendor->id)['lead_time_days'] ?? null)->filter();
+
+                return [
+                    'id' => (int) $vendor->id,
+                    'name' => (string) $vendor->name,
+                    'qualified' => $qualified,
+                    'lead_time_days' => $leadTimes->isEmpty() ? null : (int) $leadTimes->max(),
+                    'reach' => $this->reach($vendor, $portalVendorIds->has($vendor->id)),
+                    'email' => $vendor->email,
+                ];
+            })
+            ->sortByDesc('qualified')
+            ->values()
+            ->all();
     }
 
     public function createFromPurchaseRequest(PurchaseRequest $pr, array $data, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($pr, $data, $by): RequestForQuote {
+        $rfq = DB::transaction(function () use ($pr, $data, $by): RequestForQuote {
             $locked = PurchaseRequest::query()->lockForUpdate()->with(['items.item'])->findOrFail($pr->id);
-            if (! $this->purchaseRequestAccess->canView($by, $locked)) {
-                throw new BusinessRuleException('You do not have access to this purchase request.');
+            $active = $locked->rfqs()->whereIn('status', RfqStatus::active())->latest('id')->first();
+            if ($active) {
+                // A double-click or retry returns the RFQ already running.
+                return $active;
             }
-            if ($locked->status !== PurchaseRequestStatus::Approved) {
-                throw new BusinessRuleException('Only approved purchase requests can start an RFQ.');
+            if (! $this->purchaseRequestAccess->canStartRfq($by, $locked)) {
+                throw new BusinessRuleException('This purchase request cannot start an RFQ. It must be approved, still have unordered quantity, and be marked for RFQ or need manual sourcing.');
             }
-            if (! $locked->is_auto_generated || $locked->sourcing_method !== PurchaseRequestSourcingMethod::Rfq) {
-                throw new BusinessRuleException('This purchase request is not marked for competitive RFQ sourcing.');
+
+            $remaining = $this->purchaseOrders->remainingQuantitiesByPrLine($locked);
+            $lines = $locked->items->filter(fn ($line): bool => bccomp($remaining[(int) $line->id] ?? '0', '0', 3) > 0);
+            if ($lines->isEmpty()) {
+                throw new BusinessRuleException('Every line on this purchase request is already on a purchase order.');
             }
-            if ($locked->purchaseOrders()->where('status', '!=', 'cancelled')->exists()) {
-                throw new BusinessRuleException('This purchase request already has an active purchase order.');
-            }
-            $activeRfq = $locked->rfqs()->whereIn('status', RfqStatus::active())->latest('id')->first();
-            if ($activeRfq) {
-                return $this->show($activeRfq, $by);
+            // An award becomes a PO, and a PO line needs an inventory item.
+            // Refuse now rather than after suppliers have quoted.
+            $unlinked = $lines->first(fn ($line): bool => $line->item_id === null);
+            if ($unlinked !== null) {
+                throw new BusinessRuleException("Link \"{$unlinked->description}\" to an inventory item on the purchase request before starting an RFQ.");
             }
 
             $rfq = RequestForQuote::create([
@@ -111,168 +215,163 @@ class RequestForQuoteService
                 'created_by' => $by->id,
                 'title' => $data['title'],
                 'instructions' => $data['instructions'] ?? null,
-                'currency' => 'PHP',
                 'closes_at' => $this->localDateTime((string) $data['closes_at']),
             ]);
             $rfq->forceFill(['status' => RfqStatus::Draft])->save();
 
-            foreach ($locked->items as $line) {
-                // RFQ per-line delivery date falls back to PR's required_delivery_date
-                // when the per-line value is missing or empty — but only while that date
-                // is still ahead, matching the after:today rule on entered dates, so a
-                // lapsed need-by never becomes an overdue-at-birth PO via the award.
-                $deliveryDate = $data['required_delivery_dates'][$line->id] ?? null;
-                if (! $deliveryDate || trim((string) $deliveryDate) === '') {
-                    $prDate = $locked->required_delivery_date?->toDateString();
-                    $deliveryDate = $prDate !== null && $prDate > now()->toDateString() ? $prDate : null;
-                }
-
+            foreach ($lines as $line) {
                 $rfq->items()->create([
                     'purchase_request_item_id' => $line->id,
                     'item_id' => $line->item_id,
                     'description' => $line->description,
                     'specification' => $data['specifications'][$line->id] ?? null,
-                    'quantity' => (string) $line->quantity,
+                    'quantity' => $remaining[(int) $line->id],
                     'unit' => $line->unit,
-                    'required_delivery_date' => $deliveryDate,
-                    'allow_partial_quantity' => (bool) ($data['allow_partial_quantity'][$line->id] ?? true),
-                    'allow_substitute' => false,
+                    'required_delivery_date' => $this->requiredDate($locked, $data['required_delivery_dates'][$line->id] ?? null),
                 ]);
             }
-
-            $seenVendors = [];
-            foreach ((array) ($data['invitations'] ?? []) as $invitation) {
-                $vendorId = (int) $invitation['vendor_id'];
-                if (isset($seenVendors[$vendorId])) {
-                    throw new BusinessRuleException('A supplier may only be invited once per RFQ.');
-                }
-                // Vendor must be active to invite to an RFQ.
-                $vendor = Vendor::withTrashed()->find($vendorId);
-                if (! $vendor || ! $vendor->isPurchasable()) {
-                    $vendorName = $vendor?->name ?? "Vendor #{$vendorId}";
-                    throw new BusinessRuleException(
-                        "Vendor {$vendorName} is inactive. Reactivate it or choose another supplier."
-                    );
-                }
-                $seenVendors[$vendorId] = true;
-                if (! $this->isQualifiedForRfq($locked, $vendorId) && trim((string) ($invitation['exception_reason'] ?? '')) === '') {
-                    throw new BusinessRuleException('A reason is required when inviting a non-qualified supplier.');
-                }
-                $rfq->invitations()->create([
-                    'vendor_id' => $vendorId,
-                    'invited_by' => $by->id,
-                    'invited_at' => now(),
-                    'exception_reason' => $invitation['exception_reason'] ?? null,
-                ]);
-            }
+            $this->syncInvitations($rfq, $locked, (array) ($data['invitations'] ?? []), $by);
 
             $locked->forceFill([
+                'sourcing_method' => PurchaseRequestSourcingMethod::Rfq,
                 'po_conversion_status' => PurchaseRequestConversionStatus::SourcingPending,
-                'po_conversion_note' => 'RFQ sourcing in progress.',
+                'po_conversion_note' => "RFQ {$rfq->rfq_number} sourcing in progress.",
                 'po_conversion_at' => now(),
             ])->save();
 
-            return $this->show($rfq->fresh(), $by);
+            if (! empty($data['publish'])) {
+                $this->openLocked($rfq);
+            }
+
+            return $rfq;
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
     public function update(RequestForQuote $rfq, array $data, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($rfq, $data, $by): RequestForQuote {
-            $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertDraft($locked, $by);
-            $locked->update([
+        DB::transaction(function () use ($rfq, $data, $by): void {
+            $locked = RequestForQuote::query()->lockForUpdate()->with(['items', 'purchaseRequest.items'])->findOrFail($rfq->id);
+            $this->assertManage($by);
+            if ($locked->status !== RfqStatus::Draft) {
+                throw new BusinessRuleException('Only draft RFQs can be edited.');
+            }
+            $locked->fill([
                 'title' => $data['title'] ?? $locked->title,
                 'instructions' => array_key_exists('instructions', $data) ? $data['instructions'] : $locked->instructions,
-                'closes_at' => array_key_exists('closes_at', $data)
-                    ? $this->localDateTime((string) $data['closes_at'])
-                    : $locked->closes_at,
             ]);
+            if (array_key_exists('closes_at', $data)) {
+                $locked->closes_at = $this->localDateTime((string) $data['closes_at']);
+            }
+            $locked->save();
 
-            return $this->show($locked->fresh(), $by);
+            // On edit the form works with the RFQ's own lines, so overrides are
+            // keyed by RFQ line id (on create they are keyed by PR line id).
+            foreach ($locked->items as $item) {
+                $changes = [];
+                if (array_key_exists((int) $item->id, (array) ($data['required_delivery_dates'] ?? []))) {
+                    $changes['required_delivery_date'] = $this->requiredDate($locked->purchaseRequest, $data['required_delivery_dates'][$item->id]);
+                }
+                if (array_key_exists((int) $item->id, (array) ($data['specifications'] ?? []))) {
+                    $changes['specification'] = $data['specifications'][$item->id];
+                }
+                if ($changes !== []) {
+                    $item->update($changes);
+                }
+            }
+            if (array_key_exists('invitations', $data)) {
+                $this->syncInvitations($locked, $locked->purchaseRequest, (array) $data['invitations'], $by);
+            }
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
     public function publish(RequestForQuote $rfq, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($rfq, $by): RequestForQuote {
-            $locked = RequestForQuote::query()->lockForUpdate()->with('invitations')->findOrFail($rfq->id);
-            $this->assertDraft($locked, $by);
-            if ($locked->invitations->isEmpty()) {
-                throw new BusinessRuleException('Select at least one supplier before publishing.');
+        DB::transaction(function () use ($rfq, $by): void {
+            $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
+            $this->assertManage($by);
+            if ($locked->status !== RfqStatus::Draft) {
+                throw new BusinessRuleException('Only draft RFQs can be published.');
             }
-            if (! $locked->closes_at || $locked->closes_at->isPast()) {
-                throw new BusinessRuleException('The RFQ deadline must be in the future.');
-            }
-            $locked->forceFill(['status' => RfqStatus::Open, 'issued_at' => now()])->save();
-            $this->recordLifecycle($locked, 'published', 'published');
-
-            return $this->show($locked->fresh(), $by);
+            $this->openLocked($locked);
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
     public function extend(RequestForQuote $rfq, array $data, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($rfq, $data, $by): RequestForQuote {
+        DB::transaction(function () use ($rfq, $data, $by): void {
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertBuyer($by);
+            $this->assertManage($by);
             if (trim((string) ($data['reason'] ?? '')) === '') {
                 throw new BusinessRuleException('An extension reason is required.');
             }
             if ($locked->status !== RfqStatus::Open) {
                 throw new BusinessRuleException('Only open RFQs can be extended.');
             }
-            $newDeadline = $this->localDateTime((string) $data['closes_at']);
-            if ($newDeadline->lte($locked->closes_at)) {
-                throw new BusinessRuleException('The new deadline must be later than the current deadline.');
+            if (! $locked->closes_at->isFuture()) {
+                throw new BusinessRuleException('The deadline has already passed, so the RFQ is closing. Compare the quotations received, or cancel and start a new RFQ.');
             }
-            $locked->forceFill(['closes_at' => $newDeadline, 'last_extension_reason' => $data['reason']])->save();
-            $this->recordLifecycle($locked, 'extended', 'extended:'.($locked->updated_at?->timestamp ?? now()->timestamp));
-
-            return $this->show($locked->fresh(), $by);
+            $deadline = $this->localDateTime((string) $data['closes_at']);
+            if ($deadline->lte($locked->closes_at) || $deadline->isPast()) {
+                throw new BusinessRuleException('The new deadline must be in the future and later than the current deadline.');
+            }
+            $locked->forceFill(['closes_at' => $deadline, 'last_extension_reason' => $data['reason']])->save();
+            $this->recordLifecycle($locked, 'extended', 'extended:'.$deadline->timestamp);
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
-    public function addendum(RequestForQuote $rfq, array $data, User $by): RequestForQuote
+    /** Close before the deadline once every invited supplier has submitted. */
+    public function closeNow(RequestForQuote $rfq, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($rfq, $data, $by): RequestForQuote {
-            $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertBuyer($by);
+        DB::transaction(function () use ($rfq, $by): void {
+            $locked = RequestForQuote::query()->lockForUpdate()->with('invitations')->findOrFail($rfq->id);
+            $this->assertManage($by);
             if ($locked->status !== RfqStatus::Open) {
-                throw new BusinessRuleException('Only open RFQs can receive addenda.');
+                throw new BusinessRuleException('Only open RFQs can be closed.');
             }
-            $sequence = ((int) $locked->addenda()->max('sequence')) + 1;
-            $locked->addenda()->create([
-                'published_by' => $by->id, 'sequence' => $sequence,
-                'title' => $data['title'], 'body' => $data['body'],
-                'material_change' => (bool) ($data['material_change'] ?? false), 'published_at' => now(),
-            ]);
-            if ((bool) ($data['material_change'] ?? false)) {
-                $locked->forceFill(['closes_at' => $locked->closes_at->addDays((int) ($data['extension_days'] ?? 2))])->save();
+            if (! $this->access->allInvitedResponded($locked)) {
+                throw new BusinessRuleException('Close now is available once every invited supplier has submitted a quotation. Otherwise the RFQ closes at its deadline.');
             }
-            $this->recordLifecycle($locked, 'addendum', 'addendum:'.$sequence);
-
-            return $this->show($locked->fresh(), $by);
+            $this->closeLocked($locked);
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
+    /**
+     * Close every open RFQ past its deadline. The scheduler runs this each
+     * minute; reads call it too so a stopped scheduler never leaves an RFQ
+     * showing "open" after its deadline.
+     */
+    public function closeAllDue(): int
+    {
+        $closed = 0;
+        RequestForQuote::query()
+            ->where('status', RfqStatus::Open->value)
+            ->where('closes_at', '<=', now())
+            ->pluck('id')
+            ->each(function (int $id) use (&$closed): void {
+                $this->closeDue(RequestForQuote::query()->findOrFail($id));
+                $closed++;
+            });
+
+        return $closed;
+    }
+
+    /** Scheduler and lazy path: close an open RFQ whose deadline has passed. */
     public function closeDue(RequestForQuote $rfq): RequestForQuote
     {
         return DB::transaction(function () use ($rfq): RequestForQuote {
-            $locked = RequestForQuote::query()->lockForUpdate()->with('quotes')->findOrFail($rfq->id);
-            if ($locked->status === RfqStatus::Open && $locked->closes_at->isPast()) {
-                $hasValid = $locked->quotes->contains(fn (SupplierQuote $quote): bool => $quote->status === SupplierQuoteStatus::Submitted && $quote->is_current);
-                $locked->forceFill([
-                    'status' => $hasValid ? RfqStatus::Closed : RfqStatus::NoAward,
-                    'closed_at' => now(),
-                    'evaluation_started_at' => $hasValid ? now() : null,
-                    'resolved_at' => $hasValid ? null : now(),
-                    'no_award_reason' => $hasValid ? null : 'No valid supplier quotations were received before the deadline.',
-                ])->save();
-                $this->recordLifecycle($locked, $hasValid ? 'closed' : 'no_award', 'closed:'.($locked->closed_at?->timestamp ?? now()->timestamp));
-                if (! $hasValid) {
-                    $this->purchaseOrders->syncConversionStatus($locked->purchaseRequest()->lockForUpdate()->firstOrFail());
-                }
+            $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
+            if ($locked->status === RfqStatus::Open && ! $locked->closes_at->isFuture()) {
+                $this->closeLocked($locked);
             }
 
             return $locked->fresh();
@@ -281,30 +380,42 @@ class RequestForQuoteService
 
     public function cancel(RequestForQuote $rfq, string $reason, User $by): RequestForQuote
     {
-        return DB::transaction(function () use ($rfq, $reason, $by): RequestForQuote {
+        DB::transaction(function () use ($rfq, $reason, $by): void {
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertBuyer($by);
-            if (in_array($locked->status, [RfqStatus::Awarded, RfqStatus::PartiallyAwarded], true)) {
-                throw new BusinessRuleException('An awarded RFQ cannot be cancelled.');
+            $this->assertManage($by);
+            if (! in_array($locked->status, [RfqStatus::Draft, RfqStatus::Open, RfqStatus::Closed], true)) {
+                throw new BusinessRuleException('Only a draft, open or closed RFQ can be cancelled.');
             }
-            $locked->purchaseRequest()->lockForUpdate()->firstOrFail();
+            $wasPublished = $locked->status !== RfqStatus::Draft;
             $locked->forceFill(['status' => RfqStatus::Cancelled, 'cancellation_reason' => $reason, 'resolved_at' => now()])->save();
-            $this->purchaseOrders->syncConversionStatus($locked->purchaseRequest()->lockForUpdate()->firstOrFail());
-            $this->recordLifecycle($locked, 'cancelled', 'cancelled:'.($locked->resolved_at?->timestamp ?? now()->timestamp));
-
-            return $this->show($locked->fresh(), $by);
+            $this->handBack($locked, "RFQ {$locked->rfq_number} was cancelled. Convert by Direct PO or start a new RFQ.");
+            if ($wasPublished) {
+                $this->recordLifecycle($locked, 'cancelled', 'cancelled');
+            }
         });
+
+        return $this->show($rfq->fresh(), $by);
     }
 
+    /**
+     * Sealed-bid comparison. Available once closed; the lazy close covers a
+     * scheduler that has not ticked yet.
+     */
     public function comparison(RequestForQuote $rfq, User $by): RequestForQuote
     {
         $rfq = $this->closeDue($rfq);
-        if (! in_array($rfq->status, [RfqStatus::Closed, RfqStatus::UnderEvaluation, RfqStatus::Awarded, RfqStatus::PartiallyAwarded, RfqStatus::NoAward], true)) {
-            throw new BusinessRuleException('Supplier prices remain sealed until the RFQ closes.');
+        if (! in_array($rfq->status, [RfqStatus::Closed, RfqStatus::Awarded], true)) {
+            throw new BusinessRuleException('Supplier prices stay sealed until the RFQ closes.');
         }
 
         $shown = $this->show($rfq, $by);
         $snapshots = $this->performance->latestForVendors($shown->quotes->pluck('vendor_id')->all());
+        // Rank on what a line really costs Ogami. Input VAT is recoverable
+        // for a VAT-registered buyer, so a non-VAT supplier must not win
+        // merely because its price carries no VAT.
+        $exVat = $this->taxPolicy->isVatRegistered();
+        $shown->setAttribute('ranking_basis', $exVat ? 'ex_vat' : 'gross');
+        $best = [];
         foreach ($shown->quotes as $quote) {
             $snapshot = $snapshots->get((int) $quote->vendor_id);
             $quote->setAttribute('supplier_performance', $snapshot ? [
@@ -315,35 +426,29 @@ class RequestForQuoteService
                 'ncr_rate' => $snapshot->ncr_rate !== null ? (string) $snapshot->ncr_rate : null,
                 'period' => sprintf('%04d-%02d', $snapshot->period_year, $snapshot->period_month),
             ] : null);
-        }
-        // Freight, other charges and exclusive VAT are quoted once per
-        // quotation, so a line's own delivered cost omits them. Spread them over
-        // the quoted lines by value; ranking on the bare line let a cheap unit
-        // price with heavy freight beat a lower total delivered cost.
-        foreach ($shown->quotes as $quote) {
-            $quoted = $quote->items->filter(fn ($line) => ($line->response_status?->value ?? (string) $line->response_status) === 'quoted');
-            $base = Money::add('0', ...$quoted->map(static fn ($line): string => (string) $line->line_total_delivered_cost)->all());
-            $lineVat = Money::add('0', ...$quoted->map(static fn ($line): string => (string) $line->line_vat_amount)->all());
-            $header = Money::add(
-                (string) $quote->freight_amount,
-                (string) $quote->other_charges,
-                ! $quote->vat_inclusive && Money::isZero($lineVat) ? (string) $quote->vat_amount : '0',
-            );
-            foreach ($quoted as $line) {
-                $share = Money::isZero($base) ? '0' : Money::div(bcmul($header, (string) $line->line_total_delivered_cost, 8), $base, 8);
-                $line->setAttribute('allocated_delivered_cost', Money::add((string) $line->line_total_delivered_cost, $share));
+
+            $allocated = $this->calculator->allocate($quote);
+            $net = $this->calculator->allocateNet($quote);
+            foreach ($quote->items as $line) {
+                if (! isset($allocated[(int) $line->id]) || bccomp((string) $line->offered_quantity, '0', 4) <= 0) {
+                    continue;
+                }
+                $grossUnit = bcdiv($allocated[(int) $line->id], (string) $line->offered_quantity, 4);
+                $netUnit = bcdiv($net[(int) $line->id], (string) $line->offered_quantity, 4);
+                $unit = $exVat ? $netUnit : $grossUnit;
+                $line->setAttribute('allocated_delivered_cost', $allocated[(int) $line->id]);
+                $line->setAttribute('unit_delivered_cost', $grossUnit);
+                $line->setAttribute('unit_net_cost', $netUnit);
+                $line->setAttribute('meets_required_date', $this->meetsRequiredDate($shown, $line));
+                $key = (int) $line->request_for_quote_item_id;
+                if (! $quote->isExpired() && (! isset($best[$key]) || bccomp($unit, $best[$key][1], 4) < 0)) {
+                    $best[$key] = [(int) $line->id, $unit];
+                }
             }
         }
-        foreach ($shown->items as $item) {
-            $candidates = $shown->quotes->flatMap(fn ($quote) => $quote->items->filter(
-                fn ($line) => (int) $line->request_for_quote_item_id === (int) $item->id
-                    && ($line->response_status?->value ?? (string) $line->response_status) === 'quoted'
-                    && ($line->compliance_status?->value ?? (string) $line->compliance_status) !== 'blocking'
-                    && Money::gt((string) $line->offered_quantity, '0'),
-            ));
-            $best = $candidates->sortBy(fn ($line) => Money::div((string) $line->allocated_delivered_cost, (string) $line->offered_quantity, 8))->first();
-            foreach ($candidates as $line) {
-                $line->setAttribute('is_recommended', $best !== null && $line->id === $best->id);
+        foreach ($shown->quotes as $quote) {
+            foreach ($quote->items as $line) {
+                $line->setAttribute('is_recommended', ($best[(int) $line->request_for_quote_item_id][0] ?? null) === (int) $line->id);
             }
         }
 
@@ -352,19 +457,22 @@ class RequestForQuoteService
 
     public function uploadInternalDocument(RequestForQuote $rfq, UploadedFile $file, string $documentType, ?int $vendorId, User $by): RfqDocument
     {
-        return DB::transaction(function () use ($rfq, $file, $documentType, $vendorId, $by) {
+        return DB::transaction(function () use ($rfq, $file, $documentType, $vendorId, $by): RfqDocument {
             $locked = RequestForQuote::query()->lockForUpdate()->findOrFail($rfq->id);
-            $this->assertBuyer($by);
+            $this->assertManage($by);
             if (! in_array($locked->status, [RfqStatus::Draft, RfqStatus::Open], true)) {
-                throw new BusinessRuleException('RFQ documents cannot be changed after the sourcing event is resolved.');
+                throw new BusinessRuleException('Documents can only be added while the RFQ is a draft or open.');
             }
-            if ($vendorId !== null && ! $locked->invitations()->where('vendor_id', $vendorId)->exists()) {
-                throw new BusinessRuleException('The selected supplier is not invited to this RFQ.');
+            if ($documentType === 'requirement_document') {
+                $vendorId = null;
+            } elseif ($vendorId === null || ! $locked->invitations()->where('vendor_id', $vendorId)->exists()) {
+                throw new BusinessRuleException('Choose an invited supplier for this quotation document.');
             }
             $path = $file->store('rfqs/'.$locked->hash_id.'/internal', 'local');
             try {
                 return $locked->documents()->create([
                     'vendor_id' => $vendorId,
+                    'supplier_quote_id' => $vendorId === null ? null : SupplierQuote::query()->where('request_for_quote_id', $locked->id)->where('vendor_id', $vendorId)->value('id'),
                     'uploaded_by_user' => $by->id,
                     'document_type' => $documentType,
                     'original_filename' => $file->getClientOriginalName(),
@@ -379,42 +487,147 @@ class RequestForQuoteService
         });
     }
 
-    private function isQualifiedForRfq(PurchaseRequest $pr, int $vendorId): bool
+    public function canDownload(User $user, RfqDocument $document): bool
     {
-        foreach ($pr->items as $line) {
-            if ($line->item_id === null) {
-                return false;
-            }
-            $qualified = collect($this->sourcing->candidatesForItem((int) $line->item_id))->firstWhere('vendor_id', $vendorId);
-            if (! $qualified || ! $qualified['qualified']) {
-                return false;
-            }
+        $document->loadMissing('rfq');
+        if (! $this->access->canSee($user, $document->rfq)) {
+            return false;
+        }
+        if ($document->document_type === 'requirement_document') {
+            return true;
         }
 
-        return true;
+        // A supplier's own documents are sealed with its prices.
+        return ($user->hasPermission('purchasing.rfq.view') || $user->hasPermission('purchasing.rfq.manage'))
+            && in_array($document->rfq->status, [RfqStatus::Closed, RfqStatus::Awarded], true);
     }
 
-    private function canSee(RequestForQuote $rfq, User $user): bool
+    /** @return list<string> */
+    public static function respondedStatuses(): array
     {
-        return $user->hasPermission('purchasing.rfq.manage')
-            || $user->hasPermission('purchasing.rfq.evaluate')
-            || $user->hasPermission('purchasing.rfq.quality_review')
-            || $rfq->created_by === $user->id
-            || $rfq->purchaseRequest()->where('requested_by', $user->id)->exists();
+        return [RfqInvitationStatus::Submitted->value, RfqInvitationStatus::Awarded->value, RfqInvitationStatus::NotAwarded->value];
     }
 
-    private function assertBuyer(User $user): void
+    public function reach(Vendor $vendor, bool $hasPortalAccount): string
     {
-        if (! $user->hasPermission('purchasing.rfq.manage')) {
+        if ($hasPortalAccount) {
+            return 'portal';
+        }
+
+        return is_string($vendor->email) && filter_var($vendor->email, FILTER_VALIDATE_EMAIL) ? 'email' : 'none';
+    }
+
+    private function openLocked(RequestForQuote $rfq): void
+    {
+        if (! $rfq->invitations()->exists()) {
+            throw new BusinessRuleException('Invite at least one supplier before publishing.');
+        }
+        if (! $rfq->closes_at || ! $rfq->closes_at->isFuture()) {
+            throw new BusinessRuleException('The RFQ deadline must be in the future. Edit the draft to set a new deadline.');
+        }
+        $rfq->forceFill(['status' => RfqStatus::Open, 'issued_at' => now()])->save();
+        $this->recordLifecycle($rfq, 'published', 'published');
+    }
+
+    /**
+     * Closed with at least one submitted quote → ready to compare. With none,
+     * there is nothing to evaluate: cancel and hand the PR back.
+     */
+    private function closeLocked(RequestForQuote $rfq): void
+    {
+        $submitted = SupplierQuote::query()
+            ->where('request_for_quote_id', $rfq->id)
+            ->where('status', SupplierQuoteStatus::Submitted->value)
+            ->exists();
+        if ($submitted) {
+            $rfq->forceFill(['status' => RfqStatus::Closed, 'closed_at' => now()])->save();
+            $this->recordLifecycle($rfq, 'closed', 'closed');
+
+            return;
+        }
+        $rfq->forceFill([
+            'status' => RfqStatus::Cancelled,
+            'closed_at' => now(),
+            'resolved_at' => now(),
+            'cancellation_reason' => 'No quotations were received before the deadline.',
+        ])->save();
+        $this->handBack($rfq, "RFQ {$rfq->rfq_number} closed without quotations. Convert by Direct PO or start a new RFQ.");
+        $this->recordLifecycle($rfq, 'cancelled', 'cancelled');
+    }
+
+    /** Recompute the PR's coverage and, if anything is left, say where it went. */
+    public function handBack(RequestForQuote $rfq, string $note): void
+    {
+        $pr = PurchaseRequest::query()->lockForUpdate()->findOrFail($rfq->purchase_request_id);
+        $this->purchaseOrders->syncConversionStatus($pr);
+        $pr->refresh();
+        if ($pr->status === PurchaseRequestStatus::Approved) {
+            $pr->forceFill(['po_conversion_note' => $note])->save();
+        }
+    }
+
+    /** @param array<int, array{vendor_id:int, exception_reason?:?string}> $rows */
+    private function syncInvitations(RequestForQuote $rfq, PurchaseRequest $pr, array $rows, User $by): void
+    {
+        if ($rows === []) {
+            throw new BusinessRuleException('Invite at least one supplier.');
+        }
+        $options = collect($this->supplierOptions($pr))->keyBy('id');
+        $keep = [];
+        foreach ($rows as $row) {
+            $vendorId = (int) $row['vendor_id'];
+            if (isset($keep[$vendorId])) {
+                throw new BusinessRuleException('A supplier may only be invited once per RFQ.');
+            }
+            $vendor = Vendor::withTrashed()->find($vendorId);
+            if (! $vendor || ! $vendor->isPurchasable()) {
+                throw new BusinessRuleException('Vendor '.($vendor?->name ?? '#'.$vendorId).' is inactive. Reactivate it or choose another supplier.');
+            }
+            $reason = trim((string) ($row['exception_reason'] ?? ''));
+            if (! ($options->get($vendorId)['qualified'] ?? false) && $reason === '') {
+                throw new BusinessRuleException("Give a reason for inviting {$vendor->name}: it is not an approved supplier for every line.");
+            }
+            $keep[$vendorId] = true;
+            $rfq->invitations()->updateOrCreate(
+                ['vendor_id' => $vendorId],
+                ['invited_by' => $by->id, 'invited_at' => now(), 'exception_reason' => $reason === '' ? null : $reason],
+            );
+        }
+        $rfq->invitations()->whereNotIn('vendor_id', array_keys($keep))->delete();
+    }
+
+    private function requiredDate(PurchaseRequest $pr, mixed $entered): ?string
+    {
+        if (is_string($entered) && trim($entered) !== '') {
+            return $entered;
+        }
+        // Fall back to the PR need-by date only while it is still ahead, so a
+        // lapsed date never becomes an overdue-at-birth PO via the award.
+        $prDate = $pr->required_delivery_date?->toDateString();
+
+        return $prDate !== null && $prDate > now()->toDateString() ? $prDate : null;
+    }
+
+    private function meetsRequiredDate(RequestForQuote $rfq, SupplierQuoteItem $line): ?bool
+    {
+        $required = $rfq->items->firstWhere('id', (int) $line->request_for_quote_item_id)?->required_delivery_date;
+        if ($required === null || $line->response_status !== SupplierQuoteResponseStatus::Quoted) {
+            return null;
+        }
+        if ($line->proposed_delivery_date !== null) {
+            return $line->proposed_delivery_date->lte($required);
+        }
+        if ($line->lead_time_days !== null) {
+            return today()->addDays((int) $line->lead_time_days)->lte($required);
+        }
+
+        return null;
+    }
+
+    private function assertManage(User $user): void
+    {
+        if (! $this->access->canManage($user)) {
             throw new BusinessRuleException('RFQ management permission is required.');
-        }
-    }
-
-    private function assertDraft(RequestForQuote $rfq, User $by): void
-    {
-        $this->assertBuyer($by);
-        if ($rfq->status !== RfqStatus::Draft) {
-            throw new BusinessRuleException('Only draft RFQs can be edited.');
         }
     }
 

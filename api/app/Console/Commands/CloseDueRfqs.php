@@ -22,6 +22,8 @@ class CloseDueRfqs extends Command
     public function handle(): int
     {
         $due = RequestForQuote::query()->where('status', 'open')->where('closes_at', '<=', now())->get();
+        // closeAllDue() is the lazy path for reads; this loop stays per-row so
+        // one failing RFQ is reported without hiding the others.
         $closed = 0;
         $errors = 0;
         foreach ($due as $rfq) {

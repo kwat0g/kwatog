@@ -81,7 +81,7 @@ class ComprehensiveDemoSeeder extends Seeder
         $tables = [
             'payroll_periods', 'payrolls', 'invoices', 'invoice_items', 'collections', 'bills', 'bill_payments',
             'rfq_documents', 'rfq_awards', 'supplier_quote_items', 'supplier_quotes',
-            'request_for_quote_invitations', 'request_for_quote_items', 'rfq_addenda', 'request_for_quotes',
+            'request_for_quote_invitations', 'request_for_quote_items', 'request_for_quotes',
             'purchase_requests', 'purchase_request_items',
             'purchase_orders', 'purchase_order_items',
             'approved_suppliers', 'goods_receipt_notes', 'grn_items',
