@@ -21,6 +21,8 @@ Route::prefix('landing')->group(function (): void {
     Route::get('newsletter/unsubscribe/{subscriber}', [NewsletterController::class, 'unsubscribeViaLink'])
         ->middleware(['signed', 'throttle:public-form'])
         ->name('landing.newsletter.unsubscribe');
+    Route::post('newsletter/unsubscribe/{subscriber}', [NewsletterController::class, 'confirmUnsubscribeViaLink'])
+        ->middleware(['signed', 'throttle:public-form']);
     // On-demand PDF render is expensive — keep the 10/min public-form limiter
     // (mirrors the comment in bootstrap/app.php). Landing content reads stay
     // unthrottled so normal page navigation is not degraded.
@@ -30,7 +32,7 @@ Route::prefix('landing')->group(function (): void {
 });
 
 // ── ERP-side inbox — the consumer the old quote-request path never had ────
-Route::middleware(['auth:sanctum'])->prefix('crm')->group(function (): void {
+Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(function (): void {
     Route::get('/inquiries/options',               [ContactInquiryInboxController::class, 'options'])     ->middleware('permission:crm.inquiries.view');
     Route::get('/inquiries',                    [ContactInquiryInboxController::class, 'index'])        ->middleware('permission:crm.inquiries.view');
     Route::get('/inquiries/{inquiry}',          [ContactInquiryInboxController::class, 'show'])         ->middleware('permission:crm.inquiries.view');

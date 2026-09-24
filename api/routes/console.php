@@ -44,7 +44,7 @@ Schedule::command('maintenance:request-preventive-generation')
  */
 Schedule::command('assets:request-monthly-depreciation')
     ->monthlyOn(1, '03:00')
-    ->name('assets:run-monthly-depreciation')
+    ->name('assets:request-monthly-depreciation')
     ->withoutOverlapping(120)
     ->onOneServer();
 
@@ -53,6 +53,14 @@ Schedule::command('assets:request-monthly-depreciation')
 // A1 — Daily MRP run
 Schedule::command('mrp:run-daily')
     ->dailyAt('06:00')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Refresh the advisory demand horizon monthly. Manual overrides are preserved
+// by ForecastingService::recomputeBatch unless explicitly overwritten.
+Schedule::command('forecasting:generate')
+    ->monthlyOn(1, '04:00')
+    ->name('forecasting:generate')
     ->withoutOverlapping(120)
     ->onOneServer();
 
@@ -244,6 +252,21 @@ Schedule::command('documents:reconcile')
 // Notification prune — delete read notifications older than 90 days.
 Schedule::command('notifications:prune --days=90')
     ->dailyAt('02:30')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Password reset tokens have a one-hour lifetime. Remove expired and consumed
+// portal tokens daily so reset traffic cannot grow this table without bound.
+Schedule::command('portal:prune-reset-tokens')
+    ->dailyAt('02:40')
+    ->withoutOverlapping(120)
+    ->onOneServer();
+
+// Public landing forms contain personal data. The retention period is an
+// admin setting; only closed inquiries and unsubscribed records are purged.
+Schedule::command('landing:prune-pii')
+    ->sundays()
+    ->at('03:00')
     ->withoutOverlapping(120)
     ->onOneServer();
 

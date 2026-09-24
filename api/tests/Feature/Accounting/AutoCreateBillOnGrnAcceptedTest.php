@@ -71,6 +71,17 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     }
 
     /** Build an approved PO + line + a pending_qc GRN via the real service. */
+    /** A passed incoming verdict counts only once a different user checked it. */
+    private function checkedPass(): array
+    {
+        return [
+            'status'       => 'passed',
+            'inspector_id' => $this->user->id,
+            'reviewed_by'  => User::factory()->create(['is_active' => true])->id,
+            'reviewed_at'  => now(),
+        ];
+    }
+
     private function makePendingGrn(): GoodsReceiptNote
     {
         $item = Item::factory()->create(['is_active' => true]);
@@ -107,7 +118,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
 
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
         $this->assertSame(GrnStatus::Accepted, $accepted->status);
@@ -120,7 +131,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         // Line pre-filled: 80 kg × 12.50 = 1000.00 subtotal, VAT 120, total 1120.
         $this->assertSame(1, $bill->items()->count());
         $this->assertSame('80.00', (string) $bill->items()->first()->quantity);
-        $this->assertSame('12.50', (string) $bill->items()->first()->unit_price);
+        $this->assertSame('12.5000', (string) $bill->items()->first()->unit_price);
         $this->assertSame('1000.00', (string) $bill->subtotal);
         $this->assertSame('120.00', (string) $bill->vat_amount);
         $this->assertSame('1120.00', (string) $bill->total_amount);
@@ -139,7 +150,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         // Replay the event — the listener + createDraftForGrn() guard must stay idempotent.
@@ -159,7 +170,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
 
         $line = $grn->items()->first();
         $partial = $this->grnSvc->partialAccept($grn->fresh(), [
@@ -179,7 +190,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $this->assertSame(BillStatus::Draft, $bill->status);
         $this->assertSame(1, $bill->items()->count());
         $this->assertSame('40.00', (string) $bill->items()->first()->quantity);
-        $this->assertSame('12.50', (string) $bill->items()->first()->unit_price);
+        $this->assertSame('12.5000', (string) $bill->items()->first()->unit_price);
         $this->assertSame('500.00', (string) $bill->subtotal);
         $this->assertSame('60.00', (string) $bill->vat_amount);
         $this->assertSame('560.00', (string) $bill->total_amount);
@@ -208,7 +219,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
 
         $item = $grn->items()->first();
         $accepted = $this->grnSvc->partialAccept($grn->fresh(), [
@@ -273,7 +284,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
@@ -307,7 +318,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
 
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
         $shown = $this->grnSvc->show($accepted->fresh());
@@ -326,7 +337,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
@@ -371,7 +382,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         \App\Modules\Quality\Models\Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update($this->checkedPass());
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
         $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
@@ -380,5 +391,77 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $expectedDue = \Illuminate\Support\Carbon::parse($accepted->accepted_at)
             ->addDays($terms)->toDateString();
         $this->assertSame($expectedDue, $bill->due_date->toDateString());
+    }
+
+    public function test_posted_partial_bill_allows_staging_second_bill_for_remainder(): void
+    {
+        $grn = $this->makePendingGrn();
+        \App\Modules\Quality\Models\Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update($this->checkedPass());
+
+        $line = $grn->items()->first();
+        // 1. Partial accept 40 of 80
+        $partial = $this->grnSvc->partialAccept($grn->fresh(), [
+            $line->id => '40.000',
+        ], $this->user);
+
+        event(new GoodsReceiptNoteAccepted($partial));
+
+        $firstBill = Bill::where('goods_receipt_note_id', $partial->id)->firstOrFail();
+        $this->assertSame('40.00', (string) $firstBill->items()->first()->quantity);
+
+        // 2. Post the first bill using a finance officer checker
+        $fin = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+            'is_active' => true,
+        ]);
+        $posted = $this->billSvc->postDraft($firstBill->fresh(), $fin, true, 'First 40 accepted');
+        $this->assertSame(BillStatus::Unpaid, $posted->status);
+
+        // 3. Accept remaining 40 on the same GRN
+        $full = $this->grnSvc->partialAccept($partial->fresh(), [
+            $line->id => '80.000',
+        ], $this->user);
+        event(new GoodsReceiptNoteAccepted($full));
+
+        // 4. A second bill must be staged covering only the remaining 40.00 units
+        $bills = Bill::where('goods_receipt_note_id', $full->id)->orderBy('id')->get();
+        $this->assertSame(2, $bills->count());
+
+        $secondBill = $bills->last();
+        $this->assertSame(BillStatus::Draft, $secondBill->status);
+        $this->assertSame('40.00', (string) $secondBill->items()->first()->quantity);
+        $this->assertSame('500.00', (string) $secondBill->subtotal);
+    }
+
+    public function test_grn_draft_bill_carries_vendor_ewt(): void
+    {
+        $grn = $this->makePendingGrn();
+
+        // Set vendor EWT type to Goods (1%) before accepting
+        $grn->vendor->forceFill([
+            'withholding_tax_type' => \App\Modules\Accounting\Enums\WithholdingTaxType::Goods->value,
+        ])->save();
+
+        // Pass incoming QC inspection
+        \App\Modules\Quality\Models\Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update($this->checkedPass());
+
+        // Accept the GRN — auto-draft bill should be staged
+        $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
+
+        $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
+        $this->assertSame(BillStatus::Draft, $bill->status);
+
+        // Verify EWT is calculated: subtotal is 80 × 12.50 = 1000.00
+        // EWT = 1000.00 × 0.01 = 10.00
+        $this->assertSame('1000.00', (string) $bill->subtotal);
+        $this->assertSame(\App\Modules\Accounting\Enums\WithholdingTaxType::Goods, $bill->withholding_tax_type);
+        $this->assertSame('0.0100', (string) $bill->ewt_rate);
+        $this->assertSame('10.00', (string) $bill->ewt_amount);
     }
 }

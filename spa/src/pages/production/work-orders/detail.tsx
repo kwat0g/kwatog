@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuCheck, LuPause, LuPlay, LuCircleStop, LuBan, LuLock, LuActivity, LuRefreshCw } from '@/lib/icons';
+import {
+  LuCheck,
+  LuPause,
+  LuPlay,
+  LuCircleStop,
+  LuBan,
+  LuLock,
+  LuActivity,
+  LuRefreshCw,
+} from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
@@ -25,790 +34,1288 @@ import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
+import { formatDateIso } from '@/lib/formatDate';
 import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { MachineDowntimeCategory } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 
-const OP_STATUS_CHIP: Record<WoOperationStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
- pending: 'neutral',
- setup: 'info',
- in_progress: 'warning',
- paused: 'danger',
- completed: 'success',
- skipped: 'neutral' };
+const OP_STATUS_CHIP: Record<
+  WoOperationStatus,
+  'success' | 'info' | 'warning' | 'danger' | 'neutral'
+> = {
+  pending: 'neutral',
+  setup: 'info',
+  in_progress: 'warning',
+  paused: 'danger',
+  completed: 'success',
+  skipped: 'neutral',
+};
 
 type DetailTab = 'details' | 'operations';
 
 type LifecycleAction = 'confirm' | 'start' | 'pause' | 'resume' | 'complete' | 'close' | 'cancel';
-type OperationDialog = { kind: 'record' | 'skip'; operation: NonNullable<Awaited<ReturnType<typeof woOperationsApi.list>>>[number] } | null;
+type OperationDialog = {
+  kind: 'record' | 'skip';
+  operation: NonNullable<Awaited<ReturnType<typeof woOperationsApi.list>>>[number];
+} | null;
 
 export default function WorkOrderDetailPage() {
- const { id } = useParams<{ id: string }>();
- const navigate = useNavigate();
- const qc = useQueryClient();
- const { can } = usePermission();
- const employeeId = useAuthStore((state) => state.user?.employee?.id);
- const canLifecycle = can('production.work_orders.lifecycle');
- const canConfirm = can('production.wo.confirm');
- const canRecord = can('production.wo.record');
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { can } = usePermission();
+  const employeeId = useAuthStore((state) => state.user?.employee?.id);
+  const canLifecycle = can('production.work_orders.lifecycle');
+  const canConfirm = can('production.wo.confirm');
+  const canRecord = can('production.wo.record');
 
- const [confirmAction, setConfirmAction] = useState<LifecycleAction | null>(null);
- const [showConfirmDialog, setShowConfirmDialog] = useState(false);
- const [showPauseDialog, setShowPauseDialog] = useState(false);
- const [pauseReason, setPauseReason] = useState('');
- const [pauseCategory, setPauseCategory] = useState<MachineDowntimeCategory | ''>('');
- const [selectedMachineId, setSelectedMachineId] = useState<string>('');
- const [selectedMoldId, setSelectedMoldId] = useState<string>('');
- const [tab, setTab] = useState<DetailTab>('details');
- const [operationDialog, setOperationDialog] = useState<OperationDialog>(null);
- const [operationQty, setOperationQty] = useState('');
- const [operationScrap, setOperationScrap] = useState('0');
- const [operationScrapReason, setOperationScrapReason] = useState('');
- const [operationSkipReason, setOperationSkipReason] = useState('');
- const machineList = useQuery({
- queryKey: ['mrp', 'machines', 'all'],
- queryFn: () => machinesApi.list({ per_page: 100 }),
- enabled: showConfirmDialog });
- const moldList = useQuery({
- queryKey: ['mrp', 'molds', 'all'],
- queryFn: () => moldsApi.list({ per_page: 100 }),
- enabled: showConfirmDialog });
- const { data: workOrderOptions } = useQuery({
- queryKey: ['production', 'work-orders', 'options'],
- queryFn: () => workOrdersApi.options(),
- staleTime: 5 * 60 * 1000 });
- const operationStatusLabels = new Map((workOrderOptions?.operation_statuses ?? []).map((status) => [status.value, status.label]));
- const downtimeCategories = useQuery({
- queryKey: ['production', 'downtime-categories'],
- queryFn: workOrdersApi.downtimeCategories,
- enabled: showPauseDialog });
+  const [confirmAction, setConfirmAction] = useState<LifecycleAction | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showPauseDialog, setShowPauseDialog] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseCategory, setPauseCategory] = useState<MachineDowntimeCategory | ''>('');
+  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+  const [selectedMoldId, setSelectedMoldId] = useState<string>('');
+  const [tab, setTab] = useState<DetailTab>('details');
+  const [operationDialog, setOperationDialog] = useState<OperationDialog>(null);
+  const [operationQty, setOperationQty] = useState('');
+  const [operationScrap, setOperationScrap] = useState('0');
+  const [operationScrapReason, setOperationScrapReason] = useState('');
+  const [operationSkipReason, setOperationSkipReason] = useState('');
+  const machineList = useQuery({
+    queryKey: ['mrp', 'machines', 'all'],
+    queryFn: () => machinesApi.list({ per_page: 100 }),
+    enabled: showConfirmDialog,
+  });
+  const moldList = useQuery({
+    queryKey: ['mrp', 'molds', 'all'],
+    queryFn: () => moldsApi.list({ per_page: 100 }),
+    enabled: showConfirmDialog,
+  });
+  const { data: workOrderOptions } = useQuery({
+    queryKey: ['production', 'work-orders', 'options'],
+    queryFn: () => workOrdersApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const operationStatusLabels = new Map(
+    (workOrderOptions?.operation_statuses ?? []).map((status) => [status.value, status.label]),
+  );
+  const downtimeCategories = useQuery({
+    queryKey: ['production', 'downtime-categories'],
+    queryFn: workOrdersApi.downtimeCategories,
+    enabled: showPauseDialog,
+  });
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['production', 'work-orders', 'detail', id],
- queryFn: () => workOrdersApi.show(id!),
- enabled: !!id });
- const chain = useQuery({
- queryKey: ['production', 'work-orders', 'chain', id],
- queryFn: () => workOrdersApi.chain(id!),
- enabled: !!id });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['production', 'work-orders', 'detail', id],
+    queryFn: () => workOrdersApi.show(id!),
+    enabled: !!id,
+  });
+  const chain = useQuery({
+    queryKey: ['production', 'work-orders', 'chain', id],
+    queryFn: () => workOrdersApi.chain(id!),
+    enabled: !!id,
+  });
 
- const operations = useQuery({
- queryKey: ['production', 'work-orders', 'operations', id],
- queryFn: () => woOperationsApi.list(id!),
- enabled: !!id && tab === 'operations' });
+  const operations = useQuery({
+    queryKey: ['production', 'work-orders', 'operations', id],
+    queryFn: () => woOperationsApi.list(id!),
+    enabled: !!id && tab === 'operations',
+  });
 
- // Live updates from output recordings.
- useEcho(`production.wo.${id}`, '.output.recorded', () => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
- });
+  // Live updates from output recordings.
+  useEcho(`production.wo.${id}`, '.output.recorded', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+  });
 
- // Series C — Task C4. Real-time chain progress (status transitions).
- useChainProgress('work_order', id, ['production', 'work-orders', 'detail', id]);
+  // Series C — Task C4. Real-time chain progress (status transitions).
+  useChainProgress('work_order', id, ['production', 'work-orders', 'detail', id]);
 
- const mut = useMutation({
- mutationFn: async (action: LifecycleAction) => {
- switch (action) {
- case 'confirm': return workOrdersApi.confirm(id!, selectedMachineId || undefined, selectedMoldId || undefined);
- case 'start': return workOrdersApi.start(id!);
- case 'pause': return workOrdersApi.pause(id!, pauseReason.trim(), pauseCategory);
- case 'resume': return workOrdersApi.resume(id!);
- case 'complete': return workOrdersApi.complete(id!);
- case 'close': return workOrdersApi.close(id!);
- case 'cancel': return workOrdersApi.cancel(id!);
- }
- },
- onSuccess: (wo) => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'chain', id] });
- toast.success(`Work order ${wo?.wo_number} updated.`);
- setConfirmAction(null);
- setShowConfirmDialog(false);
- setSelectedMachineId('');
- setSelectedMoldId('');
- setShowPauseDialog(false);
- setPauseReason('');
- setPauseCategory('');
- },
- onError: (e: AxiosError<{ message?: string }>) => {
- toast.error(e.response?.data?.message ?? 'Action failed.');
- } });
+  const mut = useMutation({
+    mutationFn: async (action: LifecycleAction) => {
+      switch (action) {
+        case 'confirm':
+          return workOrdersApi.confirm(
+            id!,
+            selectedMachineId || undefined,
+            selectedMoldId || undefined,
+          );
+        case 'start':
+          return workOrdersApi.start(id!);
+        case 'pause':
+          return workOrdersApi.pause(id!, pauseReason.trim(), pauseCategory);
+        case 'resume':
+          return workOrdersApi.resume(id!);
+        case 'complete':
+          return workOrdersApi.complete(id!);
+        case 'close':
+          return workOrdersApi.close(id!);
+        case 'cancel':
+          return workOrdersApi.cancel(id!);
+      }
+    },
+    onSuccess: (wo) => {
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'chain', id] });
+      toast.success(`Work order ${wo?.wo_number} updated.`);
+      setConfirmAction(null);
+      setShowConfirmDialog(false);
+      setSelectedMachineId('');
+      setSelectedMoldId('');
+      setShowPauseDialog(false);
+      setPauseReason('');
+      setPauseCategory('');
+    },
+    onError: (e: AxiosError<{ message?: string }>) => {
+      toast.error(e.response?.data?.message ?? 'Action failed.');
+    },
+  });
 
- const retryReceipt = useMutation({
- mutationFn: (outputId: string) => workOrdersApi.retryProductionReceipt(id!, outputId),
- onSuccess: (output) => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'outputs', id] });
- toast.success(output.production_receipt_handoff?.status === 'generated'
- ? 'Finished-goods receipt posted.'
- : 'Receipt handoff remains pending Inventory setup.');
- },
- onError: (error: AxiosError<{ message?: string }>) => {
- toast.error(error.response?.data?.message ?? 'Finished-goods receipt could not be posted.');
- },
- });
+  const retryReceipt = useMutation({
+    mutationFn: (outputId: string) => workOrdersApi.retryProductionReceipt(id!, outputId),
+    onSuccess: (output) => {
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'outputs', id] });
+      toast.success(
+        output.production_receipt_handoff?.status === 'generated'
+          ? 'Finished-goods receipt posted.'
+          : 'Receipt handoff remains pending Inventory setup.',
+      );
+    },
+    onError: (error: AxiosError<{ message?: string }>) => {
+      toast.error(error.response?.data?.message ?? 'Finished-goods receipt could not be posted.');
+    },
+  });
 
- const operationMut = useMutation({
- mutationFn: async ({ action, operationId }: { action: 'startSetup' | 'endSetup' | 'start' | 'pause' | 'resume' | 'complete'; operationId: string }) => {
- switch (action) {
- case 'startSetup':
- if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
- return woOperationsApi.startSetup(operationId, employeeId);
- case 'start':
- if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
- return woOperationsApi.start(operationId, employeeId);
- case 'resume':
- if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
- return woOperationsApi.resume(operationId, employeeId);
- case 'endSetup': return woOperationsApi.endSetup(operationId);
- case 'pause': return woOperationsApi.pause(operationId);
- case 'complete': return woOperationsApi.complete(operationId);
- }
- },
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
- toast.success('Operation updated.');
- },
- onError: (error: AxiosError<{ message?: string }> | Error) => {
- toast.error(error instanceof AxiosError ? error.response?.data?.message ?? error.message : error.message);
- },
- });
+  const operationMut = useMutation({
+    mutationFn: async ({
+      action,
+      operationId,
+    }: {
+      action: 'startSetup' | 'endSetup' | 'start' | 'pause' | 'resume' | 'complete';
+      operationId: string;
+    }) => {
+      switch (action) {
+        case 'startSetup':
+          if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+          return woOperationsApi.startSetup(operationId, employeeId);
+        case 'start':
+          if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+          return woOperationsApi.start(operationId, employeeId);
+        case 'resume':
+          if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+          return woOperationsApi.resume(operationId, employeeId);
+        case 'endSetup':
+          return woOperationsApi.endSetup(operationId);
+        case 'pause':
+          return woOperationsApi.pause(operationId);
+        case 'complete':
+          return woOperationsApi.complete(operationId);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+      toast.success('Operation updated.');
+    },
+    onError: (error: AxiosError<{ message?: string }> | Error) => {
+      toast.error(
+        error instanceof AxiosError
+          ? (error.response?.data?.message ?? error.message)
+          : error.message,
+      );
+    },
+  });
 
- const operationDialogMut = useMutation({
- mutationFn: async () => {
- if (!operationDialog) throw new Error('Choose an operation first.');
- if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
- if (operationDialog.kind === 'skip') {
- return woOperationsApi.skip(operationDialog.operation.id, operationSkipReason.trim(), employeeId);
- }
- return woOperationsApi.recordOutput(operationDialog.operation.id, {
- qty: Number(operationQty),
- scrap: Number(operationScrap || 0),
- scrap_reason: operationScrapReason.trim() || undefined,
- });
- },
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
- qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
- toast.success(operationDialog?.kind === 'skip' ? 'Operation skipped.' : 'Operation output recorded.');
- setOperationDialog(null);
- setOperationQty('');
- setOperationScrap('0');
- setOperationScrapReason('');
- setOperationSkipReason('');
- },
- onError: (error: AxiosError<{ message?: string }> | Error) => {
- toast.error(error instanceof AxiosError ? error.response?.data?.message ?? error.message : error.message);
- },
- });
+  const operationDialogMut = useMutation({
+    mutationFn: async () => {
+      if (!operationDialog) throw new Error('Choose an operation first.');
+      if (!employeeId) throw new Error('Your account is not linked to an employee profile.');
+      if (operationDialog.kind === 'skip') {
+        return woOperationsApi.skip(
+          operationDialog.operation.id,
+          operationSkipReason.trim(),
+          employeeId,
+        );
+      }
+      return woOperationsApi.recordOutput(operationDialog.operation.id, {
+        qty: Number(operationQty),
+        scrap: Number(operationScrap || 0),
+        scrap_reason: operationScrapReason.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'operations', id] });
+      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+      toast.success(
+        operationDialog?.kind === 'skip' ? 'Operation skipped.' : 'Operation output recorded.',
+      );
+      setOperationDialog(null);
+      setOperationQty('');
+      setOperationScrap('0');
+      setOperationScrapReason('');
+      setOperationSkipReason('');
+    },
+    onError: (error: AxiosError<{ message?: string }> | Error) => {
+      toast.error(
+        error instanceof AxiosError
+          ? (error.response?.data?.message ?? error.message)
+          : error.message,
+      );
+    },
+  });
 
- if (isLoading) return <div> <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
- /><SkeletonDetail /></div>;
- if (isError || !data) return (
- <div>
- <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
- />
- <EmptyState icon="alert-circle" title="Failed to load work order"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
- </div>
- );
+  if (isLoading)
+    return (
+      <div>
+        {' '}
+        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+        <SkeletonDetail />
+      </div>
+    );
+  if (isError || !data)
+    return (
+      <div>
+        <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load work order"
+          action={
+            <Button variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      </div>
+    );
 
- const showConfirm = data.status === 'planned' && canConfirm;
- const showStart = data.status === 'confirmed' && canLifecycle;
- const showPause = data.status === 'in_progress' && canLifecycle;
- const showResume = data.status === 'paused' && canLifecycle;
- const showComplete = data.status === 'in_progress' && canLifecycle;
- const showClose = data.status === 'completed' && canLifecycle;
- const showCancel = !['completed', 'closed', 'cancelled', 'in_progress'].includes(data.status) && canLifecycle;
- const showRecord = data.status === 'in_progress' && canRecord;
+  const showConfirm = data.status === 'planned' && canConfirm;
+  const showStart = data.status === 'confirmed' && canLifecycle;
+  const showPause = data.status === 'in_progress' && canLifecycle;
+  const showResume = data.status === 'paused' && canLifecycle;
+  const showComplete = data.status === 'in_progress' && canLifecycle;
+  const showClose = data.status === 'completed' && canLifecycle;
+  const showCancel =
+    !['completed', 'closed', 'cancelled', 'in_progress'].includes(data.status) && canLifecycle;
+  const showRecord = data.status === 'in_progress' && canRecord;
 
- return (
- <div>
- <PageHeader
- title={
- <div className="flex items-center gap-3">
- <span className="font-mono">{data.wo_number}</span>
- <Chip variant={variant[data.status]}>{data.status_label}</Chip>
- </div>
- }
- subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : undefined}
- backTo="/production/work-orders"
- backLabel="Work orders"
- actions={
- <div className="flex gap-1.5">
- {showConfirm && <Button size="sm" variant="primary" icon={<LuCheck size={14} />} onClick={() => {
- setSelectedMachineId(data.machine?.id ?? '');
- setSelectedMoldId(data.mold?.id ?? '');
- setShowConfirmDialog(true);
- }}>Confirm</Button>}
- {showStart && <Button size="sm" variant="primary" icon={<LuPlay size={14} />} onClick={() => setConfirmAction('start')}>Start</Button>}
- {showPause && <Button size="sm" variant="secondary" icon={<LuPause size={14} />} onClick={() => setShowPauseDialog(true)}>Pause</Button>}
- {showResume && <Button size="sm" variant="primary" icon={<LuPlay size={14} />} onClick={() => setConfirmAction('resume')}>Resume</Button>}
- {showRecord && <Button size="sm" variant="primary" icon={<LuActivity size={14} />} onClick={() => navigate(`/production/work-orders/${data.id}/record-output`)}>Record output</Button>}
- {showComplete && <Button size="sm" variant="secondary" icon={<LuCircleStop size={14} />} onClick={() => setConfirmAction('complete')}>Complete</Button>}
- {showClose && <Button size="sm" variant="secondary" icon={<LuLock size={14} />} onClick={() => setConfirmAction('close')}>Close</Button>}
- {showCancel && <Button size="sm" variant="secondary" icon={<LuBan size={14} />} onClick={() => setConfirmAction('cancel')}>Cancel</Button>}
- </div>
- }
- bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
- />
+  return (
+    <div>
+      <PageHeader
+        title={
+          <div className="flex items-center gap-3">
+            <span className="font-mono">{data.wo_number}</span>
+            <Chip variant={variant[data.status]}>{data.status_label}</Chip>
+          </div>
+        }
+        subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : undefined}
+        backTo="/production/work-orders"
+        backLabel="Work orders"
+        actions={
+          <div className="flex gap-1.5">
+            {showConfirm && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<LuCheck size={14} />}
+                onClick={() => {
+                  setSelectedMachineId(data.machine?.id ?? '');
+                  setSelectedMoldId(data.mold?.id ?? '');
+                  setShowConfirmDialog(true);
+                }}
+              >
+                Confirm
+              </Button>
+            )}
+            {showStart && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<LuPlay size={14} />}
+                onClick={() => setConfirmAction('start')}
+              >
+                Start
+              </Button>
+            )}
+            {showPause && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<LuPause size={14} />}
+                onClick={() => setShowPauseDialog(true)}
+              >
+                Pause
+              </Button>
+            )}
+            {showResume && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<LuPlay size={14} />}
+                onClick={() => setConfirmAction('resume')}
+              >
+                Resume
+              </Button>
+            )}
+            {showRecord && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<LuActivity size={14} />}
+                onClick={() => navigate(`/production/work-orders/${data.id}/record-output`)}
+              >
+                Record output
+              </Button>
+            )}
+            {showComplete && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<LuCircleStop size={14} />}
+                onClick={() => setConfirmAction('complete')}
+              >
+                Complete
+              </Button>
+            )}
+            {showClose && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<LuLock size={14} />}
+                onClick={() => setConfirmAction('close')}
+              >
+                Close
+              </Button>
+            )}
+            {showCancel && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<LuBan size={14} />}
+                onClick={() => setConfirmAction('cancel')}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        }
+        bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
+      />
 
- {/* Tabs */}
- <Tabs
- className="px-5"
- label="Work order sections"
- value={tab}
- onChange={setTab}
- items={[
- { key: 'details', label: 'Details' },
- { key: 'operations', label: 'Operations' },
- ]}
- />
+      {/* Tabs */}
+      <Tabs
+        className="px-5"
+        label="Work order sections"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'details', label: 'Details' },
+          { key: 'operations', label: 'Operations' },
+        ]}
+      />
 
- {tab === 'details' && (
- <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
- <div className="lg:col-span-2 space-y-4">
- {/* ADV3 — IATF 16949 Production Batch panel. Visible once the WO has
+      {tab === 'details' && (
+        <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            {/* ADV3 — IATF 16949 Production Batch panel. Visible once the WO has
  been started (batch_number is generated on first start). */}
- {data.batch_number && (
- <Panel title="Production batch" meta="IATF 16949 traceability">
- <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
- <dt className="text-muted">Batch no.</dt>
- <dd className="col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
- <dt className="text-muted">Machine / Mold</dt>
- <dd className="col-span-2 font-mono">
- {data.machine?.machine_code ?? '—'} / {data.mold?.mold_code ?? '—'}
- </dd>
- <dt className="text-muted">Produced</dt>
- <dd className="col-span-2 font-mono tabular-nums">
- {formatInt(data.quantity_good)} good / {formatInt(data.quantity_rejected)} rejected
- </dd>
- </dl>
- {data.material_lot_references.length > 0 && (
- <div className="mt-3 pt-3 border-t border-subtle">
- <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
- Material lots used
- </div>
- <div className="overflow-x-auto">
- <table className={`${tableCls} min-w-[640px]`}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Item</Th>
- <Th>GRN</Th>
- <Th>Material lot</Th>
- <Th>Supplier ref</Th>
- </tr>
- </thead>
- <tbody>
- {data.material_lot_references.map((ref, i) => (
- <tr key={`${ref.material_lot_number ?? 'lot'}-${i}`} className={trCls}>
- <Td>
- <div className="font-mono">{ref.item_code ?? '—'}</div>
- <div className="text-muted">{ref.item_name ?? ''}</div>
- </Td>
- <Td mono>{ref.grn_number ?? '—'}</Td>
- <Td mono>{ref.material_lot_number ?? '—'}</Td>
- <Td mono>{ref.supplier_lot_reference ?? '—'}</Td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- </div>
- )}
- <div className="mt-3 text-xs">
- <Link
- to={`/quality/traceability?term=${encodeURIComponent(data.batch_number)}`}
- className="text-accent hover:underline"
- >
- View full traceability →
- </Link>
- </div>
- </Panel>
- )}
- {data.production_readiness && !data.production_readiness.ready && (
- <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm">
- <div className="font-medium text-warning-fg">Waiting for subassembly production</div>
- <div className="mt-1 text-muted">
- {data.production_readiness.blocking_work_orders.map((child) => (
- <span key={child.id} className="mr-2 inline-block font-mono">
- {child.wo_number} ({formatInt(child.quantity_good)} / {formatInt(child.quantity_target)} good)
- </span>
- ))}
- </div>
- </div>
- )}
- <Panel title="Overview">
- <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
- <dt className="text-muted">Product</dt>
- <dd className="col-span-2"><span className="font-mono">{data.product?.part_number}</span> — {data.product?.name}</dd>
- <dt className="text-muted">Sales order</dt>
- <dd className="col-span-2">{data.sales_order
- ? <span className="font-mono">{data.sales_order.so_number}</span>
- : <span className="text-muted">—</span>}</dd>
- <dt className="text-muted">Machine</dt>
- <dd className="col-span-2 font-mono">{data.machine?.machine_code ?? '—'}</dd>
- <dt className="text-muted">Mold</dt>
- <dd className="col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
- <dt className="text-muted">Target / Produced</dt>
- <dd className="col-span-2 font-mono tabular-nums">{formatInt(data.quantity_produced)} / {formatInt(data.quantity_target)}</dd>
- <dt className="text-muted">Good / Reject</dt>
- <dd className="col-span-2 font-mono tabular-nums">{formatInt(data.quantity_good)} / {formatInt(data.quantity_rejected)} (scrap {Number(data.scrap_rate).toFixed(2)}%)</dd>
- <dt className="text-muted">Planned</dt>
- <dd className="col-span-2 font-mono">{data.planned_start?.slice(0, 16)} → {data.planned_end?.slice(0, 16)}</dd>
- <dt className="text-muted">Actual</dt>
- <dd className="col-span-2 font-mono">{data.actual_start ? `${data.actual_start.slice(0, 16)} → ${data.actual_end?.slice(0, 16) ?? '…'}` : '—'}</dd>
- {data.pause_reason && <>
- <dt className="text-muted">Pause reason</dt>
- <dd className="col-span-2 text-warning-fg">{data.pause_reason}</dd>
- </>}
- </dl>
- </Panel>
+            {data.batch_number && (
+              <Panel title="Production batch" meta="IATF 16949 traceability">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+                  <dt className="text-muted">Batch no.</dt>
+                  <dd className="col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
+                  <dt className="text-muted">Machine / Mold</dt>
+                  <dd className="col-span-2 font-mono">
+                    {data.machine?.machine_code ?? '—'} / {data.mold?.mold_code ?? '—'}
+                  </dd>
+                  <dt className="text-muted">Produced</dt>
+                  <dd className="col-span-2 font-mono tabular-nums">
+                    {formatInt(data.quantity_good)} good / {formatInt(data.quantity_rejected)}{' '}
+                    rejected
+                  </dd>
+                </dl>
+                {data.material_lot_references.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-subtle">
+                    <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+                      Material lots used
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className={`${tableCls} min-w-[640px]`}>
+                        <thead>
+                          <tr className={theadTrCls}>
+                            <Th>Item</Th>
+                            <Th>GRN</Th>
+                            <Th>Material lot</Th>
+                            <Th>Supplier ref</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.material_lot_references.map((ref, i) => (
+                            <tr key={`${ref.material_lot_number ?? 'lot'}-${i}`} className={trCls}>
+                              <Td>
+                                <div className="font-mono">{ref.item_code ?? '—'}</div>
+                                <div className="text-muted">{ref.item_name ?? ''}</div>
+                              </Td>
+                              <Td mono>{ref.grn_number ?? '—'}</Td>
+                              <Td mono>{ref.material_lot_number ?? '—'}</Td>
+                              <Td mono>{ref.supplier_lot_reference ?? '—'}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 text-xs">
+                  <Link
+                    to={`/quality/traceability?term=${encodeURIComponent(data.batch_number)}`}
+                    className="text-accent hover:underline"
+                  >
+                    View full traceability →
+                  </Link>
+                </div>
+              </Panel>
+            )}
+            {data.production_readiness && !data.production_readiness.ready && (
+              <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-sm">
+                <div className="font-medium text-warning-fg">
+                  Waiting for subassembly production
+                </div>
+                <div className="mt-1 text-muted">
+                  {data.production_readiness.blocking_work_orders.map((child) => (
+                    <span key={child.id} className="mr-2 inline-block font-mono">
+                      {child.wo_number} ({formatInt(child.quantity_good)} /{' '}
+                      {formatInt(child.quantity_target)} good)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Panel title="Overview">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+                <dt className="text-muted">Product</dt>
+                <dd className="col-span-2">
+                  <span className="font-mono">{data.product?.part_number}</span> —{' '}
+                  {data.product?.name}
+                </dd>
+                <dt className="text-muted">Sales order</dt>
+                <dd className="col-span-2">
+                  {data.sales_order ? (
+                    <span className="font-mono">{data.sales_order.so_number}</span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </dd>
+                <dt className="text-muted">Machine</dt>
+                <dd className="col-span-2 font-mono">{data.machine?.machine_code ?? '—'}</dd>
+                <dt className="text-muted">Mold</dt>
+                <dd className="col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
+                <dt className="text-muted">Target / Produced</dt>
+                <dd className="col-span-2 font-mono tabular-nums">
+                  {formatInt(data.quantity_produced)} / {formatInt(data.quantity_target)}
+                </dd>
+                <dt className="text-muted">Good / Reject</dt>
+                <dd className="col-span-2 font-mono tabular-nums">
+                  {formatInt(data.quantity_good)} / {formatInt(data.quantity_rejected)} (scrap{' '}
+                  {Number(data.scrap_rate).toFixed(2)}%)
+                </dd>
+                <dt className="text-muted">Planned</dt>
+                <dd className="col-span-2 font-mono">
+                  {data.planned_start?.slice(0, 16)} → {data.planned_end?.slice(0, 16)}
+                </dd>
+                <dt className="text-muted">Actual</dt>
+                <dd className="col-span-2 font-mono">
+                  {data.actual_start
+                    ? `${data.actual_start.slice(0, 16)} → ${data.actual_end?.slice(0, 16) ?? '…'}`
+                    : '—'}
+                </dd>
+                {data.pause_reason && (
+                  <>
+                    <dt className="text-muted">Pause reason</dt>
+                    <dd className="col-span-2 text-warning-fg">{data.pause_reason}</dd>
+                  </>
+                )}
+              </dl>
+            </Panel>
 
- <Panel title="Materials" meta={`${data.materials?.length ?? 0} lines`} noPadding>
- {data.material_cost_summary && (
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-b border-default px-4 py-3 text-sm">
- <div><div className="text-2xs uppercase text-muted">Standard</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.standard_cost)}</div></div>
- <div><div className="text-2xs uppercase text-muted">Actual issued</div><div className="mt-1 font-mono">{formatPeso(data.material_cost_summary.actual_cost)}</div></div>
- <div><div className="text-2xs uppercase text-muted">Cost variance</div><div className={`mt-1 font-mono ${Number(data.material_cost_summary.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}`}>{formatPeso(data.material_cost_summary.cost_variance)}</div></div>
- </div>
- )}
- {data.materials?.length ? (
- <div className="overflow-x-auto">
- <table className={`${tableCls} min-w-[520px]`}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Item</Th>
- <Th align="right">BOM qty</Th>
- <Th align="right">Issued</Th>
- <Th align="right">Variance</Th>
- <Th align="right">Standard</Th>
- <Th align="right">Actual</Th>
- <Th align="right">Cost variance</Th>
- </tr>
- </thead>
- <tbody>
- {data.materials.map((m) => (
- <tr key={m.id} className={trCls}>
- <Td>
- <div className="font-mono">{m.item?.code}</div>
- <div className="text-muted">{m.item?.name}</div>
- </Td>
- <Td align="right" mono>{Number(m.bom_quantity).toFixed(3)}</Td>
- <Td align="right" mono>{Number(m.actual_quantity_issued).toFixed(3)}</Td>
- <Td align="right" mono>{Number(m.variance).toFixed(3)}</Td>
- <Td align="right" mono>{formatPeso(m.standard_cost)}</Td>
- <Td align="right" mono>{formatPeso(m.actual_cost)}</Td>
- <Td align="right" mono className={Number(m.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}>{formatPeso(m.cost_variance)}</Td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- ) : (
- <div className="p-4 text-sm text-muted">No materials defined (no active BOM).</div>
- )}
- </Panel>
+            <Panel title="Materials" meta={`${data.materials?.length ?? 0} lines`} noPadding>
+              {data.material_cost_summary && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-b border-default px-4 py-3 text-sm">
+                  <div>
+                    <div className="text-2xs uppercase text-muted">Standard</div>
+                    <div className="mt-1 font-mono">
+                      {formatPeso(data.material_cost_summary.standard_cost)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xs uppercase text-muted">Actual issued</div>
+                    <div className="mt-1 font-mono">
+                      {formatPeso(data.material_cost_summary.actual_cost)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xs uppercase text-muted">Cost variance</div>
+                    <div
+                      className={`mt-1 font-mono ${Number(data.material_cost_summary.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'}`}
+                    >
+                      {formatPeso(data.material_cost_summary.cost_variance)}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {data.materials?.length ? (
+                <div className="overflow-x-auto">
+                  <table className={`${tableCls} min-w-[520px]`}>
+                    <thead>
+                      <tr className={theadTrCls}>
+                        <Th>Item</Th>
+                        <Th align="right">BOM qty</Th>
+                        <Th align="right">Issued</Th>
+                        <Th align="right">Variance</Th>
+                        <Th align="right">Standard</Th>
+                        <Th align="right">Actual</Th>
+                        <Th align="right">Cost variance</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.materials.map((m) => (
+                        <tr key={m.id} className={trCls}>
+                          <Td>
+                            <div className="font-mono">{m.item?.code}</div>
+                            <div className="text-muted">{m.item?.name}</div>
+                          </Td>
+                          <Td align="right" mono>
+                            {Number(m.bom_quantity).toFixed(3)}
+                          </Td>
+                          <Td align="right" mono>
+                            {Number(m.actual_quantity_issued).toFixed(3)}
+                          </Td>
+                          <Td align="right" mono>
+                            {Number(m.variance).toFixed(3)}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(m.standard_cost)}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(m.actual_cost)}
+                          </Td>
+                          <Td
+                            align="right"
+                            mono
+                            className={
+                              Number(m.cost_variance) > 0 ? 'text-danger-fg' : 'text-success-fg'
+                            }
+                          >
+                            {formatPeso(m.cost_variance)}
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 text-sm text-muted">No materials defined (no active BOM).</div>
+              )}
+            </Panel>
 
- <Panel title="Recent outputs" meta={`${data.outputs?.length ?? 0} entries`} noPadding>
- {data.outputs?.length ? (
- <div className="overflow-x-auto">
- <table className={`${tableCls} min-w-[760px]`}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Recorded</Th>
- <Th>Batch</Th>
- <Th align="right">Good</Th>
- <Th align="right">Reject</Th>
- <Th>FG receipt</Th>
- <Th>Defects</Th>
- </tr>
- </thead>
- <tbody>
- {data.outputs.map((o) => (
- <tr key={o.id} className={trCls}>
- <Td mono>{o.recorded_at?.slice(0, 16)}</Td>
- <Td mono>{o.batch_code ?? '—'}</Td>
- <Td align="right" mono>{o.good_count}</Td>
- <Td align="right" mono>{o.reject_count}</Td>
- <Td>
- {o.production_receipt_handoff ? (
- <div className="flex items-center gap-2">
- <span title={o.production_receipt_handoff.message ?? undefined}>
- <Chip variant={o.production_receipt_handoff.status === 'generated' || o.production_receipt_handoff.status === 'not_required'
- ? 'success' : o.production_receipt_handoff.status === 'manual_required' ? 'warning' : 'neutral'}>
- {o.production_receipt_handoff.status_label ?? o.production_receipt_handoff.status.replace('_', ' ')}
- </Chip>
- </span>
- {canRecord && o.production_receipt_handoff.status === 'manual_required' && (
- <Button
- type="button"
- variant="ghost"
- size="sm"
- icon={<LuRefreshCw size={13} className={retryReceipt.isPending ? 'animate-spin' : ''} />}
- disabled={retryReceipt.isPending}
- onClick={() => retryReceipt.mutate(o.id)}
- >Retry</Button>
- )}
- </div>
- ) : <span className="text-muted">—</span>}
- </Td>
- <Td className="text-xs">
- {o.defects?.length
- ? o.defects.map((d) => `${d.defect_type?.code} ×${d.count}`).join(', ')
- : <span className="text-muted">—</span>}
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- ) : (
- <div className="p-4 text-sm text-muted">No output recorded yet.</div>
- )}
- </Panel>
- </div>
+            <Panel title="Recent outputs" meta={`${data.outputs?.length ?? 0} entries`} noPadding>
+              {data.outputs?.length ? (
+                <div className="overflow-x-auto">
+                  <table className={`${tableCls} min-w-[760px]`}>
+                    <thead>
+                      <tr className={theadTrCls}>
+                        <Th>Recorded</Th>
+                        <Th>Batch</Th>
+                        <Th align="right">Good</Th>
+                        <Th align="right">Reject</Th>
+                        <Th>FG receipt</Th>
+                        <Th>Defects</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.outputs.map((o) => (
+                        <tr key={o.id} className={trCls}>
+                          <Td mono>{o.recorded_at?.slice(0, 16)}</Td>
+                          <Td mono>{o.batch_code ?? '—'}</Td>
+                          <Td align="right" mono>
+                            {o.good_count}
+                          </Td>
+                          <Td align="right" mono>
+                            {o.reject_count}
+                          </Td>
+                          <Td>
+                            {o.production_receipt_handoff ? (
+                              <div className="flex items-center gap-2">
+                                <span title={o.production_receipt_handoff.message ?? undefined}>
+                                  <Chip
+                                    variant={
+                                      o.production_receipt_handoff.status === 'generated' ||
+                                      o.production_receipt_handoff.status === 'not_required'
+                                        ? 'success'
+                                        : o.production_receipt_handoff.status === 'manual_required'
+                                          ? 'warning'
+                                          : 'neutral'
+                                    }
+                                  >
+                                    {o.production_receipt_handoff.status_label ??
+                                      o.production_receipt_handoff.status.replace('_', ' ')}
+                                  </Chip>
+                                </span>
+                                {canRecord &&
+                                  o.production_receipt_handoff.status === 'manual_required' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      icon={
+                                        <LuRefreshCw
+                                          size={13}
+                                          className={retryReceipt.isPending ? 'animate-spin' : ''}
+                                        />
+                                      }
+                                      disabled={retryReceipt.isPending}
+                                      onClick={() => retryReceipt.mutate(o.id)}
+                                    >
+                                      Retry
+                                    </Button>
+                                  )}
+                              </div>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </Td>
+                          <Td className="text-xs">
+                            {o.defects?.length ? (
+                              o.defects.map((d) => `${d.defect_type?.code} ×${d.count}`).join(', ')
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 text-sm text-muted">No output recorded yet.</div>
+              )}
+            </Panel>
+          </div>
 
- <div className="space-y-4">
- <Panel title="Linked records">
- {/* Sprint 6 audit §3.2: replace the inline list with the proper
+          <div className="space-y-4">
+            <Panel title="Linked records">
+              {/* Sprint 6 audit §3.2: replace the inline list with the proper
  LinkedRecords component so the WO detail right panel matches
  the SO detail panel and the documented design system. */}
- <LinkedRecords
- groups={[
- ...(data.sales_order ? [{
- label: 'Sales Order',
- items: [{
- id: data.sales_order.so_number,
- href: `/crm/sales-orders/${data.sales_order.id}` }] }] : []),
- ...(data.parent ? [{
- label: 'Parent work order',
- items: [{ id: data.parent.wo_number, href: `/production/work-orders/${data.parent.id}` }] }] : []),
- ...(data.children && data.children.length > 0 ? [{
- label: 'Subassembly work orders',
- items: data.children.map((child) => ({
- id: child.wo_number,
- href: `/production/work-orders/${child.id}`,
- meta: `qty ${child.quantity_target}` })) }] : []),
- ...(data.machine || data.mold ? [{
- label: 'Resources',
- items: [
- ...(data.machine ? [{
- id: data.machine.machine_code,
- href: `/mrp/machines/${data.machine.id}`,
- meta: data.machine.name }] : []),
- ...(data.mold ? [{
- id: data.mold.mold_code,
- href: `/mrp/molds/${data.mold.id}`,
- meta: data.mold.name }] : []),
- ] }] : []),
- ...(data.materials && data.materials.length > 0 ? [{
- label: 'Materials',
- items: data.materials.map((m) => ({
- id: m.item?.code ?? '—',
- meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}` })) }] : []),
- ...(data.inspections && data.inspections.length > 0 ? [{
- label: 'Quality inspections',
- items: data.inspections.map((inspection) => ({
- id: inspection.inspection_number,
- href: `/quality/inspections/${inspection.id}`,
- meta: inspection.stage_label ?? inspection.stage.replace('_', ' '),
- chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status_label ?? inspection.status.replace('_', ' ') } })) }] : []),
- ]}
- />
- </Panel>
- <Panel title="Activity">
- <ActivityStream
- items={[
- { dot: 'success' as const, text: <>Work order <span className="font-mono">{data.wo_number}</span> created.</>, time: data.created_at?.slice(0, 10) ?? '' },
- ...(data.actual_start ? [{
- dot: 'info' as const,
- text: <>Production started.</>,
- time: data.actual_start.slice(0, 10) }] : []),
- ...(data.actual_end ? [{
- dot: 'success' as const,
- text: <>Production completed.</>,
- time: data.actual_end.slice(0, 10) }] : []),
- ...(data.pause_reason ? [{
- dot: 'warning' as const,
- text: <>Paused: {data.pause_reason}</>,
- time: data.updated_at?.slice(0, 10) ?? '' }] : []),
- ]}
- />
- </Panel>
- </div>
- </div>
- )}
+              <LinkedRecords
+                groups={[
+                  ...(data.sales_order
+                    ? [
+                        {
+                          label: 'Sales Order',
+                          items: [
+                            {
+                              id: data.sales_order.so_number,
+                              href: `/crm/sales-orders/${data.sales_order.id}`,
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
+                  ...(data.parent
+                    ? [
+                        {
+                          label: 'Parent work order',
+                          items: [
+                            {
+                              id: data.parent.wo_number,
+                              href: `/production/work-orders/${data.parent.id}`,
+                            },
+                          ],
+                        },
+                      ]
+                    : []),
+                  ...(data.children && data.children.length > 0
+                    ? [
+                        {
+                          label: 'Subassembly work orders',
+                          items: data.children.map((child) => ({
+                            id: child.wo_number,
+                            href: `/production/work-orders/${child.id}`,
+                            meta: `qty ${child.quantity_target}`,
+                          })),
+                        },
+                      ]
+                    : []),
+                  ...(data.machine || data.mold
+                    ? [
+                        {
+                          label: 'Resources',
+                          items: [
+                            ...(data.machine
+                              ? [
+                                  {
+                                    id: data.machine.machine_code,
+                                    href: `/mrp/machines/${data.machine.id}`,
+                                    meta: data.machine.name,
+                                  },
+                                ]
+                              : []),
+                            ...(data.mold
+                              ? [
+                                  {
+                                    id: data.mold.mold_code,
+                                    href: `/mrp/molds/${data.mold.id}`,
+                                    meta: data.mold.name,
+                                  },
+                                ]
+                              : []),
+                          ],
+                        },
+                      ]
+                    : []),
+                  ...(data.materials && data.materials.length > 0
+                    ? [
+                        {
+                          label: 'Materials',
+                          items: data.materials.map((m) => ({
+                            id: m.item?.code ?? '—',
+                            meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}`,
+                          })),
+                        },
+                      ]
+                    : []),
+                  ...(data.inspections && data.inspections.length > 0
+                    ? [
+                        {
+                          label: 'Quality inspections',
+                          items: data.inspections.map((inspection) => ({
+                            id: inspection.inspection_number,
+                            href: `/quality/inspections/${inspection.id}`,
+                            meta: inspection.stage_label ?? inspection.stage.replace('_', ' '),
+                            chip: {
+                              variant:
+                                inspection.status === 'passed'
+                                  ? ('success' as const)
+                                  : inspection.status === 'failed'
+                                    ? ('danger' as const)
+                                    : inspection.status === 'in_progress'
+                                      ? ('info' as const)
+                                      : ('neutral' as const),
+                              text: inspection.status_label ?? inspection.status.replace('_', ' '),
+                            },
+                          })),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </Panel>
+            <Panel title="Activity">
+              <ActivityStream
+                items={[
+                  {
+                    dot: 'success' as const,
+                    text: (
+                      <>
+                        Work order <span className="font-mono">{data.wo_number}</span> created.
+                      </>
+                    ),
+                    time: formatDateIso(data.created_at, ''),
+                  },
+                  ...(data.actual_start
+                    ? [
+                        {
+                          dot: 'info' as const,
+                          text: <>Production started.</>,
+                          time: data.actual_start.slice(0, 10),
+                        },
+                      ]
+                    : []),
+                  ...(data.actual_end
+                    ? [
+                        {
+                          dot: 'success' as const,
+                          text: <>Production completed.</>,
+                          time: data.actual_end.slice(0, 10),
+                        },
+                      ]
+                    : []),
+                  ...(data.pause_reason
+                    ? [
+                        {
+                          dot: 'warning' as const,
+                          text: <>Paused: {data.pause_reason}</>,
+                          time: formatDateIso(data.updated_at, ''),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </Panel>
+          </div>
+        </div>
+      )}
 
- {tab === 'operations' && (
- <div className="px-5 py-4">
- <Panel title="Operations" meta={operations.data ? `${operations.data.length} operations` : undefined} noPadding>
- {operations.isLoading && (
- <div className="p-4 text-sm text-muted">Loading operations...</div>
- )}
- {operations.isError && (
- <div className="p-4">
- <EmptyState
- icon="alert-circle"
- title="Failed to load operations"
- action={<Button variant="secondary" size="sm" onClick={() => operations.refetch()}>Retry</Button>}
- />
- </div>
- )}
- {operations.data && operations.data.length === 0 && (
- <div className="p-4 text-sm text-muted">No operations defined for this work order.</div>
- )}
- {operations.data && operations.data.length > 0 && (
- <div className="overflow-x-auto">
- <table className={`${tableCls} min-w-[980px]`}>
- <thead>
- <tr className={theadTrCls}>
- <Th align="right" className="w-14">#</Th>
- <Th>Operation</Th>
- <Th>Status</Th>
- <Th>Operator</Th>
- <Th>Machine</Th>
- <Th align="right">Qty progress</Th>
- <Th>Start</Th>
- <Th>End</Th>
- <Th>Actions</Th>
- </tr>
- </thead>
- <tbody>
- {operations.data.map((op) => (
- <tr key={op.id} className={trCls}>
- <Td align="right" mono>{op.sequence}</Td>
- <Td>{op.operation_name}</Td>
- <Td>
- <Chip variant={OP_STATUS_CHIP[op.status]}>{operationStatusLabels.get(op.status) ?? op.status}</Chip>
- </Td>
- <Td>
- {op.operator
- ? `${op.operator.first_name} ${op.operator.last_name}`
- : <span className="text-muted">—</span>}
- </Td>
- <Td mono>
- {op.machine?.machine_code ?? <span className="text-muted">—</span>}
- </Td>
- <Td align="right" mono>
- {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
- </Td>
- <Td mono>{op.actual_start?.slice(0, 16) ?? '—'}</Td>
- <Td mono>{op.actual_end?.slice(0, 16) ?? '—'}</Td>
- <Td>
- {data.status !== 'in_progress' ? <span className="text-xs text-muted">Available after WO start</span> : (
- <div className="flex flex-wrap gap-1">
- {op.status === 'pending' && (
- <>
- {canLifecycle && <Button size="xs" variant="secondary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'startSetup', operationId: op.id })}>Setup</Button>}
- {canLifecycle && <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}>Start</Button>}
- </>
- )}
- {op.status === 'setup' && (
- <>
- {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'endSetup', operationId: op.id })}>End setup</Button>}
- {canLifecycle && <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'start', operationId: op.id })}>Start</Button>}
- </>
- )}
- {op.status === 'in_progress' && (
- <>
- {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'pause', operationId: op.id })}>Pause</Button>}
- {canRecord && <Button size="xs" variant="primary" disabled={!employeeId || operationDialogMut.isPending} onClick={() => setOperationDialog({ kind: 'record', operation: op })}>Output</Button>}
- {canLifecycle && <Button size="xs" variant="secondary" disabled={operationMut.isPending} onClick={() => operationMut.mutate({ action: 'complete', operationId: op.id })}>Complete</Button>}
- </>
- )}
- {op.status === 'paused' && canLifecycle && (
- <Button size="xs" variant="primary" disabled={!employeeId || operationMut.isPending} onClick={() => operationMut.mutate({ action: 'resume', operationId: op.id })}>Resume</Button>
- )}
- {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
- <Button size="xs" variant="ghost" disabled={!employeeId || operationDialogMut.isPending} onClick={() => setOperationDialog({ kind: 'skip', operation: op })}>Skip</Button>
- )}
- </div>
- )}
- </Td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- )}
- </Panel>
- </div>
- )}
+      {tab === 'operations' && (
+        <div className="px-5 py-4">
+          <Panel
+            title="Operations"
+            meta={operations.data ? `${operations.data.length} operations` : undefined}
+            noPadding
+          >
+            {operations.isLoading && (
+              <div className="p-4 text-sm text-muted">Loading operations...</div>
+            )}
+            {operations.isError && (
+              <div className="p-4">
+                <EmptyState
+                  icon="alert-circle"
+                  title="Failed to load operations"
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => operations.refetch()}>
+                      Retry
+                    </Button>
+                  }
+                />
+              </div>
+            )}
+            {operations.data && operations.data.length === 0 && (
+              <div className="p-4 text-sm text-muted">
+                No operations defined for this work order.
+              </div>
+            )}
+            {operations.data && operations.data.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className={`${tableCls} min-w-[980px]`}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th align="right" className="w-14">
+                        #
+                      </Th>
+                      <Th>Operation</Th>
+                      <Th>Status</Th>
+                      <Th>Operator</Th>
+                      <Th>Machine</Th>
+                      <Th align="right">Qty progress</Th>
+                      <Th>Start</Th>
+                      <Th>End</Th>
+                      <Th>Actions</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {operations.data.map((op) => (
+                      <tr key={op.id} className={trCls}>
+                        <Td align="right" mono>
+                          {op.sequence}
+                        </Td>
+                        <Td>{op.operation_name}</Td>
+                        <Td>
+                          <Chip variant={OP_STATUS_CHIP[op.status]}>
+                            {operationStatusLabels.get(op.status) ?? op.status}
+                          </Chip>
+                        </Td>
+                        <Td>
+                          {op.operator ? (
+                            `${op.operator.first_name} ${op.operator.last_name}`
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </Td>
+                        <Td mono>
+                          {op.machine?.machine_code ?? <span className="text-muted">—</span>}
+                        </Td>
+                        <Td align="right" mono>
+                          {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
+                        </Td>
+                        <Td mono>{op.actual_start?.slice(0, 16) ?? '—'}</Td>
+                        <Td mono>{op.actual_end?.slice(0, 16) ?? '—'}</Td>
+                        <Td>
+                          {data.status !== 'in_progress' ? (
+                            <span className="text-xs text-muted">Available after WO start</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {op.status === 'pending' && (
+                                <>
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="secondary"
+                                      disabled={!employeeId || operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({
+                                          action: 'startSetup',
+                                          operationId: op.id,
+                                        })
+                                      }
+                                    >
+                                      Setup
+                                    </Button>
+                                  )}
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="primary"
+                                      disabled={!employeeId || operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({ action: 'start', operationId: op.id })
+                                      }
+                                    >
+                                      Start
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              {op.status === 'setup' && (
+                                <>
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="secondary"
+                                      disabled={operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({
+                                          action: 'endSetup',
+                                          operationId: op.id,
+                                        })
+                                      }
+                                    >
+                                      End setup
+                                    </Button>
+                                  )}
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="primary"
+                                      disabled={!employeeId || operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({ action: 'start', operationId: op.id })
+                                      }
+                                    >
+                                      Start
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              {op.status === 'in_progress' && (
+                                <>
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="secondary"
+                                      disabled={operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({ action: 'pause', operationId: op.id })
+                                      }
+                                    >
+                                      Pause
+                                    </Button>
+                                  )}
+                                  {canRecord && (
+                                    <Button
+                                      size="xs"
+                                      variant="primary"
+                                      disabled={!employeeId || operationDialogMut.isPending}
+                                      onClick={() =>
+                                        setOperationDialog({ kind: 'record', operation: op })
+                                      }
+                                    >
+                                      Output
+                                    </Button>
+                                  )}
+                                  {canLifecycle && (
+                                    <Button
+                                      size="xs"
+                                      variant="secondary"
+                                      disabled={operationMut.isPending}
+                                      onClick={() =>
+                                        operationMut.mutate({
+                                          action: 'complete',
+                                          operationId: op.id,
+                                        })
+                                      }
+                                    >
+                                      Complete
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              {op.status === 'paused' && canLifecycle && (
+                                <Button
+                                  size="xs"
+                                  variant="primary"
+                                  disabled={!employeeId || operationMut.isPending}
+                                  onClick={() =>
+                                    operationMut.mutate({ action: 'resume', operationId: op.id })
+                                  }
+                                >
+                                  Resume
+                                </Button>
+                              )}
+                              {canLifecycle && !['completed', 'skipped'].includes(op.status) && (
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={!employeeId || operationDialogMut.isPending}
+                                  onClick={() =>
+                                    setOperationDialog({ kind: 'skip', operation: op })
+                                  }
+                                >
+                                  Skip
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </div>
+      )}
 
- <Modal
- isOpen={showConfirmDialog}
- onClose={() => setShowConfirmDialog(false)}
- title={<>Confirm work order <span className="font-mono">{data.wo_number}</span></>}
- size="md"
- >
- <div className="px-5 py-4 space-y-4">
- <p className="text-sm text-muted">
- Confirming a work order requires both a machine and a mold. The system will reserve materials based on the BOM once you confirm.
- </p>
- <Select
- label="Machine"
- required
- value={selectedMachineId}
- onChange={(e) => setSelectedMachineId(e.target.value)}
- >
- <option value="">Select a machine…</option>
- {machineList.data?.data?.map((m) => (
- <option key={m.id} value={m.id}>
- {m.machine_code} — {m.name} ({m.tonnage}t)
- </option>
- ))}
- </Select>
- <Select
- label="Mold"
- required
- value={selectedMoldId}
- onChange={(e) => setSelectedMoldId(e.target.value)}
- >
- <option value="">Select a mold…</option>
- {moldList.data?.data
- .filter((m) => !data.product || !m.product || m.product.id === data.product.id)
- .map((m) => (
- <option key={m.id} value={m.id}>
- {m.mold_code} — {m.name} (cavity {m.cavity_count})
- </option>
- ))}
- </Select>
- <ModalFooter>
- <Button variant="secondary" onClick={() => setShowConfirmDialog(false)}>Cancel</Button>
- <Button
- variant="primary"
- icon={<LuCheck size={14} />}
- disabled={!selectedMachineId || !selectedMoldId || mut.isPending}
- onClick={() => mut.mutate('confirm')}
- >
- {mut.isPending ? 'Confirming…' : 'Confirm work order'}
- </Button>
- </ModalFooter>
- </div>
- </Modal>
+      <Modal
+        isOpen={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        title={
+          <>
+            Confirm work order <span className="font-mono">{data.wo_number}</span>
+          </>
+        }
+        size="md"
+      >
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-muted">
+            Confirming a work order requires both a machine and a mold. The system will reserve
+            materials based on the BOM once you confirm.
+          </p>
+          <Select
+            label="Machine"
+            required
+            value={selectedMachineId}
+            onChange={(e) => setSelectedMachineId(e.target.value)}
+          >
+            <option value="">Select a machine…</option>
+            {machineList.data?.data?.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.machine_code} — {m.name} ({m.tonnage}t)
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Mold"
+            required
+            value={selectedMoldId}
+            onChange={(e) => setSelectedMoldId(e.target.value)}
+          >
+            <option value="">Select a mold…</option>
+            {moldList.data?.data
+              .filter((m) => !data.product || !m.product || m.product.id === data.product.id)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.mold_code} — {m.name} (cavity {m.cavity_count})
+                </option>
+              ))}
+          </Select>
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => setShowConfirmDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={<LuCheck size={14} />}
+              disabled={!selectedMachineId || !selectedMoldId || mut.isPending}
+              onClick={() => mut.mutate('confirm')}
+            >
+              {mut.isPending ? 'Confirming…' : 'Confirm work order'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
- <Modal
- isOpen={showPauseDialog}
- onClose={() => setShowPauseDialog(false)}
- title={<>Pause work order <span className="font-mono">{data.wo_number}</span></>}
- size="md"
- >
- <div className="px-5 py-4 space-y-4">
- <Select
- label="Downtime category"
- required
- value={pauseCategory}
- onChange={(event) => setPauseCategory(event.target.value as MachineDowntimeCategory)}
- error={downtimeCategories.isError ? 'Could not load downtime categories.' : undefined}
- >
- <option value="">Select the actual cause…</option>
- {downtimeCategories.data?.map((category) => (
- <option key={category.value} value={category.value}>
- {category.label}{category.is_planned ? ' (planned)' : ''}
- </option>
- ))}
- </Select>
- <Textarea
- label="Reason"
- required
- maxLength={200}
- rows={3}
- value={pauseReason}
- onChange={(event) => setPauseReason(event.target.value)}
- placeholder="Describe what stopped production."
- />
- <p className="text-xs text-muted">
- This reason and category feed the machine downtime and OEE reports.
- </p>
- <ModalFooter>
- <Button variant="secondary" onClick={() => setShowPauseDialog(false)}>Cancel</Button>
- <Button
- variant="primary"
- icon={<LuPause size={14} />}
- disabled={!pauseCategory || !pauseReason.trim() || mut.isPending || downtimeCategories.isError}
- onClick={() => mut.mutate('pause')}
- >
- {mut.isPending ? 'Pausing…' : 'Pause work order'}
- </Button>
- </ModalFooter>
- </div>
- </Modal>
+      <Modal
+        isOpen={showPauseDialog}
+        onClose={() => setShowPauseDialog(false)}
+        title={
+          <>
+            Pause work order <span className="font-mono">{data.wo_number}</span>
+          </>
+        }
+        size="md"
+      >
+        <div className="px-5 py-4 space-y-4">
+          <Select
+            label="Downtime category"
+            required
+            value={pauseCategory}
+            onChange={(event) => setPauseCategory(event.target.value as MachineDowntimeCategory)}
+            error={downtimeCategories.isError ? 'Could not load downtime categories.' : undefined}
+          >
+            <option value="">Select the actual cause…</option>
+            {downtimeCategories.data?.map((category) => (
+              <option key={category.value} value={category.value}>
+                {category.label}
+                {category.is_planned ? ' (planned)' : ''}
+              </option>
+            ))}
+          </Select>
+          <Textarea
+            label="Reason"
+            required
+            maxLength={200}
+            rows={3}
+            value={pauseReason}
+            onChange={(event) => setPauseReason(event.target.value)}
+            placeholder="Describe what stopped production."
+          />
+          <p className="text-xs text-muted">
+            This reason and category feed the machine downtime and OEE reports.
+          </p>
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => setShowPauseDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={<LuPause size={14} />}
+              disabled={
+                !pauseCategory || !pauseReason.trim() || mut.isPending || downtimeCategories.isError
+              }
+              onClick={() => mut.mutate('pause')}
+            >
+              {mut.isPending ? 'Pausing…' : 'Pause work order'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
- <Modal
- isOpen={operationDialog !== null}
- onClose={() => {
- if (!operationDialogMut.isPending) setOperationDialog(null);
- }}
- title={operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record operation output'}
- size="md"
- >
- <div className="space-y-4">
- {operationDialog?.kind === 'skip' ? (
- <>
- <p className="text-sm text-muted">
- Skip <span className="font-medium text-primary">{operationDialog.operation.operation_name}</span> only when the routing step will not run.
- </p>
- <Textarea
- label="Reason"
- required
- rows={3}
- maxLength={500}
- value={operationSkipReason}
- onChange={(event) => setOperationSkipReason(event.target.value)}
- placeholder="Explain why this operation is being skipped."
- />
- </>
- ) : (
- <>
- <p className="text-sm text-muted">
- Record output for <span className="font-medium text-primary">{operationDialog?.operation.operation_name}</span>. The server enforces the routing quantity policy.
- </p>
- <div className="grid grid-cols-2 gap-3">
- <Input label="Quantity" required type="number" min={0.0001} step="0.0001" value={operationQty} onChange={(event) => setOperationQty(event.target.value)} className="font-mono text-right" />
- <Input label="Scrap" type="number" min={0} step="0.0001" value={operationScrap} onChange={(event) => setOperationScrap(event.target.value)} className="font-mono text-right" />
- </div>
- <Textarea
- label="Scrap reason"
- rows={2}
- maxLength={500}
- value={operationScrapReason}
- onChange={(event) => setOperationScrapReason(event.target.value)}
- placeholder="Optional reason for scrap."
- />
- </>
- )}
- <ModalFooter>
- <Button variant="secondary" disabled={operationDialogMut.isPending} onClick={() => setOperationDialog(null)}>Cancel</Button>
- <Button
- variant={operationDialog?.kind === 'skip' ? 'danger' : 'primary'}
- disabled={operationDialogMut.isPending || !employeeId || (operationDialog?.kind === 'skip' ? !operationSkipReason.trim() : !(Number(operationQty) > 0) || Number(operationScrap) < 0 || Number(operationScrap) > Number(operationQty))}
- loading={operationDialogMut.isPending}
- onClick={() => operationDialogMut.mutate()}
- >
- {operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record output'}
- </Button>
- </ModalFooter>
- </div>
- </Modal>
+      <Modal
+        isOpen={operationDialog !== null}
+        onClose={() => {
+          if (!operationDialogMut.isPending) setOperationDialog(null);
+        }}
+        title={operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record operation output'}
+        size="md"
+      >
+        <div className="space-y-4">
+          {operationDialog?.kind === 'skip' ? (
+            <>
+              <p className="text-sm text-muted">
+                Skip{' '}
+                <span className="font-medium text-primary">
+                  {operationDialog.operation.operation_name}
+                </span>{' '}
+                only when the routing step will not run.
+              </p>
+              <Textarea
+                label="Reason"
+                required
+                rows={3}
+                maxLength={500}
+                value={operationSkipReason}
+                onChange={(event) => setOperationSkipReason(event.target.value)}
+                placeholder="Explain why this operation is being skipped."
+              />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted">
+                Record output for{' '}
+                <span className="font-medium text-primary">
+                  {operationDialog?.operation.operation_name}
+                </span>
+                . The server enforces the routing quantity policy.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Quantity"
+                  required
+                  type="number"
+                  min={0.0001}
+                  step="0.0001"
+                  value={operationQty}
+                  onChange={(event) => setOperationQty(event.target.value)}
+                  className="font-mono text-right"
+                />
+                <Input
+                  label="Scrap"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  value={operationScrap}
+                  onChange={(event) => setOperationScrap(event.target.value)}
+                  className="font-mono text-right"
+                />
+              </div>
+              <Textarea
+                label="Scrap reason"
+                rows={2}
+                maxLength={500}
+                value={operationScrapReason}
+                onChange={(event) => setOperationScrapReason(event.target.value)}
+                placeholder="Optional reason for scrap."
+              />
+            </>
+          )}
+          <ModalFooter>
+            <Button
+              variant="secondary"
+              disabled={operationDialogMut.isPending}
+              onClick={() => setOperationDialog(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={operationDialog?.kind === 'skip' ? 'danger' : 'primary'}
+              disabled={
+                operationDialogMut.isPending ||
+                !employeeId ||
+                (operationDialog?.kind === 'skip'
+                  ? !operationSkipReason.trim()
+                  : !(Number(operationQty) > 0) ||
+                    Number(operationScrap) < 0 ||
+                    Number(operationScrap) > Number(operationQty))
+              }
+              loading={operationDialogMut.isPending}
+              onClick={() => operationDialogMut.mutate()}
+            >
+              {operationDialog?.kind === 'skip' ? 'Skip operation' : 'Record output'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
- <ConfirmDialog
- isOpen={!!confirmAction}
- onClose={() => setConfirmAction(null)}
- onConfirm={() => {
- if (confirmAction) mut.mutate(confirmAction);
- }}
- title={confirmAction ? `${confirmAction[0].toUpperCase()}${confirmAction.slice(1)} this work order?` : ''}
- description={confirmAction
- ? <>This will run the <span className="font-mono">{confirmAction}</span> lifecycle action on <span className="font-mono">{data.wo_number}</span>.</>
- : null}
- confirmLabel={confirmAction ? `${confirmAction[0].toUpperCase()}${confirmAction.slice(1)}` : 'Confirm'}
- variant={confirmAction === 'cancel' ? 'danger' : 'primary'}
- pending={mut.isPending}
- />
- </div>
- );
+      <ConfirmDialog
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction) mut.mutate(confirmAction);
+        }}
+        title={
+          confirmAction
+            ? `${confirmAction[0].toUpperCase()}${confirmAction.slice(1)} this work order?`
+            : ''
+        }
+        description={
+          confirmAction ? (
+            <>
+              This will run the <span className="font-mono">{confirmAction}</span> lifecycle action
+              on <span className="font-mono">{data.wo_number}</span>.
+            </>
+          ) : null
+        }
+        confirmLabel={
+          confirmAction ? `${confirmAction[0].toUpperCase()}${confirmAction.slice(1)}` : 'Confirm'
+        }
+        variant={confirmAction === 'cancel' ? 'danger' : 'primary'}
+        pending={mut.isPending}
+      />
+    </div>
+  );
 }

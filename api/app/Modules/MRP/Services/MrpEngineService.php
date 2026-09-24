@@ -31,9 +31,11 @@ use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Services\OpenSupplyService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -45,7 +47,7 @@ use Illuminate\Support\Facades\Log;
  *    consolidating all material lines for the SO; each line is one
  *    purchase_request_items row). is_auto_generated=true, priority is set
  *    to 'urgent' when order_by_date <= today, else 'normal'. Each line
- *    quantity is the net shortage ceiled to 2dp, then rounded up to the
+ *    quantity is the net shortage ceiled to 3dp, then rounded up to the
  *    item's minimum_order_quantity multiple when one is set (MRP-01).
  *  - Draft work_orders (status='planned') — one root per SO line plus one
  *    linked child per manufactured subassembly. Each WO receives only its
@@ -75,6 +77,7 @@ class MrpEngineService
         private readonly BomService $boms,
         private readonly WorkOrderService $workOrders,
         private readonly SettingsService $settings,
+        private readonly OpenSupplyService $openSupply,
     ) {}
 
     private function resolveAutoPurchaseRequestDepartment(SalesOrder $so, ?MrpRun $run, ?int $actorId): ?int
@@ -323,8 +326,9 @@ class MrpEngineService
                         'on_hand' => round((float) $supply['on_hand'], 3),
                         'reserved' => round((float) $supply['reserved'], 3),
                         'in_transit' => round((float) $supply['in_transit'], 3),
-                        'safety_stock' => round((float) $supply['safety_stock'], 3),
                         'open_purchase_requests' => round($openPurchaseRequests, 3),
+                        'open_unplanned_requests' => round((float) $supply['open_requests'], 3),
+                        'safety_stock' => round((float) $supply['safety_stock'], 3),
                         'standard_unit_cost' => (string) $item->standard_cost,
                         'gross_cost' => Money::round2(bcmul((string) $gross, (string) $item->standard_cost, 8)),
                         'net_cost' => Money::round2(bcmul((string) $net, (string) $item->standard_cost, 8)),
@@ -338,12 +342,15 @@ class MrpEngineService
                         if (! $earliest) {
                             throw new BusinessRuleException("No required delivery date is available for item {$item->code}.");
                         }
-                        $orderBy = $earliest->copy()->subDays($leadTime + $this->safetyBufferDays());
+                        $safetyBuffer = $this->safetyBufferDays();
+                        $orderBy = $earliest->copy()->subDays($leadTime + $safetyBuffer);
+                        $needBy = $orderBy->copy()->addDays($leadTime);
 
                         $priority = $orderBy->lte(Carbon::today()) ? 'urgent' : 'normal';
                         $shortages[$itemId] = [
                             'net' => $net,
                             'order_by' => $orderBy,
+                            'need_by' => $needBy,
                             'priority' => $priority,
                             'unit' => $item->unit_of_measure,
                             'estimated_unit_price' => (string) $item->standard_cost,
@@ -410,6 +417,10 @@ class MrpEngineService
                         $candidate->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
                     }
 
+                    $earliestNeedBy = collect($shortages)
+                        ->pluck('need_by')
+                        ->min();
+
                     if ($pr === null) {
                         $pr = PurchaseRequest::create([
                             'pr_number' => $this->sequences->generate('pr'),
@@ -417,6 +428,7 @@ class MrpEngineService
                             'department_id' => $purchaseRequestDepartmentId,
                             'mrp_plan_id' => $plan->id,
                             'date' => Carbon::today(),
+                            'required_delivery_date' => $earliestNeedBy?->toDateString(),
                             'reason' => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
                             'priority' => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
                             'is_auto_generated' => true,
@@ -428,6 +440,7 @@ class MrpEngineService
                             'status' => PurchaseRequestStatus::Draft->value,
                             'mrp_plan_id' => $plan->id,
                             'date' => Carbon::today(),
+                            'required_delivery_date' => $earliestNeedBy?->toDateString(),
                             'reason' => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
                             'priority' => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
                             'department_id' => $pr->department_id ?? $purchaseRequestDepartmentId,
@@ -658,7 +671,10 @@ class MrpEngineService
      * MrpRun history row, increments counters per SO, and rolls back via
      * the run-row's status on catastrophic failure.
      *
-     * Active = confirmed | in_production | partially_delivered.
+     * Active = any non-terminal SO with remaining (undelivered) demand, per
+     * SalesOrder::scopePlanningRelevant(). Delivered coverage, not status, is
+     * what ends planning ownership: an order invoiced after a partial
+     * shipment still has goods to make.
      *
      * Idempotency: each runForSalesOrder() supersedes the prior plan and
      * reconciles its draft auto-PR/planned WO children. Progressed purchasing
@@ -682,6 +698,31 @@ class MrpEngineService
         ?array $salesOrderIds = null,
         ?string $reason = null,
     ): MrpRun {
+        // Queue overlap middleware only covers queued automatic jobs. Manual
+        // recovery and the daily scheduler enter through this service too, so
+        // one shared-cache mutex protects the stock-allocation pass across all
+        // run sources and application workers.
+        // ponytail: 20-minute lease caps a batch; renew it or use a DB advisory
+        // lock if measured plant-wide runs grow beyond that window.
+        $lock = Cache::lock('mrp:plant-run', 1200);
+        if (! $lock->get()) {
+            throw new BusinessRuleException('Another MRP run is already in progress. Retry after it finishes.');
+        }
+
+        try {
+            return $this->runForActiveSalesOrdersLocked($trigger, $userId, $salesOrderIds, $reason);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** @param list<int>|null $salesOrderIds */
+    private function runForActiveSalesOrdersLocked(
+        MrpRunTrigger $trigger,
+        ?int $userId,
+        ?array $salesOrderIds,
+        ?string $reason,
+    ): MrpRun {
         $start = microtime(true);
 
         $run = MrpRun::create([
@@ -694,9 +735,7 @@ class MrpEngineService
         ]);
 
         try {
-            $salesOrderQuery = SalesOrder::whereIn('status', [
-                'confirmed', 'in_production', 'partially_delivered',
-            ]);
+            $salesOrderQuery = SalesOrder::query()->planningRelevant();
             if ($salesOrderIds !== null) {
                 $salesOrderQuery->whereIn('id', array_values(array_unique(array_map('intval', $salesOrderIds))));
             }
@@ -707,6 +746,7 @@ class MrpEngineService
             $prsUpdated = 0;
             $plansGenerated = 0;
             $failedSalesOrders = 0;
+            $incompleteSalesOrders = 0;
             $perSo = [];
             $sharedSupply = [];
 
@@ -722,6 +762,13 @@ class MrpEngineService
                     $plan = $this->runForSalesOrder($so, $sharedSupply, $run, $userId, $reason);
                     $plansGenerated++;
                     $shortagesTotal += (int) $plan->shortages_found;
+                    $warnings = collect((array) $plan->diagnostics)
+                        ->filter(static fn ($row): bool => is_array($row) && ($row['type'] ?? null) === 'missing_bom')
+                        ->values()
+                        ->all();
+                    if ($warnings !== []) {
+                        $incompleteSalesOrders++;
+                    }
 
                     $afterAutoPrs = PurchaseRequest::where('is_auto_generated', true)
                         ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
@@ -740,6 +787,7 @@ class MrpEngineService
                         'so_number' => $so->so_number,
                         'shortages_found' => (int) $plan->shortages_found,
                         'plan_no' => $plan->mrp_plan_no,
+                        'warnings' => $warnings,
                     ];
                 } catch (\Throwable $inner) {
                     $failure = MrpErrorPolicy::describe($inner);
@@ -768,12 +816,13 @@ class MrpEngineService
                 'plans_generated' => $plansGenerated,
                 'failed_sales_orders' => $failedSalesOrders,
                 'duration_ms' => (int) round((microtime(true) - $start) * 1000),
-                'status' => $failedSalesOrders > 0
+                'status' => $failedSalesOrders > 0 || $incompleteSalesOrders > 0
                     ? MrpRunStatus::Partial->value
                     : MrpRunStatus::Completed->value,
                 'summary' => [
                     'per_sales_order' => $perSo,
                     'failed_sales_orders' => $failedSalesOrders,
+                    'incomplete_sales_orders' => $incompleteSalesOrders,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -977,8 +1026,8 @@ class MrpEngineService
      * MRP-01 — safety stock absorbs demand variability; netting may only
      * consume stock above it, so it floors the available quantity.
      *
-     * @param  array<int, array{on_hand:float,reserved:float,in_transit:float,safety_stock:float,available:float}>  $planningSupply
-     * @return array{on_hand:float,reserved:float,in_transit:float,safety_stock:float,available:float}
+     * @param  array<int, array{on_hand:float,reserved:float,in_transit:float,open_requests:float,safety_stock:float,available:float}>  $planningSupply
+     * @return array{on_hand:float,reserved:float,in_transit:float,open_requests:float,safety_stock:float,available:float}
      */
     private function supplyForItem(int $itemId, array &$planningSupply): array
     {
@@ -999,14 +1048,16 @@ class MrpEngineService
         $onHand = (float) $levels->sum('quantity');
         $reserved = (float) $levels->sum('reserved_quantity');
         $inTransit = $this->inTransit($itemId);
+        $openRequests = $this->openUnplannedRequestQuantity($itemId);
         $safetyStock = (float) (Item::query()->whereKey($itemId)->value('safety_stock') ?? 0);
 
         return $planningSupply[$itemId] = [
             'on_hand' => $onHand,
             'reserved' => $reserved,
             'in_transit' => $inTransit,
+            'open_requests' => $openRequests,
             'safety_stock' => $safetyStock,
-            'available' => max(0.0, $onHand - $reserved + $inTransit - $safetyStock),
+            'available' => max(0.0, $onHand - $reserved + $inTransit + $openRequests - $safetyStock),
         ];
     }
 
@@ -1029,64 +1080,66 @@ class MrpEngineService
 
     /**
      * MRP-01 — orderable quantity for an auto-PR line: the net shortage
-     * ceiled to two decimal places (purchase-request precision), then lifted
+     * ceiled to three decimal places (purchase-request precision), then lifted
      * to the next multiple of the item's minimum order quantity when one is
      * configured, so purchasing never receives a below-MOQ line. BCMath keeps
-     * the multiple exact; the bcdiv quotient truncates at scale 6, so any
+     * the multiple exact; the bcdiv quotient truncates at scale 8, so any
      * surviving remainder bumps the multiple count up.
      */
     private function purchaseQuantity(float $net, string $minimumOrderQuantity): string
     {
-        $quantity = ceil(max(0.0, $net) * 100 - 0.000000001) / 100;
+        $net = number_format(max(0.0, $net), 8, '.', '');
+        $thousandths = bcmul($net, '1000', 8);
+        $quantityUnits = bcdiv($thousandths, '1', 0);
+        if (bccomp($thousandths, $quantityUnits, 8) > 0) {
+            $quantityUnits = bcadd($quantityUnits, '1', 0);
+        }
+        $quantity = bcdiv($quantityUnits, '1000', 3);
 
         if (bccomp($minimumOrderQuantity, '0', 3) === 1) {
-            $quotient = bcdiv(number_format($quantity, 2, '.', ''), $minimumOrderQuantity, 6);
-            $multiples = (string) (int) $quotient;
-            if (bccomp(bcsub($quotient, $multiples, 6), '0', 6) === 1) {
+            $quotient = bcdiv($quantity, $minimumOrderQuantity, 8);
+            $multiples = bcdiv($quotient, '1', 0);
+            if (bccomp($quotient, $multiples, 8) > 0) {
                 $multiples = bcadd($multiples, '1', 0);
             }
-            $quantity = (float) bcmul($multiples, $minimumOrderQuantity, 6);
+            $quantity = bcmul($multiples, $minimumOrderQuantity, 3);
         }
 
-        return number_format($quantity, 2, '.', '');
+        return bcadd($quantity, '0', 3);
     }
 
     /**
      * Quantity already covered by open purchase requests for one SO/item.
+     * Counts only remaining unconverted quantities (PR line qty minus PO qty already placed).
      * Draft requests are intentionally excluded because this service owns and
      * reconciles those rows on the current run; pending/approved requests have
      * crossed the purchasing handoff and must not be duplicated.
      */
     private function openPurchaseRequestQuantity(int $salesOrderId, int $itemId): float
     {
-        $row = PurchaseRequestItem::query()
-            ->where('item_id', $itemId)
-            ->whereHas('purchaseRequest', function ($q) use ($salesOrderId): void {
-                $q->whereIn('status', [
-                    PurchaseRequestStatus::Pending->value,
-                    PurchaseRequestStatus::Approved->value,
-                ])->whereHas('mrpPlan', fn ($plan) => $plan->where('sales_order_id', $salesOrderId));
-            })
-            ->selectRaw('COALESCE(SUM(quantity), 0) as quantity')
-            ->first();
+        $baseQty = $this->openSupply->openRequestBaseQuantity($itemId, $salesOrderId, false);
+        return (float) $baseQty;
+    }
 
-        return (float) ($row->quantity ?? 0);
+    /**
+     * Quantity in open unplanned PRs (reorder-point auto-replenishment or manual)
+     * that remain unconverted. Used to net unplanned supply into the shared pool.
+     */
+    private function openUnplannedRequestQuantity(int $itemId): float
+    {
+        $baseQty = $this->openSupply->openRequestBaseQuantity($itemId, null, true);
+        return (float) $baseQty;
     }
 
     /**
      * Sum of (purchase_order_items.quantity - quantity_received) across all
-     * open POs for this item.
+     * open POs for this item (in base UoM). Includes POs under change re-approval
+     * (pending approval with pending_change_response_id set) as they are real supply
+     * in transit. Delegates to OpenSupplyService which excludes declined/closed POs.
      */
     private function inTransit(int $itemId): float
     {
-        $row = DB::table('purchase_order_items as poi')
-            ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
-            ->where('poi.item_id', $itemId)
-            ->whereIn('po.status', PurchaseOrderStatus::open())
-            ->selectRaw('COALESCE(SUM(poi.quantity - poi.quantity_received), 0) as in_transit')
-            ->first();
-
-        return (float) ($row->in_transit ?? 0);
+        return (float) $this->openSupply->inTransitBaseQuantity($itemId);
     }
 
     /**

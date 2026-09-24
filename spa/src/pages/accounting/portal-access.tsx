@@ -259,7 +259,7 @@ function SuppliersSection() {
 
 /* ─── Customers tab ──────────────────────────────────────── */
 
-type CustomerConfirmAction = { kind: 'deactivate'; user: CustomerPortalUser } | null;
+type CustomerConfirmAction = { kind: 'deactivate' | 'revoke'; user: CustomerPortalUser } | null;
 
 function CustomersSection() {
  const queryClient = useQueryClient();
@@ -302,11 +302,16 @@ function CustomersSection() {
   onSuccess: () => { setConfirmAction(null); refresh(); toast.success('Portal access deactivated.'); },
   onError: () => toast.error('Could not deactivate portal access.'),
  });
- const reactivateMutation = useMutation({
-  mutationFn: (id: string) => portalAccessApi.reactivateCustomer(id),
-  onSuccess: () => { refresh(); toast.success('Portal access reactivated.'); },
-  onError: () => toast.error('Could not reactivate portal access.'),
- });
+  const reactivateMutation = useMutation({
+   mutationFn: (id: string) => portalAccessApi.reactivateCustomer(id),
+   onSuccess: () => { refresh(); toast.success('Portal access reactivated.'); },
+   onError: () => toast.error('Could not reactivate portal access.'),
+  });
+  const revokeMutation = useMutation({
+   mutationFn: (id: string) => portalAccessApi.revokeCustomerTokens(id),
+   onSuccess: () => { setConfirmAction(null); refresh(); toast.success('All customer sessions revoked.'); },
+   onError: () => toast.error('Could not revoke customer sessions.'),
+  });
 
  const submitInvite = (event: FormEvent<HTMLFormElement>) => {
   event.preventDefault();
@@ -331,10 +336,11 @@ function CustomersSection() {
      {row.status !== 'inactive' && <Button size="xs" variant="ghost" icon={<LuRefreshCw size={12} />} onClick={() => resendMutation.mutate(row.id)} loading={resendMutation.isPending && resendMutation.variables === row.id}>Resend</Button>}
      {row.status === 'inactive' ? (
       <Button size="xs" variant="ghost" icon={<LuShieldCheck size={12} />} onClick={() => reactivateMutation.mutate(row.id)} loading={reactivateMutation.isPending && reactivateMutation.variables === row.id}>Reactivate</Button>
-     ) : (
-      <Button size="xs" variant="ghost" icon={<LuBan size={12} />} onClick={() => setConfirmAction({ kind: 'deactivate', user: row })}>Deactivate</Button>
-     )}
-    </div>
+      ) : (
+       <Button size="xs" variant="ghost" icon={<LuBan size={12} />} onClick={() => setConfirmAction({ kind: 'deactivate', user: row })}>Deactivate</Button>
+      )}
+      <Button size="xs" variant="ghost" icon={<LuKeyRound size={12} />} onClick={() => setConfirmAction({ kind: 'revoke', user: row })}>Revoke sessions</Button>
+     </div>
    ) : <span className="text-xs text-muted">View only</span>,
   },
  ];
@@ -380,14 +386,17 @@ function CustomersSection() {
    <ConfirmDialog
     isOpen={confirmAction !== null}
     onClose={() => setConfirmAction(null)}
-    title="Deactivate customer access?"
-    description={`${confirmAction?.user.name ?? 'This contact'} will no longer be able to sign in to the customer portal.`}
-    variant="danger"
-    confirmLabel="Deactivate"
-    pending={deactivateMutation.isPending}
+    title={confirmAction?.kind === 'deactivate' ? 'Deactivate customer access?' : 'Revoke customer sessions?'}
+    description={confirmAction?.kind === 'deactivate'
+     ? `${confirmAction.user.name} will no longer be able to sign in to the customer portal.`
+     : `All active sessions for ${confirmAction?.user.name ?? 'this contact'} will be revoked.`}
+    variant={confirmAction?.kind === 'deactivate' ? 'danger' : 'warning'}
+    confirmLabel={confirmAction?.kind === 'deactivate' ? 'Deactivate' : 'Revoke sessions'}
+    pending={deactivateMutation.isPending || revokeMutation.isPending}
     onConfirm={() => {
      if (!confirmAction) return;
-     deactivateMutation.mutate(confirmAction.user.id);
+     if (confirmAction.kind === 'deactivate') deactivateMutation.mutate(confirmAction.user.id);
+     else revokeMutation.mutate(confirmAction.user.id);
     }}
    />
   </>

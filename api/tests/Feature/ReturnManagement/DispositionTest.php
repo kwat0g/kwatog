@@ -17,7 +17,10 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -172,8 +175,23 @@ class DispositionTest extends TestCase
     private function makeLineStockable(ReturnRequest $rma, User $by): void
     {
         $line = $rma->items->firstOrFail();
-        $item = Item::factory()->create();
-        $source = SalesOrderItem::factory()->create();
+        $product = Product::query()->findOrFail((int) $line->product_id);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $rma->customer_id,
+            'status' => SalesOrderStatus::Delivered,
+            'created_by' => $by->id,
+        ]);
+        $rma->forceFill(['sales_order_id' => $salesOrder->id])->save();
+        $item = Item::factory()->create([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => $line->quantity,
+            'unit_price' => $line->unit_price,
+        ]);
 
         $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
@@ -250,6 +268,38 @@ class DispositionTest extends TestCase
         $this->assertSame($product->id, $ncr->product_id);
         $this->assertStringContains('Auto-created from RMA', $ncr->defect_description);
         $this->assertSame(8, $ncr->affected_quantity);
+    }
+
+    public function test_scrap_disposition_reuses_the_ncr_already_opened_by_failed_inspection(): void
+    {
+        $by = $this->makeUser();
+        $customer = $this->makeCustomer();
+        $product = $this->makeProduct();
+        $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        $this->makeLineStockable($rma, $by);
+        $inspection = Inspection::query()
+            ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+            ->where('entity_id', $rma->id)
+            ->where('product_id', $product->id)
+            ->firstOrFail();
+        $inspection->update(['status' => InspectionStatus::Failed->value]);
+        $existingNcr = app(\App\Modules\Quality\Services\NcrService::class)->create([
+            'source' => 'inspection_fail',
+            'severity' => 'medium',
+            'product_id' => $product->id,
+            'inspection_id' => $inspection->id,
+            'defect_description' => 'Auto-created when the return inspection failed.',
+            'affected_quantity' => 8,
+            'is_auto_generated' => true,
+        ], $by);
+
+        $result = app(ReturnRequestService::class)->dispose($rma, [[
+            'item_id' => $rma->items->first()->hash_id,
+            'disposition' => 'scrap',
+        ]], $by);
+
+        $this->assertSame($existingNcr->id, (int) $result->items->first()->ncr_id);
+        $this->assertSame(1, NonConformanceReport::query()->where('inspection_id', $inspection->id)->count());
     }
 
     public function test_dispose_creates_credit_note_for_customer_return(): void
@@ -444,7 +494,7 @@ class DispositionTest extends TestCase
         $vendor = Vendor::factory()->create(['created_by' => null]);
         $item = Item::factory()->create();
         $location = WarehouseLocation::factory()->create();
-        $expense = Account::query()->where('type', 'expense')->firstOrFail();
+        $expense = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
         $po = PurchaseOrder::factory()->create([
             'vendor_id'   => $vendor->id,
@@ -560,7 +610,10 @@ class DispositionTest extends TestCase
         $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_received);
         $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_accepted);
         $this->assertSame('80.00', (string) $poItem->fresh()->quantity_received);
-        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+        // The replacement PO takes over the returned 20, so the original only
+        // owed those and is short-closed (it must not keep expecting them too).
+        $this->assertSame(PurchaseOrderStatus::Closed, $po->fresh()->status);
+        $this->assertNotNull($po->fresh()->short_closed_at);
         $this->assertTrue(ChainStepRun::query()
             ->where('chain', 'p2p')
             ->where('entity_type', 'purchase_order')
@@ -641,7 +694,7 @@ class DispositionTest extends TestCase
             ]], $by, false, $location->id);
             $this->fail('Expected invalid supplier-return lineage to be rejected.');
         } catch (RuntimeException $e) {
-            $this->assertStringContainsString('source GRN and PO lines', $e->getMessage());
+            $this->assertStringContainsString('both source PO and GRN lines', $e->getMessage());
         }
 
         $this->assertNull($rmaItem->fresh()->disposition, 'Item update must roll back with the transaction.');
@@ -653,6 +706,20 @@ class DispositionTest extends TestCase
     {
         $by = $this->makeUser();
         $item = Item::factory()->create();
+        $product = $this->makeProduct();
+        $item->update(['code' => $product->part_number, 'item_type' => ItemType::FinishedGood]);
+        $customer = $this->makeCustomer();
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => SalesOrderStatus::Delivered,
+            'created_by' => $by->id,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '2.000',
+            'unit_price' => '10.00',
+        ]);
         $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
         $location = WarehouseLocation::factory()->create();
@@ -660,7 +727,8 @@ class DispositionTest extends TestCase
             'rma_number'        => 'RMA-REPLAY-'.substr(uniqid(), -5),
             'type'              => ReturnRequestType::CustomerReturn->value,
             'status'            => ReturnRequestStatus::Approved->value,
-            'customer_id'       => $this->makeCustomer()->id,
+            'customer_id'       => $customer->id,
+            'sales_order_id'    => $salesOrder->id,
             'reason_code'       => 'defective',
             'return_date'       => now()->toDateString(),
             'created_by'        => $by->id,
@@ -668,9 +736,8 @@ class DispositionTest extends TestCase
         ReturnRequestItem::create([
             'return_request_id' => $rma->id,
             'item_id'           => $item->id,
-            // The credit contract runs for every customer return, so a
-            // stockable line must carry sale provenance.
-            'source_sales_order_item_id' => SalesOrderItem::factory()->create()->id,
+            'product_id'        => $product->id,
+            'source_sales_order_item_id' => $source->id,
             'quantity'           => '2.000',
             'returned_quantity'  => '2.000',
             'unit_price'         => '10.00',
@@ -680,6 +747,20 @@ class DispositionTest extends TestCase
         $service = app(ReturnRequestService::class);
         $line = $rma->items()->firstOrFail();
         $received = $service->receive($rma, [$line->id => '2.000'], $quarantine->id, $by);
+        Inspection::create([
+            'inspection_number' => 'QC-REPLAY-'.substr(uniqid(), -8),
+            'stage' => InspectionStage::CustomerReturn->value,
+            'status' => InspectionStatus::Passed->value,
+            'product_id' => $product->id,
+            'entity_type' => InspectionEntityType::ReturnRequest->value,
+            'entity_id' => $rma->id,
+            'batch_quantity' => 2,
+            'sample_size' => 2,
+            'accept_count' => 2,
+            'reject_count' => 0,
+            'defect_count' => 0,
+            'inspector_id' => $by->id,
+        ]);
         $inspected = $service->inspect($received, null, $by);
         $disposed = $service->dispose($inspected, [[
             'item_id' => $line->hash_id,

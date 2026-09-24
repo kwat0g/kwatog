@@ -7,7 +7,9 @@ namespace Tests\Feature\SupplyChain;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Services\InvoiceService;
 use App\Common\Models\ChainListenerRun;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxEventCodec;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -220,6 +222,42 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
         $this->assertSame($invoiceCount, Invoice::count());
     }
 
+    public function test_finalize_rejects_an_invoice_that_reuses_an_already_invoiced_delivery(): void
+    {
+        $user = $this->makeUser();
+        $revenueId = Account::query()->where('code', '4010')->firstOrFail()->hash_id;
+
+        [$delivery, $deliveryItem, $so, $customer] = $this->seedDeliveryWithLine(
+            $user,
+            productRevenueAccountId: null,
+            qty: '5',
+            price: '100.00',
+        );
+        $this->addProof($delivery, $user);
+        $this->svc->confirm($delivery, $user);
+
+        // The auto-drafted invoice already names this delivery's only line.
+        $second = app(InvoiceService::class)->create([
+            'customer_id' => $customer->hash_id,
+            'sales_order_id' => $so->hash_id,
+            'delivery_id' => $delivery->hash_id,
+            'date' => now()->toDateString(),
+            'vat_classification' => 'vat_exempt',
+            'items' => [[
+                'revenue_account_id' => $revenueId,
+                'source_delivery_item_id' => $deliveryItem->hash_id,
+                'description' => 'Second billing attempt',
+                'quantity' => '5',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('invoiced once');
+
+        app(InvoiceService::class)->finalize($second, $user);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private function makeUser(): User
@@ -267,7 +305,7 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
     }
 
     /**
-     * @return array{0: Delivery, 1: DeliveryItem}
+     * @return array{0: Delivery, 1: DeliveryItem, 2: SalesOrder, 3: Customer}
      */
     private function seedDeliveryWithLine(
         User $user,
@@ -328,6 +366,6 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
             'unit_price'          => $price,
         ]);
 
-        return [$delivery, $item];
+        return [$delivery, $item, $so, $customer];
     }
 }

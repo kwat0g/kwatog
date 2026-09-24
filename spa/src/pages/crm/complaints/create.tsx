@@ -24,6 +24,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { useDebounce } from '@/hooks/useDebounce';
+import { localIsoDate } from '@/lib/formatDate';
 const schema = z.object({
  customer_id: z.string().min(1, 'Customer is required'),
  product_id: z.string().optional().or(z.literal('')),
@@ -82,7 +83,7 @@ export default function CreateComplaintPage() {
  customer_id: '',
  product_id: '',
  sales_order_id: '',
- received_date: new Date().toISOString().slice(0, 10),
+ received_date: localIsoDate(),
  severity: '',
  description: '',
  affected_quantity: 0,

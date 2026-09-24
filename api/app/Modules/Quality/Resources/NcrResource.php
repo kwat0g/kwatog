@@ -58,6 +58,19 @@ class NcrResource extends JsonResource
                 'id'   => $this->closer->hash_id,
                 'name' => $this->closer->name,
             ] : null),
+            'mrb_accepted_quantity' => $this->mrb_accepted_quantity,
+            'mrb_decided_at'        => optional($this->mrb_decided_at)?->toISOString(),
+            'mrb_decider'           => $this->whenLoaded('mrbDecider', fn () => $this->mrbDecider ? [
+                'id'   => $this->mrbDecider->hash_id,
+                'name' => $this->mrbDecider->name,
+            ] : null),
+            // Cheap pre-filter, then the service's own rule (pending GRN + MRB
+            // setting) so the SPA never offers an MRB input the API refuses.
+            'is_incoming_mrb'       => $this->inspection
+                && $this->inspection->stage?->value === 'incoming'
+                && in_array($this->status?->value, ['open', 'in_progress'], true)
+                && ! $this->disposition
+                && app(\App\Modules\Quality\Services\NcrService::class)->awaitsMrbDecision($this->resource),
             'replacement_work_order' => $this->whenLoaded('replacementWorkOrder', fn () => $this->replacementWorkOrder ? [
                 'id'              => $this->replacementWorkOrder->hash_id,
                 'wo_number'       => $this->replacementWorkOrder->wo_number,

@@ -62,7 +62,6 @@ class PayrollVoidTest extends TestCase
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
             'date_hired' => '2025-01-01', 'basic_monthly_salary' => '20000.00',
-            'status' => 'active',
         ]);
 
         $period = PayrollPeriod::create([

@@ -87,6 +87,28 @@ class TrainingExpiryAlertTest extends TestCase
         $this->assertSame(EmployeeTrainingStatus::Completed, $rec->status);
     }
 
+    public function test_backfilled_record_does_not_hide_newer_completion_by_id(): void
+    {
+        $this->seedHrOfficer();
+        [$emp, $t] = $this->setupEmpAndTraining();
+        $newerCompletion = $this->makeCompleted($emp, $t, now()->addDays(30)->toDateString());
+        $newerCompletion->forceFill(['completed_at' => '2026-01-01'])->save();
+        $backfilled = EmployeeTraining::create([
+            'employee_id' => $emp->id,
+            'training_id' => $t->id,
+            'scheduled_for' => '2025-07-01',
+            'completed_at' => '2025-01-01',
+            'expires_at' => now()->addDays(14)->toDateString(),
+        ]);
+        $backfilled->forceFill(['completed_at' => '2025-01-01'])->save();
+
+        $result = app(TrainingExpiryService::class)->check();
+
+        $this->assertSame(1, $result['evaluated']);
+        $this->assertSame(0, (int) $backfilled->refresh()->last_alert_level?->ordinal());
+        $this->assertNotNull($newerCompletion->refresh()->last_alert_level);
+    }
+
     public function test_idempotent_same_day_rerun(): void
     {
         $this->seedHrOfficer();

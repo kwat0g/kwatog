@@ -69,15 +69,26 @@ class EmployeeSkillService
                 if ($record === null) {
                     $record = EmployeeSkill::create($attributes);
                 } else {
+                    $oldPath = $record->certification_document_path;
                     $record->restore();
                     $record->fill($attributes)->save();
+                    if ($certificate === null) {
+                        $record->forceFill([
+                            'certification_document_path' => null,
+                            'certification_document_name' => null,
+                            'certification_document_mime_type' => null,
+                            'certification_document_size' => null,
+                            'certification_document_uploaded_by' => null,
+                            'certification_document_uploaded_at' => null,
+                        ])->save();
+                    }
                 }
 
                 $evidence = $certificate
                     ? $this->evidence->store($certificate, 'employee-skill-certificates/'.$record->id)
                     : null;
                 $newPath = $evidence['path'] ?? null;
-                $oldPath = $record->certification_document_path;
+                $oldPath ??= $record->certification_document_path;
 
                 if ($evidence !== null) {
                     $record->forceFill([
@@ -91,6 +102,9 @@ class EmployeeSkillService
                 }
 
                 if ($evidence !== null && $oldPath !== null && $oldPath !== $evidence['path']) {
+                    DB::afterCommit(fn () => $this->evidence->delete($oldPath));
+                }
+                if ($evidence === null && $oldPath !== null) {
                     DB::afterCommit(fn () => $this->evidence->delete($oldPath));
                 }
 

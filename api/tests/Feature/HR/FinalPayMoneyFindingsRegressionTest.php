@@ -77,7 +77,6 @@ class FinalPayMoneyFindingsRegressionTest extends TestCase
             'pay_type'             => 'monthly',
             'basic_monthly_salary' => '20000.00',
             'date_hired'           => '2024-01-01',
-            'status'               => 'active',
         ], $overrides));
     }
 

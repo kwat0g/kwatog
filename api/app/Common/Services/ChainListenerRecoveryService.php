@@ -473,8 +473,11 @@ class ChainListenerRecoveryService
         AuditLog::create([
             'user_id' => $actor->id,
             'action' => $action,
-            'model_type' => 'chain_listener_run',
-            'model_id' => null,
+            // ChainListenerRun uses a UUID primary key while audit_logs.model_id
+            // is an unsigned bigint. The durable outbox row is the numeric,
+            // stable subject that links every recovery action back to this run.
+            'model_type' => OutboxMessage::class,
+            'model_id' => (int) $run->outbox_id,
             'old_values' => [
                 'run_id' => (string) $run->getKey(),
                 'resolution_status' => $run->getOriginal('resolution_status'),
@@ -492,8 +495,8 @@ class ChainListenerRecoveryService
         AuditLog::create([
             'user_id' => $actor->id,
             'action' => 'chain_listener.replay_failed',
-            'model_type' => 'chain_listener_run',
-            'model_id' => null,
+            'model_type' => OutboxMessage::class,
+            'model_id' => (int) $command['outbox_id'],
             'old_values' => null,
             'new_values' => [
                 'run_id' => $command['source_run_id'],

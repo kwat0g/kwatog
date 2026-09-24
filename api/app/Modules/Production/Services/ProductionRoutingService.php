@@ -6,6 +6,7 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Enums\MachineStatus;
@@ -45,14 +46,14 @@ class ProductionRoutingService
     /**
      * Paginated listing with optional filters.
      *
-     * @param array{product_id?: string, search?: string, is_active?: string|bool, per_page?: int} $filters
+     * @param  array{product_id?: string, search?: string, is_active?: string|bool, per_page?: int}  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
         $q = ProductRouting::query()->with(['operations', 'product:id,part_number,name']);
 
         if (! empty($filters['product_id'])) {
-            $decoded = \App\Common\Support\HashIdFilter::decode(
+            $decoded = HashIdFilter::decode(
                 $filters['product_id'],
                 Product::class,
             );
@@ -81,7 +82,7 @@ class ProductionRoutingService
     /**
      * Create a routing with its operations in a single transaction.
      *
-     * @param array $data Validated payload with 'product_id', 'notes', 'operations'.
+     * @param  array  $data  Validated payload with 'product_id', 'notes', 'operations'.
      */
     public function create(array $data): ProductRouting
     {
@@ -116,7 +117,7 @@ class ProductionRoutingService
      * key to its operation rows, so mutating them in place would sever the
      * provenance of work that has already been generated.
      *
-     * @param array $data Validated payload.
+     * @param  array  $data  Validated payload.
      */
     public function update(ProductRouting $routing, array $data): ProductRouting
     {
@@ -250,18 +251,18 @@ class ProductionRoutingService
     private function snapshotOperations(ProductRouting $routing): array
     {
         return $routing->operations->map(fn ($op) => [
-            'sequence'               => $op->sequence,
-            'operation_name'         => $op->operation_name,
-            'work_center'            => $op->work_center,
-            'machine_id'             => $op->machine_id,
-            'mold_id'                => $op->mold_id,
-            'setup_time_minutes'     => $op->setup_time_minutes,
-            'cycle_time_minutes'     => $op->cycle_time_minutes,
-            'labor_rate_per_hour'    => $op->labor_rate_per_hour,
-            'machine_rate_per_hour'  => $op->machine_rate_per_hour,
+            'sequence' => $op->sequence,
+            'operation_name' => $op->operation_name,
+            'work_center' => $op->work_center,
+            'machine_id' => $op->machine_id,
+            'mold_id' => $op->mold_id,
+            'setup_time_minutes' => $op->setup_time_minutes,
+            'cycle_time_minutes' => $op->cycle_time_minutes,
+            'labor_rate_per_hour' => $op->labor_rate_per_hour,
+            'machine_rate_per_hour' => $op->machine_rate_per_hour,
             'overhead_rate_per_hour' => $op->overhead_rate_per_hour,
-            'description'            => $op->description,
-            'qc_required'            => $op->qc_required,
+            'description' => $op->description,
+            'qc_required' => $op->qc_required,
         ])->values()->all();
     }
 
@@ -285,11 +286,11 @@ class ProductionRoutingService
         }
 
         $routing = ProductRouting::create([
-            'product_id'       => $product->id,
-            'version'          => $maxVersion + 1,
-            'is_active'        => true,
+            'product_id' => $product->id,
+            'version' => $maxVersion + 1,
+            'is_active' => true,
             'total_cycle_time' => $totalCycleTime,
-            'notes'            => $data['notes'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ]);
 
         foreach ($data['operations'] as $opData) {
@@ -324,18 +325,18 @@ class ProductionRoutingService
     private function operationAttributes(array $opData): array
     {
         return [
-            'sequence'              => (int) $opData['sequence'],
-            'operation_name'        => $opData['operation_name'],
-            'work_center'          => $opData['work_center'] ?? null,
-            'machine_id'            => $opData['machine_id'] ?? null,
-            'mold_id'               => $opData['mold_id'] ?? null,
-            'setup_time_minutes'   => $opData['setup_time_minutes'] ?? 0,
-            'cycle_time_minutes'   => $opData['cycle_time_minutes'],
-            'labor_rate_per_hour'  => $opData['labor_rate_per_hour'] ?? 0,
+            'sequence' => (int) $opData['sequence'],
+            'operation_name' => $opData['operation_name'],
+            'work_center' => $opData['work_center'] ?? null,
+            'machine_id' => $opData['machine_id'] ?? null,
+            'mold_id' => $opData['mold_id'] ?? null,
+            'setup_time_minutes' => $opData['setup_time_minutes'] ?? 0,
+            'cycle_time_minutes' => $opData['cycle_time_minutes'],
+            'labor_rate_per_hour' => $opData['labor_rate_per_hour'] ?? 0,
             'machine_rate_per_hour' => $opData['machine_rate_per_hour'] ?? 0,
             'overhead_rate_per_hour' => $opData['overhead_rate_per_hour'] ?? 0,
-            'description'          => $opData['description'] ?? null,
-            'qc_required'          => $opData['qc_required'] ?? false,
+            'description' => $opData['description'] ?? null,
+            'qc_required' => $opData['qc_required'] ?? false,
         ];
     }
 
@@ -415,8 +416,12 @@ class ProductionRoutingService
 
             $machineId = $this->nullablePositiveInteger($operation['machine_id'] ?? null, 'machine', $index);
             $moldId = $this->nullablePositiveInteger($operation['mold_id'] ?? null, 'mold', $index);
-            if ($machineId !== null) $machineIds[$machineId] = true;
-            if ($moldId !== null) $moldIds[$moldId] = true;
+            if ($machineId !== null) {
+                $machineIds[$machineId] = true;
+            }
+            if ($moldId !== null) {
+                $moldIds[$moldId] = true;
+            }
         }
 
         $machines = Machine::query()->whereIn('id', array_keys($machineIds))->get()->keyBy('id');
@@ -453,7 +458,9 @@ class ProductionRoutingService
 
     private function nullablePositiveInteger(mixed $value, string $label, int $index): ?int
     {
-        if ($value === null || $value === '') return null;
+        if ($value === null || $value === '') {
+            return null;
+        }
         if (! is_int($value) && ! (is_string($value) && preg_match('/^\d+$/D', $value))) {
             throw new BusinessRuleException("Operation row {$index} has an invalid {$label}.");
         }
@@ -461,12 +468,15 @@ class ProductionRoutingService
         if ($id < 1) {
             throw new BusinessRuleException("Operation row {$index} has an invalid {$label}.");
         }
+
         return $id;
     }
 
     private function assertDecimal(mixed $value, int $scale, string $label, string $maximum, int $index): string
     {
-        if ($value === null || $value === '') $value = '0';
+        if ($value === null || $value === '') {
+            $value = '0';
+        }
         $value = trim((string) $value);
         if (! preg_match('/^\d+(?:\.\d+)?$/D', $value)) {
             throw new BusinessRuleException("Operation row {$index} has an invalid {$label}.");
@@ -478,6 +488,7 @@ class ProductionRoutingService
         if (bccomp($value, $maximum, $scale) > 0) {
             throw new BusinessRuleException("Operation row {$index} {$label} exceeds the supported maximum.");
         }
+
         return $value;
     }
 
@@ -491,7 +502,9 @@ class ProductionRoutingService
     private function isRoutingVersionConflict(QueryException $exception): bool
     {
         $state = (string) ($exception->errorInfo[0] ?? $exception->getCode());
-        if (! in_array($state, ['23000', '23505'], true)) return false;
+        if (! in_array($state, ['23000', '23505'], true)) {
+            return false;
+        }
 
         return str_contains($exception->getMessage(), 'product_routings');
     }

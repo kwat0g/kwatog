@@ -36,6 +36,9 @@ const CustomerDeliveryDetailPage = lazy(() => import('@/pages/portal/customer/de
 const CustomerComplaintsPage = lazy(() => import('@/pages/portal/customer/complaints'));
 const CustomerStatementOfAccountPage = lazy(() => import('@/pages/portal/customer/statement-of-account'));
 const CustomerDeliverySchedulesPage = lazy(() => import('@/pages/portal/customer/delivery-schedules'));
+const CustomerReturnsPage = lazy(() => import('@/pages/portal/customer/returns'));
+const CustomerCreateReturnPage = lazy(() => import('@/pages/portal/customer/returns/new'));
+const CustomerReturnDetailPage = lazy(() => import('@/pages/portal/customer/returns/detail'));
 
 export const portalRoutes = (
  <>
@@ -73,7 +76,10 @@ export const portalRoutes = (
  <Route path="/portal/customer/invoices/:id" element={<CustomerInvoiceDetailPage />} />
  <Route path="/portal/customer/deliveries" element={<CustomerDeliveriesPage />} />
  <Route path="/portal/customer/deliveries/:id" element={<CustomerDeliveryDetailPage />} />
- <Route path="/portal/customer/complaints" element={<CustomerComplaintsPage />} />
+  <Route path="/portal/customer/complaints" element={<CustomerComplaintsPage />} />
+  <Route path="/portal/customer/returns" element={<CustomerReturnsPage />} />
+  <Route path="/portal/customer/returns/new" element={<CustomerCreateReturnPage />} />
+  <Route path="/portal/customer/returns/:id" element={<CustomerReturnDetailPage />} />
  <Route path="/portal/customer/statement-of-account" element={<CustomerStatementOfAccountPage />} />
  <Route path="/portal/customer/delivery-schedules" element={<CustomerDeliverySchedulesPage />} />
  </Route>

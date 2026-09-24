@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Purchasing;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -125,5 +129,130 @@ class PurchaseOrderCancelTest extends TestCase
             $this->assertSame('Cannot cancel a fully received or closed PO.', $e->getMessage());
         }
         $this->assertSame(PurchaseOrderStatus::Received, $po->fresh()->status);
+    }
+
+    public function test_cancelling_po_purges_staged_draft_grns_and_prevents_receiving(): void
+    {
+        $user = User::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+
+        $draftGrn = GoodsReceiptNote::create([
+            'grn_number' => 'GRN-DRAFT-PURGE',
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'status' => GrnStatus::Draft,
+            'received_date' => now()->toDateString(),
+            'received_by' => $user->id,
+        ]);
+
+        $this->svc->cancel($po, 'Supplier cancelled order');
+
+        $this->assertSame(PurchaseOrderStatus::Cancelled, $po->fresh()->status);
+        $this->assertDatabaseMissing('goods_receipt_notes', ['id' => $draftGrn->id]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('not open for receiving');
+
+        app(GrnService::class)->create($po->fresh(), [], [], $user);
+    }
+
+    public function test_cancel_refuses_po_with_non_cancelled_bill(): void
+    {
+        $user = User::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+
+        // Create a non-cancelled bill (e.g., unpaid service bill)
+        Bill::create([
+            'bill_number' => 'BILL-'.uniqid(),
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'total_amount' => '100.00',
+            'status' => 'unpaid',
+            'date' => now(),
+            'due_date' => now()->addDays(30),
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Cannot cancel a PO that has linked bills');
+
+        $this->svc->cancel($po, 'no bills allowed');
+    }
+
+    public function test_cancel_refuses_po_with_draft_bill(): void
+    {
+        $user = User::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+
+        // Create a draft bill (auto-created on GRN acceptance)
+        Bill::create([
+            'bill_number' => 'BILL-'.uniqid(),
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'total_amount' => '100.00',
+            'status' => 'draft',
+            'date' => now(),
+            'due_date' => now()->addDays(30),
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Cannot cancel a PO that has linked bills');
+
+        $this->svc->cancel($po, 'no bills allowed');
+    }
+
+    public function test_cancel_allows_po_with_cancelled_bill(): void
+    {
+        $user = User::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+
+        // Create a cancelled bill (should not block cancellation)
+        Bill::create([
+            'bill_number' => 'BILL-'.uniqid(),
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'total_amount' => '100.00',
+            'status' => 'cancelled',
+            'date' => now(),
+            'due_date' => now()->addDays(30),
+        ]);
+
+        $result = $this->svc->cancel($po, 'cancelled bill ok');
+
+        $this->assertSame(PurchaseOrderStatus::Cancelled, $result->status);
+    }
+
+    public function test_cancel_allows_po_with_rejected_grn(): void
+    {
+        $user = User::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+
+        // Create a rejected GRN (supplier rejected goods; should not block)
+        GoodsReceiptNote::create([
+            'grn_number' => 'GRN-REJECTED-OK',
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'status' => GrnStatus::Rejected,
+            'received_date' => now()->toDateString(),
+            'received_by' => $user->id,
+        ]);
+
+        $result = $this->svc->cancel($po, 'rejected goods ok');
+
+        $this->assertSame(PurchaseOrderStatus::Cancelled, $result->status);
     }
 }

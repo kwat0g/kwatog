@@ -191,7 +191,7 @@ class SupplierPortalAccessLifecycleTest extends TestCase
             'locked_until' => now()->addMinutes(15),
         ]);
 
-        $this->actingAs($this->operator())
+        $this->actingAs($this->operator(), 'sanctum')
             ->patchJson("/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/reactivate")
             ->assertOk()
             ->assertJsonPath('data.status', 'pending');
@@ -216,6 +216,26 @@ class SupplierPortalAccessLifecycleTest extends TestCase
         $fresh = $user->fresh();
         $this->assertSame(0, $fresh->tokens()->count());
         $this->assertTrue((bool) $fresh->is_active, 'Revoking sessions is not the same decision as revoking access.');
+    }
+
+    public function test_inactive_vendor_parent_blocks_supplier_sessions_and_reactivation(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $user = $this->portalUser($vendor, 'inactive-vendor-parent@example.test');
+        $vendor->update(['is_active' => false]);
+
+        Sanctum::actingAs($user, ['*'], 'supplier_portal');
+        $this->getJson('/api/v1/b2b/supplier/dashboard')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'portal_account_inactive');
+
+        $this->actingAs($this->operator(), 'sanctum')
+            ->patchJson("/api/v1/b2b/portal-access/suppliers/{$user->hash_id}/reactivate")
+            ->assertStatus(422);
+        $this->actingAs($this->operator(), 'sanctum')
+            ->getJson('/api/v1/b2b/portal-access/suppliers?status=inactive')
+            ->assertOk()
+            ->assertJsonPath('data.0.status', 'inactive');
     }
 
     public function test_list_reports_every_lifecycle_state_and_filters_by_status(): void

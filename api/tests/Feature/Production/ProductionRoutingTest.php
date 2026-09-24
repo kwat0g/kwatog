@@ -124,6 +124,7 @@ class ProductionRoutingTest extends TestCase
             'slug' => 'm052-'.substr(uniqid(), -8),
         ]);
         $ids = [];
+        $permissionSlugs[] = 'production.view';
         foreach ($permissionSlugs as $slug) {
             $ids[] = Permission::firstOrCreate(
                 ['slug' => $slug],

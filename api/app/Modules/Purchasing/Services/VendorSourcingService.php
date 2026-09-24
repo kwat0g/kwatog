@@ -65,7 +65,7 @@ class VendorSourcingService
         // Tiers 1–2 — qualified ASL links.
         $approved = ApprovedSupplier::query()
             ->qualified()
-            ->with('vendor:id,name')
+            ->with('vendor:id,name,is_active,deleted_at')
             ->where('item_id', $itemId)
             ->orderByDesc('is_preferred')
             ->orderByDesc('last_price_at')
@@ -74,6 +74,10 @@ class VendorSourcingService
 
         foreach ($approved as $row) {
             $vendorId = (int) $row->vendor_id;
+            // Skip vendors that are not purchasable (inactive or soft-deleted).
+            if (! $row->vendor || ! $row->vendor->isPurchasable()) {
+                continue;
+            }
             $candidates[] = [
                 'vendor_id' => $vendorId,
                 'vendor_name' => $row->vendor?->name,
@@ -91,7 +95,7 @@ class VendorSourcingService
 
         // Tier 3 — supplier-listed items (approved first, then pending).
         $listings = SupplierItemListing::query()
-            ->with('vendor:id,name')
+            ->with('vendor:id,name,is_active,deleted_at')
             ->where('item_id', $itemId)
             ->whereIn('status', [
                 SupplierListingStatus::Approved->value,
@@ -104,6 +108,10 @@ class VendorSourcingService
         foreach ($listings as $listing) {
             $vendorId = (int) $listing->vendor_id;
             if (isset($seen[$vendorId])) {
+                continue;
+            }
+            // Skip vendors that are not purchasable (inactive or soft-deleted).
+            if (! $listing->vendor || ! $listing->vendor->isPurchasable()) {
                 continue;
             }
             $candidates[] = [
@@ -124,9 +132,17 @@ class VendorSourcingService
         // Tier 4 — vendors that actually supplied the item before.
         $historyVendorIds = $this->historyVendorIds($itemId);
         if ($historyVendorIds !== []) {
-            $names = Vendor::query()->whereIn('id', $historyVendorIds)->pluck('name', 'id');
+            $names = Vendor::query()
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->whereIn('id', $historyVendorIds)
+                ->pluck('name', 'id');
             foreach ($historyVendorIds as $vendorId) {
                 if (isset($seen[$vendorId])) {
+                    continue;
+                }
+                // Skip vendors not in the purchasable names list (they're inactive or trashed).
+                if (! isset($names[$vendorId])) {
                     continue;
                 }
                 $candidates[] = [
@@ -156,8 +172,8 @@ class VendorSourcingService
 
     /**
      * Authoritative per-base-unit price for an item/vendor pair, or null when no
-     * positive price is known. Prefers the qualified ASL price, then a listing,
-     * then the last purchase price.
+     * positive price is known. Prefers the qualified ASL price (if not expired), then
+     * an approved listing (if not expired), then the last purchase price.
      */
     public function priceFor(int $itemId, int $vendorId): ?string
     {
@@ -166,25 +182,29 @@ class VendorSourcingService
             ->where('item_id', $itemId)
             ->where('vendor_id', $vendorId)
             ->first();
-        $price = $this->positiveOrNull($row?->last_price);
-        if ($price !== null) {
-            return $price;
+        if ($row !== null) {
+            // Check if price is not expired.
+            if ($row->price_valid_until === null || $row->price_valid_until->gte(now()->toDateString())) {
+                $price = $this->positiveOrNull($row->last_price);
+                if ($price !== null) {
+                    return $price;
+                }
+            }
         }
 
         $listing = SupplierItemListing::query()
             ->where('item_id', $itemId)
             ->where('vendor_id', $vendorId)
-            ->whereIn('status', [
-                SupplierListingStatus::Approved->value,
-                SupplierListingStatus::Pending->value,
-            ])
-            ->orderByRaw("CASE WHEN status = 'approved' THEN 0 ELSE 1 END")
+            ->where('status', SupplierListingStatus::Approved->value)
             ->orderByDesc('submitted_at')
             ->first();
         if ($listing !== null) {
-            $price = $this->listingPricePerBaseUnit($listing);
-            if ($price !== null) {
-                return $price;
+            // Check if listing is not expired.
+            if ($listing->valid_until === null || $listing->valid_until->gte(now()->toDateString())) {
+                $price = $this->listingPricePerBaseUnit($listing);
+                if ($price !== null) {
+                    return $price;
+                }
             }
         }
 

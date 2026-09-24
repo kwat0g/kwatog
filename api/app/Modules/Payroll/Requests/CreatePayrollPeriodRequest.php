@@ -28,7 +28,10 @@ class CreatePayrollPeriodRequest extends FormRequest
             // cycle key and let the same employee be paid twice for one month.
             // See PayrollPeriod::deriveIsFirstHalf().
             'is_first_half'       => ['nullable', 'boolean'],
-            'is_thirteenth_month' => ['nullable', 'boolean'],
+            // 13th-month windows are generated only by ThirteenthMonthService;
+            // accepting this switch here can reserve the annual cycle with a
+            // malformed manually-created period.
+            'is_thirteenth_month' => ['prohibited'],
 
             // ─── Scope filters (all optional) ────────────────────
             // Omitted / empty = company-wide, the historical behaviour. The

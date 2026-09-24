@@ -22,6 +22,10 @@ class PortalInvitationService
     /** @return array{user: CustomerPortalUser, temporary_password: string} */
     public function inviteCustomer(Customer $customer, string $name, string $email): array
     {
+        if (! $customer->is_active || $customer->trashed()) {
+            throw new BusinessRuleException('Customer portal access cannot be invited for an inactive customer.');
+        }
+
         $name = trim($name);
         $email = strtolower(trim($email));
         $password = $this->temporaryPasswords->generate();
@@ -83,6 +87,10 @@ class PortalInvitationService
     /** @return array{user: SupplierPortalUser, temporary_password: string} */
     public function inviteSupplier(Vendor $vendor, string $name, string $email): array
     {
+        if (! $vendor->is_active || $vendor->trashed()) {
+            throw new BusinessRuleException('Supplier portal access cannot be invited for an inactive supplier.');
+        }
+
         $name = trim($name);
         $email = strtolower(trim($email));
         $password = $this->temporaryPasswords->generate();

@@ -13,9 +13,12 @@ use App\Modules\HR\Models\EmployeeSalaryHistory;
 use App\Modules\HR\Models\SalaryAdjustment;
 use App\Modules\HR\Services\EmployeeService;
 use App\Modules\HR\Services\SalaryAdjustmentService;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -66,7 +69,10 @@ class SalaryAdjustmentGateTest extends TestCase
         }
 
         $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);
-        $this->assertSame(0, EmployeeSalaryHistory::query()->where('employee_id', $employee->id)->count());
+        $this->assertDatabaseMissing('employee_salary_history', [
+            'employee_id' => $employee->id,
+            'basic_monthly_salary' => '99000.00',
+        ]);
     }
 
     /** Requesting an adjustment defers the write — employee unchanged while pending. */
@@ -109,6 +115,69 @@ class SalaryAdjustmentGateTest extends TestCase
             'employee_id'          => $employee->id,
             'basic_monthly_salary' => '25000.00',
             'effective_date'       => '2026-08-01',
+        ]);
+        $this->assertDatabaseHas('employment_history', [
+            'employee_id' => $employee->id,
+            'change_type' => 'salary_adjusted',
+            'approved_by' => $approver->id,
+        ]);
+    }
+
+    public function test_only_one_pending_salary_adjustment_is_allowed(): void
+    {
+        $svc = app(SalaryAdjustmentService::class);
+        $hr = $this->userWithRole('hr_officer');
+        $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
+
+        $svc->request($employee, [
+            'to_basic_monthly_salary' => '21000.00',
+            'effective_date' => '2026-08-01',
+        ], $hr);
+
+        $this->expectException(ValidationException::class);
+        $svc->request($employee, [
+            'to_basic_monthly_salary' => '22000.00',
+            'effective_date' => '2026-09-01',
+        ], $hr);
+    }
+
+    public function test_salary_adjustment_cannot_rewrite_an_already_computed_payroll_input(): void
+    {
+        $svc = app(SalaryAdjustmentService::class);
+        $hr = $this->userWithRole('hr_officer');
+        $checker = $this->userWithRole('production_manager');
+        $approver = $this->userWithRole('vice_president');
+        $employee = Employee::factory()->create(['basic_monthly_salary' => '20000.00']);
+        $period = PayrollPeriod::factory()->create([
+            'period_start' => '2026-08-01',
+            'period_end' => '2026-08-15',
+            'payroll_date' => '2026-08-15',
+            'status' => 'computed',
+        ]);
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $adjustment = $svc->request($employee, [
+            'to_basic_monthly_salary' => '25000.00',
+            'effective_date' => '2026-08-10',
+            'reason' => 'Merit during computed period',
+        ], $hr);
+
+        $svc->approve($adjustment, $checker);
+        try {
+            $svc->approve($adjustment, $approver);
+            $this->fail('A salary adjustment rewrote a computed payroll input.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('computed payroll period', $exception->getMessage());
+        }
+
+        $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);
+        $this->assertSame('pending', $adjustment->fresh()->status->value);
+        $this->assertDatabaseMissing('employee_salary_history', [
+            'employee_id' => $employee->id,
+            'basic_monthly_salary' => '25000.00',
+            'effective_date' => '2026-08-10',
         ]);
     }
 

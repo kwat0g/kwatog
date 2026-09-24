@@ -108,6 +108,68 @@ class CreditNoteTest extends TestCase
         $this->assertSame('1120.00', (string) $je->total_debit);
     }
 
+    public function test_unapplied_finalized_credit_note_can_be_voided_with_a_balanced_reversal(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Voidable Credit', 'payment_terms_days' => 30]);
+        $finalized = $this->svc->finalize($this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'is_vatable' => false,
+            'customer_id' => $customer->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Void fixture',
+                'amount' => '100.00',
+            ]],
+        ], $by), $by);
+
+        $void = $this->svc->void($finalized, $by, 'Duplicate credit note');
+
+        $this->assertSame(CreditNoteStatus::Void, $void->status);
+        $this->assertSame('0.00', (string) $void->balance);
+        $this->assertNotNull($void->void_reversal_journal_entry_id);
+        $this->assertSame(
+            JournalEntryStatus::Reversed,
+            JournalEntry::query()->findOrFail($finalized->journal_entry_id)->status,
+        );
+        $this->assertSame(
+            '100.00',
+            (string) JournalEntry::query()->findOrFail($void->void_reversal_journal_entry_id)->total_debit,
+        );
+    }
+
+    public function test_applied_credit_note_cannot_be_voided_in_place(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Applied Credit', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-APPLIED-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+        $cn = $this->svc->finalize($this->svc->create([
+            'type' => 'customer', 'date' => now()->toDateString(), 'is_vatable' => false,
+            'customer_id' => $customer->id, 'invoice_id' => $invoice->id,
+            'lines' => [['account_id' => $this->revenueAccountId(), 'description' => 'Applied', 'amount' => '50.00']],
+        ], $by), $by);
+        $this->svc->apply($cn, ['invoice_id' => $invoice->id, 'amount' => '50.00'], $by);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('unwound before it can be voided');
+        $this->svc->void($cn, $by, 'Attempted direct void');
+    }
+
     public function test_customer_credit_note_inherits_vat_treatment_from_source_invoice(): void
     {
         $by = $this->admin();
@@ -145,6 +207,83 @@ class CreditNoteTest extends TestCase
         $this->assertFalse($creditNote->is_vatable);
         $this->assertSame('0.00', (string) $creditNote->vat_amount);
         $this->assertSame('100.00', (string) $creditNote->total_amount);
+    }
+
+    public function test_credit_note_rejects_a_source_invoice_that_was_never_finalized(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Draft Source Co', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-DRAFT-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'draft',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'created_by' => $by->id,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('finalized, partially paid, or paid invoice');
+
+        $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'invoice_id' => $invoice->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Credit against an unposted source',
+                'amount' => '50.00',
+            ]],
+        ], $by);
+    }
+
+    public function test_finalize_rejects_a_credit_note_whose_source_was_cancelled(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Cancelled Source Co', 'payment_terms_days' => 30]);
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-CN-CANCELLED-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'status' => 'finalized',
+            'is_vatable' => false,
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $this->postedJournalEntry($by)->id,
+            'created_by' => $by->id,
+        ]);
+
+        $creditNote = $this->svc->create([
+            'type' => 'customer',
+            'date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'invoice_id' => $invoice->id,
+            'lines' => [[
+                'account_id' => $this->revenueAccountId(),
+                'description' => 'Return credit',
+                'amount' => '50.00',
+            ]],
+        ], $by);
+
+        // The source is cancelled after the credit note was staged — the
+        // finalize boundary must re-check, not trust the draft-time state.
+        $invoice->forceFill(['status' => 'cancelled'])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('finalized, partially paid, or paid invoice');
+
+        $this->svc->finalize($creditNote, $by);
     }
 
     public function test_customer_credit_note_cannot_reference_another_customers_invoice(): void
@@ -306,7 +445,7 @@ class CreditNoteTest extends TestCase
         ]);
 
         // Supplier credit lines credit an expense account (use 5010 COGS-ish or any expense).
-        $expenseId = (string) Account::query()->where('type', 'expense')->value('id');
+        $expenseId = (string) Account::query()->where('code', '5010')->value('id');
 
         $cn = $this->svc->finalize($this->svc->create([
             'type' => 'supplier', 'date' => now()->toDateString(), 'is_vatable' => true,

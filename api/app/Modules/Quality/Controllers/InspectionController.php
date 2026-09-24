@@ -13,7 +13,9 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\QualityPlanSamplingMethod;
 use App\Modules\Quality\Requests\CreateInspectionRequest;
+use App\Modules\Quality\Requests\RecordLotResultRequest;
 use App\Modules\Quality\Requests\RecordMeasurementsRequest;
+use App\Modules\Quality\Requests\ReviewInspectionRequest;
 use App\Modules\Quality\Resources\InspectionResource;
 use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
@@ -136,7 +138,8 @@ class InspectionController
 
         return response()->json(['data' => [
             ['key' => 'opened', 'label' => 'Opened', 'state' => 'done', 'date' => $created],
-            ['key' => 'in_progress', 'label' => 'In progress', 'state' => $isTerminal ? 'done' : ($status === InspectionStatus::InProgress->value ? 'active' : 'pending'), 'date' => null],
+            ['key' => 'in_progress', 'label' => 'In progress', 'state' => $isTerminal || $status === InspectionStatus::AwaitingReview->value ? 'done' : ($status === InspectionStatus::InProgress->value ? 'active' : 'pending'), 'date' => null],
+            ['key' => 'review', 'label' => 'Checker review', 'state' => $status === InspectionStatus::AwaitingReview->value ? 'active' : ($isTerminal && $inspection->reviewed_at ? 'done' : 'pending'), 'date' => optional($inspection->reviewed_at)?->toISOString()],
             ['key' => 'completed', 'label' => 'Completed', 'state' => in_array($status, [InspectionStatus::Passed->value, InspectionStatus::Failed->value], true) ? 'done' : 'pending', 'date' => $completed],
             ['key' => 'cancelled', 'label' => 'Cancelled', 'state' => $status === InspectionStatus::Cancelled->value ? 'done' : 'pending', 'date' => $status === InspectionStatus::Cancelled->value ? ($completed ?? optional($inspection->updated_at)?->toISOString()) : null],
         ]]);
@@ -200,6 +203,15 @@ class InspectionController
         return new InspectionResource($insp);
     }
 
+    public function recordLotResult(
+        RecordLotResultRequest $request,
+        Inspection $inspection
+    ): InspectionResource {
+        $data = $request->decoded();
+        $insp = $this->service->recordLotResult($inspection, $data, $request->user());
+        return new InspectionResource($insp);
+    }
+
     /**
      * @OA\Post(
      *     path="/quality/inspections/{id}/complete",
@@ -216,6 +228,16 @@ class InspectionController
     {
         $insp = $this->service->complete($inspection, $request->user());
         return new InspectionResource($insp);
+    }
+
+    public function review(ReviewInspectionRequest $request, Inspection $inspection): InspectionResource
+    {
+        return new InspectionResource($this->service->review(
+            $inspection,
+            (string) $request->validated('decision'),
+            $request->validated('remarks'),
+            $request->user(),
+        ));
     }
 
     public function cancel(Request $request, Inspection $inspection): InspectionResource

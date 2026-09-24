@@ -10,6 +10,7 @@ export interface Asset {
  category: AssetCategory;
  category_label?: string;
  department?: { id: string; name: string; code: string } | null;
+ association?: { type: 'machine' | 'mold' | 'vehicle'; id: string; code: string; name: string } | null;
  acquisition_date: string;
  acquisition_cost: string;
  useful_life_years: number;
@@ -85,36 +86,13 @@ export interface UpdateAssetData {
  location?: string;
 }
 
+export interface AssociateAssetData {
+ target_type: 'machine' | 'mold' | 'vehicle';
+ target_id: string | null;
+}
+
 export interface DisposeAssetData {
  disposal_amount: string;
  disposed_date?: string;
  remarks?: string;
-}
-
-/* ── Asset Transfers ── */
-
-export type AssetTransferStatus = 'pending' | 'approved' | 'rejected' | 'completed';
-
-export interface AssetTransfer {
- id: string;
- transfer_number: string;
- asset: { id: string; asset_code: string; name: string };
- from_department: { id: string; name: string };
- to_department: { id: string; name: string };
- reason: string | null;
- transfer_date: string;
- status: AssetTransferStatus;
- status_label?: string;
- requested_by: string;
- approved_by: string | null;
- approved_at: string | null;
- created_at: string;
-}
-
-export interface CreateTransferData {
- asset_id: string;
- from_department_id: string;
- to_department_id: string;
- reason?: string;
- transfer_date: string;
 }

@@ -119,6 +119,9 @@ final class PostingAccountResolver
         if (! $account->is_active) {
             throw new BusinessRuleException("Account {$account->code} is inactive and cannot receive new postings.");
         }
+        if (Account::query()->where('parent_id', $account->id)->exists()) {
+            throw new BusinessRuleException("Account {$account->code} is a header account and cannot receive new postings.");
+        }
 
         return $account;
     }

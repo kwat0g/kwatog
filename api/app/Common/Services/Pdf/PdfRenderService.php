@@ -38,7 +38,10 @@ class PdfRenderService
         $paper        = $opts['paper']         ?? 'a4';
         $orientation  = $opts['orientation']   ?? 'portrait';
         $confidential = (bool) ($opts['confidential'] ?? false);
-        $generator    = $opts['generator']     ?? null;
+        // Most callers never pass a generator; without this fallback every
+        // document printed from the UI read "Issued By: system".
+        $actor        = auth()->user();
+        $generator    = $opts['generator']     ?? ($actor instanceof User ? $actor : null);
         $title        = $opts['title']         ?? null;
         $watermark    = $opts['watermark_text'] ?? ($confidential ? 'CONFIDENTIAL' : null);
 

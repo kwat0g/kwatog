@@ -11,6 +11,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
@@ -36,6 +37,7 @@ class PdfService
         private readonly StatementMoneyFormatter $statementMoney,
         private readonly PdfRenderService $renderer,
         private readonly DocumentVaultService $vault,
+        private readonly Bir2307Service $bir2307,
     ) {}
 
     public function bill(Bill $bill): StreamedResponse
@@ -113,6 +115,41 @@ class PdfService
             'money'   => $this->statementMoney,
         ], ['title' => 'Balance Sheet']);
         return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="BalanceSheet-'.$asOf->toDateString().'.pdf"']);
+    }
+
+    public function bir2307(Vendor $vendor, int $year, int $quarter): Response
+    {
+        $data = $this->bir2307->forVendorQuarter($vendor, $year, $quarter);
+
+        // Convert month numbers to month names and format data for template
+        $monthStart = ($quarter - 1) * 3 + 1;
+        $monthEnd = $monthStart + 2;
+        $incomePayments = array_map(function ($payment) use ($year) {
+            return [
+                ...$payment,
+                'month_name' => (new \DateTime("$year-{$payment['month']}-01"))->format('F'),
+            ];
+        }, $data['income_payments']);
+
+        $quarterStart = (new \DateTime("$year-$monthStart-01"))->format('F j, Y');
+        $quarterEndDate = (new \DateTime("$year-$monthEnd-01"))->modify('last day of this month');
+        $quarterEnd = $quarterEndDate->format('F j, Y');
+
+        $bytes = $this->renderer->render('pdf.bir-2307', [
+            'year' => $year,
+            'year_quarter' => $quarter,
+            'quarter_start' => $quarterStart,
+            'quarter_end' => $quarterEnd,
+            'vendor' => $data['vendor'],
+            'payor' => $data['payor'],
+            'income_payments' => $incomePayments,
+            'summary' => $data['summary'],
+        ], ['title' => 'BIR Form 2307']);
+
+        $vendorSlug = \Illuminate\Support\Str::slug($vendor->name) ?: $vendor->hash_id;
+        $filename = "BIR2307-{$vendorSlug}-{$year}-Q{$quarter}.pdf";
+
+        return response($bytes, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$filename.'"']);
     }
 
     private function currency(): string

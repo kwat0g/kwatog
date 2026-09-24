@@ -306,9 +306,15 @@ class PayrollGlPostingService
                 // 13th-month withholding reduces the employee payable, not the
                 // employer expense. Post the gross expense and split the credit
                 // between withholding tax payable and the net 13th-month payable.
+                // A negative annual correction refunds over-withheld tax, so it
+                // reverses the payable with a debit instead of a negative credit.
                 $debit($code('production_thirteenth_expense'), $expenseTotals['production']['gross'], '13th Month Expense — Production');
                 $debit($code('thirteenth_expense'), $expenseTotals['operating']['gross'], '13th Month Expense — Operating');
-                $credit($code('withholding_payable'), $wht, '13th Month Withholding Tax Payable');
+                if (Money::lt($wht, '0')) {
+                    $debit($code('withholding_payable'), Money::negate($wht), '13th Month Withholding Tax Refund');
+                } else {
+                    $credit($code('withholding_payable'), $wht, '13th Month Withholding Tax Payable');
+                }
                 $credit($code('thirteenth_payable'), $net, '13th Month Pay Payable');
             } else {
                 // Production department wages are direct labor; all other

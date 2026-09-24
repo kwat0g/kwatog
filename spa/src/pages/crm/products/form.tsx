@@ -6,38 +6,27 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
+import { productFormSchema, type ProductFormValues } from './schema';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
+import { accountsApi } from '@/api/accounting/accounts';
 import { productsApi } from '@/api/crm/products';
 import { uomsApi } from '@/api/inventory/uoms';
 import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
+import { usePermission } from '@/hooks/usePermission';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-const schema = z.object({
-  part_number: z
-    .string()
-    .regex(/^[A-Z0-9-]{2,30}$/, 'Use 2–30 uppercase letters, digits, or hyphens.'),
-  name: z.string().min(1, 'Name is required').max(200),
-  description: z.string().max(1000).optional().or(z.literal('')),
-  unit_of_measure: z.string().min(1, 'UOM is required').max(20),
-  standard_cost: z
-    .string()
-    .regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal with up to 2 places'),
-  is_active: z.boolean().optional(),
-});
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = ProductFormValues;
 
 interface Props {
   initial?: Product;
@@ -47,21 +36,31 @@ interface Props {
 export function ProductForm({ initial, mode }: Props) {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { can } = usePermission();
 
   const { data: uoms = [] } = useQuery({
     queryKey: ['inventory', 'uoms'],
     queryFn: uomsApi.list,
     staleTime: 300_000,
   });
+  const canViewRevenueAccounts = can('accounting.coa.view');
+  const { data: revenueAccountsResponse } = useQuery({
+    queryKey: ['accounting', 'accounts', 'revenue'],
+    queryFn: () => accountsApi.list({ per_page: 200, type: 'revenue', is_active: true }),
+    enabled: canViewRevenueAccounts,
+    staleTime: 300_000,
+  });
+  const revenueAccounts = revenueAccountsResponse?.data ?? [];
 
     const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(productFormSchema),
     defaultValues: {
       part_number: initial?.part_number ?? '',
       name: initial?.name ?? '',
       description: initial?.description ?? '',
       unit_of_measure: initial?.unit_of_measure ?? '',
       standard_cost: initial?.standard_cost ?? '',
+      revenue_account_id: initial?.revenue_account_id ?? '',
       is_active: initial?.is_active ?? true,
     },
   });
@@ -86,6 +85,7 @@ export function ProductForm({ initial, mode }: Props) {
         description: initial.description ?? '',
         unit_of_measure: initial.unit_of_measure,
         standard_cost: initial.standard_cost,
+        revenue_account_id: initial.revenue_account_id ?? '',
         is_active: initial.is_active,
       });
     }
@@ -190,6 +190,25 @@ export function ProductForm({ initial, mode }: Props) {
             placeholder="0.00"
             className="font-mono"
           />
+          {canViewRevenueAccounts ? (
+            <Select
+              label="Revenue Account"
+              {...register('revenue_account_id')}
+              error={errors.revenue_account_id?.message}
+              helper="Optional override for the product's sales revenue account."
+            >
+              <option value="">Use configured default</option>
+              {revenueAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.code} · {account.name}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <p className="text-xs text-muted self-end pb-1">
+              Revenue account selection requires chart-of-accounts access.
+            </p>
+          )}
         </div>
         <p className="mt-2 text-xs text-muted">
           Internal accounting figure. Customer pricing is set per Price Agreement (Sales → Customers

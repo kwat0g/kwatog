@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,6 +22,7 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { localIsoDate } from '@/lib/formatDate';
 const itemSchema = z.object({
  item_id: z.string().min(1, 'Item required'),
  location_id: z.string().min(1, 'Location required'),
@@ -55,13 +56,14 @@ export default function CreateMaterialIssuePage() {
  const nav = useNavigate();
  const qc = useQueryClient();
  const [search] = useSearchParams();
+ const idempotencyKey = useRef(crypto.randomUUID());
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
  work_order_id: search.get('work_order_id') ?? '',
  reference_text: '',
- issued_date: new Date().toISOString().slice(0, 10),
+ issued_date: localIsoDate(),
  remarks: '',
  items: [{ ...blankLine }],
  },
@@ -99,8 +101,8 @@ export default function CreateMaterialIssuePage() {
  );
 
  const mutation = useMutation({
- mutationFn: (v: FormValues) =>
- materialIssuesApi.create({
+  mutationFn: (v: FormValues) =>
+  materialIssuesApi.create({
  work_order_id: v.work_order_id ? v.work_order_id : null,
  issued_date: v.issued_date,
  reference_text: v.reference_text || undefined,
@@ -113,7 +115,7 @@ export default function CreateMaterialIssuePage() {
  lot_number: i.lot_number || undefined,
  remarks: i.remarks || undefined,
  })),
- }),
+  }, idempotencyKey.current),
  onSuccess: (slip) => {
  qc.invalidateQueries({ queryKey: ['inventory', 'material-issues'] });
  toast.success(`Material issue ${slip.slip_number} created.`);

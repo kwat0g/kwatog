@@ -3,6 +3,7 @@
  */
 
 export type ForecastMethod = 'moving_avg' | 'weighted_avg' | 'manual';
+export type ComputedForecastMethod = Exclude<ForecastMethod, 'manual'>;
 
 export interface DemandForecast {
  id: string;
@@ -45,15 +46,15 @@ export interface StockOutRow {
  code: string;
  name: string;
  unit_of_measure: string;
- available: number;
- safety_stock: number;
- reorder_point: number;
+ available: string;
+ safety_stock: string;
+ reorder_point: string;
  lead_time_days: number;
- daily_demand: number;
+ daily_demand: string;
  demand_source: DemandSource;
  days_until_stockout: number | null;
  reorder_date: string | null;
- suggested_qty: number | null;
+ suggested_qty: string | null;
  risk: StockOutRisk;
 }
 

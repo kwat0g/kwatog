@@ -17,6 +17,7 @@ use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Services\OpenSupplyService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,6 +30,7 @@ class AutoReplenishmentService
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
         private readonly SystemActorService $actors,
+        private readonly OpenSupplyService $openSupply,
     ) {}
 
     public function checkAndReplenish(int $itemId): ?PurchaseRequest
@@ -37,14 +39,19 @@ class AutoReplenishmentService
             /** @var Item|null $item */
             $item = Item::query()
                 ->lockForUpdate()
+                ->with('stockLevels')
                 ->find($itemId);
             if (! $item || ! $item->is_active) return null;
 
-            $available = (float) $item->available;
-            $reorder   = (float) $item->reorder_point;
-            $safety    = (float) $item->safety_stock;
+            $available = (string) $item->available;
+            $reorder   = (string) $item->reorder_point;
+            $safety    = (string) $item->safety_stock;
 
-            if ($available > $reorder) return null;
+            // Net in-transit supply from open POs to position.
+            $inTransit = $this->openSupply->inTransitBaseQuantity($item->id);
+            $position = bcadd($available, $inTransit, 3);
+
+            if (bccomp($position, $reorder, 3) > 0) return null;
 
             // Task A8 — for critical items with exactly one preferred supplier,
             // skip the PR workflow and go directly to an auto-PO routed to VP.
@@ -67,15 +74,13 @@ class AutoReplenishmentService
             // This check runs while the item row is locked. Every low-stock
             // event for the same item therefore observes the PR/PO created by
             // the first worker before it can create another replenishment.
-            $hasOpen = PurchaseRequest::query()
-                ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))
-                ->whereIn('status', [
-                    PurchaseRequestStatus::Draft,
-                    PurchaseRequestStatus::Pending,
-                    PurchaseRequestStatus::Approved,
-                ])
-                ->exists();
-            if ($hasOpen) return null;
+            // Note: in-transit supply is already netted via position; this guard
+            // prevents duplicate PRs from the same low-stock event.
+            // Count PRs with remaining unconverted quantity, including Draft (not yet submitted).
+            // Fully converted Approved PRs should not block a new replenishment.
+            if (bccomp($this->openSupply->openRequestBaseQuantity($item->id, null, false, true), '0', 3) > 0) {
+                return null;
+            }
 
             // Auto-PRs are system-initiated; attribute only to a configured
             // automation actor. If no eligible user exists, skip rather than hit the
@@ -84,19 +89,28 @@ class AutoReplenishmentService
             if ($systemUser === null) return null;
             $systemUserId = $systemUser->id;
 
-            $orderQty = $this->computeOrderQuantity($item);
-            if ($orderQty === null || (float) $item->standard_cost <= 0) {
+            $orderQty = $this->computeOrderQuantity($item, $position);
+            if ($orderQty === null || bccomp((string) $item->standard_cost, '0', 2) <= 0) {
                 // Do not create a replenishment request with a fabricated quantity
                 // or a zero-valued estimate; master data must be completed first.
                 return null;
             }
-            $priority = $available <= $safety ? PurchaseRequestPriority::Critical : PurchaseRequestPriority::Urgent;
+            $priority = bccomp($position, $safety, 3) <= 0
+                ? PurchaseRequestPriority::Critical
+                : PurchaseRequestPriority::Urgent;
+
+            $leadTime = (int) ($item->lead_time_days ?? 0);
+            if ($leadTime <= 0) {
+                $leadTime = $this->settings->requiredInt('mrp.default_lead_time_days', 0, 365);
+            }
+            $requiredDeliveryDate = $leadTime > 0 ? now()->addDays($leadTime)->toDateString() : null;
 
             $pr = PurchaseRequest::create([
                 'pr_number'         => $this->sequences->generate('pr'),
                 'requested_by'      => $systemUserId,
                 'department_id'     => null,
                 'date'              => now()->toDateString(),
+                'required_delivery_date' => $requiredDeliveryDate,
                 'reason'            => "Auto-generated: {$item->code} below reorder point.",
                 'priority'          => $priority,
                 'is_auto_generated' => true,
@@ -120,20 +134,26 @@ class AutoReplenishmentService
         });
     }
 
-    private function computeOrderQuantity(Item $item): ?string
+    private function computeOrderQuantity(Item $item, string $position): ?string
     {
-        $reorder = (float) $item->reorder_point;
-        $available = (float) $item->available;
-        $moq = (float) $item->minimum_order_quantity;
+        $reorder = (string) $item->reorder_point;
+        $moq = (string) $item->minimum_order_quantity;
 
         if ($item->reorder_method === ReorderMethod::FixedQuantity) {
-            $qty = max(($reorder * 2) - $available, $reorder);
+            // Use position (available + in-transit) so the target reflects supply already in flight.
+            $target = bcsub(bcmul($reorder, '2', 3), $position, 3);
+            $qty = bccomp($target, $reorder, 3) > 0 ? $target : $reorder;
         } else {
             $historyDays = $this->settings->requiredInt('inventory.replenishment.demand_history_days', 1);
-            $coverageBuffer = $this->settings->requiredFloat('inventory.replenishment.coverage_buffer_ratio', 1);
+            $coverageBuffer = number_format(
+                $this->settings->requiredFloat('inventory.replenishment.coverage_buffer_ratio', 1),
+                6,
+                '.',
+                '',
+            );
             // Days-of-supply: average demand × lead time × configured coverage buffer.
             $historyStart = now()->subDays($historyDays);
-            $totalIssued = (float) StockMovement::query()
+            $totalIssued = (string) StockMovement::query()
                 ->where('item_id', $item->id)
                 ->whereIn('movement_type', [
                     StockMovementType::MaterialIssue->value,
@@ -141,14 +161,24 @@ class AutoReplenishmentService
                 ])
                 ->where('created_at', '>=', $historyStart)
                 ->sum('quantity');
-            $avgDaily = $totalIssued / $historyDays;
-            $qty = max($avgDaily * (int) $item->lead_time_days * $coverageBuffer, $reorder);
+            $avgDaily = bcdiv($totalIssued, (string) $historyDays, 6);
+            $demand = bcmul(
+                bcmul($avgDaily, (string) (int) $item->lead_time_days, 6),
+                $coverageBuffer,
+                6,
+            );
+            $qty = bccomp($demand, $reorder, 3) > 0 ? $demand : $reorder;
         }
 
         // Round up to nearest MOQ multiple.
-        if ($moq > 0) {
-            $qty = ceil($qty / $moq) * $moq;
+        if (bccomp($moq, '0', 3) > 0) {
+            $multiples = bcdiv($qty, $moq, 6);
+            $whole = bcdiv($multiples, '1', 0);
+            if (bccomp($multiples, $whole, 6) > 0) {
+                $whole = bcadd($whole, '1', 0);
+            }
+            $qty = bcmul($whole, $moq, 3);
         }
-        return $qty > 0 ? number_format($qty, 3, '.', '') : null;
+        return bccomp($qty, '0', 3) > 0 ? bcadd($qty, '0', 3) : null;
     }
 }

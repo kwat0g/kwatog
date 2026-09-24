@@ -39,9 +39,7 @@ class MrpScopeResolver
     {
         return SalesOrderItem::query()
             ->whereIn('product_id', $productIds)
-            ->whereHas('salesOrder', fn ($q) => $q->whereIn('status', [
-                'confirmed', 'in_production', 'partially_delivered',
-            ]))
+            ->whereHas('salesOrder', fn ($q) => $q->planningRelevant())
             ->pluck('sales_order_id')
             ->map(fn ($id): int => (int) $id)
             ->unique()

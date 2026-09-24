@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Resources;
 
+use App\Common\Services\ApprovalService;
+use App\Modules\Accounting\Enums\BillPaymentStatus;
+use App\Modules\Accounting\Services\BillService;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,10 +15,19 @@ class BillPaymentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // EWT is computed when the payment posts. Until then show what posting
+        // would withhold now, so approvers see the cash that will be disbursed
+        // rather than the gross settlement.
+        [$ewt, $cash] = $this->status === BillPaymentStatus::PendingApproval && $this->relationLoaded('bill')
+            ? app(BillService::class)->withholdingFor($this->bill, (string) $this->amount)
+            : [(string) ($this->ewt_amount ?? '0.00'), (string) ($this->cash_amount ?? $this->amount)];
+
         return [
             'id'               => $this->hash_id,
             'payment_date'     => optional($this->payment_date)->toDateString(),
             'amount'           => (string) $this->amount,
+            'ewt_amount'       => $ewt,
+            'cash_amount'      => $cash,
             'payment_method'   => $this->payment_method?->value,
             'payment_method_label' => $this->payment_method?->label(),
             'reference_number' => $this->reference_number,
@@ -48,6 +61,27 @@ class BillPaymentResource extends JsonResource
                 'acted_at' => optional($record->acted_at)->toIso8601String(),
             ])->values()),
             'created_at'       => optional($this->created_at)->toIso8601String(),
+            'can_decide'       => $this->canDecide($request->user()),
         ];
+    }
+
+    /**
+     * Mirrors ApprovalService::approve()'s guards (current step role, not the
+     * submitter) so the SPA stops offering Approve/Reject on a step the API
+     * will refuse — e.g. to finance once the payment has moved on to the VP.
+     */
+    private function canDecide(?User $user): bool
+    {
+        if ($user === null
+            || $this->status !== BillPaymentStatus::PendingApproval
+            || (int) $this->created_by === (int) $user->id
+            || ! $user->hasPermission('accounting.bills.payment_approve')) {
+            return false;
+        }
+
+        $approvals = app(ApprovalService::class);
+        $next = $approvals->nextStep($this->resource);
+
+        return $next !== null && $approvals->canUserActFor($user, $next->role_slug);
     }
 }

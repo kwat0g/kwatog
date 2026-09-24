@@ -80,7 +80,7 @@ class AssetUpdateVsDisposeRaceTest extends TestCase
             'remarks' => 'Asset retired.',
         ], $this->user('finance_officer'));
         $svc->approveDisposal($disposer, $this->user('finance_officer'));
-        $svc->approveDisposal($disposer, $this->user('system_admin'));
+        $svc->approveDisposal($disposer, $this->user('vice_president'));
 
         // Concurrent stale updater still sees `active` in memory.
         try {

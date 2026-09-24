@@ -22,7 +22,7 @@ class BillItem extends Model
 
     protected $casts = [
         'quantity'   => 'decimal:2',
-        'unit_price' => 'decimal:2',
+        'unit_price' => 'decimal:4',
         'total'      => 'decimal:2',
     ];
 

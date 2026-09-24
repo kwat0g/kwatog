@@ -11,6 +11,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class StoreGrnRequest extends FormRequest
 {
@@ -43,7 +44,7 @@ class StoreGrnRequest extends FormRequest
                 'integer',
                 Rule::exists('purchase_orders', 'id')->whereNull('deleted_at'),
             ],
-            'received_date'                  => ['nullable', 'date'],
+            'received_date'                  => ['nullable', 'date', 'before_or_equal:today'],
             'remarks'                        => ['nullable', 'string', 'max:1000'],
             'items'                          => ['required', 'array', 'min:1'],
             // purchase_order_items has no SoftDeletes — a plain exists is right.
@@ -85,5 +86,20 @@ class StoreGrnRequest extends FormRequest
             'items.*.coa_verified'          => ['prohibited'],
             'items.*.remarks'                => ['nullable', 'string', 'max:200'],
         ];
+    }
+
+    public function idempotencyKey(): ?string
+    {
+        $key = trim((string) $this->header('Idempotency-Key', ''));
+        if ($key === '') {
+            return null;
+        }
+        if (strlen($key) > 128 || ! preg_match('/^[A-Za-z0-9._:-]+$/D', $key)) {
+            throw ValidationException::withMessages([
+                'idempotency_key' => ['Idempotency-Key must contain only letters, numbers, dot, underscore, colon, or hyphen and be at most 128 characters.'],
+            ]);
+        }
+
+        return $key;
     }
 }

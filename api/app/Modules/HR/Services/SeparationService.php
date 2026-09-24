@@ -23,6 +23,7 @@ use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Support\EmployeeStateMachine;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Enums\LoanStatus;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +48,7 @@ class SeparationService
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
         private readonly EmployeeStateMachine $stateMachine,
+        private readonly PayrollPeriodService $payrollPeriods,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -109,6 +111,15 @@ class SeparationService
     public function initiate(Employee $employee, array $data, User $by): Clearance
     {
         return DB::transaction(function () use ($employee, $data, $by) {
+            $separationDate = Carbon::parse((string) $data['separation_date'])->startOfDay();
+            // Payroll-period rows are the outer lock in the H2R input fence;
+            // take them before the employee lock to match payroll compute's
+            // period → employee order and avoid a separation/compute deadlock.
+            $this->payrollPeriods->assertCompensationInputMutable(
+                (int) $employee->id,
+                $separationDate,
+            );
+
             // The route-bound employee may have gone through another lifecycle
             // transition while the operator was filling out the form. Lock and
             // re-read the authoritative row before creating a clearance so two
@@ -132,7 +143,6 @@ class SeparationService
             // the fraction collapses to 0.0000 and every later cutoff pays zero
             // basic pay — and because no cancel/correct transition exists, a
             // mistyped year could not be walked back through the API.
-            $separationDate = Carbon::parse((string) $data['separation_date'])->startOfDay();
             $hireDate = $lockedEmployee->date_hired;
 
             if ($hireDate && $separationDate->lt($hireDate->copy()->startOfDay())) {
@@ -141,7 +151,6 @@ class SeparationService
                     .$hireDate->toDateString().'. The separation was not initiated.'
                 );
             }
-
             $hasOpenClearance = Clearance::query()
                 ->where('employee_id', $lockedEmployee->id)
                 ->whereIn('status', [
@@ -489,7 +498,7 @@ class SeparationService
                 ? $employee->status->value
                 : (string) $employee->getRawOriginal('status');
             $targetStatus = EmployeeStatus::from($reason->toEmployeeStatus());
-            $this->stateMachine->transition($employee, $targetStatus);
+            $this->stateMachine->transitionAfterClearance($employee, $targetStatus);
 
             $lockedClearance->status       = ClearanceStatus::Finalized->value;
             $lockedClearance->finalized_at = now();

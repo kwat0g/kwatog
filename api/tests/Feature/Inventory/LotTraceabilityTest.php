@@ -59,8 +59,15 @@ class LotTraceabilityTest extends TestCase
 
     private function passIncomingQc(GoodsReceiptNote $grn): void
     {
+        // Maker-checker: a passed incoming inspection only counts once a
+        // second person has checked it.
         Inspection::query()->findOrFail($grn->fresh()->qc_inspection_id)
-            ->update(['status' => 'passed']);
+            ->update([
+                'status' => 'passed',
+                'inspector_id' => User::factory()->create()->id,
+                'reviewed_by' => User::factory()->create()->id,
+                'reviewed_at' => now(),
+            ]);
     }
 
     public function test_lot_flows_from_grn_receipt_through_to_material_issue(): void

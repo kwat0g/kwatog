@@ -247,4 +247,57 @@ class DraftGrnOnPoSentTest extends TestCase
         $this->assertSame(0, Inspection::where('entity_type', 'grn')
             ->where('entity_id', $grn->id)->count());
     }
+    public function test_direct_receipt_completes_the_open_draft_instead_of_stranding_it(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $draft = GoodsReceiptNote::where('purchase_order_id', $po->id)->firstOrFail();
+        $poLine = $po->items()->firstOrFail();
+        $location = WarehouseLocation::factory()->create();
+
+        $result = app(GrnService::class)->create($po->fresh(), [[
+            'purchase_order_item_id' => $poLine->id,
+            'item_id'                => $poLine->item_id,
+            'location_id'            => $location->id,
+            'quantity_received'      => '100.000',
+        ]], ['received_date' => now()->toDateString()], User::factory()->create());
+
+        // One GRN for the PO, carrying the draft's number — not a second one
+        // beside a draft that can never be finalized once the PO is received.
+        $this->assertSame($draft->id, $result->id);
+        $this->assertSame($draft->grn_number, $result->grn_number);
+        $this->assertSame(1, GoodsReceiptNote::where('purchase_order_id', $po->id)->count());
+        $this->assertSame(GrnStatus::PendingQc, $result->status);
+        // The zero-qty placeholder line was replaced, not left beside the real one.
+        $this->assertSame(1, GrnItem::where('goods_receipt_note_id', $result->id)->count());
+        $this->assertSame('100.000', (string) $result->items()->first()->quantity_received);
+        // Received needs QC-accepted quantities; physical receipt alone is partial.
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+        $this->assertSame(1, Inspection::where('entity_type', 'grn')
+            ->where('entity_id', $result->id)->count());
+    }
+
+    public function test_second_delivery_after_the_draft_is_consumed_opens_a_new_grn(): void
+    {
+        $po = $this->makeSentPo();
+        event(new PurchaseOrderSent($po->fresh()));
+        $poLine = $po->items()->firstOrFail();
+        $location = WarehouseLocation::factory()->create();
+        $service = app(GrnService::class);
+        $row = fn (string $qty) => [[
+            'purchase_order_item_id' => $poLine->id,
+            'item_id'                => $poLine->item_id,
+            'location_id'            => $location->id,
+            'quantity_received'      => $qty,
+        ]];
+
+        $first = $service->create($po->fresh(), $row('60.000'), [], User::factory()->create());
+        $second = $service->create($po->fresh(), $row('40.000'), [], User::factory()->create());
+
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertSame(0, GoodsReceiptNote::where('purchase_order_id', $po->id)
+            ->where('status', GrnStatus::Draft->value)->count());
+        // Received needs QC-accepted quantities; physical receipt alone is partial.
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+    }
 }

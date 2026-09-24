@@ -21,6 +21,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
+import { formatDateIso } from '@/lib/formatDate';
 
 export default function QualityDashboardPage() {
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
@@ -257,7 +258,7 @@ export default function QualityDashboardPage() {
                         <div className="font-mono text-accent">{row.inspection_number}</div>
                         <div className="text-muted">
                           {row.product?.part_number ?? '—'} · {row.stage} ·{' '}
-                          {row.completed_at?.slice(0, 10)}
+                          {formatDateIso(row.completed_at, '')}
                         </div>
                       </Link>
                     </li>

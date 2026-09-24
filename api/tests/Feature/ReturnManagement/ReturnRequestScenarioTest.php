@@ -13,8 +13,10 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
@@ -74,6 +76,36 @@ class ReturnRequestScenarioTest extends TestCase
         return Product::create([
             'part_number' => 'PT-' . substr(uniqid(), -5),
             'name'        => 'Scenario Product',
+        ]);
+    }
+
+    private function finishedGoodItem(Product $product): Item
+    {
+        return Item::factory()->create([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood->value,
+        ]);
+    }
+
+    private function attachSalesOrderSource(ReturnRequest $rma, User $by, Product $product, Item $item): void
+    {
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $rma->customer_id,
+            'status' => SalesOrderStatus::PartiallyDelivered,
+            'created_by' => $by->id,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '10.000',
+            'unit_price' => '100.00',
+        ]);
+
+        $rma->forceFill(['sales_order_id' => $salesOrder->id])->save();
+        $rma->items->firstOrFail()->update([
+            'product_id' => $product->id,
+            'item_id' => $item->id,
+            'source_sales_order_item_id' => $source->id,
         ]);
     }
 
@@ -417,13 +449,12 @@ class ReturnRequestScenarioTest extends TestCase
     public function test_complete_does_not_restock_scrapped_lines(): void
     {
         $admin = $this->admin();
-        $item  = Item::factory()->create();
+        $product = $this->product();
+        $item  = $this->finishedGoodItem($product);
         $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
-        $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
-        // The credit contract now runs for every customer return, so a
-        // stockable line must carry invoice/delivery/SO provenance.
-        $rma->items->first()->update(['source_sales_order_item_id' => SalesOrderItem::factory()->create()->id]);
+        $rma   = $this->inspectedRma($admin, $this->customer(), p: $product, item: $item);
+        $this->attachSalesOrderSource($rma, $admin, $product, $item);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
@@ -453,14 +484,13 @@ class ReturnRequestScenarioTest extends TestCase
     public function test_complete_restocks_only_the_returned_quantity(): void
     {
         $admin = $this->admin();
-        $item  = Item::factory()->create();
+        $product = $this->product();
+        $item  = $this->finishedGoodItem($product);
         $zone  = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $loc   = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $destination = WarehouseLocation::factory()->create();
-        $rma   = $this->inspectedRma($admin, $this->customer(), null, null, $item);
-        // The credit contract now runs for every customer return, so a
-        // stockable line must carry invoice/delivery/SO provenance.
-        $rma->items->first()->update(['source_sales_order_item_id' => SalesOrderItem::factory()->create()->id]);
+        $rma   = $this->inspectedRma($admin, $this->customer(), p: $product, item: $item);
+        $this->attachSalesOrderSource($rma, $admin, $product, $item);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
@@ -552,9 +582,12 @@ class ReturnRequestScenarioTest extends TestCase
     {
         // No WorkflowSeeder → the return_request workflow definition is absent.
         $admin = $this->admin();
-        $rma   = $this->inspectedRma($admin, $this->customer());
-        $this->asFinanceOnly($rma, $admin);
-        $rma->forceFill(['status' => ReturnRequestStatus::Draft->value])->save();
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-NOWF-'.substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Draft,
+            'created_by' => $admin->id,
+        ]);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
@@ -652,7 +685,7 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,
@@ -727,10 +760,10 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $salesOrder = SalesOrder::factory()->create([
             'customer_id' => $customer->id,
-            'status' => 'confirmed',
+            'status' => 'partially_delivered',
         ]);
         $salesOrderItem = SalesOrderItem::factory()->create([
             'sales_order_id' => $salesOrder->id,
@@ -768,10 +801,10 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $salesOrder = SalesOrder::factory()->create([
             'customer_id' => $customer->id,
-            'status' => 'confirmed',
+            'status' => 'partially_delivered',
         ]);
         $salesOrderItem = SalesOrderItem::factory()->create([
             'sales_order_id' => $salesOrder->id,
@@ -895,7 +928,7 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,
@@ -944,7 +977,7 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,
@@ -1035,7 +1068,7 @@ class ReturnRequestScenarioTest extends TestCase
         $admin = $this->admin();
         $customer = $this->customer();
         $product = $this->product();
-        $item = Item::factory()->create();
+        $item = $this->finishedGoodItem($product);
         $invoice = $this->invoice($customer, $admin);
         $invoiceItem = InvoiceItem::create([
             'invoice_id' => $invoice->id,

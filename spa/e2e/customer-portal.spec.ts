@@ -196,4 +196,108 @@ test.describe('customer portal', () => {
     await expect(navigation).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Orders' })).toBeVisible();
   });
+
+  test('customer can respond to an order and reach the RMA form', async ({ page }) => {
+    await mockCustomerSession(page);
+    await page.route('**/api/v1/b2b/customer/orders/so_customer_01/chain', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+    });
+    await page.route('**/api/v1/b2b/customer/orders/so_customer_01', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            id: 'so_customer_01',
+            so_number: 'SO-1001',
+            date: '2026-09-20',
+            total_amount: '1500.00',
+            status: 'draft',
+            status_label: 'Draft',
+            items: [{
+              id: 'so_line_01',
+              part_number: 'WIP-001',
+              name: 'Wiper pivot cap',
+              quantity: '100.00',
+              unit_price: '15.00',
+              total: '1500.00',
+              delivery_date: '2026-10-01',
+            }],
+            capabilities: { can_respond: true, can_confirm: true },
+            latest_response: null,
+          },
+        }),
+      });
+    });
+    await page.route('**/api/v1/b2b/customer/orders/so_customer_01/respond', async (route) => {
+      expect(route.request().postDataJSON()).toMatchObject({
+        type: 'propose',
+        items: [{ sales_order_item_id: 'so_line_01', proposed_quantity: '120.00', proposed_unit_price: '14.50' }],
+      });
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { id: 'response_01' }, message: 'Your response was submitted to our sales team.' }),
+      });
+    });
+
+    await page.goto('/portal/customer/orders/so_customer_01');
+    await page.getByLabel('Response').selectOption('propose');
+    await page.getByLabel('Proposed quantity').fill('120.00');
+    await page.getByLabel('Proposed unit price').fill('14.50');
+    await page.getByRole('button', { name: 'Submit proposal' }).click();
+    await expect(page.getByText('Your response was submitted to our sales team.')).toBeVisible();
+
+    await page.route('**/api/v1/b2b/customer/return-requests?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], meta: pagination(1, 0), links: { first: '', last: '', prev: null, next: null } }),
+      });
+    });
+    await page.getByRole('link', { name: 'Returns' }).click();
+    await expect(page.getByText('No return requests yet')).toBeVisible();
+
+    await page.route('**/api/v1/b2b/customer/return-requests/source-options', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { customer: {
+          invoices: [{ id: 'invoice_01', label: 'INV-1001', lines: [{
+            id: 'invoice_line_01', product_id: 'product_01', item_id: 'item_01', quantity: '2.000', remaining_quantity: '2.000', unit_price: '15.00', label: 'Wiper pivot cap',
+          }] }],
+          salesOrders: [],
+          deliveries: [],
+        } } }),
+      });
+    });
+    await page.route('**/api/v1/b2b/customer/return-requests', async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: {
+          id: 'rma_customer_01', rma_number: 'RMA-1001', type: 'customer_return', status: 'draft',
+          status_label: 'Draft', reason_code: null, reason_description: 'Packaging damaged', customer_notes: null,
+          resolution: null, return_date: '2026-09-23', created_at: new Date().toISOString(), items: [],
+        }, message: 'Return request submitted.' }),
+      });
+    });
+    await page.route('**/api/v1/b2b/customer/return-requests/rma_customer_01', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: {
+          id: 'rma_customer_01', rma_number: 'RMA-1001', type: 'customer_return', status: 'draft',
+          status_label: 'Draft', reason_code: null, reason_description: 'Packaging damaged', customer_notes: null,
+          resolution: null, return_date: '2026-09-23', created_at: new Date().toISOString(), items: [],
+        } }),
+      });
+    });
+
+    await page.getByRole('button', { name: 'Start a return' }).click();
+    await page.getByLabel(/Delivered item/).selectOption('invoice:invoice_line_01');
+    await page.getByLabel('Reason').fill('Packaging damaged');
+    await page.getByRole('button', { name: 'Submit return request' }).click();
+    await expect(page.getByText('RMA-1001')).toBeVisible();
+  });
 });

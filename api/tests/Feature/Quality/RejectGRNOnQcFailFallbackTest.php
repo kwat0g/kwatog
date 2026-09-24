@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Quality;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -34,6 +35,8 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        // Legacy tests: disable MRB review to test the old auto-reject behavior
+        app(SettingsService::class)->set('quality.incoming_failure.mrb_review', false);
     }
 
     public function test_listener_falls_back_to_system_admin_when_inspector_missing(): void
@@ -45,9 +48,15 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
             'is_active' => true,
         ]);
 
-        // GRN sitting at pending_qc with no inspector on the failed inspection.
+        // Reviewer to make the inspection maker-checked (different from inspector)
+        $reviewer = User::factory()->create(['is_active' => true]);
+
+        // GRN sitting at pending_qc whose inspector has since left (soft-deleted).
+        // Maker-checker needs an inspector on record, so "missing" now means
+        // the inspector can no longer act, not a null inspector_id.
         $grn = $this->seedGrn();
-        $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: null);
+        $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: $this->departedInspectorId());
+        $inspection->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()])->save();
 
         $listener = new RejectGRNOnQcFail(app(GrnService::class));
         $listener->handle(new InspectionFailed($inspection));
@@ -75,8 +84,12 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
             'is_active' => true,
         ]);
 
+        // Reviewer to make the inspection maker-checked (different from inspector)
+        $reviewer = User::factory()->create(['is_active' => true]);
+
         $grn = $this->seedGrn();
         $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: $inspector->id);
+        $inspection->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()])->save();
 
         $listener = new RejectGRNOnQcFail(app(GrnService::class));
         $listener->handle(new InspectionFailed($inspection));
@@ -92,8 +105,13 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
         // No system_admin user exists; inspection has no inspector either.
         // The listener must expose the blocked handoff to the queue retry and
         // failed-job paths while leaving the GRN at pending_qc.
+
+        // Reviewer to make the inspection maker-checked (different from inspector)
+        $reviewer = User::factory()->create(['is_active' => true]);
+
         $grn = $this->seedGrn();
-        $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: null);
+        $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: $this->departedInspectorId());
+        $inspection->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()])->save();
 
         $listener = new RejectGRNOnQcFail(app(GrnService::class));
         try {
@@ -109,8 +127,13 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
 
     public function test_stale_failed_event_does_not_reject_when_inspection_is_no_longer_failed(): void
     {
+        // Reviewer to make the inspection maker-checked (different from inspector)
+        $reviewer = User::factory()->create(['is_active' => true]);
+
         $grn = $this->seedGrn();
         $inspection = $this->seedFailedIncomingInspectionFor($grn, inspectorId: null);
+        $inspection->forceFill(['reviewed_by' => $reviewer->id, 'reviewed_at' => now()])->save();
+
         $staleEvent = new InspectionFailed($inspection->fresh());
         $inspection->update(['status' => InspectionStatus::Passed->value]);
 
@@ -127,6 +150,14 @@ class RejectGRNOnQcFailFallbackTest extends TestCase
         return GoodsReceiptNote::factory()->create([
             'status' => GrnStatus::PendingQc->value,
         ]);
+    }
+
+    private function departedInspectorId(): int
+    {
+        $inspector = User::factory()->create(['is_active' => true]);
+        $inspector->delete();
+
+        return (int) $inspector->id;
     }
 
     private function seedFailedIncomingInspectionFor(GoodsReceiptNote $grn, ?int $inspectorId): Inspection

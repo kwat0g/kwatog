@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\HR\Models\Employee;
 use App\Modules\MRP\Models\Machine;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WoOperation extends Model
 {
-    use HasFactory, HasHashId;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'work_order_id',
@@ -42,18 +43,18 @@ class WoOperation extends Model
     ];
 
     protected $casts = [
-        'status'           => WoOperationStatus::class,
-        'planned_start'    => 'datetime',
-        'planned_end'      => 'datetime',
-        'actual_start'     => 'datetime',
-        'actual_end'       => 'datetime',
-        'setup_start'      => 'datetime',
-        'setup_end'        => 'datetime',
-        'qty_planned'      => 'decimal:4',
-        'qty_completed'    => 'decimal:4',
-        'qty_scrapped'     => 'decimal:4',
+        'status' => WoOperationStatus::class,
+        'planned_start' => 'datetime',
+        'planned_end' => 'datetime',
+        'actual_start' => 'datetime',
+        'actual_end' => 'datetime',
+        'setup_start' => 'datetime',
+        'setup_end' => 'datetime',
+        'qty_planned' => 'decimal:4',
+        'qty_completed' => 'decimal:4',
+        'qty_scrapped' => 'decimal:4',
         'downtime_minutes' => 'decimal:2',
-        'sequence'         => 'integer',
+        'sequence' => 'integer',
     ];
 
     public function workOrder(): BelongsTo

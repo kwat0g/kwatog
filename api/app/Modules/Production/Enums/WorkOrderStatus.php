@@ -6,13 +6,13 @@ namespace App\Modules\Production\Enums;
 
 enum WorkOrderStatus: string
 {
-    case Planned    = 'planned';
-    case Confirmed  = 'confirmed';
+    case Planned = 'planned';
+    case Confirmed = 'confirmed';
     case InProgress = 'in_progress';
-    case Paused     = 'paused';
-    case Completed  = 'completed';
-    case Closed     = 'closed';
-    case Cancelled  = 'cancelled';
+    case Paused = 'paused';
+    case Completed = 'completed';
+    case Closed = 'closed';
+    case Cancelled = 'cancelled';
 
     public static function values(): array
     {
@@ -22,13 +22,13 @@ enum WorkOrderStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Planned    => 'Planned',
-            self::Confirmed  => 'Confirmed',
+            self::Planned => 'Planned',
+            self::Confirmed => 'Confirmed',
             self::InProgress => 'In Progress',
-            self::Paused     => 'Paused',
-            self::Completed  => 'Completed',
-            self::Closed     => 'Closed',
-            self::Cancelled  => 'Cancelled',
+            self::Paused => 'Paused',
+            self::Completed => 'Completed',
+            self::Closed => 'Closed',
+            self::Cancelled => 'Cancelled',
         };
     }
 }

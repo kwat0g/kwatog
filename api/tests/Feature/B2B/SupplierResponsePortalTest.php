@@ -385,7 +385,7 @@ class SupplierResponsePortalTest extends TestCase
         $line = $bill->items()->firstOrFail();
         // D2 — the payable is 1.50 × 90.00 = 135.00, never 2.00 × 100.00.
         $this->assertSame('1.50', (string) $line->quantity);
-        $this->assertSame('90.00', (string) $line->unit_price);
+        $this->assertSame('90.0000', (string) $line->unit_price);
         $this->assertSame('135.00', (string) $line->total);
         $this->assertSame('135.00', (string) $bill->total_amount);
     }

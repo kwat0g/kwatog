@@ -95,14 +95,15 @@ class StatementOfAccountCreditNoteTest extends TestCase
         return app(StatementOfAccountService::class)->forCustomer($customer, $asOf);
     }
 
-    /** @param array{aging: array{current: string, d30_days: string, d60_days: string, d90_plus: string}} $statement */
+    /** @param array{aging: array{current: string, d1_30: string, d31_60: string, d61_90: string, d91_plus: string}} $statement */
     private function agingTotal(array $statement): string
     {
         return Money::add(
             $statement['aging']['current'],
-            $statement['aging']['d30_days'],
-            $statement['aging']['d60_days'],
-            $statement['aging']['d90_plus'],
+            $statement['aging']['d1_30'],
+            $statement['aging']['d31_60'],
+            $statement['aging']['d61_90'],
+            $statement['aging']['d91_plus'],
         );
     }
 

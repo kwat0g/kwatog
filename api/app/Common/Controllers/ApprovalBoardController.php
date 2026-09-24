@@ -27,16 +27,22 @@ class ApprovalBoardController
             'type' => ['nullable', 'string', 'in:leave,pr,po,loan,payroll'],
             'pending_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
             'history_limit' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'pending_page' => ['nullable', 'integer', 'min:1'],
+            'history_page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $type = $request->query('type');
         $pendingLimit = (int) $request->integer('pending_limit', 100);
         $historyLimit = (int) $request->integer('history_limit', 50);
+        $pendingPage = (int) $request->integer('pending_page', 1);
+        $historyPage = (int) $request->integer('history_page', 1);
         $board = $this->service->board(
             $request->user(),
             is_string($type) ? $type : null,
             $pendingLimit,
             $historyLimit,
+            $pendingPage,
+            $historyPage,
         );
 
         return response()->json(['data' => $board]);

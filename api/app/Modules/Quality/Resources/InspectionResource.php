@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Resources;
 
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Resources\InspectionSpecRevisionResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,7 +21,18 @@ class InspectionResource extends JsonResource
             'stage' => $this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage,
             'stage_label' => InspectionStage::tryFrom((string) ($this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage))?->label(),
             'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
-            'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
+            'status_label' => $this->status instanceof \BackedEnum && method_exists($this->status, 'label')
+                ? $this->status->label()
+                : Str::headline((string) $this->status),
+            // Mirrors InspectionService::review()'s guards so the checker actions
+            // are hidden from the maker instead of failing with a 403 on click.
+            'can_review' => ($this->status instanceof \BackedEnum ? $this->status->value : $this->status) === InspectionStatus::AwaitingReview->value
+                && (bool) $request->user()?->hasPermission('quality.inspections.review')
+                && $this->inspector_id !== null
+                && (int) $this->inspector_id !== (int) $request->user()?->id,
+            'proposed_result' => $this->proposed_result instanceof \BackedEnum ? $this->proposed_result->value : $this->proposed_result,
+            'reviewed_at' => optional($this->reviewed_at)?->toISOString(),
+            'review_remarks' => $this->review_remarks,
             'entity_type' => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
             'entity_hash_id' => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
             'entity_context' => $this->whenLoaded('entityRecord', function () use ($request) {
@@ -56,7 +68,9 @@ class InspectionResource extends JsonResource
                     'type' => $type,
                     'reference' => $reference,
                     'status' => $status,
-                    'status_label' => $status !== '' ? Str::headline($status) : null,
+                    'status_label' => $entity->status instanceof \BackedEnum && method_exists($entity->status, 'label')
+                        ? $entity->status->label()
+                        : ($status !== '' ? Str::headline($status) : null),
                     'href' => $permission && $request->user()?->hasPermission($permission) ? $href : null,
                 ];
             }),
@@ -71,11 +85,13 @@ class InspectionResource extends JsonResource
                     'wo_number' => $this->workOrderOutput->workOrder->wo_number,
                 ] : null,
             ] : null),
+            'inspection_mode' => $this->inspection_mode instanceof \BackedEnum ? $this->inspection_mode->value : $this->inspection_mode,
             'sample_size' => (int) $this->sample_size,
             'aql_code' => $this->aql_code,
             'accept_count' => (int) $this->accept_count,
             'reject_count' => (int) $this->reject_count,
             'defect_count' => (int) $this->defect_count,
+            'sample_defect_count' => $this->sample_defect_count !== null ? (int) $this->sample_defect_count : null,
             'started_at' => optional($this->started_at)?->toISOString(),
             'completed_at' => optional($this->completed_at)?->toISOString(),
             'notes' => $this->notes,
@@ -92,6 +108,10 @@ class InspectionResource extends JsonResource
             'inspector' => $this->whenLoaded('inspector', fn () => $this->inspector ? [
                 'id' => $this->inspector->hash_id,
                 'name' => $this->inspector->name,
+            ] : null),
+            'reviewer' => $this->whenLoaded('reviewer', fn () => $this->reviewer ? [
+                'id' => $this->reviewer->hash_id,
+                'name' => $this->reviewer->name,
             ] : null),
             'spec' => $this->whenLoaded('spec', fn () => $this->spec ? [
                 'id' => $this->spec->hash_id,
@@ -116,6 +136,14 @@ class InspectionResource extends JsonResource
                 'id' => $this->qualityPlan->hash_id,
                 'version' => (int) $this->qualityPlan->version,
                 'sampling_method' => $this->qualityPlan->sampling_method,
+            ] : null),
+            'calibration_record' => $this->whenLoaded('calibrationRecord', fn () => $this->calibrationRecord ? [
+                'id' => $this->calibrationRecord->hash_id,
+                'equipment_code' => $this->calibrationRecord->equipment_code,
+                'name' => $this->calibrationRecord->name,
+                'status' => $this->calibrationRecord->status instanceof \BackedEnum
+                    ? $this->calibrationRecord->status->value
+                    : $this->calibrationRecord->status,
             ] : null),
             'measurements' => $this->whenLoaded('measurements', fn () => InspectionMeasurementResource::collection($this->measurements)->resolve()
             ),

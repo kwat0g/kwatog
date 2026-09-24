@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /** Sprint 8 — Task 70. */
@@ -79,6 +80,21 @@ class Asset extends Model
     public function disposalRequester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disposal_requested_by');
+    }
+
+    public function machine(): HasOne
+    {
+        return $this->hasOne(\App\Modules\MRP\Models\Machine::class, 'asset_id');
+    }
+
+    public function mold(): HasOne
+    {
+        return $this->hasOne(\App\Modules\MRP\Models\Mold::class, 'asset_id');
+    }
+
+    public function vehicle(): HasOne
+    {
+        return $this->hasOne(\App\Modules\SupplyChain\Models\Vehicle::class, 'asset_id');
     }
 
     /**

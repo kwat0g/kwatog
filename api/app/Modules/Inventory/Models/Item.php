@@ -111,7 +111,11 @@ class Item extends Model
             return (string) ($this->attributes['on_hand_quantity'] ?? '0');
         }
         if ($this->relationLoaded('stockLevels')) {
-            return (string) $this->stockLevels->sum('quantity');
+            $total = '0.000';
+            foreach ($this->stockLevels as $level) {
+                $total = bcadd($total, (string) $level->quantity, 3);
+            }
+            return $total;
         }
         return '0';
     }
@@ -122,25 +126,27 @@ class Item extends Model
             return (string) ($this->attributes['reserved_quantity'] ?? '0');
         }
         if ($this->relationLoaded('stockLevels')) {
-            return (string) $this->stockLevels->sum('reserved_quantity');
+            $total = '0.000';
+            foreach ($this->stockLevels as $level) {
+                $total = bcadd($total, (string) $level->reserved_quantity, 3);
+            }
+            return $total;
         }
         return '0';
     }
 
     public function getAvailableAttribute(): string
     {
-        $onHand   = (float) $this->on_hand;
-        $reserved = (float) $this->reserved;
-        return number_format(max(0.0, $onHand - $reserved), 3, '.', '');
+        $available = bcsub($this->on_hand, $this->reserved, 3);
+
+        return bccomp($available, '0', 3) < 0 ? '0.000' : $available;
     }
 
     public function getStockStatusAttribute(): string
     {
-        $available = (float) $this->available;
-        $safety    = (float) $this->safety_stock;
-        $reorder   = (float) $this->reorder_point;
-        if ($available <= $safety) return 'critical';
-        if ($available <= $reorder) return 'low';
+        $available = $this->available;
+        if (bccomp($available, (string) $this->safety_stock, 3) <= 0) return 'critical';
+        if (bccomp($available, (string) $this->reorder_point, 3) <= 0) return 'low';
         return 'ok';
     }
 

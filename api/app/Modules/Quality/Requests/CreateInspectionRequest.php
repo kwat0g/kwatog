@@ -10,6 +10,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +32,7 @@ class CreateInspectionRequest extends FormRequest
         return [
             'product_id' => Product::class,
             'work_order_output_id' => WorkOrderOutput::class,
+            'calibration_record_id' => CalibrationRecord::class,
             // entity_id is decoded conditionally — see prepareForValidation override.
         ];
     }
@@ -95,6 +97,7 @@ class CreateInspectionRequest extends FormRequest
             'entity_type' => ['nullable', Rule::in(InspectionEntityType::values())],
             'entity_id' => ['nullable', 'required_with:entity_type', 'integer', 'min:1'],
             'work_order_output_id' => ['nullable', 'integer', 'exists:work_order_outputs,id', 'required_if:stage,outgoing'],
+            'calibration_record_id' => ['nullable', 'integer', 'exists:calibration_records,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

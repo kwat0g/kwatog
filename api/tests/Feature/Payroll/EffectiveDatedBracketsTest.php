@@ -48,6 +48,25 @@ class EffectiveDatedBracketsTest extends TestCase
         $this->assertSame('150.0000', (string) $in2025->first()->ee_amount);
     }
 
+    public function test_inactive_effective_rows_are_not_used_for_payroll(): void
+    {
+        $this->sssRow('2024-01-01', 100.00, 200.00);
+        GovernmentContributionTable::create([
+            'agency' => 'sss',
+            'bracket_min' => 0.00,
+            'bracket_max' => 999999.99,
+            'ee_amount' => 150.00,
+            'er_amount' => 300.00,
+            'effective_date' => '2025-01-01',
+            'is_active' => false,
+        ]);
+
+        $rows = app(GovernmentContributionTableService::class)
+            ->bracketsEffectiveOn(ContributionAgency::Sss, '2025-06-15');
+
+        $this->assertSame('100.0000', (string) $rows->sole()->ee_amount);
+    }
+
     public function test_falls_back_to_active_set_when_no_dated_rows_match(): void
     {
         $this->sssRow('2025-01-01', 150.00, 300.00);

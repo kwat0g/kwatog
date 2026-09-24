@@ -18,13 +18,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Series C — Task C2. When an INCOMING inspection fails, automatically
- * reject the linked GRN. Stock is NOT incremented (GrnService::reject
- * just flips the status), and the existing NCR auto-open path inside
- * InspectionService handles the corrective-action side.
+ * Series C — Task C2. When an INCOMING inspection fails, settle the GRN's
+ * incoming QC. The settlement logic waits until all inspections are terminal,
+ * then decides: no failed lines → accept, all failed → reject, mixed → partial
+ * accept the good lines and reject the remainder.
+ *
+ * This prevents the old behavior where the first failure rejected the entire
+ * GRN, losing good lines that passed inspection. In real receiving, you accept
+ * the good lines and return only the bad ones.
  *
  * Stage filter: only acts on incoming inspections linked to a GRN.
- * Idempotent: skips if the GRN is already in a terminal status.
+ * Idempotent: skips if the GRN is already in a terminal status or QC is pending.
  * A missing actor is a stateful configuration failure: it is rethrown so the
  * queue worker can retry and retain a failed-job record instead of reporting a
  * completed handoff while the GRN remains pending_qc.
@@ -44,6 +48,7 @@ class RejectGRNOnQcFail implements ShouldQueue
         $inspection = $event->inspection->fresh();
         if (!$inspection
             || $inspection->status !== InspectionStatus::Failed
+            || ! $inspection->isMakerChecked()
             || $inspection->stage?->value !== InspectionStage::Incoming->value) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_incoming_failure');
             return;
@@ -98,7 +103,7 @@ class RejectGRNOnQcFail implements ShouldQueue
             throw new BusinessRuleException($message);
         }
 
-        $outcomeCode = DB::transaction(function () use ($grn, $inspection, $by): string {
+        $outcomeCode = DB::transaction(function () use ($grn, $by): string {
             $lockedGrn = GoodsReceiptNote::query()
                 ->lockForUpdate()
                 ->find($grn->id);
@@ -109,18 +114,27 @@ class RejectGRNOnQcFail implements ShouldQueue
                 return 'grn_already_terminal';
             }
 
-            $reason = "Auto-rejected: incoming inspection {$inspection->inspection_number} failed.";
-            $this->grns->reject($lockedGrn, $reason, $by);
-
-            return 'grn_rejected';
+            return $this->grns->settleIncomingQc($lockedGrn, $by);
         });
 
+        $isCompleted = in_array($outcomeCode, ['grn_accepted', 'grn_rejected', 'grn_partially_accepted'], true);
+        $message = null;
+        if ($isCompleted) {
+            $grn = $grn->fresh();
+            match ($outcomeCode) {
+                'grn_accepted' => $message = "Incoming QC accepted GRN {$grn->grn_number}.",
+                'grn_rejected' => $message = "Incoming QC rejected GRN {$grn->grn_number}.",
+                'grn_partially_accepted' => $message = "Incoming QC settled GRN {$grn->grn_number} with mixed results.",
+                default => null,
+            };
+        } elseif ($outcomeCode === 'awaiting_mrb') {
+            $message = "Incoming QC failure awaiting material review board disposition.";
+        }
+
         app(ChainListenerRunService::class)->recordOutcome(
-            $outcomeCode === 'grn_rejected' ? 'completed' : 'skipped',
+            $isCompleted ? 'completed' : 'skipped',
             $outcomeCode,
-            $outcomeCode === 'grn_rejected'
-                ? "Incoming QC rejected GRN {$grn->grn_number}."
-                : null,
+            $message,
         );
     }
 }

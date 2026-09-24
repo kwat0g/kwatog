@@ -64,6 +64,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [CreditNoteController::class, 'store'])->middleware('permission:accounting.credit_notes.manage');
         Route::post('/{creditNote}/finalize', [CreditNoteController::class, 'finalize'])->middleware('permission:accounting.credit_notes.manage');
         Route::post('/{creditNote}/apply', [CreditNoteController::class, 'apply'])->middleware('permission:accounting.credit_notes.manage');
+        Route::post('/{creditNote}/void', [CreditNoteController::class, 'void'])->middleware('permission:accounting.credit_notes.manage');
     });
 
 
@@ -71,6 +72,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     Route::prefix('vendors')->group(function () {
         Route::get('/', [VendorController::class, 'index'])->middleware('permission:accounting.vendors.view');
         Route::get('/{vendor}', [VendorController::class, 'show'])->middleware('permission:accounting.vendors.view');
+        Route::get('/{vendor}/bir-2307', [VendorController::class, 'bir2307'])->middleware('permission:accounting.bills.view');
+        Route::get('/{vendor}/bir-2307/pdf', [VendorController::class, 'bir2307Pdf'])->middleware('permission:accounting.bills.view');
         Route::post('/', [VendorController::class, 'store'])->middleware('permission:accounting.vendors.manage');
         Route::put('/{vendor}', [VendorController::class, 'update'])->middleware('permission:accounting.vendors.manage');
         Route::delete('/{vendor}', [VendorController::class, 'destroy'])->middleware('permission:accounting.vendors.manage');
@@ -143,6 +146,9 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::get('/options', [BudgetController::class, 'options'])->middleware('permission:budgeting.view');
             Route::get('/', [BudgetController::class, 'index'])->middleware('permission:budgeting.view');
             Route::get('/fiscal-years', [BudgetController::class, 'fiscalYears'])->middleware('permission:budgeting.view');
+            Route::post('/fiscal-years', [BudgetController::class, 'storeFiscalYear'])->middleware('permission:budgeting.manage');
+            Route::post('/fiscal-years/{fiscalYear}/activate', [BudgetController::class, 'activateFiscalYear'])->middleware('permission:budgeting.manage');
+            Route::post('/fiscal-years/{fiscalYear}/close', [BudgetController::class, 'closeFiscalYear'])->middleware('permission:budgeting.manage');
             Route::get('/overview', [BudgetController::class, 'overview'])->middleware('permission:budgeting.view');
             Route::get('/budget-vs-actual', [BudgetController::class, 'budgetVsActual'])->middleware('permission:budgeting.view');
             Route::post('/sync-actuals', [BudgetController::class, 'syncActuals'])->middleware('permission:budgeting.manage');

@@ -518,11 +518,19 @@ class RecruitmentService
                 return;
             }
 
+            $lockedEmployee = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            if (JobApplication::query()
+                ->where('converted_employee_id', $lockedEmployee->id)
+                ->whereKeyNot($lockedApplication->id)
+                ->exists()) {
+                throw new BusinessRuleException('This employee is already linked to another application.');
+            }
+
             $posting = JobPosting::withTrashed()
                 ->lockForUpdate()
                 ->findOrFail($lockedApplication->job_posting_id);
 
-            $lockedApplication->converted_employee_id = $employee->id;
+            $lockedApplication->converted_employee_id = $lockedEmployee->id;
             $lockedApplication->save();
 
             $hiredCount = JobApplication::query()

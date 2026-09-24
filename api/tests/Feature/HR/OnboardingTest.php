@@ -67,6 +67,11 @@ class OnboardingTest extends TestCase
         $this->assertNotNull($onboarding);
         $this->assertNotNull($onboarding->profile_completed_at);
         $this->assertNotNull($onboarding->leave_balances_initialized_at);
+        $this->assertDatabaseHas('employee_salary_history', [
+            'employee_id' => $emp->id,
+            'basic_monthly_salary' => '20000.00',
+            'effective_date' => '2025-01-01',
+        ]);
     }
 
     public function test_recompute_marks_account_provisioned_after_user_created(): void
@@ -143,6 +148,7 @@ class OnboardingTest extends TestCase
         /** @var EmployeeService $svc */
         $svc = app(EmployeeService::class);
         $hr = $this->userForRole('hr_officer');
+        $admin = $this->userForRole('system_admin');
         $emp = $svc->create($this->basePayload());
 
         // Fresh onboarding — no reminder yet.
@@ -168,6 +174,10 @@ class OnboardingTest extends TestCase
 
         $this->assertSame(0, $ob->sendRemindersForStaleOnboardings());
         $this->assertSame(1, DB::table('notifications')->where('type', 'hr.onboarding.stale')->count());
+        $this->assertDatabaseMissing('notifications', [
+            'type' => 'hr.onboarding.stale',
+            'notifiable_id' => $admin->id,
+        ]);
     }
 
     public function test_status_reconciles_canonical_data_in_a_transaction(): void

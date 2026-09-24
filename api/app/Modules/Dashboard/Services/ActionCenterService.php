@@ -51,17 +51,18 @@ class ActionCenterService
     public function for(User $user): array
     {
         $items = [];
+        $failedSources = [];
 
-        $this->append($items, 'alerts', fn () => $this->alertItems(), $user, ['alerts.view']);
+        $this->append($items, $failedSources, 'alerts', fn () => $this->alertItems(), $user, ['alerts.view']);
         // Source gates mirror the owning module's READ routes exactly, so the
         // queue can never surface a row the module list endpoint would refuse:
         // quality splits inspections/NCRs like Quality/routes.php, deliveries
         // accept the narrow deliveries slug like SupplyChain/routes.php.
-        $this->append($items, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
-        $this->append($items, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.ncr.view']);
-        $this->append($items, 'maintenance', fn () => $this->maintenanceItems(), $user, ['maintenance.view']);
-        $this->append($items, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
-        $this->append($items, 'deliveries', fn () => $this->deliveryItems(), $user, ['supply_chain.view', 'supply_chain.deliveries.view']);
+        $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
+        $this->append($items, $failedSources, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.ncr.view']);
+        $this->append($items, $failedSources, 'maintenance', fn () => $this->maintenanceItems(), $user, ['maintenance.view']);
+        $this->append($items, $failedSources, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
+        $this->append($items, $failedSources, 'deliveries', fn () => $this->deliveryItems(), $user, ['supply_chain.view', 'supply_chain.deliveries.view']);
 
         $items = $this->overlayTaskState($items);
 
@@ -91,6 +92,7 @@ class ActionCenterService
             ],
             'generated_at' => now()->toIso8601String(),
             'category_options' => $this->categoryOptions(),
+            'meta' => ['failed_sources' => array_values($failedSources)],
         ];
     }
 
@@ -179,7 +181,7 @@ class ActionCenterService
     }
 
     /** @param array<int, array<string, mixed>> $items @param array<int, string> $permissions */
-    private function append(array &$items, string $source, callable $loader, User $user, array $permissions): void
+    private function append(array &$items, array &$failedSources, string $source, callable $loader, User $user, array $permissions): void
     {
         if (! $this->hasAnyPermission($user, $permissions)) {
             return;
@@ -188,6 +190,7 @@ class ActionCenterService
         try {
             array_push($items, ...$loader());
         } catch (Throwable $e) {
+            $failedSources[$source] = true;
             Log::warning("ActionCenterService source {$source} skipped", ['exception' => $e]);
         }
     }

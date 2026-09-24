@@ -1,8 +1,21 @@
 # MRP / BOM Audit
 
 Date: 2026-09-18
- 
-## Re-audit 2026-09-19
+
+## Current re-audit 2026-09-23
+
+Current engineering verdict: **remediated; process-level concurrency proof remains**.
+
+- BOM creation now allocates above soft-deleted versions and validates numeric fields at the service boundary.
+- MRP nets open PO supply after converting each ordered-unit remainder to the inventory item's base UOM.
+- PR/PO quantity storage and validation preserve 3-decimal stock quantities; MOQ rounding uses decimal arithmetic at the same precision.
+- Manual, scheduled, rerun, and automatic MRP batches share a plant mutex; missing-BOM plans mark the run `partial` and raise an operator alert.
+- Verified against current tests: BOM version/validation, in-transit UOM, 0.001 MOQ, missing-BOM status/alert, and existing MRP rerun/PR-submit race regressions. The focused MRP/P2P/CRM/inquiry/GRN set passed 166 tests / 580 assertions.
+- Release evidence now includes a passing Redis-backed two-worker/manual-vs-daily overlap smoke and
+  a read-only migration preflight; production-database execution remains a deployment gate.
+- The cross-module register remains unchanged per task scope; this scoped re-audit supersedes its stale MRP residual summary.
+
+## Historical re-audit 2026-09-19
 
 Current verdict: **historical FINISHED label is not release closure**.
 

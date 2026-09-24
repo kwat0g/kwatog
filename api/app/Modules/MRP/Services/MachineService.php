@@ -39,7 +39,7 @@ class MachineService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Machine::query()->withCount('compatibleMolds');
+        $q = Machine::query()->with(['asset:id,asset_code,name'])->withCount('compatibleMolds');
 
         TrashedFilter::apply($q, $filters);
 
@@ -60,7 +60,7 @@ class MachineService
 
     public function show(Machine $m): Machine
     {
-        return $m->load(['compatibleMolds:id,mold_code,name']);
+        return $m->load(['compatibleMolds:id,mold_code,name', 'asset:id,asset_code,name']);
     }
 
     public function create(array $data): Machine

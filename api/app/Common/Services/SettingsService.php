@@ -20,6 +20,13 @@ class SettingsService
 {
     private const CACHE_TTL = 3600; // 1 hour
 
+    /** A dependent feature may not be enabled while its source is disabled. */
+    private const MODULE_DEPENDENCIES = [
+        'b2b_portals' => ['crm'],
+        'forecasting' => ['crm'],
+        'budgeting' => ['accounting'],
+    ];
+
     public function get(string $key, mixed $default = null): mixed
     {
         // The settings table doesn't exist until Task 12 migrates it.
@@ -196,6 +203,8 @@ class SettingsService
                 ]);
             }
 
+            $this->assertModuleDependencies($key, $value);
+
             try {
                 $encoded = json_encode($value, JSON_THROW_ON_ERROR);
             } catch (\JsonException $exception) {
@@ -248,6 +257,37 @@ class SettingsService
     {
         if (str_starts_with($key, 'production.') || $key === 'alerts.mold.warning_ratio') {
             Cache::forget('dashboard:production');
+        }
+    }
+
+    private function assertModuleDependencies(string $key, mixed $value): void
+    {
+        if (! str_starts_with($key, 'modules.') || ! is_bool($value)) {
+            return;
+        }
+
+        $module = substr($key, strlen('modules.'));
+        $dependencies = self::MODULE_DEPENDENCIES[$module] ?? [];
+
+        if ($value === true) {
+            foreach ($dependencies as $dependency) {
+                if ($this->get("modules.{$dependency}", true) !== true) {
+                    throw ValidationException::withMessages([
+                        'value' => ["The {$module} module requires {$dependency} to be enabled."],
+                    ]);
+                }
+            }
+
+            return;
+        }
+
+        foreach (self::MODULE_DEPENDENCIES as $dependent => $required) {
+            if (in_array($module, $required, true)
+                && $this->get("modules.{$dependent}", true) === true) {
+                throw ValidationException::withMessages([
+                    'value' => ["The {$module} module cannot be disabled while {$dependent} is enabled."],
+                ]);
+            }
         }
     }
 

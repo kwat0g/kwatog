@@ -18,6 +18,9 @@ class ProductResource extends JsonResource
             'description'     => $this->description,
             'unit_of_measure' => $this->unit_of_measure,
             'standard_cost'   => (string) $this->standard_cost,
+            'revenue_account_id' => $this->revenue_account_id
+                ? app('hashids')->encode((int) $this->revenue_account_id)
+                : null,
             'is_active'       => (bool) $this->is_active,
             'include_forecast_in_mrp' => (bool) $this->include_forecast_in_mrp,
             'has_bom'         => $this->relationLoaded('activeBom')

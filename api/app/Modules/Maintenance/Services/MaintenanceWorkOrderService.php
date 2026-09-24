@@ -11,6 +11,8 @@ use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Enums\MaintainableType;
@@ -54,6 +56,8 @@ class MaintenanceWorkOrderService
     {
         $q = MaintenanceWorkOrder::query()->with([
             'schedule:id,description,interval_type,interval_value',
+            'machineTarget:id,machine_code,name',
+            'moldTarget:id,mold_code,name',
             'assignee:id,first_name,last_name,employee_no',
             'creator:id,name',
         ]);
@@ -88,6 +92,8 @@ class MaintenanceWorkOrderService
     {
         return $wo->load([
             'schedule',
+            'machineTarget:id,machine_code,name',
+            'moldTarget:id,mold_code,name',
             'assignee:id,first_name,last_name,employee_no,position_id',
             'creator:id,name',
             'logs.logger:id,name',
@@ -123,12 +129,13 @@ class MaintenanceWorkOrderService
             $type = MaintainableType::from((string) ($fromSchedule?->maintainable_type?->value ?? $data['maintainable_type']));
             $maintainableId = $fromSchedule?->maintainable_id ?? (int) $data['maintainable_id'];
 
-            // Validate target
-            $exists = match ($type) {
-                MaintainableType::Machine => Machine::query()->whereKey($maintainableId)->exists(),
-                MaintainableType::Mold => Mold::query()->whereKey($maintainableId)->exists(),
+            // Lock the polymorphic target as part of creation: target removal
+            // cannot race the existence check and leave a new orphaned MWO.
+            $target = match ($type) {
+                MaintainableType::Machine => Machine::query()->lockForUpdate()->find($maintainableId),
+                MaintainableType::Mold => Mold::query()->lockForUpdate()->find($maintainableId),
             };
-            if (! $exists) {
+            if (! $target) {
                 throw ValidationException::withMessages([
                     'maintainable_id' => ["Target {$type->value}#{$maintainableId} not found."],
                 ]);
@@ -219,13 +226,27 @@ class MaintenanceWorkOrderService
                         MachineStatus::Maintenance,
                         'Maintenance work order '.$locked->mwo_number.' started',
                     );
-                    MachineDowntime::create([
-                        'machine_id' => $machine->id,
-                        'maintenance_order_id' => $locked->id,
-                        'start_time' => now(),
-                        'category' => MachineDowntimeCategory::PlannedMaintenance->value,
-                        'description' => 'Maintenance work order '.$locked->mwo_number,
-                    ]);
+                    $openBreakdown = MachineDowntime::query()
+                        ->where('machine_id', $machine->id)
+                        ->where('category', MachineDowntimeCategory::Breakdown->value)
+                        ->whereNull('end_time')
+                        ->whereNull('maintenance_order_id')
+                        ->lockForUpdate()
+                        ->first();
+                    if ($openBreakdown) {
+                        $openBreakdown->forceFill(['maintenance_order_id' => $locked->id])->save();
+                    } elseif (! MachineDowntime::query()
+                        ->where('maintenance_order_id', $locked->id)
+                        ->whereNull('end_time')
+                        ->exists()) {
+                        MachineDowntime::create([
+                            'machine_id' => $machine->id,
+                            'maintenance_order_id' => $locked->id,
+                            'start_time' => now(),
+                            'category' => MachineDowntimeCategory::PlannedMaintenance->value,
+                            'description' => 'Maintenance work order '.$locked->mwo_number,
+                        ]);
+                    }
                 }
             }
             if ($locked->maintainable_type === MaintainableType::Mold) {
@@ -241,6 +262,11 @@ class MaintenanceWorkOrderService
                     ]);
                 }
             }
+
+            // The fixed-asset register follows the existing maintenance
+            // work-order lifecycle; no sensor or separate IoT status writer is
+            // required for the dashboard to reflect an active MWO.
+            $this->markLinkedAssetUnderMaintenance($locked);
 
             $this->recordLifecycleLog($locked, 'Maintenance started.', $by);
 
@@ -258,10 +284,13 @@ class MaintenanceWorkOrderService
             $this->stateMachine->transition($locked, MaintenanceWorkOrderStatus::Completed);
 
             $cost = (string) SparePartUsage::query()->where('work_order_id', $locked->id)->sum('total_cost');
+            $downtimeMinutes = $locked->maintainable_type === MaintainableType::Machine
+                ? $this->closeMachineDowntime($locked)
+                : 0;
 
             $locked->forceFill([
                 'completed_at' => now(),
-                'downtime_minutes' => (int) ($data['downtime_minutes'] ?? 0),
+                'downtime_minutes' => $downtimeMinutes,
                 'cost' => $cost,
                 'remarks' => $data['remarks'] ?? $locked->remarks,
             ])->save();
@@ -304,7 +333,6 @@ class MaintenanceWorkOrderService
             }
             // Machine: close the maintenance downtime ledger row, restore to idle
             if ($locked->maintainable_type === MaintainableType::Machine) {
-                $this->closeMachineDowntime($locked);
                 $machine = Machine::query()->lockForUpdate()->find($locked->maintainable_id);
                 if ($machine && $machine->status?->value === 'maintenance') {
                     $this->machines->transitionStatus(
@@ -314,6 +342,7 @@ class MaintenanceWorkOrderService
                     );
                 }
             }
+            $this->restoreLinkedAssetIfIdle($locked);
 
             // Recompute schedule next_due_at
             if ($locked->schedule_id) {
@@ -350,6 +379,7 @@ class MaintenanceWorkOrderService
                     );
                 }
             }
+            $this->restoreLinkedAssetIfIdle($locked);
             // Cancellation does not count as maintenance performed. Leave the
             // schedule due so the next sweep can create a replacement WO.
             $this->recordLifecycleLog($locked, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
@@ -378,21 +408,107 @@ class MaintenanceWorkOrderService
         ]);
     }
 
-    private function closeMachineDowntime(MaintenanceWorkOrder $wo): void
+    private function markLinkedAssetUnderMaintenance(MaintenanceWorkOrder $wo): void
     {
-        $open = MachineDowntime::query()
-            ->where('maintenance_order_id', $wo->id)
-            ->whereNull('end_time')
-            ->lockForUpdate()
-            ->first();
-        if (! $open) {
+        $assetId = match ($wo->maintainable_type) {
+            MaintainableType::Machine => Machine::query()->find($wo->maintainable_id)?->asset_id,
+            MaintainableType::Mold => Mold::query()->find($wo->maintainable_id)?->asset_id,
+            default => null,
+        };
+        if ($assetId === null) {
             return;
         }
 
-        $end = now();
-        $open->update([
-            'end_time' => $end,
-            'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
-        ]);
+        $asset = Asset::query()->lockForUpdate()->find($assetId);
+        if (! $asset) {
+            return;
+        }
+        if ($asset->status === AssetStatus::Disposed) {
+            throw ValidationException::withMessages([
+                'maintainable_id' => ['A disposed asset cannot enter maintenance.'],
+            ]);
+        }
+        if ($asset->status === AssetStatus::Active) {
+            $asset->forceFill(['status' => AssetStatus::UnderMaintenance->value])->save();
+        }
+    }
+
+    private function restoreLinkedAssetIfIdle(MaintenanceWorkOrder $wo): void
+    {
+        $type = $wo->maintainable_type;
+        if (! in_array($type, [MaintainableType::Machine, MaintainableType::Mold], true)) {
+            return;
+        }
+        $hasAnotherOpen = MaintenanceWorkOrder::query()
+            ->where('maintainable_type', $type->value)
+            ->where('maintainable_id', $wo->maintainable_id)
+            ->where('id', '<>', $wo->getKey())
+            ->whereIn('status', [
+                MaintenanceWorkOrderStatus::Open->value,
+                MaintenanceWorkOrderStatus::Assigned->value,
+                MaintenanceWorkOrderStatus::InProgress->value,
+            ])
+            ->exists();
+        if ($hasAnotherOpen) {
+            return;
+        }
+
+        $assetId = match ($type) {
+            MaintainableType::Machine => Machine::query()->find($wo->maintainable_id)?->asset_id,
+            MaintainableType::Mold => Mold::query()->find($wo->maintainable_id)?->asset_id,
+        };
+        if ($assetId === null) {
+            return;
+        }
+        $asset = Asset::query()->lockForUpdate()->find($assetId);
+        if ($asset?->status === AssetStatus::UnderMaintenance) {
+            $asset->forceFill(['status' => AssetStatus::Active->value])->save();
+        }
+    }
+
+    private function closeMachineDowntime(MaintenanceWorkOrder $wo): int
+    {
+        $openRows = MachineDowntime::query()
+            ->where('maintenance_order_id', $wo->id)
+            ->whereNull('end_time')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($openRows as $open) {
+            $end = now();
+            $open->update([
+                'end_time' => $end,
+                'duration_minutes' => (int) max(0, $open->start_time->diffInMinutes($end, true)),
+            ]);
+        }
+
+        $intervals = MachineDowntime::query()
+            ->where('maintenance_order_id', $wo->id)
+            ->get(['start_time', 'end_time'])
+            ->map(static fn (MachineDowntime $row): array => [
+                $row->start_time->getTimestamp(),
+                $row->end_time?->getTimestamp() ?? $row->start_time->getTimestamp(),
+            ])
+            ->all();
+        usort($intervals, static fn (array $left, array $right): int => $left[0] <=> $right[0]);
+
+        $seconds = 0;
+        $start = null;
+        $end = null;
+        foreach ($intervals as [$rowStart, $rowEnd]) {
+            if ($start === null) {
+                [$start, $end] = [$rowStart, $rowEnd];
+            } elseif ($rowStart <= $end) {
+                $end = max($end, $rowEnd);
+            } else {
+                $seconds += $end - $start;
+                [$start, $end] = [$rowStart, $rowEnd];
+            }
+        }
+        if ($start !== null) {
+            $seconds += $end - $start;
+        }
+
+        return intdiv($seconds, 60);
     }
 }

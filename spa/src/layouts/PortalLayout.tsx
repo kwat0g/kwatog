@@ -107,8 +107,11 @@ const CUSTOMER_NAV: PortalNavSection[] = [
     ],
   },
   {
-    label: 'Quality',
-    items: [{ to: '/portal/customer/complaints', label: 'Quality Complaints', icon: ComplaintIcon }],
+   label: 'Quality',
+   items: [
+     { to: '/portal/customer/complaints', label: 'Quality Complaints', icon: ComplaintIcon },
+     { to: '/portal/customer/returns', label: 'Returns', icon: LuPackageCheck },
+   ],
   },
 ];
 
@@ -284,14 +287,17 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  queryFn: landingApi.contact,
  staleTime: 300_000,
  });
- const { data: businessPolicies } = useQuery({
+ const { data: businessPolicies, isFetched: policiesFetched } = useQuery({
  queryKey: ['portal', type, 'business-policies'],
  queryFn: () => type === 'supplier' ? supplierPortalApi.businessPolicies() : customerPortalApi.businessPolicies(),
  });
+ // Same first-paint race as AppLayout: formatPeso reads a module variable.
+ const [currencyApplied, setCurrencyApplied] = useState(false);
 
  useEffect(() => {
  setFunctionalCurrency(businessPolicies?.functional_currency_code);
- }, [businessPolicies?.functional_currency_code]);
+ if (policiesFetched) setCurrencyApplied(true);
+ }, [businessPolicies?.functional_currency_code, policiesFetched]);
 
  useEffect(() => {
  setMobileOpen(false);
@@ -364,7 +370,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  back on; keep the failure inside the content column so the portal nav
  and sign-out survive. */}
  <ErrorBoundary>
- {children}
+ {currencyApplied && children}
  </ErrorBoundary>
  </div>
  </main>

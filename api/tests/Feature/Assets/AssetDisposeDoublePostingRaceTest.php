@@ -81,7 +81,7 @@ class AssetDisposeDoublePostingRaceTest extends TestCase
     {
         $this->requestDisposal($asset, [], $this->user('finance_officer'));
         app(AssetService::class)->approveDisposal($asset, $this->user('finance_officer'));
-        app(AssetService::class)->approveDisposal($asset, $this->user('system_admin'));
+        app(AssetService::class)->approveDisposal($asset, $this->user('vice_president'));
     }
 
     public function test_stale_second_dispose_is_blocked_and_posts_single_je(): void
@@ -114,7 +114,7 @@ class AssetDisposeDoublePostingRaceTest extends TestCase
         // And a second approval after the chain closed finds the asset
         // already disposed — the status guard answers first.
         try {
-            app(AssetService::class)->approveDisposal($disposerB, $this->user('system_admin'));
+            app(AssetService::class)->approveDisposal($disposerB, $this->user('vice_president'));
             $this->fail('A second approval after execution must be rejected.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('already disposed', strtolower($e->getMessage()));
@@ -148,7 +148,7 @@ class AssetDisposeDoublePostingRaceTest extends TestCase
 
         // The single surviving request executes exactly once.
         app(AssetService::class)->approveDisposal($stale, $this->user('finance_officer'));
-        app(AssetService::class)->approveDisposal($stale, $this->user('system_admin'));
+        app(AssetService::class)->approveDisposal($stale, $this->user('vice_president'));
         $this->assertSame(
             1,
             JournalEntry::query()

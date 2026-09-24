@@ -27,6 +27,10 @@ class EmployeeLoan extends Model
         'pay_periods_total', 'pay_periods_remaining',
         'approval_chain_size', 'purpose',
         'is_final_pay_deduction',
+        'write_off_amount', 'write_off_reason', 'write_off_evidence', 'write_off_approval_remarks',
+        'write_off_requested_by', 'write_off_requested_at',
+        'write_off_approved_by', 'write_off_approved_at',
+        'write_off_journal_entry_id', 'disbursement_journal_entry_id',
     ];
 
     protected $casts = [
@@ -43,6 +47,9 @@ class EmployeeLoan extends Model
         'status'                 => LoanStatus::class,
         'loan_type'              => LoanType::class,
         'is_final_pay_deduction' => 'boolean',
+        'write_off_amount'       => 'decimal:2',
+        'write_off_requested_at' => 'datetime',
+        'write_off_approved_at'  => 'datetime',
     ];
 
     public function employee(): BelongsTo

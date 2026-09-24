@@ -41,7 +41,6 @@ class Employee extends Model
         'date_hired', 'date_regularized',
         'basic_monthly_salary', 'semi_monthly_rate',
         'bank_name', 'bank_account_no',
-        'status',
     ];
 
     protected $casts = [
@@ -58,6 +57,7 @@ class Employee extends Model
         'bank_account_no'      => 'encrypted',
         // Enums
         'status'               => EmployeeStatus::class,
+        'account_deactivated_by_archive' => 'boolean',
         'employment_type'      => EmploymentType::class,
         'pay_type'             => PayType::class,
         'gender'               => Gender::class,
@@ -130,11 +130,6 @@ class Employee extends Model
     public function employmentHistory(): HasMany
     {
         return $this->hasMany(EmploymentHistory::class)->orderByDesc('effective_date');
-    }
-
-    public function property(): HasMany
-    {
-        return $this->hasMany(EmployeeProperty::class)->orderByDesc('date_issued');
     }
 
     public function skills(): HasMany

@@ -42,6 +42,9 @@ class PartialAcceptedGrnBillingTest extends TestCase
 
     private User $user;
 
+    // Maker-checker: an incoming inspection counts only when a different user checks it.
+    private User $checker;
+
     private GrnService $grnSvc;
 
     private BillService $billSvc;
@@ -55,6 +58,7 @@ class PartialAcceptedGrnBillingTest extends TestCase
 
         $role = Role::firstOrCreate(['slug' => 'warehouse_staff'], ['name' => 'Warehouse Staff']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $this->checker = User::factory()->create(['is_active' => true]);
 
         $admin = User::factory()->create([
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
@@ -99,7 +103,7 @@ class PartialAcceptedGrnBillingTest extends TestCase
         Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update(['status' => 'passed', 'inspector_id' => $this->user->id, 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()]);
     }
 
     public function test_auto_stage_bills_only_the_accepted_quantity_of_a_partial_grn(): void
@@ -120,7 +124,7 @@ class PartialAcceptedGrnBillingTest extends TestCase
         $bill = Bill::where('goods_receipt_note_id', $partial->id)->firstOrFail();
         $this->assertSame(BillStatus::Draft, $bill->status);
         $this->assertSame('40.00', (string) $bill->items()->first()->quantity);
-        $this->assertSame('12.50', (string) $bill->items()->first()->unit_price);
+        $this->assertSame('12.5000', (string) $bill->items()->first()->unit_price);
         $this->assertSame('500.00', (string) $bill->subtotal);
         $this->assertSame('60.00', (string) $bill->vat_amount);
         $this->assertSame('560.00', (string) $bill->total_amount);

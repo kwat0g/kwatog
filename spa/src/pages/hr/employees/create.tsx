@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import type { ApiValidationError } from '@/types';
 import type { Employee } from '@/types/hr';
+import { localIsoDate } from '@/lib/formatDate';
 
 const cleanup = (d: EmployeeFormValues): CreateEmployeeData => {
  const out: Record<string, unknown> = { ...d };
@@ -62,7 +63,7 @@ export default function CreateEmployeePage() {
  if (shiftId) {
  await shiftsApi.assignEmployee(employee.id, {
  shift_id: shiftId,
- effective_date: payload.date_hired || new Date().toISOString().slice(0, 10),
+ effective_date: payload.date_hired || localIsoDate(),
  });
  }
  return employee;

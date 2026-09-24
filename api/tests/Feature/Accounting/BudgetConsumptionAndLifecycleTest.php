@@ -14,6 +14,7 @@ use App\Modules\Accounting\Models\JournalEntryLine;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\BudgetFiscalYearResolver;
 use App\Modules\Accounting\Services\BudgetService;
+use App\Modules\Accounting\Services\FiscalYearService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -190,6 +191,28 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
 
         $this->expectException(ValidationException::class);
         app(BudgetFiscalYearResolver::class)->resolve(999999);
+    }
+
+    public function test_fiscal_year_lifecycle_rejects_overlaps_and_controls_activation_and_close(): void
+    {
+        $service = app(FiscalYearService::class);
+        $draft = $service->create([
+            'year' => 2030,
+            'start_date' => '2030-01-01',
+            'end_date' => '2030-12-31',
+        ]);
+        $this->assertSame('draft', $draft->status);
+
+        $active = $service->activate($draft);
+        $this->assertSame('active', $active->status);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('must not overlap');
+        $service->create([
+            'year' => 2031,
+            'start_date' => '2030-12-01',
+            'end_date' => '2031-01-31',
+        ]);
     }
 
     private function currentFiscalYear(): FiscalYear

@@ -15,12 +15,17 @@ use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Controllers\MachineConditionReadingController;
 use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
 use App\Modules\MRP\Models\Machine;
+use App\Common\Services\SettingsService;
 use Database\Seeders\MachineSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 /**
@@ -130,7 +135,7 @@ class MobileMaintenanceTest extends TestCase
 
         $completeResponse->assertOk();
         $completeResponse->assertJsonPath('data.status', 'completed');
-        $completeResponse->assertJsonPath('data.downtime_minutes', 45);
+        $completeResponse->assertJsonPath('data.downtime_minutes', 0);
 
         // Verify spare parts are included in the detail response
         $this->assertNotEmpty($completeResponse->json('data.spare_parts'));
@@ -146,6 +151,92 @@ class MobileMaintenanceTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('data.status', 'in_progress');
+    }
+
+    public function test_mwo_list_eager_loads_machine_targets_instead_of_querying_per_row(): void
+    {
+        foreach (range(1, 3) as $_) {
+            $this->createMwo(MaintenanceWorkOrderStatus::Open);
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($this->admin)
+            ->getJson('/api/v1/maintenance/work-orders?per_page=20')
+            ->assertOk();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $machineLookups = array_filter($queries, static fn (array $query): bool =>
+            str_contains(strtolower($query['query']), 'from "machines"')
+            || str_contains(strtolower($query['query']), 'from machines'));
+        $this->assertCount(1, $machineLookups);
+    }
+
+    public function test_database_rejects_unknown_polymorphic_maintenance_target_types(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('The target check is a PostgreSQL database constraint.');
+        }
+
+        try {
+            DB::table('maintenance_work_orders')->insert([
+                'mwo_number' => 'MWO-INVALID-'.substr(uniqid(), -5),
+                'maintainable_type' => 'asset',
+                'maintainable_id' => 1,
+                'type' => MaintenanceWorkOrderType::Corrective->value,
+                'priority' => MaintenancePriority::Medium->value,
+                'description' => 'Invalid target type regression',
+                'status' => MaintenanceWorkOrderStatus::Open->value,
+                'created_by' => $this->admin->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->fail('The database must reject unregistered maintenance target types.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('Invalid maintenance target type', $exception->getMessage());
+        }
+    }
+
+    public function test_database_rejects_missing_maintenance_targets(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Polymorphic target triggers are PostgreSQL database constraints.');
+        }
+
+        try {
+            DB::table('maintenance_work_orders')->insert([
+                'mwo_number' => 'MWO-MISSING-'.substr(uniqid(), -5),
+                'maintainable_type' => 'machine',
+                'maintainable_id' => 999999999,
+                'type' => MaintenanceWorkOrderType::Corrective->value,
+                'priority' => MaintenancePriority::Medium->value,
+                'description' => 'Missing target regression',
+                'status' => MaintenanceWorkOrderStatus::Open->value,
+                'created_by' => $this->admin->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->fail('The database must reject a non-existent polymorphic target.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('does not exist or is deleted', $exception->getMessage());
+        }
+
+    }
+
+    public function test_database_protects_hard_delete_of_a_maintenance_target(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Polymorphic target triggers are PostgreSQL database constraints.');
+        }
+
+        $this->createMwo(MaintenanceWorkOrderStatus::Open);
+        try {
+            DB::table('machines')->where('id', $this->machine->id)->delete();
+            $this->fail('The database must preserve a machine referenced by maintenance history.');
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString('referenced by maintenance history', $exception->getMessage());
+        }
     }
 
     public function test_mobile_mwo_cannot_complete_before_start(): void
@@ -230,6 +321,71 @@ class MobileMaintenanceTest extends TestCase
         $this->assertNotNull($result['work_order']->mwo_number);
     }
 
+    public function test_stale_condition_readings_do_not_trigger_a_corrective_work_order(): void
+    {
+        app(SettingsService::class)->set('maintenance.predictive.max_reading_age_hours', 1, 'maintenance');
+
+        foreach (range(1, 3) as $minute) {
+            MachineConditionReading::create([
+                'machine_id' => $this->machine->id,
+                'metric' => 'temperature',
+                'value' => 90.0,
+                'unit' => 'celsius',
+                'recorded_at' => now()->subHours(3)->addMinutes($minute),
+                'source' => 'manual',
+                'recorded_by' => $this->admin->id,
+            ]);
+        }
+
+        $created = app(PredictiveMaintenanceService::class)->evaluateAllMachines($this->admin);
+
+        $this->assertSame(0, $created);
+        $this->assertSame(0, MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $this->machine->id)
+            ->count());
+    }
+
+    public function test_predictive_recheck_finds_an_existing_work_order_case_insensitively(): void
+    {
+        foreach (range(1, 2) as $minute) {
+            MachineConditionReading::create([
+                'machine_id' => $this->machine->id,
+                'metric' => 'temperature',
+                'value' => 90.0,
+                'unit' => 'celsius',
+                'recorded_at' => now()->subMinutes(10 - $minute),
+                'source' => 'manual',
+                'recorded_by' => $this->admin->id,
+            ]);
+        }
+        MaintenanceWorkOrder::create([
+            'mwo_number' => 'MWO-PRED-'.substr(uniqid(), -5),
+            'maintainable_type' => 'machine',
+            'maintainable_id' => $this->machine->id,
+            'type' => MaintenanceWorkOrderType::Corrective->value,
+            'priority' => MaintenancePriority::High->value,
+            'description' => '[pReDiCtIvE] Existing corrective order',
+            'status' => MaintenanceWorkOrderStatus::Open->value,
+            'created_by' => $this->admin->id,
+        ]);
+
+        $result = app(PredictiveMaintenanceService::class)->recordAndEvaluate([
+            'machine_id' => $this->machine->id,
+            'metric' => 'temperature',
+            'value' => 92.0,
+            'source' => 'manual',
+        ], $this->admin);
+
+        $this->assertFalse($result['triggered']);
+        $this->assertSame(1, MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $this->machine->id)
+            ->where('type', MaintenanceWorkOrderType::Corrective->value)
+            ->whereIn('status', [MaintenanceWorkOrderStatus::Open->value, MaintenanceWorkOrderStatus::Assigned->value, MaintenanceWorkOrderStatus::InProgress->value])
+            ->count());
+    }
+
     public function test_health_snapshot_returns_all_metrics(): void
     {
         // Record one reading so snapshot has data
@@ -250,6 +406,33 @@ class MobileMaintenanceTest extends TestCase
         $this->assertContains('temperature', $metrics);
         $this->assertContains('vibration', $metrics);
         $this->assertContains('pressure', $metrics);
+    }
+
+    public function test_condition_trend_accepts_metrics_from_configuration(): void
+    {
+        app(SettingsService::class)->set('maintenance.predictive.metrics', [[
+            'value' => 'custom_metric',
+            'label' => 'Custom metric',
+            'unit' => 'unit',
+        ]], 'maintenance');
+        MachineConditionReading::create([
+            'machine_id' => $this->machine->id,
+            'metric' => 'custom_metric',
+            'value' => 2.5,
+            'unit' => 'unit',
+            'recorded_at' => now(),
+            'source' => 'manual',
+            'recorded_by' => $this->admin->id,
+        ]);
+        $request = Request::create('/api/v1/maintenance/condition-readings/trend', 'GET', [
+            'machine_id' => $this->machine->hash_id,
+            'metric' => 'custom_metric',
+        ]);
+
+        $response = app(MachineConditionReadingController::class)->trend($request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(2.5, $response->getData(true)['data'][0]['value']);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────

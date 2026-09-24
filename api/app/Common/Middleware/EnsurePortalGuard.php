@@ -45,8 +45,15 @@ class EnsurePortalGuard
             ], 401);
         }
 
-        if (in_array($guard, ['customer_portal', 'supplier_portal'], true) && ! $user->is_active) {
+        $parentActive = match (true) {
+            $user instanceof CustomerPortalUser => $user->customer()->where('is_active', true)->exists(),
+            $user instanceof SupplierPortalUser => $user->vendor()->where('is_active', true)->exists(),
+            default => true,
+        };
+
+        if (! $user->is_active || ! $parentActive) {
             $user->tokens()->delete();
+            auth()->guard($guard)->logout();
 
             return response()->json([
                 'message' => 'Unauthenticated.',

@@ -76,11 +76,11 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
 
     /* ─── Customer complaints + 8D (Task 68) ─── */
     Route::get('/complaints/options', [ComplaintController::class, 'options'])
-        ->middleware('permission:crm.complaints.manage');
+        ->middleware('permission:crm.complaints.view');
     Route::get('/complaints',                              [ComplaintController::class, 'index'])
-        ->middleware('permission:crm.complaints.manage');
+        ->middleware('permission:crm.complaints.view');
     Route::get('/complaints/{complaint}',                  [ComplaintController::class, 'show'])
-        ->middleware('permission:crm.complaints.manage');
+        ->middleware('permission:crm.complaints.view');
     Route::post('/complaints',                             [ComplaintController::class, 'store'])
         ->middleware('permission:crm.complaints.manage');
     Route::post('/complaints/{complaint}/retry-ncr',       [ComplaintController::class, 'retryNcr'])
@@ -94,6 +94,6 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/complaints/{complaint}/close',           [ComplaintController::class, 'close'])
         ->middleware('permission:crm.complaints.manage');
     Route::get('/complaints/{complaint}/8d/pdf',           [ComplaintController::class, 'pdf'])
-        ->middleware('permission:crm.complaints.manage');
+        ->middleware('permission:crm.complaints.view');
 
 });

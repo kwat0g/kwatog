@@ -6,7 +6,6 @@ namespace Database\Seeders;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -79,7 +78,6 @@ class AdminUserSeeder extends Seeder
                 'pay_type'             => 'monthly',
                 'date_hired'           => now()->toDateString(),
                 'basic_monthly_salary' => null,
-                'status'               => EmployeeStatus::Active->value,
             ],
         );
     }

@@ -27,7 +27,7 @@ class NcrEscalationTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         // Ensure recipient pools exist for each tier. All three slugs are
         // seeded by RolePermissionSeeder; firstOrCreate is defensive.
-        foreach (['qc_inspector', 'production_manager', 'system_admin'] as $slug) {
+        foreach (['qc_inspector', 'production_manager', 'vice_president'] as $slug) {
             $role = Role::firstOrCreate(
                 ['slug' => $slug],
                 ['name' => $slug, 'description' => $slug, 'is_system' => true],
@@ -138,5 +138,14 @@ class NcrEscalationTest extends TestCase
         app(NcrEscalationService::class)->run();
 
         $this->assertSame(3, (int) $ncr->fresh()->escalation_level);
+    }
+
+    public function test_escalation_roles_setting_escalates_to_vice_president_not_system_admin(): void
+    {
+        $roles = json_decode((string) DB::table('settings')->where('key', 'quality.ncr.escalation_roles')->value('value'), true);
+        $this->assertIsArray($roles);
+        $this->assertCount(3, $roles);
+        $this->assertSame('vice_president', $roles[2], 'Tier 3 NCR escalation must escalate to vice_president.');
+        $this->assertNotContains('system_admin', $roles, 'system_admin is IT only and must not be a business escalation tier.');
     }
 }

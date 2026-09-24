@@ -6,7 +6,6 @@ namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
-use App\Modules\B2B\Services\PortalInvitationService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Resources\CustomerPortalUserResource;
@@ -19,7 +18,6 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class PortalAccessController
 {
     public function __construct(
-        private readonly PortalInvitationService $invitations,
         private readonly PortalAccessService $access,
     ) {}
 
@@ -29,14 +27,16 @@ class PortalAccessController
             'name' => ['required', 'string', 'max:200'],
             'email' => ['required', 'email', 'max:255'],
         ]);
-        $result = $this->invitations->inviteCustomer($customer, $data['name'], $data['email']);
+        /** @var \App\Modules\Auth\Models\User $actor */
+        $actor = $request->user('sanctum');
+        $user = $this->access->inviteCustomer($customer, $data['name'], $data['email'], $actor, $request);
 
         return response()->json([
             'message' => 'Customer portal invitation queued.',
             'data' => [
-                'id' => $result['user']->hash_id,
-                'name' => $result['user']->name,
-                'email' => $result['user']->email,
+                'id' => $user->hash_id,
+                'name' => $user->name,
+                'email' => $user->email,
             ],
         ], 201);
     }
@@ -142,5 +142,14 @@ class PortalAccessController
         $user = $this->access->revokeTokens($supplierPortalUser, $actor, $request);
 
         return response()->json(['message' => 'Supplier portal sessions revoked.', 'data' => (new SupplierPortalUserResource($user))->toArray($request)]);
+    }
+
+    public function revokeCustomerTokens(Request $request, CustomerPortalUser $customerPortalUser): JsonResponse
+    {
+        /** @var \App\Modules\Auth\Models\User $actor */
+        $actor = $request->user('sanctum');
+        $user = $this->access->revokeCustomerTokens($customerPortalUser, $actor, $request);
+
+        return response()->json(['message' => 'Customer portal sessions revoked.', 'data' => (new CustomerPortalUserResource($user))->toArray($request)]);
     }
 }

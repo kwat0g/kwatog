@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Common\Services\SettingsService;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
+use App\Common\Support\DepartmentScope;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
@@ -75,6 +76,34 @@ use Throwable;
  */
 class BadgeService
 {
+    /** Badge counts disappear with the module that owns their screen. */
+    private const FEATURE_BY_BADGE = [
+        'purchase_requests' => 'purchasing',
+        'leaves' => 'leave',
+        'overtime' => 'attendance',
+        'maintenance_wo' => 'maintenance',
+        'low_stock' => 'inventory',
+        'ncrs' => 'quality',
+        'profile_requests' => 'hr',
+        'payroll' => 'payroll',
+        'training_expiry' => 'hr',
+        'training_upcoming' => 'hr',
+        'open_postings' => 'recruitment',
+        'work_orders' => 'production',
+        'deliveries' => 'supply_chain',
+        'pending_so' => 'crm',
+        'inquiries' => 'crm',
+        'open_complaints' => 'crm',
+        'pending_inspections' => 'quality',
+        'pending_grn' => 'inventory',
+        'mrb_holds' => 'inventory',
+        'shipments' => 'supply_chain',
+        'mrp_plans' => 'mrp',
+        'pending_returns' => 'return_management',
+        'draft_invoices' => 'accounting',
+        'overdue_bills' => 'accounting',
+    ];
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
@@ -129,6 +158,10 @@ class BadgeService
 
         $out = [];
         foreach ($this->definitions($user) as $key => $def) {
+            $feature = self::FEATURE_BY_BADGE[$key] ?? null;
+            if ($feature !== null && $this->settings->get("modules.{$feature}", true) !== true) {
+                continue;
+            }
             if (! $this->userHasAny($user, $def['permissions'])) {
                 continue;
             }
@@ -227,7 +260,19 @@ class BadgeService
                     if ($statuses === []) {
                         return 0;
                     }
-                    return LeaveRequest::query()->whereIn('status', $statuses)->count();
+                    $query = LeaveRequest::query()->whereIn('status', $statuses);
+                    DepartmentScope::apply(
+                        $query,
+                        $user,
+                        viewAllPermission: 'leave.approve_hr',
+                        departmentPermission: 'leave.approve_dept',
+                        deptColumn: 'department_id',
+                        selfColumn: 'employee_id',
+                        selfId: $user->employee_id ? (int) $user->employee_id : null,
+                        deptRelation: 'employee',
+                    );
+
+                    return $query->count();
                 },
             ],
 
@@ -236,9 +281,21 @@ class BadgeService
                 'permissions' => ['attendance.ot.approve'],
                 'label'       => 'Overtime',
                 'description' => 'Overtime requests awaiting approval',
-                'counter'     => fn (): int => OvertimeRequest::query()
-                    ->where('status', 'pending')
-                    ->count(),
+                'counter'     => function () use ($user): int {
+                    $query = OvertimeRequest::query()->where('status', 'pending');
+                    DepartmentScope::apply(
+                        $query,
+                        $user,
+                        viewAllPermission: 'hr.employees.view_sensitive',
+                        departmentPermission: 'attendance.ot.approve',
+                        deptColumn: 'department_id',
+                        selfColumn: 'employee_id',
+                        selfId: $user->employee_id ? (int) $user->employee_id : null,
+                        deptRelation: 'employee',
+                    );
+
+                    return $query->count();
+                },
             ],
 
             // Maintenance > Maintenance WOs — open + in-progress work orders.
@@ -283,9 +340,19 @@ class BadgeService
                 'permissions' => ['hr.employees.view'],
                 'label'       => 'Profile Requests',
                 'description' => 'Pending employee profile change requests',
-                'counter'     => fn (): int => ProfileUpdateRequest::query()
-                    ->where('status', 'pending')
-                    ->count(),
+                'counter'     => function () use ($user): int {
+                    $query = ProfileUpdateRequest::query()->where('status', 'pending');
+                    DepartmentScope::apply(
+                        $query,
+                        $user,
+                        viewAllPermission: 'hr.employees.view_sensitive',
+                        departmentPermission: 'hr.employees.view',
+                        deptColumn: 'department_id',
+                        deptRelation: 'employee',
+                    );
+
+                    return $query->count();
+                },
             ],
 
             // Payroll > Periods awaiting HR/Finance action (draft or processing).

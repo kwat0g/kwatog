@@ -21,7 +21,8 @@ export interface CreateLocationData {
  code: string;
  rack?: string | null;
  bin?: string | null;
- is_active?: boolean;
+  is_active?: boolean;
+  is_blocked?: boolean;
 }
 
 export const warehouseApi = {

@@ -6,16 +6,20 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
+use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\OutboxService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseType;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
 use App\Modules\Purchasing\Mail\SupplierPoDecisionMail;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -55,7 +59,9 @@ class SupplierResponseService
     ];
 
     public function __construct(
+        private readonly ApprovalService $approvals,
         private readonly BusinessPolicyService $businessPolicy,
+        private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
         private readonly NotificationService $notifications,
     ) {}
@@ -174,28 +180,78 @@ class SupplierResponseService
 
             if ($decision === 'accept') {
                 if ($locked->response_type === PurchaseOrderResponseType::Propose) {
-                    // Apply the counter-offer to the PO lines and recompute the
-                    // money under the row locks. This is the one place a
-                    // supplier proposal becomes a committed order.
-                    $this->applyProposal($locked, $po);
-                    if ($locked->proposed_delivery_date !== null) {
-                        $po->confirmed_delivery_date = $locked->proposed_delivery_date;
+                    // Compute proposed totals without mutating yet. Any price increase
+                    // requires re-approval, not immediate application.
+                    $proposed = $this->computeProposalTotals($locked, $po);
+                    $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
+
+                    // Check if proposed total is higher than current
+                    $totalComparison = bccomp(
+                        $proposed['total_amount'],
+                        (string) $po->total_amount,
+                        2,
+                    );
+
+                    if ($totalComparison > 0) {
+                        // Price increase: reset approval gate. The proposal is NOT
+                        // applied until re-approval commits. Set the PO to pending_approval
+                        // with marker, then re-submit through chain.
+                        $proposedAmount = (float) $proposed['total_amount'];
+
+                        // Set response to pending_approval to block re-submission
+                        $locked->status = PurchaseOrderResponseStatus::PendingApproval;
+
+                        // Set PO to pending_approval with marker
+                        $po->forceFill([
+                            'pending_change_response_id' => $locked->id,
+                            'status' => PurchaseOrderStatus::PendingApproval,
+                            'requires_vp_approval' => $proposedAmount >= $threshold,
+                        ])->save();
+
+                        // Re-submit through approval chain for the proposed amount
+                        $deptId = $po->purchaseRequest?->department_id;
+                        if ($deptId !== null) {
+                            // Assess budget against proposed total
+                            $this->budget->assess($po, $deptId, $proposed['total_amount']);
+                        }
+
+                        // Submit to approval service (supports re-submission)
+                        $this->approvals->submit($po, 'purchase_order', $proposed['total_amount']);
+
+                        // Record submission event
+                        app(OutboxService::class)->recordForChain(
+                            new PurchaseOrderSubmitted($po->fresh()),
+                            $po->fresh(),
+                            'p2p',
+                            'purchase_order',
+                            PurchaseOrderStatus::PendingApproval->value,
+                        );
+                    } else {
+                        // Price decrease or unchanged: apply immediately
+                        $this->applyProposal($locked, $po);
+                        if ($locked->proposed_delivery_date !== null) {
+                            $po->confirmed_delivery_date = $locked->proposed_delivery_date;
+                        }
+                        $po->status = $po->receiptStatusOr(PurchaseOrderStatus::Acknowledged);
+                        $locked->status = PurchaseOrderResponseStatus::Accepted;
+                        $po->save();
                     }
-                    $po->status = PurchaseOrderStatus::Acknowledged;
                 } else {
                     // Accepting a `decline` does not resurrect the order: the
                     // PO stays supplier_declined so purchasing explicitly
                     // cancels or re-sources it. The reply itself is accepted so
                     // the trail shows the decision was made.
                     $po->status = PurchaseOrderStatus::SupplierDeclined;
+                    $locked->status = PurchaseOrderResponseStatus::Accepted;
+                    $po->save();
                 }
-                $locked->status = PurchaseOrderResponseStatus::Accepted;
             } else {
                 // Rejection is a "try again": the PO returns to `sent` so the
                 // supplier can file a fresh reply (also true when the reply was
                 // a decline — a reject means reconsider).
                 $locked->status = PurchaseOrderResponseStatus::Rejected;
-                $po->status = PurchaseOrderStatus::Sent;
+                $po->status = $po->receiptStatusOr(PurchaseOrderStatus::Sent);
+                $po->save();
             }
 
             $locked->resolved_by     = $by->id;
@@ -203,10 +259,13 @@ class SupplierResponseService
             $locked->resolution_notes = $notes;
             $locked->save();
 
-            $po->save();
-
             $this->broadcastChain($po->fresh());
-            $this->emailSupplierDecision($locked->load('purchaseOrder'), $decision);
+
+            // Only email supplier decision for immediate paths (decline accept, propose reject).
+            // For price-increase re-approval, email is sent when approval completes.
+            if ($decision !== 'accept' || $locked->status !== PurchaseOrderResponseStatus::PendingApproval) {
+                $this->emailSupplierDecision($locked->load('purchaseOrder'), $decision);
+            }
 
             return $locked->fresh()->load('items');
         });
@@ -241,11 +300,82 @@ class SupplierResponseService
     }
 
     /**
+     * Public API to compute the proposed totals without mutation. Used during
+     * re-approval to determine the amount to enforce and compare against
+     * thresholds.
+     *
+     * @return array{subtotal: string, vat_amount: string, total_amount: string}
+     */
+    public function computeProposalTotals(PurchaseOrderResponse $response, PurchaseOrder $po): array
+    {
+        return $this->computeProposalTotalsInternal($response, $po);
+    }
+
+    /**
+     * Internal computation of the proposed totals without mutation. Returns the calculated
+     * subtotal, VAT, and total that would result from applying this response.
+     *
+     * @return array{subtotal: string, vat_amount: string, total_amount: string}
+     */
+    private function computeProposalTotalsInternal(PurchaseOrderResponse $response, PurchaseOrder $po): array
+    {
+        $subtotal = Money::zero();
+
+        foreach ($response->items as $item) {
+            // Validate that all proposed items still exist on the PO
+            $line = $po->items()->where('id', $item->purchase_order_item_id)->first();
+            if (! $line) {
+                throw new BusinessRuleException('A proposed line no longer matches a purchase-order item.');
+            }
+
+            $qty = $item->proposed_quantity !== null ? (string) $item->proposed_quantity : (string) $line->quantity;
+            $price = $item->proposed_unit_price !== null ? (string) $item->proposed_unit_price : (string) $line->unit_price;
+
+            if (Money::lte($qty, '0')) {
+                throw new BusinessRuleException('Proposed quantity must be greater than zero.');
+            }
+            if (Money::lte($price, '0')) {
+                throw new BusinessRuleException('Proposed unit price must be greater than zero.');
+            }
+            // Proposed quantity cannot be less than what has already been received.
+            // A PO in SupplierProposed is receivable, so goods may arrive while the
+            // proposal is pending. Catch this early before approval chain.
+            if ($item->proposed_quantity !== null && bccomp($qty, (string) $line->quantity_received, 3) < 0) {
+                $lineLabel = $line->item?->code ?? $line->description ?? 'unnamed item';
+                throw new BusinessRuleException(
+                    "Line {$lineLabel}: the supplier proposed quantity {$qty}, "
+                    ."but {$line->quantity_received} have already been received."
+                );
+            }
+
+            $lineTotal = Money::mul($qty, $price);
+            $subtotal = Money::add($subtotal, $lineTotal);
+        }
+
+        $vat = $po->is_vatable
+            ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate())
+            : Money::zero();
+
+        return [
+            'subtotal' => $subtotal,
+            'vat_amount' => $vat,
+            'total_amount' => Money::add($subtotal, $vat),
+        ];
+    }
+
+    /**
      * Write a supplier's counter-offer onto the purchase order and recompute
      * every money column with string decimal math. Runs under both the
      * response and PO row locks held by the caller's transaction.
+     *
+     * DO NOT call this for price-increase proposals before they are re-approved.
+     * Use computeProposalTotals() to check the amount first, then apply only
+     * after the approval chain confirms the new total.
+     *
+     * Called from resolve() for immediate-apply path and from
+     * PurchaseOrderService::approve() for re-approval path.
      */
-    private function applyProposal(PurchaseOrderResponse $response, PurchaseOrder $po): void
+    public function applyProposal(PurchaseOrderResponse $response, PurchaseOrder $po): void
     {
         $linesByLine = $po->items()->lockForUpdate()->get()->keyBy('id');
         $subtotal = Money::zero();
@@ -259,6 +389,17 @@ class SupplierResponseService
             if ($item->proposed_quantity !== null) {
                 if (Money::lte((string) $item->proposed_quantity, '0')) {
                     throw new BusinessRuleException('Proposed quantity must be greater than zero.');
+                }
+                // Proposed quantity cannot be less than what has already been received.
+                // A PO in SupplierProposed is receivable, so goods may arrive while the
+                // proposal is pending. Accepting a proposal that cuts the order below
+                // received quantity would create negative in-transit supply.
+                if (bccomp((string) $item->proposed_quantity, (string) $line->quantity_received, 3) < 0) {
+                    $lineLabel = $line->item?->code ?? $line->description ?? 'unnamed item';
+                    throw new BusinessRuleException(
+                        "Line {$lineLabel}: the supplier proposed quantity {$item->proposed_quantity}, "
+                        ."but {$line->quantity_received} have already been received."
+                    );
                 }
                 $line->quantity = $item->proposed_quantity;
             }
@@ -279,8 +420,6 @@ class SupplierResponseService
             ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate())
             : Money::zero();
         $po->total_amount = Money::add($po->subtotal, $po->vat_amount);
-        // Same threshold + comparison PurchaseOrderService::create uses so a
-        // counter-offer that crosses the VP line re-enters the approval gate.
         $po->requires_vp_approval = (float) $po->total_amount >= $this->businessPolicy->purchaseOrderVpThreshold();
     }
 
@@ -314,7 +453,7 @@ class SupplierResponseService
         };
     }
 
-    private function emailSupplierDecision(PurchaseOrderResponse $response, string $decision): void
+    public function emailSupplierDecision(PurchaseOrderResponse $response, string $decision): void
     {
         try {
             $po = $response->purchaseOrder;

@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -128,5 +129,27 @@ class PoVendorSodTest extends TestCase
         $this->expectException(ForbiddenActionException::class);
         $this->expectExceptionMessage('segregation of duties');
         $svc->approve($submitted->fresh(), $vendorCreator);
+    }
+
+    public function test_action_map_explains_a_vendor_sod_block(): void
+    {
+        $svc = app(PurchaseOrderService::class);
+        $vendorCreator = $this->makeUser('finance_officer');
+        $otherApprover = $this->makeUser('finance_officer');
+
+        $vendor = Vendor::factory()->create(['created_by' => $vendorCreator->id]);
+        $po = $svc->submit($this->makePo($svc, $this->makeUser('purchasing_officer'), $vendor))->fresh();
+        $policy = app(PurchaseOrderAccessPolicy::class);
+
+        // The creator holds the current step but may only reject, and the map
+        // says why so the UI is not left showing a lone Reject button.
+        $blocked = $policy->actionsFor($vendorCreator, $po);
+        $this->assertFalse($blocked['can_approve']);
+        $this->assertTrue($blocked['can_reject']);
+        $this->assertTrue($blocked['approve_blocked_by_vendor_sod']);
+
+        $clear = $policy->actionsFor($otherApprover, $po);
+        $this->assertTrue($clear['can_approve']);
+        $this->assertFalse($clear['approve_blocked_by_vendor_sod']);
     }
 }

@@ -89,8 +89,6 @@ class EmployeeResource extends JsonResource
                 $user?->hasPermission('hr.employees.documents.view') ?? false,
                 fn () => EmployeeDocumentResource::collection($this->whenLoaded('documents')),
             ),
-            'property' => EmployeePropertyResource::collection($this->whenLoaded('property')),
-
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
             'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
@@ -130,6 +128,7 @@ class EmployeeResource extends JsonResource
         }
 
         return (int) $user->employee_id === (int) $this->id
-            || $user->hasPermission('hr.employees.view_sensitive');
+            || $user->hasPermission('hr.employees.view_sensitive')
+            || $user->role?->slug === 'system_admin';
     }
 }

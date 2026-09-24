@@ -2,7 +2,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
-import { LuCircleCheck, LuTruck, LuFileDown, LuUpload, LuFileText, LuSend, LuPencil, LuThumbsDown } from '@/lib/icons';
+import {
+  LuCircleCheck,
+  LuTruck,
+  LuFileDown,
+  LuUpload,
+  LuFileText,
+  LuSend,
+  LuPencil,
+  LuThumbsDown,
+} from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import type { PortalShippingDocument, RespondToPurchaseOrderPayload } from '@/types/b2b';
 import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType } from '@/types/purchasing';
@@ -27,20 +36,24 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 const DECIMAL_RE = /^\d+(\.\d{1,2})?$/;
 
 const responseTypeLabel: Record<PurchaseOrderResponseType, string> = {
- accept: 'Accepted',
- propose: 'Changes proposed',
- decline: 'Declined',
+  accept: 'Accepted',
+  propose: 'Changes proposed',
+  decline: 'Declined',
 };
 const responseTypeVariant: Record<PurchaseOrderResponseType, 'success' | 'warning' | 'danger'> = {
- accept: 'success',
- propose: 'warning',
- decline: 'danger',
+  accept: 'success',
+  propose: 'warning',
+  decline: 'danger',
 };
-const responseStatusVariant: Record<PurchaseOrderResponseStatus, 'neutral' | 'warning' | 'success' | 'danger'> = {
- pending: 'warning',
- accepted: 'success',
- rejected: 'danger',
- superseded: 'neutral',
+const responseStatusVariant: Record<
+  PurchaseOrderResponseStatus,
+  'neutral' | 'warning' | 'success' | 'danger'
+> = {
+  pending: 'warning',
+  accepted: 'success',
+  rejected: 'danger',
+  superseded: 'neutral',
+  pending_approval: 'warning',
 };
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -84,7 +97,12 @@ export default function SupplierPurchaseOrderDetailPage() {
   });
   const reconfirmMut = useMutation({
     mutationFn: () => supplierPortalApi.confirmRfqReconfirmation(id!, po!.rfq_reconfirmation!.id),
-    onSuccess: () => { toast.success('Winning RFQ terms reconfirmed. Ogami can now submit the purchase order for approval.'); queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] }); },
+    onSuccess: () => {
+      toast.success(
+        'Winning RFQ terms reconfirmed. Ogami can now submit the purchase order for approval.',
+      );
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
+    },
     onError: () => toast.error('RFQ terms could not be reconfirmed.'),
   });
 
@@ -101,11 +119,18 @@ export default function SupplierPurchaseOrderDetailPage() {
   const [proposeOpen, setProposeOpen] = useState(false);
   const [proposeDeliveryDate, setProposeDeliveryDate] = useState('');
   const [proposeNotes, setProposeNotes] = useState('');
-  const [proposedLines, setProposedLines] = useState<Record<string, { quantity: string; unit_price: string; reason: string }>>({});
+  const [proposedLines, setProposedLines] = useState<
+    Record<string, { quantity: string; unit_price: string; reason: string }>
+  >({});
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
   const [proposeError, setProposeError] = useState<string | null>(null);
 
-  const { data: po, isLoading, isError, refetch } = useQuery({
+  const {
+    data: po,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['portal', 'supplier', 'po', id],
     queryFn: () => supplierPortalApi.getPo(id!),
     enabled: !!id,
@@ -118,14 +143,15 @@ export default function SupplierPurchaseOrderDetailPage() {
   });
 
   const respondMut = useMutation({
-    mutationFn: (payload: RespondToPurchaseOrderPayload) => supplierPortalApi.respondToPurchaseOrder(id!, payload),
+    mutationFn: (payload: RespondToPurchaseOrderPayload) =>
+      supplierPortalApi.respondToPurchaseOrder(id!, payload),
     onSuccess: (_po, payload) => {
       toast.success(
         payload.type === 'accept'
           ? 'Purchase order accepted.'
           : payload.type === 'propose'
-          ? 'Counter-proposal sent to OGAMI.'
-          : 'Purchase order declined.',
+            ? 'Counter-proposal sent to OGAMI.'
+            : 'Purchase order declined.',
       );
       setAcceptOpen(false);
       setProposeOpen(false);
@@ -138,13 +164,14 @@ export default function SupplierPurchaseOrderDetailPage() {
   });
 
   const shipmentMut = useMutation({
-    mutationFn: () => supplierPortalApi.updateShipment(id!, {
-      shipped_date: shippedDate || undefined,
-      carrier: carrier.trim() || undefined,
-      tracking_number: trackingNumber.trim() || undefined,
-      estimated_arrival: estimatedArrival || undefined,
-      notes: shipmentNotes.trim() || undefined,
-    }),
+    mutationFn: () =>
+      supplierPortalApi.updateShipment(id!, {
+        shipped_date: shippedDate || undefined,
+        carrier: carrier.trim() || undefined,
+        tracking_number: trackingNumber.trim() || undefined,
+        estimated_arrival: estimatedArrival || undefined,
+        notes: shipmentNotes.trim() || undefined,
+      }),
     onSuccess: () => {
       toast.success('Shipment details updated.');
       setShowShipmentForm(false);
@@ -296,41 +323,82 @@ export default function SupplierPurchaseOrderDetailPage() {
         subtitle={po?.date ? formatDate(po.date) : undefined}
         backTo="/portal/supplier/purchase-orders"
         backLabel="Purchase orders"
-        actions={po ? (
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" icon={<LuFileDown size={14} />} onClick={downloadPdf}>
-              PDF
-            </Button>
-            {canRespond && (
-              <>
-                <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={openAccept} disabled={respondMut.isPending} loading={respondMut.isPending && acceptOpen}>
-                  Accept
-                </Button>
-                <Button variant="secondary" size="sm" icon={<LuPencil size={14} />} onClick={openPropose} disabled={respondMut.isPending}>
-                  Propose changes
-                </Button>
-                <Button variant="secondary" size="sm" icon={<LuThumbsDown size={14} />} onClick={() => setDeclineOpen(true)} disabled={respondMut.isPending}>
-                  Decline
-                </Button>
-              </>
-            )}
-            {canUpdateShipment && (
-              <Button variant="secondary" size="sm" icon={<LuTruck size={14} />} onClick={openShipmentForm}>
-                Update shipment
+        actions={
+          po ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<LuFileDown size={14} />}
+                onClick={downloadPdf}
+              >
+                PDF
               </Button>
-            )}
-            {canUploadDocument && (
-              <Button variant="secondary" size="sm" icon={<LuUpload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
-                Upload doc
-              </Button>
-            )}
-            {canSubmitInvoice && (
-              <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
-                Submit invoice
-              </Button>
-            )}
-          </div>
-        ) : undefined}
+              {canRespond && (
+                <>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<LuCircleCheck size={14} />}
+                    onClick={openAccept}
+                    disabled={respondMut.isPending}
+                    loading={respondMut.isPending && acceptOpen}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<LuPencil size={14} />}
+                    onClick={openPropose}
+                    disabled={respondMut.isPending}
+                  >
+                    Propose changes
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<LuThumbsDown size={14} />}
+                    onClick={() => setDeclineOpen(true)}
+                    disabled={respondMut.isPending}
+                  >
+                    Decline
+                  </Button>
+                </>
+              )}
+              {canUpdateShipment && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuTruck size={14} />}
+                  onClick={openShipmentForm}
+                >
+                  Update shipment
+                </Button>
+              )}
+              {canUploadDocument && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuUpload size={14} />}
+                  onClick={() => setShowUploadForm(!showUploadForm)}
+                >
+                  Upload doc
+                </Button>
+              )}
+              {canSubmitInvoice && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuSend size={14} />}
+                  onClick={() => setShowInvoiceForm(!showInvoiceForm)}
+                >
+                  Submit invoice
+                </Button>
+              )}
+            </div>
+          ) : undefined
+        }
       />
 
       <div className="px-5 py-4 space-y-4">
@@ -340,7 +408,11 @@ export default function SupplierPurchaseOrderDetailPage() {
           <EmptyState
             icon="alert-circle"
             title="Failed to load purchase order"
-            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+            action={
+              <Button variant="secondary" onClick={() => refetch()}>
+                Retry
+              </Button>
+            }
           />
         )}
 
@@ -350,7 +422,28 @@ export default function SupplierPurchaseOrderDetailPage() {
 
         {!isLoading && !isError && po && (
           <>
-            {po.capabilities.can_reconfirm_rfq && po.rfq_reconfirmation && <Panel title="RFQ terms reconfirmation"><p className="text-sm text-muted">The quotation validity date has passed. Confirm that the original quantity, price, and terms remain valid so Ogami can continue PO approval.</p><div className="mt-2 text-sm">Quote valid until <span className="font-mono">{po.rfq_reconfirmation.quote_valid_until ?? '—'}</span></div><Button className="mt-3" variant="primary" onClick={() => reconfirmMut.mutate()} loading={reconfirmMut.isPending}>Reconfirm quoted terms</Button></Panel>}
+            {po.capabilities.can_reconfirm_rfq && po.rfq_reconfirmation && (
+              <Panel title="RFQ terms reconfirmation">
+                <p className="text-sm text-muted">
+                  The quotation validity date has passed. Confirm that the original quantity, price,
+                  and terms remain valid so Ogami can continue PO approval.
+                </p>
+                <div className="mt-2 text-sm">
+                  Quote valid until{' '}
+                  <span className="font-mono">
+                    {po.rfq_reconfirmation.quote_valid_until ?? '—'}
+                  </span>
+                </div>
+                <Button
+                  className="mt-3"
+                  variant="primary"
+                  onClick={() => reconfirmMut.mutate()}
+                  loading={reconfirmMut.isPending}
+                >
+                  Reconfirm quoted terms
+                </Button>
+              </Panel>
+            )}
             <KpiGrid count={5}>
               <StatCard label="Total Amount" value={formatPeso(po.total_amount)} />
               <StatCard
@@ -363,7 +456,11 @@ export default function SupplierPurchaseOrderDetailPage() {
                 helper={po.confirmed_delivery_date ? undefined : 'Not yet confirmed'}
               />
               <StatCard label="Incoterm" value={po.incoterm ?? '—'} />
-              <StatCard label="Receipts" value={po.goods_receipt_notes.length} helper="Goods receipts posted" />
+              <StatCard
+                label="Receipts"
+                value={po.goods_receipt_notes.length}
+                helper="Goods receipts posted"
+              />
             </KpiGrid>
 
             {po.latest_response && (
@@ -378,13 +475,17 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <div className="space-y-3 text-sm">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div>
-                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Status</div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Status
+                      </div>
                       <Chip variant={responseStatusVariant[po.latest_response.status]}>
                         {po.latest_response.status.replace(/_/g, ' ')}
                       </Chip>
                     </div>
                     <div>
-                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Proposed delivery</div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Proposed delivery
+                      </div>
                       <div className="font-mono">
                         {po.latest_response.proposed_delivery_date
                           ? formatDate(po.latest_response.proposed_delivery_date)
@@ -392,21 +493,29 @@ export default function SupplierPurchaseOrderDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Responded</div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Responded
+                      </div>
                       <div className="font-mono">
-                        {po.latest_response.responded_at ? formatDate(po.latest_response.responded_at) : '—'}
+                        {po.latest_response.responded_at
+                          ? formatDate(po.latest_response.responded_at)
+                          : '—'}
                       </div>
                     </div>
                   </div>
                   {po.latest_response.notes && (
                     <div>
-                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">Notes</div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Notes
+                      </div>
                       <p className="text-secondary">{po.latest_response.notes}</p>
                     </div>
                   )}
                   {po.latest_response.resolution_notes && (
                     <div>
-                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">OGAMI response</div>
+                      <div className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        OGAMI response
+                      </div>
                       <p className="text-secondary">{po.latest_response.resolution_notes}</p>
                     </div>
                   )}
@@ -425,13 +534,24 @@ export default function SupplierPurchaseOrderDetailPage() {
                           {po.latest_response.items.map((line) => {
                             const item = po.items.find((i) => i.id === line.purchase_order_item_id);
                             return (
-                              <tr key={`${line.purchase_order_item_id}-${line.proposed_quantity ?? ''}-${line.proposed_unit_price ?? ''}`} className={trCls}>
+                              <tr
+                                key={`${line.purchase_order_item_id}-${line.proposed_quantity ?? ''}-${line.proposed_unit_price ?? ''}`}
+                                className={trCls}
+                              >
                                 <Td>
-                                  <span className="font-mono text-muted">{item?.part_number ?? '—'}</span>
+                                  <span className="font-mono text-muted">
+                                    {item?.part_number ?? '—'}
+                                  </span>
                                   {item ? ` · ${item.name}` : ''}
                                 </Td>
-                                <Td align="right" mono>{line.proposed_quantity ?? '—'}</Td>
-                                <Td align="right" mono>{line.proposed_unit_price ? formatPeso(line.proposed_unit_price) : '—'}</Td>
+                                <Td align="right" mono>
+                                  {line.proposed_quantity ?? '—'}
+                                </Td>
+                                <Td align="right" mono>
+                                  {line.proposed_unit_price
+                                    ? formatPeso(line.proposed_unit_price)
+                                    : '—'}
+                                </Td>
                                 <Td className="text-secondary">{line.reason ?? '—'}</Td>
                               </tr>
                             );
@@ -449,24 +569,40 @@ export default function SupplierPurchaseOrderDetailPage() {
                 {po.shipment ? (
                   <dl className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Shipped date</dt>
-                      <dd className="font-mono">{po.shipment.shipped_date ? formatDate(po.shipment.shipped_date) : '—'}</dd>
+                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Shipped date
+                      </dt>
+                      <dd className="font-mono">
+                        {po.shipment.shipped_date ? formatDate(po.shipment.shipped_date) : '—'}
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Carrier</dt>
+                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Carrier
+                      </dt>
                       <dd>{po.shipment.carrier ?? '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Tracking number</dt>
+                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Tracking number
+                      </dt>
                       <dd className="font-mono">{po.shipment.tracking_number ?? '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Estimated arrival</dt>
-                      <dd className="font-mono">{po.shipment.estimated_arrival ? formatDate(po.shipment.estimated_arrival) : '—'}</dd>
+                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+                        Estimated arrival
+                      </dt>
+                      <dd className="font-mono">
+                        {po.shipment.estimated_arrival
+                          ? formatDate(po.shipment.estimated_arrival)
+                          : '—'}
+                      </dd>
                     </div>
                     {po.shipment.notes && (
                       <div className="col-span-2">
-                        <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Notes</dt>
+                        <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+                          Notes
+                        </dt>
                         <dd>{po.shipment.notes}</dd>
                       </div>
                     )}
@@ -480,15 +616,24 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <Panel title="Shipping Documents" meta={String(shippingDocs.length)}>
                   <div className="divide-y divide-subtle">
                     {shippingDocs.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
+                      >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <LuFileText size={14} className="text-muted shrink-0" />
                           <div className="min-w-0">
                             <p className="text-xs font-medium truncate">{doc.original_filename}</p>
-                            <p className="text-2xs text-muted">{doc.document_type_label} · {doc.file_size_formatted}</p>
+                            <p className="text-2xs text-muted">
+                              {doc.document_type_label} · {doc.file_size_formatted}
+                            </p>
                           </div>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => void downloadShippingDoc(doc)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void downloadShippingDoc(doc)}
+                        >
                           Download
                         </Button>
                       </div>
@@ -500,7 +645,13 @@ export default function SupplierPurchaseOrderDetailPage() {
 
             {showShipmentForm && canUpdateShipment && (
               <Panel title="Update shipment information">
-                <form onSubmit={(e) => { e.preventDefault(); shipmentMut.mutate(); }} className="flex flex-col gap-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    shipmentMut.mutate();
+                  }}
+                  className="flex flex-col gap-3"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Input
                       label="Shipped date"
@@ -536,10 +687,20 @@ export default function SupplierPurchaseOrderDetailPage() {
                     maxLength={500}
                   />
                   <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowShipmentForm(false)}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowShipmentForm(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" variant="primary" size="sm" loading={shipmentMut.isPending}>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      loading={shipmentMut.isPending}
+                    >
                       Save shipment
                     </Button>
                   </div>
@@ -549,12 +710,24 @@ export default function SupplierPurchaseOrderDetailPage() {
 
             {showUploadForm && canUploadDocument && (
               <Panel title="Upload shipping document">
-                <form onSubmit={(e) => { e.preventDefault(); if (uploadFile) uploadDocMut.mutate(); }} className="flex flex-col gap-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (uploadFile) uploadDocMut.mutate();
+                  }}
+                  className="flex flex-col gap-3"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Select label="Document type" value={uploadDocType} onChange={(e) => setUploadDocType(e.target.value)}>
+                    <Select
+                      label="Document type"
+                      value={uploadDocType}
+                      onChange={(e) => setUploadDocType(e.target.value)}
+                    >
                       <option value="">— Select —</option>
                       {(shippingOptions?.document_types ?? []).map((type) => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
                       ))}
                     </Select>
                     <FileInput
@@ -571,10 +744,21 @@ export default function SupplierPurchaseOrderDetailPage() {
                     rows={2}
                   />
                   <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowUploadForm(false)}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowUploadForm(false)}
+                    >
                       Cancel
                     </Button>
-                    <Button type="submit" variant="primary" size="sm" disabled={!uploadFile || !uploadDocType} loading={uploadDocMut.isPending}>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      disabled={!uploadFile || !uploadDocType}
+                      loading={uploadDocMut.isPending}
+                    >
                       Upload
                     </Button>
                   </div>
@@ -584,7 +768,13 @@ export default function SupplierPurchaseOrderDetailPage() {
 
             {showInvoiceForm && canSubmitInvoice && (
               <Panel title="Submit invoice" meta="Creates a draft bill for AP review">
-                <form onSubmit={(e) => { e.preventDefault(); submitInvoiceMut.mutate(); }} className="flex flex-col gap-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitInvoiceMut.mutate();
+                  }}
+                  className="flex flex-col gap-3"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Input
                       label="Your invoice #"
@@ -620,10 +810,16 @@ export default function SupplierPurchaseOrderDetailPage() {
                     rows={2}
                   />
                   <p className="text-2xs text-muted">
-                    Bill items will be auto-populated from the PO line items. A draft bill will be created in Accounts Payable for review.
+                    Bill items will be auto-populated from the PO line items. A draft bill will be
+                    created in Accounts Payable for review.
                   </p>
                   <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => setShowInvoiceForm(false)}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowInvoiceForm(false)}
+                    >
                       Cancel
                     </Button>
                     <Button
@@ -658,12 +854,22 @@ export default function SupplierPurchaseOrderDetailPage() {
                     <tbody>
                       {po.items.map((item) => (
                         <tr key={item.id} className={trCls}>
-                          <Td mono className="text-muted">{item.part_number}</Td>
+                          <Td mono className="text-muted">
+                            {item.part_number}
+                          </Td>
                           <Td>{item.name}</Td>
-                          <Td align="right" mono>{item.quantity_ordered}</Td>
-                          <Td align="right" mono>{item.quantity_received}</Td>
-                          <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                          <Td align="right" mono>{formatPeso(item.total_price)}</Td>
+                          <Td align="right" mono>
+                            {item.quantity_ordered}
+                          </Td>
+                          <Td align="right" mono>
+                            {item.quantity_received}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(item.unit_price)}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(item.total_price)}
+                          </Td>
                         </tr>
                       ))}
                     </tbody>
@@ -675,7 +881,11 @@ export default function SupplierPurchaseOrderDetailPage() {
             </Panel>
 
             {po.goods_receipt_notes.length > 0 && (
-              <Panel title="Goods Receipt Notes" meta={String(po.goods_receipt_notes.length)} noPadding>
+              <Panel
+                title="Goods Receipt Notes"
+                meta={String(po.goods_receipt_notes.length)}
+                noPadding
+              >
                 <div className="overflow-x-auto">
                   <table className={tableCls}>
                     <thead>
@@ -688,7 +898,9 @@ export default function SupplierPurchaseOrderDetailPage() {
                       {po.goods_receipt_notes.map((grn) => (
                         <tr key={grn.id} className={trCls}>
                           <Td mono>{grn.grn_number}</Td>
-                          <Td className="text-muted">{grn.received_date ? formatDate(grn.received_date) : '—'}</Td>
+                          <Td className="text-muted">
+                            {grn.received_date ? formatDate(grn.received_date) : '—'}
+                          </Td>
                         </tr>
                       ))}
                     </tbody>
@@ -714,13 +926,25 @@ export default function SupplierPurchaseOrderDetailPage() {
                     <tbody>
                       {po.bills.map((bill) => (
                         <tr key={bill.id} className={trCls}>
-                          <Td mono className="text-accent">{bill.bill_number}</Td>
-                          <Td align="right" mono>{formatPeso(bill.total_amount)}</Td>
-                          <Td align="right" mono>{formatPeso(bill.paid_amount)}</Td>
-                          <Td align="right" mono>{formatPeso(bill.balance)}</Td>
-                          <Td className="text-muted">{bill.due_date ? formatDate(bill.due_date) : '—'}</Td>
+                          <Td mono className="text-accent">
+                            {bill.bill_number}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(bill.total_amount)}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(bill.paid_amount)}
+                          </Td>
+                          <Td align="right" mono>
+                            {formatPeso(bill.balance)}
+                          </Td>
+                          <Td className="text-muted">
+                            {bill.due_date ? formatDate(bill.due_date) : '—'}
+                          </Td>
                           <Td>
-                            <Chip variant={chipVariantForStatus(bill.status)}>{bill.status_label ?? bill.status}</Chip>
+                            <Chip variant={chipVariantForStatus(bill.status)}>
+                              {bill.status_label ?? bill.status}
+                            </Chip>
                           </Td>
                         </tr>
                       ))}
@@ -741,7 +965,8 @@ export default function SupplierPurchaseOrderDetailPage() {
       >
         <div className="space-y-4 py-2">
           <p className="text-sm text-secondary">
-            Accepting confirms the order as written. You may optionally confirm a delivery date and add notes.
+            Accepting confirms the order as written. You may optionally confirm a delivery date and
+            add notes.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
@@ -760,7 +985,12 @@ export default function SupplierPurchaseOrderDetailPage() {
           />
         </div>
         <ModalFooter>
-          <Button variant="secondary" size="sm" onClick={() => setAcceptOpen(false)} disabled={respondMut.isPending}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setAcceptOpen(false)}
+            disabled={respondMut.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -790,7 +1020,8 @@ export default function SupplierPurchaseOrderDetailPage() {
       >
         <div className="space-y-4 py-2">
           <p className="text-sm text-secondary">
-            Edit the lines you want to change. Only changed lines are sent. A reason is required for each.
+            Edit the lines you want to change. Only changed lines are sent. A reason is required for
+            each.
           </p>
           <div className="overflow-x-auto">
             <table className={tableCls}>
@@ -806,33 +1037,51 @@ export default function SupplierPurchaseOrderDetailPage() {
               </thead>
               <tbody>
                 {(po?.items ?? []).map((item) => {
-                  const draft = proposedLines[item.id] ?? { quantity: item.quantity_ordered, unit_price: item.unit_price, reason: '' };
+                  const draft = proposedLines[item.id] ?? {
+                    quantity: item.quantity_ordered,
+                    unit_price: item.unit_price,
+                    reason: '',
+                  };
                   return (
                     <tr key={item.id} className={trCls}>
                       <Td>
                         <span className="font-mono text-muted">{item.part_number}</span>
                         <div className="text-2xs text-muted">{item.name}</div>
                       </Td>
-                      <Td align="right" mono>{item.quantity_ordered}</Td>
+                      <Td align="right" mono>
+                        {item.quantity_ordered}
+                      </Td>
                       <Td align="right">
                         <Input
                           type="text"
                           inputMode="decimal"
                           value={draft.quantity}
-                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, quantity: e.target.value } }))}
+                          onChange={(e) =>
+                            setProposedLines((cur) => ({
+                              ...cur,
+                              [item.id]: { ...draft, quantity: e.target.value },
+                            }))
+                          }
                           error={lineErrors[`${item.id}:quantity`]}
                           fieldSize="sm"
                           className="text-right font-mono w-24"
                           aria-label={`Proposed quantity for ${item.part_number}`}
                         />
                       </Td>
-                      <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                      <Td align="right" mono>
+                        {formatPeso(item.unit_price)}
+                      </Td>
                       <Td align="right">
                         <Input
                           type="text"
                           inputMode="decimal"
                           value={draft.unit_price}
-                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, unit_price: e.target.value } }))}
+                          onChange={(e) =>
+                            setProposedLines((cur) => ({
+                              ...cur,
+                              [item.id]: { ...draft, unit_price: e.target.value },
+                            }))
+                          }
                           error={lineErrors[`${item.id}:unit_price`]}
                           fieldSize="sm"
                           className="text-right font-mono w-28"
@@ -843,7 +1092,12 @@ export default function SupplierPurchaseOrderDetailPage() {
                         <Input
                           type="text"
                           value={draft.reason}
-                          onChange={(e) => setProposedLines((cur) => ({ ...cur, [item.id]: { ...draft, reason: e.target.value } }))}
+                          onChange={(e) =>
+                            setProposedLines((cur) => ({
+                              ...cur,
+                              [item.id]: { ...draft, reason: e.target.value },
+                            }))
+                          }
                           error={lineErrors[`${item.id}:reason`]}
                           fieldSize="sm"
                           placeholder="e.g. Resin cost increase"
@@ -874,7 +1128,12 @@ export default function SupplierPurchaseOrderDetailPage() {
           />
         </div>
         <ModalFooter>
-          <Button variant="secondary" size="sm" onClick={() => setProposeOpen(false)} disabled={respondMut.isPending}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setProposeOpen(false)}
+            disabled={respondMut.isPending}
+          >
             Cancel
           </Button>
           <Button

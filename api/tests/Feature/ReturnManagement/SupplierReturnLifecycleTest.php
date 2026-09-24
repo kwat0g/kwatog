@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\ReturnManagement;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
@@ -25,6 +26,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -92,20 +94,20 @@ class SupplierReturnLifecycleTest extends TestCase
      *
      * @return array{vendor: Vendor, item: Item, location: WarehouseLocation, po: PurchaseOrder, poItem: PurchaseOrderItem, grnItem: GrnItem, bill: Bill, billItem: BillItem}
      */
-    private function receivedShipment(User $by): array
+    private function receivedShipment(User $by, bool $isVatable = true): array
     {
         $vendor   = Vendor::factory()->create(['created_by' => null]);
         $item     = Item::factory()->create();
         $location = WarehouseLocation::factory()->create();
-        $expense  = Account::query()->where('type', 'expense')->firstOrFail();
+        $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
         $po = PurchaseOrder::factory()->create([
             'vendor_id'    => $vendor->id,
             'created_by'   => $by->id,
             'subtotal'     => '1000.00',
-            'vat_amount'   => '120.00',
-            'total_amount' => '1120.00',
-            'is_vatable'   => true,
+            'vat_amount'   => $isVatable ? '120.00' : '0.00',
+            'total_amount' => $isVatable ? '1120.00' : '1000.00',
+            'is_vatable'   => $isVatable,
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Received])->save();
 
@@ -153,13 +155,13 @@ class SupplierReturnLifecycleTest extends TestCase
             'purchase_order_id' => $po->id,
             'status'            => 'unpaid',
             'subtotal'          => '1000.00',
-            'vat_amount'        => '120.00',
-            'total_amount'      => '1120.00',
+            'vat_amount'        => $isVatable ? '120.00' : '0.00',
+            'total_amount'      => $isVatable ? '1120.00' : '1000.00',
             'amount_paid'       => '0.00',
-            'balance'           => '1120.00',
+            'balance'           => $isVatable ? '1120.00' : '1000.00',
             'date'              => now()->toDateString(),
             'due_date'          => now()->addDays(30)->toDateString(),
-            'is_vatable'        => true,
+            'is_vatable'        => $isVatable,
             // A supplier credit can only be applied to a bill that reached the
             // GL (CreditNoteService::apply → "The target bill does not have a
             // posted journal entry."). A billed GRN is posted in production, so
@@ -292,6 +294,7 @@ class SupplierReturnLifecycleTest extends TestCase
             ->firstOrFail();
         $this->assertSame(StockMovementType::ReturnToVendor, $movement->movement_type);
         $this->assertSame('18.000', (string) $movement->quantity, 'Only the returned quantity leaves stock.');
+        $this->assertSame($movement->id, (int) $line->fresh()->stock_movement_id);
         $this->assertSame('82.000', (string) \App\Modules\Inventory\Models\StockLevel::where('item_id', $ctx['item']->id)
             ->where('location_id', $ctx['location']->id)->firstOrFail()->quantity, '100 on shelf − 18 shipped back');
 
@@ -309,6 +312,30 @@ class SupplierReturnLifecycleTest extends TestCase
                 ->count(),
             'Complete must not create a second movement for already-shipped lines.',
         );
+    }
+
+    public function test_supplier_return_rejects_a_lot_that_differs_from_the_source_receipt(): void
+    {
+        $admin = $this->admin();
+        $ctx = $this->receivedShipment($admin);
+        $ctx['grnItem']->update(['material_lot_number' => 'SUPPLIER-LOT-A']);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('lot provenance does not match');
+
+        app(ReturnRequestService::class)->create([
+            'type' => 'supplier_return',
+            'vendor_id' => $ctx['vendor']->id,
+            'purchase_order_id' => $ctx['po']->id,
+            'bill_id' => $ctx['bill']->id,
+            'items' => [[
+                'item_id' => $ctx['item']->id,
+                'quantity' => '1.000',
+                'source_po_item_id' => $ctx['poItem']->id,
+                'source_grn_item_id' => $ctx['grnItem']->id,
+                'lot_number' => 'WRONG-LOT',
+            ]],
+        ], $admin);
     }
 
     public function test_supplier_return_without_source_lineage_is_refused_cleanly(): void
@@ -352,5 +379,97 @@ class SupplierReturnLifecycleTest extends TestCase
         // The failed disposition must not leave a half-applied state behind.
         $this->assertNull($rma->fresh()->disposition_status);
         $this->assertSame('100.000', $ctx['grnItem']->fresh()->quantity_received);
+    }
+
+    public function test_supplier_bill_line_must_belong_to_the_rma_purchase_order(): void
+    {
+        $admin = $this->admin();
+        $ctx = $this->receivedShipment($admin);
+        $otherPo = PurchaseOrder::factory()->create([
+            'vendor_id' => $ctx['vendor']->id,
+            'created_by' => $admin->id,
+        ]);
+        $otherBill = Bill::create([
+            'bill_number' => 'BILL-OTHER-'.substr(uniqid(), -5),
+            'vendor_id' => $ctx['vendor']->id,
+            'purchase_order_id' => $otherPo->id,
+            'status' => 'unpaid',
+            'subtotal' => '100.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '100.00',
+            'amount_paid' => '0.00',
+            'balance' => '100.00',
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'journal_entry_id' => $ctx['bill']->journal_entry_id,
+            'created_by' => $admin->id,
+        ]);
+        $otherBillItem = BillItem::create([
+            'bill_id' => $otherBill->id,
+            'expense_account_id' => Account::query()->where('type', 'expense')->where('code', '5010')->value('id'),
+            'item_id' => $ctx['item']->id,
+            'description' => 'Wrong PO source line',
+            'quantity' => '10.00',
+            'unit' => 'kg',
+            'unit_price' => '10.00',
+            'total' => '100.00',
+        ]);
+
+        try {
+            app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)->create([
+                'type' => 'supplier_return',
+                'vendor_id' => $ctx['vendor']->id,
+                'purchase_order_id' => $ctx['po']->id,
+                'bill_id' => $otherBill->id,
+                'items' => [[
+                    'item_id' => $ctx['item']->id,
+                    'quantity' => '1.000',
+                    'source_po_item_id' => $ctx['poItem']->id,
+                    'source_grn_item_id' => $ctx['grnItem']->id,
+                    'source_bill_item_id' => $otherBillItem->id,
+                ]],
+            ], $admin);
+            $this->fail('A bill line from a different purchase order must be rejected.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+            $this->assertStringContainsString('bill provenance', strtolower($e->getMessage()));
+        }
+    }
+
+    public function test_replacement_purchase_order_inherits_source_non_vatable_treatment(): void
+    {
+        $admin = $this->admin();
+        $ctx = $this->receivedShipment($admin, false);
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-VAT-'.substr(uniqid(), -5),
+            'type' => 'supplier_return',
+            'status' => ReturnRequestStatus::Inspected,
+            'vendor_id' => $ctx['vendor']->id,
+            'purchase_order_id' => $ctx['po']->id,
+            'goods_receipt_note_id' => $ctx['grnItem']->goods_receipt_note_id,
+            'bill_id' => $ctx['bill']->id,
+            'created_by' => $admin->id,
+        ]);
+        $line = $rma->items()->create([
+            'item_id' => $ctx['item']->id,
+            'quantity' => '2.000',
+            'returned_quantity' => '2.000',
+            'unit_price' => '10.00',
+            'source_po_item_id' => $ctx['poItem']->id,
+            'source_grn_item_id' => $ctx['grnItem']->id,
+            'source_bill_item_id' => $ctx['billItem']->id,
+        ]);
+
+        $disposed = app(\App\Modules\ReturnManagement\Services\ReturnRequestService::class)->dispose(
+            $rma->load('items'),
+            [['item_id' => $line->hash_id, 'disposition' => 'return_to_supplier']],
+            $admin,
+            true,
+            $ctx['location']->id,
+        );
+
+        $replacement = $disposed->replacementPurchaseOrder;
+        $this->assertNotNull($replacement);
+        $this->assertFalse((bool) $replacement->is_vatable);
+        $this->assertSame('0.00', (string) $replacement->vat_amount);
     }
 }

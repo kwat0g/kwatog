@@ -11,9 +11,15 @@ enum LoanStatus: string
     case Paid      = 'paid';
     case Cancelled = 'cancelled';
     case Rejected  = 'rejected';
+    case WriteOffPending = 'write_off_pending';
+    case WrittenOff = 'written_off';
 
     public function label(): string
     {
-        return ucfirst($this->value);
+        return match ($this) {
+            self::WriteOffPending => 'Write-off pending',
+            self::WrittenOff => 'Written off',
+            default => ucfirst($this->value),
+        };
     }
 }

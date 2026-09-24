@@ -6,12 +6,15 @@ namespace App\Modules\Admin\Services;
 
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class RoleService
 {
@@ -260,6 +263,9 @@ class RoleService
     public function clone(Role $source, array $data): Role
     {
         return DB::transaction(function () use ($source, $data) {
+            $permissionSlugs = $source->permissions()->pluck('permissions.slug')->all();
+            $this->assertPermissionAuthority($permissionSlugs);
+
             $clone = Role::create([
                 'name' => $data['name'],
                 'slug' => $data['slug'],
@@ -267,7 +273,7 @@ class RoleService
                 'is_system' => false,
             ]);
 
-            $permissionIds = $source->permissions()->pluck('permissions.id')->all();
+            $permissionIds = Permission::query()->whereIn('slug', $permissionSlugs)->pluck('id')->all();
             if (! empty($permissionIds)) {
                 $clone->permissions()->sync($permissionIds);
             }
@@ -307,6 +313,7 @@ class RoleService
             $requested = array_values(array_unique($slugs));
             sort($existing);
             sort($requested);
+            $this->assertPermissionAuthority($requested);
             $ids = Permission::whereIn('slug', $requested)->pluck('id')->all();
             abort_if(count($ids) !== count($requested), 422, 'One or more permissions do not exist.');
             $locked->permissions()->sync($ids);
@@ -325,6 +332,7 @@ class RoleService
             // serves every user of this role (cache is keyed by role_id, not
             // user_id, since H-9 split the cache).
             Cache::forget("auth:role_perms:{$locked->id}");
+            BadgeService::touch();
 
             return $locked->load('permissions');
         });
@@ -359,6 +367,21 @@ class RoleService
                 ? 'The System Administrator role always has every permission and cannot be edited.'
                 : 'System roles cannot be edited. Clone the role first to create a customizable copy.',
         );
+    }
+
+    /** Prevent a role manager from granting permissions they do not hold. */
+    private function assertPermissionAuthority(array $slugs): void
+    {
+        $actor = Auth::user();
+        if (! $actor instanceof User) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        foreach ($slugs as $slug) {
+            if (! $actor->hasPermission((string) $slug)) {
+                abort(403, 'A role cannot grant permissions outside the acting user\'s authority.');
+            }
+        }
     }
 
     /** @return array<string, mixed> */

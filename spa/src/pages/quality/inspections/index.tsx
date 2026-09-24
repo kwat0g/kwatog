@@ -6,7 +6,7 @@
  */
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate} from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LuPlus } from '@/lib/icons';
 import { inspectionsApi, type InspectionListParams } from '@/api/quality/inspections';
 import { Button } from '@/components/ui/Button';
@@ -20,17 +20,23 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Inspection, InspectionStatus } from '@/types/quality';
+import { formatDateIso } from '@/lib/formatDate';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
-const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  draft: 'neutral',
-  in_progress: 'info',
-  passed: 'success',
-  failed: 'danger',
-  cancelled: 'neutral' };
+const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
+  {
+    draft: 'neutral',
+    in_progress: 'info',
+    awaiting_review: 'warning',
+    passed: 'success',
+    failed: 'danger',
+    cancelled: 'neutral',
+  };
 
 const DEFAULT_FILTERS: InspectionListParams = {
-  page: 1, per_page: 25, status: '',
+  page: 1,
+  per_page: 25,
+  status: '',
 };
 
 export default function InspectionsListPage() {
@@ -48,188 +54,193 @@ export default function InspectionsListPage() {
     }
   }, [filters.date, setFilters]);
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['quality', 'inspections', filters],
- queryFn: () => inspectionsApi.list(filters),
- placeholderData: (prev) => prev });
- const { data: inspectionOptions } = useQuery({
- queryKey: ['quality', 'inspection-options'],
- queryFn: inspectionsApi.options,
- staleTime: 5 * 60 * 1000 });
- const labels = new Map([
- ...(inspectionOptions?.stages ?? []),
- ...(inspectionOptions?.statuses ?? []),
- ].map((option) => [option.value, option.label]));
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['quality', 'inspections', filters],
+    queryFn: () => inspectionsApi.list(filters),
+    placeholderData: (prev) => prev,
+  });
+  const { data: inspectionOptions } = useQuery({
+    queryKey: ['quality', 'inspection-options'],
+    queryFn: inspectionsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map(
+    [...(inspectionOptions?.stages ?? []), ...(inspectionOptions?.statuses ?? [])].map((option) => [
+      option.value,
+      option.label,
+    ]),
+  );
 
- const columns: Column<Inspection>[] = [
- {
- key: 'inspection_number',
- header: 'Inspection',
- cell: (r) => (
- <span className="font-mono">
- {r.inspection_number}
- </span>
- ) },
- {
- key: 'product',
- header: 'Product',
- cell: (r) =>
- r.product ? (
- <span>
- <span className="font-mono">{r.product.part_number}</span>
- <span className="ml-2 text-muted">{r.product.name}</span>
- </span>
- ) : r.item ? (
- <span>
- <span className="font-mono">{r.item.code}</span>
- <span className="ml-2 text-muted">{r.item.name}</span>
- </span>
- ) : (
- <span className="text-muted">—</span>
- ) },
- {
- key: 'stage',
- header: 'Stage',
- cell: (r) => (
- <Chip variant="neutral">
- {labels.get(r.stage) ?? r.stage}
- </Chip>
- ) },
- {
- key: 'sample',
- header: 'Sample / Batch',
- align: 'right',
- cell: (r) => (
- <NumCell>
- {r.sample_size} / {r.batch_quantity}
- {r.aql_code ? <span className="ml-2 text-muted">[{r.aql_code}]</span> : null}
- </NumCell>
- ) },
- {
- key: 'defects',
- header: 'Defects (Ac)',
- align: 'right',
- cell: (r) => (
- <NumCell className={r.defect_count > r.accept_count ? 'text-danger-fg' : ''}>
- {r.defect_count} ({r.accept_count})
- </NumCell>
- ) },
- {
- key: 'status',
- header: 'Status',
- cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
- {
- key: 'completed',
- header: 'Completed',
- align: 'right',
- cell: (r) => <NumCell>{r.completed_at?.slice(0, 10) ?? '—'}</NumCell> },
- ];
+  const columns: Column<Inspection>[] = [
+    {
+      key: 'inspection_number',
+      header: 'Inspection',
+      cell: (r) => <span className="font-mono">{r.inspection_number}</span>,
+    },
+    {
+      key: 'product',
+      header: 'Product',
+      cell: (r) =>
+        r.product ? (
+          <span>
+            <span className="font-mono">{r.product.part_number}</span>
+            <span className="ml-2 text-muted">{r.product.name}</span>
+          </span>
+        ) : r.item ? (
+          <span>
+            <span className="font-mono">{r.item.code}</span>
+            <span className="ml-2 text-muted">{r.item.name}</span>
+          </span>
+        ) : (
+          <span className="text-muted">—</span>
+        ),
+    },
+    {
+      key: 'stage',
+      header: 'Stage',
+      cell: (r) => <Chip variant="neutral">{labels.get(r.stage) ?? r.stage}</Chip>,
+    },
+    {
+      key: 'sample',
+      header: 'Sample / Batch',
+      align: 'right',
+      cell: (r) => (
+        <NumCell>
+          {r.sample_size} / {r.batch_quantity}
+          {r.aql_code ? <span className="ml-2 text-muted">[{r.aql_code}]</span> : null}
+        </NumCell>
+      ),
+    },
+    {
+      key: 'defects',
+      header: 'Defects (Ac)',
+      align: 'right',
+      cell: (r) => (
+        <NumCell className={r.defect_count > r.accept_count ? 'text-danger-fg' : ''}>
+          {r.defect_count} ({r.accept_count})
+        </NumCell>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => (
+        <Chip variant={STATUS_CHIP[r.status]}>
+          {r.status_label ?? labels.get(r.status) ?? r.status}
+        </Chip>
+      ),
+    },
+    {
+      key: 'completed',
+      header: 'Completed',
+      align: 'right',
+      cell: (r) => <NumCell>{formatDateIso(r.completed_at)}</NumCell>,
+    },
+  ];
 
- const filterConfig: FilterConfig[] = [
- {
- key: 'stage',
- label: 'Stage',
- type: 'select',
- options: [
- { value: '', label: 'All' },
- ...(inspectionOptions?.stages ?? []),
- ] },
- {
- key: 'status',
- label: 'Status',
- type: 'select',
- options: [
- { value: '', label: 'All' },
- ...(inspectionOptions?.statuses ?? []),
- ] },
- ];
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'stage',
+      label: 'Stage',
+      type: 'select',
+      options: [{ value: '', label: 'All' }, ...(inspectionOptions?.stages ?? [])],
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [{ value: '', label: 'All' }, ...(inspectionOptions?.statuses ?? [])],
+    },
+  ];
 
- return (
- <div>
- <PageHeader
- title="Inspections"
- subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'inspection' : 'inspections'}` : undefined}
- actions={
- can('quality.inspections.manage') ? (
- <Button
- variant="primary"
- size="sm"
- icon={<LuPlus size={14} />}
- onClick={() => navigate('/quality/inspections/new')}
- >
- New inspection
- </Button>
- ) : undefined
- }
- />
-  <FilterBar
-  filters={filterConfig}
-  values={filters}
-  onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-  onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-  searchPlaceholder="Search inspection number or product…"
-  dateRange={{ fromKey: 'from', toKey: 'to', label: 'Date' }}
-  />
- {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
- {isError && (
- <EmptyState
- icon="alert-circle"
- title="Failed to load inspections"
- action={
- <Button variant="secondary" onClick={() => refetch()}>
- Retry
- </Button>
- }
- />
- )}
- {data && (
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
-  <StatCard
-    label={labels.get('draft') ?? '—'}
-    value={data.data.filter(i => i.status === 'draft').length}
-    helper="in current view"
-    linkTo="?status=draft"
-  />
-  <StatCard
-    label={labels.get('in_progress') ?? '—'}
-    value={data.data.filter(i => i.status === 'in_progress').length}
-    helper="in current view"
-    linkTo="?status=in_progress"
-  />
-  <StatCard
-    label={labels.get('passed') ?? '—'}
-    value={data.data.filter(i => i.status === 'passed').length}
-    helper="in current view"
-    linkTo="?status=passed"
-    className="border-success bg-success-bg"
-  />
-  <StatCard
-    label={labels.get('failed') ?? '—'}
-    value={data.data.filter(i => i.status === 'failed').length}
-    helper="in current view"
-    linkTo="?status=failed"
-    className="border-danger bg-danger-bg"
-  />
-  </div>
- )}
+  return (
+    <div>
+      <PageHeader
+        title="Inspections"
+        subtitle={
+          data
+            ? `${data.meta.total} ${data.meta.total === 1 ? 'inspection' : 'inspections'}`
+            : undefined
+        }
+        actions={
+          can('quality.inspections.manage') ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<LuPlus size={14} />}
+              onClick={() => navigate('/quality/inspections/new')}
+            >
+              New inspection
+            </Button>
+          ) : undefined
+        }
+      />
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+        searchPlaceholder="Search inspection number or product…"
+        dateRange={{ fromKey: 'from', toKey: 'to', label: 'Date' }}
+      />
+      {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
+      {isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load inspections"
+          action={
+            <Button variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      )}
+      {data && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-5 py-4 border-b border-default bg-canvas">
+          <StatCard
+            label={labels.get('draft') ?? '—'}
+            value={data.data.filter((i) => i.status === 'draft').length}
+            helper="in current view"
+            linkTo="?status=draft"
+          />
+          <StatCard
+            label={labels.get('in_progress') ?? '—'}
+            value={data.data.filter((i) => i.status === 'in_progress').length}
+            helper="in current view"
+            linkTo="?status=in_progress"
+          />
+          <StatCard
+            label={labels.get('passed') ?? '—'}
+            value={data.data.filter((i) => i.status === 'passed').length}
+            helper="in current view"
+            linkTo="?status=passed"
+            className="border-success bg-success-bg"
+          />
+          <StatCard
+            label={labels.get('failed') ?? '—'}
+            value={data.data.filter((i) => i.status === 'failed').length}
+            helper="in current view"
+            linkTo="?status=failed"
+            className="border-danger bg-danger-bg"
+          />
+        </div>
+      )}
 
-{data && data.data.length === 0 && (
- <ListEmptyState />
- )}
+      {data && data.data.length === 0 && <ListEmptyState />}
 
- {data && data.data.length > 0 && (
- <div className="px-5 py-4">
-  <DataTable
-  tableKey="inspections"
-  onRowClick={(r) => navigate(`/quality/inspections/${r.id}`)}
- columns={columns}
- data={data.data}
- meta={data.meta}
- onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
- />
- </div>
- )}
- </div>
- );
+      {data && data.data.length > 0 && (
+        <div className="px-5 py-4">
+          <DataTable
+            tableKey="inspections"
+            onRowClick={(r) => navigate(`/quality/inspections/${r.id}`)}
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+          />
+        </div>
+      )}
+    </div>
+  );
 }

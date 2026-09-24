@@ -1719,7 +1719,7 @@ twice.
 | Every 6 hours | `approvals:run-escalations` | Escalate stale approvals |
 | Daily | `purchasing:recompute-supplier-performance` | Supplier scoring |
 | 02:00 daily | `maintenance:generate-preventive` | Generate preventive MWOs |
-| 1st @ 03:00 | `assets:run-monthly-depreciation` | Asset depreciation |
+| 1st @ 03:00 | `assets:request-monthly-depreciation` | Stage durable asset depreciation request; the queued listener executes the period |
 | Every 15 min | `ncr:escalate` | Escalate overdue NCRs |
 | 06:30 daily | `training:check-expiries` | Flag expired training certs |
 | Every 15 min | `complaints:check-8d-slas` | Check 8D SLA deadlines |

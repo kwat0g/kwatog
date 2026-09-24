@@ -6,6 +6,7 @@ namespace Tests\Feature\CRM;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -14,12 +15,16 @@ use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Services\PriceAgreementService;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Inventory\Models\Uom;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -183,6 +188,42 @@ class CustomerProductPricingTest extends TestCase
         $this->assertTrue(Product::withTrashed()->findOrFail($product->id)->trashed());
     }
 
+    public function test_product_archive_ignores_terminal_orders_and_active_flag_uses_the_same_guard(): void
+    {
+        [$customer, $historicalProduct] = $this->references();
+        $cancelled = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'cancelled',
+        ]);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $cancelled->id,
+            'product_id' => $historicalProduct->id,
+        ]);
+
+        $this->actingAs($this->actor('crm.products.manage'))
+            ->deleteJson("/api/v1/crm/products/{$historicalProduct->hash_id}")
+            ->assertNoContent();
+
+        [$customer, $activeProduct] = $this->references();
+        $activeOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => 'confirmed',
+        ]);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $activeOrder->id,
+            'product_id' => $activeProduct->id,
+        ]);
+
+        $this->actingAs($this->actor('crm.products.manage'))
+            ->putJson("/api/v1/crm/products/{$activeProduct->hash_id}", ['is_active' => false])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Cannot archive this product while it has open sales orders. Archive or retire the dependent records first.',
+            ]);
+
+        $this->assertTrue($activeProduct->fresh()->is_active);
+    }
+
     public function test_product_uom_is_normalized_and_must_exist_in_the_catalog(): void
     {
         $response = $this->actingAs($this->actor('crm.products.manage'))
@@ -208,6 +249,77 @@ class CustomerProductPricingTest extends TestCase
         $response->assertUnprocessable()->assertJsonValidationErrors(['unit_of_measure']);
     }
 
+    public function test_product_part_number_is_normalized_to_uppercase(): void
+    {
+        $response = $this->actingAs($this->actor('crm.products.manage'))
+            ->postJson('/api/v1/crm/products', [
+                'part_number' => 'case-pn-001',
+                'name' => 'Case Product',
+                'unit_of_measure' => 'PCS',
+                'standard_cost' => '12.34',
+            ]);
+
+        $response->assertCreated()->assertJsonPath('data.part_number', 'CASE-PN-001');
+    }
+
+    public function test_seeded_master_data_owners_can_manage_products_and_price_agreements(): void
+    {
+        $ppc = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'ppc_head')->value('id'),
+        ]);
+        $catalog = $this->actingAs($ppc, 'sanctum')->postJson('/api/v1/crm/products', [
+            'part_number' => 'PPC-MASTER-01',
+            'name' => 'PPC Master Product',
+            'unit_of_measure' => 'PCS',
+            'standard_cost' => '12.34',
+        ]);
+        $catalog->assertCreated();
+
+        [$customer, $product] = $this->references();
+        $customerService = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id'),
+        ]);
+        $this->actingAs($customerService, 'sanctum')
+            ->postJson('/api/v1/crm/price-agreements', [
+                'customer_id' => $customer->hash_id,
+                'product_id' => $product->hash_id,
+                'price' => '99.99',
+                'effective_from' => now()->toDateString(),
+                'effective_to' => now()->addMonth()->toDateString(),
+            ])
+            ->assertCreated();
+    }
+
+    public function test_product_part_number_uniqueness_is_case_insensitive_in_the_database(): void
+    {
+        Product::factory()->create(['part_number' => 'CASE-IDENTITY']);
+
+        $this->expectException(QueryException::class);
+        Product::factory()->create(['part_number' => 'case-identity']);
+    }
+
+    public function test_revenue_account_can_be_configured_and_read_through_product_api(): void
+    {
+        $this->seed(ChartOfAccountsSeeder::class);
+        $account = Account::query()->where('code', '4010')->firstOrFail();
+        $actor = $this->actor('crm.products.manage');
+
+        $response = $this->actingAs($actor)
+            ->postJson('/api/v1/crm/products', [
+                'part_number' => 'REV-ACCT-01',
+                'name' => 'Revenue Account Product',
+                'unit_of_measure' => 'PCS',
+                'standard_cost' => '12.34',
+                'revenue_account_id' => $account->hash_id,
+            ]);
+
+        $response->assertCreated()->assertJsonPath('data.revenue_account_id', $account->hash_id);
+        $this->assertDatabaseHas('products', [
+            'id' => app('hashids')->decode($response->json('data.id'))[0],
+            'revenue_account_id' => $account->id,
+        ]);
+    }
+
     public function test_tiered_price_resolution_returns_exact_decimal_strings(): void
     {
         [$customer, $product] = $this->references();
@@ -227,6 +339,25 @@ class CustomerProductPricingTest extends TestCase
         $service = app(PriceAgreementService::class);
         $this->assertSame('12.34', $service->resolveUnitPrice($agreement, 1));
         $this->assertSame('10.00', $service->resolveUnitPrice($agreement, 100));
+    }
+
+    public function test_quantity_below_the_first_price_tier_uses_the_agreement_base_price(): void
+    {
+        [$customer, $product] = $this->references();
+        $agreement = app(PriceAgreementService::class)->create([
+            'customer_id' => $customer->id,
+            'product_id' => $product->id,
+            'price' => '99.99',
+            'effective_from' => now()->subDay()->toDateString(),
+            'effective_to' => now()->addMonth()->toDateString(),
+            'pricing_method' => PricingMethod::Tiered->value,
+            'tiers' => [
+                ['min_qty' => 100, 'unit_price' => '12.34'],
+                ['min_qty' => 500, 'unit_price' => '10.00'],
+            ],
+        ]);
+
+        $this->assertSame('99.99', app(PriceAgreementService::class)->resolveUnitPrice($agreement, 1));
     }
 
     public function test_tiered_agreements_require_ascending_centavo_tiers(): void

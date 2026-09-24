@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Notifications;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use App\Common\Services\SettingsService;
 
 /**
  * Task A10 — Weekly Friday 18:00 trend email.

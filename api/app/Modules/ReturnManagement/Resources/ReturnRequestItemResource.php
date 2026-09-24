@@ -70,6 +70,9 @@ class ReturnRequestItemResource extends JsonResource
                 && bccomp((string) $this->stock_movement_quantity, '0', 3) > 0
                     ? (string) $this->stock_movement_quantity
                     : null,
+            'stock_movement_id' => $this->stock_movement_id
+                ? \App\Common\Support\HashId::encode((int) $this->stock_movement_id)
+                : null,
             'ncr'               => $this->whenLoaded('ncr', fn () => $this->ncr ? [
                 'id'         => $this->ncr->hash_id,
                 'ncr_number' => $this->ncr->ncr_number,

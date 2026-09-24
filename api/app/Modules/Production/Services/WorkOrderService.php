@@ -22,6 +22,8 @@ use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\MRP\Enums\MachineStatus;
@@ -32,12 +34,14 @@ use App\Modules\MRP\Services\BomService;
 use App\Modules\MRP\Services\MachineService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\ProductionScheduleStatus;
+use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\ProductionSchedule;
+use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Support\WorkOrderStateMachine;
@@ -85,6 +89,7 @@ class WorkOrderService
         private readonly WoOperationService $operations,
         private readonly WorkOrderStateMachine $stateMachine,
         private readonly MachineService $machines,
+        private readonly StockLocationSummaryService $locationSummary,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -307,26 +312,72 @@ class WorkOrderService
     {
         $refs = [];
         $materials = $wo->materials()->with('item:id,code,name')->get();
-        foreach ($materials as $material) {
-            $latestGrnItem = GrnItem::query()
-                ->where('item_id', $material->item_id)
-                ->whereNotNull('material_lot_number')
-                ->with('grn:id,grn_number,received_date')
-                ->latest('id')
-                ->first();
-            if (! $latestGrnItem) {
-                continue;
+
+        // 1. Authoritative: resolve lots from actual stock movements recorded for this WO.
+        $issueMovements = StockMovement::query()
+            ->where('reference_type', 'work_order')
+            ->where('reference_id', $wo->id)
+            ->where('movement_type', StockMovementType::MaterialIssue)
+            ->whereNotNull('lot_number')
+            ->get();
+
+        if ($issueMovements->isNotEmpty()) {
+            $grouped = $issueMovements->groupBy(fn ($m) => $m->item_id.'_'.$m->lot_number);
+            foreach ($grouped as $mvmts) {
+                $first = $mvmts->first();
+                $itemId = (int) $first->item_id;
+                $lotNumber = (string) $first->lot_number;
+                $qtyTotal = '0';
+                foreach ($mvmts as $m) {
+                    $qtyTotal = bcadd($qtyTotal, (string) $m->quantity, 3);
+                }
+
+                $matchingMaterial = $materials->firstWhere('item_id', $itemId);
+                $item = $matchingMaterial?->item ?? $first->item;
+
+                $grnItem = GrnItem::query()
+                    ->where('item_id', $itemId)
+                    ->where('material_lot_number', $lotNumber)
+                    ->with('grn:id,grn_number,received_date')
+                    ->latest('id')
+                    ->first();
+
+                $refs[] = [
+                    'item_id' => $item ? $item->hash_id : null,
+                    'item_code' => $item->code ?? null,
+                    'item_name' => $item->name ?? null,
+                    'grn_number' => $grnItem?->grn?->grn_number,
+                    'material_lot_number' => $lotNumber,
+                    'supplier_lot_reference' => $grnItem?->supplier_lot_reference,
+                    'quantity_used' => $qtyTotal,
+                ];
             }
-            $refs[] = [
-                'item_id' => $material->item ? $material->item->hash_id : null,
-                'item_code' => $material->item->code ?? null,
-                'item_name' => $material->item->name ?? null,
-                'grn_number' => $latestGrnItem->grn?->grn_number,
-                'material_lot_number' => $latestGrnItem->material_lot_number,
-                'supplier_lot_reference' => $latestGrnItem->supplier_lot_reference,
-                'quantity_used' => (string) $material->bom_quantity,
-            ];
         }
+
+        // 2. Fallback: if no movements had lots (legacy records / unlotted stock), query latest GRN items per material.
+        if (empty($refs)) {
+            foreach ($materials as $material) {
+                $latestGrnItem = GrnItem::query()
+                    ->where('item_id', $material->item_id)
+                    ->whereNotNull('material_lot_number')
+                    ->with('grn:id,grn_number,received_date')
+                    ->latest('id')
+                    ->first();
+                if (! $latestGrnItem) {
+                    continue;
+                }
+                $refs[] = [
+                    'item_id' => $material->item ? $material->item->hash_id : null,
+                    'item_code' => $material->item->code ?? null,
+                    'item_name' => $material->item->name ?? null,
+                    'grn_number' => $latestGrnItem->grn?->grn_number,
+                    'material_lot_number' => $latestGrnItem->material_lot_number,
+                    'supplier_lot_reference' => $latestGrnItem->supplier_lot_reference,
+                    'quantity_used' => (string) $material->bom_quantity,
+                ];
+            }
+        }
+
         if (! empty($refs)) {
             $wo->update(['material_lot_references' => $refs]);
         }
@@ -428,11 +479,14 @@ class WorkOrderService
                     'category' => $category->value,
                     'description' => $reason,
                 ]);
+                $isCurrentOccupant = (int) $machine->current_work_order_id === (int) $lockedWo->id;
                 if ($category === MachineDowntimeCategory::Breakdown) {
                     // A breakdown pause must enter the same authoritative
                     // machine-status flow as an operator transition. This
                     // keeps the maintenance queue and alert listener alive.
-                    $machine->update(['current_work_order_id' => null]);
+                    if ($isCurrentOccupant) {
+                        $machine->update(['current_work_order_id' => null]);
+                    }
                     if ($machine->status !== MachineStatus::Breakdown) {
                         $this->machines->transitionStatus(
                             $machine,
@@ -441,10 +495,16 @@ class WorkOrderService
                         );
                     }
                 } else {
-                    $machine->update([
-                        'status' => MachineStatus::Idle->value,
-                        'current_work_order_id' => null,
-                    ]);
+                    $updates = [];
+                    if ($isCurrentOccupant) {
+                        $updates['current_work_order_id'] = null;
+                        if ($machine->status === MachineStatus::Running) {
+                            $updates['status'] = MachineStatus::Idle->value;
+                        }
+                    }
+                    if (! empty($updates)) {
+                        $machine->update($updates);
+                    }
                 }
             }
             $lockedWo->update([
@@ -511,6 +571,11 @@ class WorkOrderService
                 throw new BusinessRuleException('Cannot resume a work order without an assigned machine and mold.');
             }
             $this->assertMachineNotOccupied($lockedWo, $machine);
+            if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
+                throw new BusinessRuleException(
+                    "Assigned machine {$machine->machine_code} is currently {$machine->status?->value} and cannot resume production. Repair or restore the machine first."
+                );
+            }
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
                 throw new BusinessRuleException('Assigned mold is not available to resume production.');
             }
@@ -544,6 +609,19 @@ class WorkOrderService
             $this->assertTransition($lockedWo, WorkOrderStatus::Completed);
             $from = $lockedWo->status?->value ?? 'in_progress';
 
+            $incompleteOps = WoOperation::query()
+                ->where('work_order_id', $lockedWo->id)
+                ->whereNotIn('status', [
+                    WoOperationStatus::Completed->value,
+                    WoOperationStatus::Skipped->value,
+                ])
+                ->exists();
+            if ($incompleteOps) {
+                throw new BusinessRuleException(
+                    "Work order {$lockedWo->wo_number} cannot be completed because some routing operations are still pending or in progress."
+                );
+            }
+
             $produced = (int) $lockedWo->quantity_produced;
             $rejected = (int) $lockedWo->quantity_rejected;
             $scrap = $produced > 0 ? round(($rejected / $produced) * 100, 2) : 0.0;
@@ -555,15 +633,16 @@ class WorkOrderService
             $machine = $lockedWo->machine_id
                 ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
                 : null;
-            if ($machine) {
-                $machine->update([
-                    'status' => MachineStatus::Idle->value,
-                    'current_work_order_id' => null,
-                ]);
+            if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
+                $updates = ['current_work_order_id' => null];
+                if ($machine->status === MachineStatus::Running) {
+                    $updates['status'] = MachineStatus::Idle->value;
+                }
+                $machine->update($updates);
             }
             if ($lockedWo->mold_id) {
                 $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
-                if ($mold && $mold->status !== MoldStatus::Maintenance) {
+                if ($mold && $mold->status === MoldStatus::InUse) {
                     $mold->update(['status' => MoldStatus::Available->value]);
                 }
             }
@@ -642,10 +721,11 @@ class WorkOrderService
                 ? Machine::query()->lockForUpdate()->find($lockedWo->machine_id)
                 : null;
             if ($machine && (int) $machine->current_work_order_id === (int) $lockedWo->id) {
-                $machine->update([
-                    'status' => MachineStatus::Idle->value,
-                    'current_work_order_id' => null,
-                ]);
+                $updates = ['current_work_order_id' => null];
+                if ($machine->status === MachineStatus::Running) {
+                    $updates['status'] = MachineStatus::Idle->value;
+                }
+                $machine->update($updates);
             }
             if ($lockedWo->mold_id) {
                 $mold = Mold::query()->lockForUpdate()->find($lockedWo->mold_id);
@@ -1107,6 +1187,8 @@ class WorkOrderService
             // freed stock as on-hand-available.
             $this->stock->release((int) $res->item_id, (int) $res->location_id, $qty);
 
+            $preferredLot = $this->locationSummary->preferredLot((int) $res->item_id, (int) $res->location_id);
+
             $movement = $this->stock->move(new StockMovementInput(
                 type: StockMovementType::MaterialIssue,
                 itemId: (int) $res->item_id,
@@ -1117,6 +1199,8 @@ class WorkOrderService
                 referenceId: $wo->id,
                 remarks: "WO {$wo->wo_number} material issue (reservation #{$res->id})",
                 createdBy: $userId,
+                lotNumber: $preferredLot['lot_number'] ?? null,
+                expiryDate: $preferredLot['expiry_date'] ?? null,
             ));
 
             $res->update([

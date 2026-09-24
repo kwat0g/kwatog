@@ -8,6 +8,7 @@ use App\Modules\Landing\Models\NewsletterSubscriber;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class NewsletterTest extends TestCase
@@ -84,5 +85,24 @@ class NewsletterTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('email');
+    }
+
+    public function test_signed_get_unsubscribe_requires_post_confirmation(): void
+    {
+        $subscriber = NewsletterSubscriber::create([
+            'email' => 'signed-unsubscribe@example.com',
+        ]);
+        $subscriber->forceFill(['status' => 'subscribed', 'consent_at' => now()])->save();
+        $url = URL::signedRoute('landing.newsletter.unsubscribe', ['subscriber' => $subscriber->hash_id]);
+
+        $this->get($url)
+            ->assertOk()
+            ->assertSee('Confirm unsubscribing')
+            ->assertSee('<form', false);
+        $this->assertNull($subscriber->fresh()->unsubscribed_at);
+
+        RateLimiter::clear(md5('public-form127.0.0.1'));
+        $this->post($url)->assertOk();
+        $this->assertNotNull($subscriber->fresh()->unsubscribed_at);
     }
 }

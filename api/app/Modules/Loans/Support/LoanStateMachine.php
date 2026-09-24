@@ -20,11 +20,13 @@ final class LoanStateMachine
     /** @var array<string, list<string>> */
     public const TRANSITIONS = [
         'pending' => ['active', 'rejected', 'cancelled'],
-        'active' => ['paid'],
+        'active' => ['paid', 'write_off_pending'],
+        'write_off_pending' => ['written_off'],
         // A controlled ledger reversal may reopen a paid loan.
         'paid' => ['active'],
         'rejected' => [],
         'cancelled' => [],
+        'written_off' => [],
     ];
 
     public function transition(EmployeeLoan $loan, LoanStatus $target): void

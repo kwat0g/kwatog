@@ -37,13 +37,6 @@ export type UpdateBudgetData = Partial<Omit<CreateBudgetData, 'line_items'>> & {
  line_items?: CreateBudgetData['line_items'];
 };
 
-export interface CreateTransferData {
- from_budget_line_id: string;
- to_budget_line_id: string;
- amount: string;
- reason: string;
-}
-
 export const budgetingApi = {
  options: () => client.get<{ data: { budget_types: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }>; warning_ratio_pct: number; critical_ratio_pct: number; exhausted_ratio_pct: number } }>('/budgets/options').then((r) => r.data.data),
  // Fiscal Years
@@ -80,7 +73,7 @@ export const budgetingApi = {
  client.get<{ data: BudgetVsActual }>('/budgets/budget-vs-actual', { params: { fiscal_year_id: fiscalYearId } }).then((r) => r.data.data),
 
  syncActuals: (fiscalYearId?: string) =>
- client.post<{ data: { dispatched: boolean; outbox_id: string; status: string; run_id: string | null; fiscal_year_id: string | null; run_status: BudgetSyncRun['status'] | null } }>('/budgets/sync-actuals', {
+  client.post<{ data: { dispatched: boolean; request_id: string; status: string; fiscal_year_id: string | null; run_status: BudgetSyncRun['status'] | null } }>('/budgets/sync-actuals', {
  fiscal_year_id: fiscalYearId,
  }).then((r) => r.data.data),
 

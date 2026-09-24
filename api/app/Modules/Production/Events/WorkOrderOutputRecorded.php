@@ -35,7 +35,7 @@ class WorkOrderOutputRecorded implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('production.wo.' . $this->workOrder->hash_id),
+            new PrivateChannel('production.wo.'.$this->workOrder->hash_id),
             new PrivateChannel('production.dashboard'),
         ];
     }
@@ -48,16 +48,16 @@ class WorkOrderOutputRecorded implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'wo_id'                 => $this->workOrder->hash_id,
-            'wo_number'             => $this->workOrder->wo_number,
-            'output_id'             => $this->output->hash_id,
-            'good_count'            => (int) $this->output->good_count,
-            'reject_count'          => (int) $this->output->reject_count,
+            'wo_id' => $this->workOrder->hash_id,
+            'wo_number' => $this->workOrder->wo_number,
+            'output_id' => $this->output->hash_id,
+            'good_count' => (int) $this->output->good_count,
+            'reject_count' => (int) $this->output->reject_count,
             'total_quantity_produced' => (int) $this->workOrder->quantity_produced,
-            'total_quantity_good'     => (int) $this->workOrder->quantity_good,
+            'total_quantity_good' => (int) $this->workOrder->quantity_good,
             'total_quantity_rejected' => (int) $this->workOrder->quantity_rejected,
-            'scrap_rate'            => (string) $this->workOrder->scrap_rate,
-            'recorded_at'           => optional($this->output->recorded_at)->toIso8601String(),
+            'scrap_rate' => (string) $this->workOrder->scrap_rate,
+            'recorded_at' => optional($this->output->recorded_at)->toIso8601String(),
         ];
     }
 }

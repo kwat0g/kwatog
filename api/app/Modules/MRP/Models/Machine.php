@@ -33,6 +33,7 @@ class Machine extends Model
         'machine_code', 'name', 'tonnage', 'machine_type',
         'operators_required', 'available_hours_per_day', 'status',
         'current_work_order_id',
+        'asset_id',
         'running_hours_total',
         'running_hours_updated_at',
     ];
@@ -43,6 +44,7 @@ class Machine extends Model
         'operators_required'      => 'decimal:1',
         'available_hours_per_day' => 'decimal:1',
         'current_work_order_id'   => 'integer',
+        'asset_id'                => 'integer',
         'running_hours_total'     => 'decimal:2',
         'running_hours_updated_at' => 'datetime',
     ];
@@ -55,6 +57,11 @@ class Machine extends Model
     public function currentWorkOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class, 'current_work_order_id');
+    }
+
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Assets\Models\Asset::class, 'asset_id');
     }
 
     public function scopeAvailable(Builder $q): Builder

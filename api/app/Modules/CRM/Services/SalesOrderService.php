@@ -25,13 +25,16 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
 use App\Modules\CRM\Support\SalesOrderTransitionResult;
-use App\Modules\Inventory\Services\PickingListService;
 use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Models\MrpPlan;
-use App\Modules\MRP\Services\CapacityPlanningService;
+use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Services\PurchaseRequestService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -435,6 +438,8 @@ class SalesOrderService
                 'notes' => $data['notes'] ?? null,
                 'incoterm' => $data['incoterm'] ?? null,
                 'submission_source' => $data['submission_source'] ?? 'internal',
+                'portal_idempotency_key' => $data['portal_idempotency_key'] ?? null,
+                'portal_idempotency_fingerprint' => $data['portal_idempotency_fingerprint'] ?? null,
                 'created_by' => $userId,
             ]);
 
@@ -618,27 +623,6 @@ class SalesOrderService
     }
 
     /**
-     * Resolve the CapacityPlanningService via the container so this module
-     * can run without the MRP module being booted.
-     */
-    private function capacityPlanner(): ?CapacityPlanningService
-    {
-        $cls = '\\App\\Modules\\MRP\\Services\\CapacityPlanningService';
-
-        return class_exists($cls) ? app($cls) : null;
-    }
-
-    /**
-     * Resolve PickingListService via the container (optional dependency).
-     */
-    private function pickingListService(): ?PickingListService
-    {
-        $cls = '\\App\\Modules\\Inventory\\Services\\PickingListService';
-
-        return class_exists($cls) ? app($cls) : null;
-    }
-
-    /**
      * Confirm SO and return a chain summary of everything auto-created.
      *
      * Wraps confirm() which queues the durable MRP + capacity-planning job.
@@ -671,7 +655,17 @@ class SalesOrderService
 
         $planSummary = (array) ($plan?->mrpRun?->summary ?? []);
         $schedulingResult = $planSummary['scheduling'] ?? ['scheduled' => [], 'conflicts' => []];
-        $planningStatus = $plan ? 'completed' : 'queued';
+
+        // A missing plan is only "queued" when nothing has failed. With the
+        // sync queue driver the failure has already been recorded by now, and
+        // reporting it as queued told the operator to wait for a run that was
+        // never coming.
+        $planningFailure = $plan === null ? $this->latestPlanningFailure((int) $confirmedSo->id) : null;
+        $planningStatus = match (true) {
+            $plan !== null => 'completed',
+            $planningFailure !== null => 'failed',
+            default => 'queued',
+        };
 
         // Reload WOs after scheduling may have changed their machine/mold.
         $confirmedSo->load([
@@ -721,6 +715,7 @@ class SalesOrderService
                 'shortages' => $shortageCount,
                 'prs_created' => $prsCreated,
                 'planning_status' => $planningStatus,
+                'planning_error' => $planningFailure,
                 'work_orders' => $woSummaries,
                 'scheduling_conflicts' => $schedulingResult['conflicts'],
             ],
@@ -777,6 +772,12 @@ class SalesOrderService
                 }
             }
 
+            // Buying demand must not outlive the order that justified it: a
+            // cancelled SO used to leave its MRP auto-PR in the purchasing
+            // queue, where a buyer could still source material for demand
+            // that no longer exists.
+            $this->retireAutoPurchaseRequests($lockedSo);
+
             // Series C — Task C4. Stage real-time chain progress atomically
             // with the cancellation and its downstream work-order changes.
             $fresh = $lockedSo->fresh();
@@ -796,7 +797,50 @@ class SalesOrderService
      */
     private function workOrderService(): ?WorkOrderService
     {
-        $cls = '\\App\\Modules\\Production\\Services\\WorkOrderService';
+        $cls = '\\App\Modules\Production\Services\WorkOrderService';
+
+        return class_exists($cls) ? app($cls) : null;
+    }
+
+    /**
+     * Retire the automatic purchase requests raised for this SO's material
+     * plans. Draft and pending only: an approved/converted PR has already
+     * crossed the purchasing handoff and must be unwound by Purchasing.
+     */
+    private function retireAutoPurchaseRequests(SalesOrder $so): void
+    {
+        $autoPrs = PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->whereIn('status', [
+                PurchaseRequestStatus::Draft->value,
+                PurchaseRequestStatus::Pending->value,
+            ])
+            ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
+            ->lockForUpdate()
+            ->get();
+
+        if ($autoPrs->isEmpty()) {
+            return;
+        }
+
+        $service = $this->purchaseRequestService();
+
+        foreach ($autoPrs as $pr) {
+            // The service owns the cancel guard and the chain broadcast; it is
+            // called actorless because the SO owner need not hold PR rights.
+            if ($service !== null) {
+                $service->cancel($pr);
+
+                continue;
+            }
+
+            $pr->forceFill(['status' => PurchaseRequestStatus::Cancelled->value])->save();
+        }
+    }
+
+    private function purchaseRequestService(): ?PurchaseRequestService
+    {
+        $cls = '\\App\Modules\Purchasing\Services\PurchaseRequestService';
 
         return class_exists($cls) ? app($cls) : null;
     }
@@ -1025,6 +1069,47 @@ class SalesOrderService
     }
 
     /**
+     * Find the most recent MRP run that evaluated this SO and failed it, so
+     * the confirmation response can report a failure instead of a lie about
+     * work still being queued.
+     *
+     * @return array{message: string, recovery_action: ?string}|null
+     */
+    private function latestPlanningFailure(int $salesOrderId): ?array
+    {
+        $runs = MrpRun::query()
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'status', 'summary', 'error_message', 'recovery_action']);
+
+        foreach ($runs as $run) {
+            foreach ((array) ($run->summary['per_sales_order'] ?? []) as $row) {
+                if (! is_array($row) || (int) ($row['so_id'] ?? 0) !== $salesOrderId) {
+                    continue;
+                }
+
+                if (! isset($row['error'])) {
+                    return null; // The newest run that saw this SO planned it cleanly.
+                }
+
+                return [
+                    'message' => (string) $row['error'],
+                    'recovery_action' => isset($row['recovery_action']) ? (string) $row['recovery_action'] : null,
+                ];
+            }
+
+            if ($run->status === MrpRunStatus::Failed) {
+                return [
+                    'message' => (string) ($run->error_message ?: 'Automatic MRP run failed without an error message.'),
+                    'recovery_action' => $run->recovery_action !== null ? (string) $run->recovery_action : null,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Chain payload — qc_outgoing derived from real Inspection state (H-4);
      * the remaining stages derive from the SO's own lifecycle state.
      */
@@ -1041,6 +1126,16 @@ class SalesOrderService
             $qc['state'] = 'rejected';
         }
 
+        // Delivery coverage, not status, decides the Delivered tile. An SO
+        // invoiced after a partial shipment still reads `invoiced`; keying the
+        // tile off status showed Delivered as done with the partial-delivery
+        // date, hiding the goods still owed.
+        $fullyDelivered = $this->isFullyDelivered($so);
+        $hasDeliveredQuantity = ! $fullyDelivered && SalesOrderItem::query()
+            ->where('sales_order_id', $so->id)
+            ->where('quantity_delivered', '>', 0)
+            ->exists();
+
         $mrpState = match (true) {
             $isCancelled => 'skipped',
             $status === SalesOrderStatus::Draft => 'pending',
@@ -1056,10 +1151,9 @@ class SalesOrderService
         };
         $deliveryState = match (true) {
             $isCancelled => 'skipped',
-            $status === SalesOrderStatus::Draft, $status === SalesOrderStatus::Confirmed,
-            $status === SalesOrderStatus::InProduction => 'pending',
-            $status === SalesOrderStatus::PartiallyDelivered, $status === SalesOrderStatus::Paid => 'active',
-            default => 'done',
+            $fullyDelivered => 'done',
+            $hasDeliveredQuantity => 'active',
+            default => 'pending',
         };
 
         return [

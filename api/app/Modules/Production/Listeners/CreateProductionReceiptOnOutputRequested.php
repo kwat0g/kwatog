@@ -38,6 +38,7 @@ class CreateProductionReceiptOnOutputRequested implements ShouldQueue
                 'skipped',
                 'work_order_output_missing',
             );
+
             return;
         }
 
@@ -46,6 +47,7 @@ class CreateProductionReceiptOnOutputRequested implements ShouldQueue
                 'skipped',
                 'no_good_output_to_receipt',
             );
+
             return;
         }
 
@@ -61,6 +63,7 @@ class CreateProductionReceiptOnOutputRequested implements ShouldQueue
                 'production_receipt_actor_missing',
                 'Configure an automation actor or create the finished-goods receipt manually.',
             );
+
             return;
         }
 
@@ -77,6 +80,7 @@ class CreateProductionReceiptOnOutputRequested implements ShouldQueue
                 'production_receipt_manual_required',
                 'Fix the finished-goods item/location setup, then replay this handoff or create the receipt manually.',
             );
+
             return;
         } catch (Throwable $e) {
             Log::error('CreateProductionReceiptOnOutputRequested failed unexpectedly', [

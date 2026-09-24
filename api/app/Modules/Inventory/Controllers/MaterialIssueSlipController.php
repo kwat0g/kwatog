@@ -33,7 +33,9 @@ class MaterialIssueSlipController
     public function store(StoreMaterialIssueRequest $request): JsonResponse
     {
         try {
-            $slip = $this->service->create($request->validated(), $request->user());
+            $data = $request->validated();
+            $data['idempotency_key'] = $request->idempotencyKey();
+            $slip = $this->service->create($data, $request->user());
         } catch (BusinessRuleException|ClosedPeriodException|InsufficientStockException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

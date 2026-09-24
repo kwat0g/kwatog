@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -90,7 +91,7 @@ class ForecastingDashboardService
                 'year' => (int) $future->year,
                 'month' => (int) $future->month,
                 'value' => $val,
-                'confidence' => $this->confidenceFromForecast($values, $base),
+                'confidence' => ForecastConfidence::fromSeries($values),
             ];
         }
 
@@ -177,7 +178,7 @@ class ForecastingDashboardService
                 'year' => (int) $future->year,
                 'month' => (int) $future->month,
                 'value' => $val,
-                'confidence' => $this->confidenceFromForecast($values, $avg),
+                'confidence' => ForecastConfidence::fromSeries($values),
             ];
         }
 
@@ -276,7 +277,7 @@ class ForecastingDashboardService
                 'year' => (int) $future->year,
                 'month' => (int) $future->month,
                 'value' => $val,
-                'confidence' => $this->confidenceFromForecast($values, $avg),
+                'confidence' => ForecastConfidence::fromSeries($values),
             ];
         }
 
@@ -371,31 +372,6 @@ class ForecastingDashboardService
         }
 
         return $adjustments;
-    }
-
-    /**
-     * Confidence level based on coefficient of variation (same as ForecastingService).
-     */
-    private function confidenceFromForecast(array $values, float $forecastValue): ?float
-    {
-        $n = count($values);
-        if ($n < 2) {
-            return null;
-        }
-
-        $mean = array_sum($values) / $n;
-        if ($mean <= 0) {
-            return null;
-        }
-
-        $variance = 0.0;
-        foreach ($values as $v) {
-            $variance += ($v - $mean) ** 2;
-        }
-        $stddev = sqrt($variance / $n);
-        $cv = $stddev / $mean;
-
-        return max(0.0, min(100.0, 100.0 - (100.0 * $cv)));
     }
 
     private function historicalMonths(): int

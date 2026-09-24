@@ -40,3 +40,12 @@ export function formatRelative(value: string | Date | null | undefined, fallback
  const d = toDate(value);
  return d ? formatDistanceToNow(d, { addSuffix: true }) : fallback;
 }
+
+/**
+ * Local calendar date as YYYY-MM-DD. Never `toISOString().slice(0, 10)`: that is
+ * the UTC date, so in Manila (UTC+8) local midnight lands on the previous day —
+ * Jan 1 reads as Dec 31 — and "today" is yesterday until 08:00.
+ */
+export function localIsoDate(d: Date = new Date()): string {
+ return format(d, 'yyyy-MM-dd');
+}

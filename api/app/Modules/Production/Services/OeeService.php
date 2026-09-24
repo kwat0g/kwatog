@@ -51,24 +51,16 @@ class OeeService
     {
         $scheduledMinutes = $this->scheduledMinutes($machine, $from, $to);
 
-        $planned = (int) MachineDowntime::where('machine_id', $machine->id)
-            ->whereIn('category', [
-                MachineDowntimeCategory::PlannedMaintenance->value,
-                MachineDowntimeCategory::Changeover->value,
-            ])
-            ->whereBetween('start_time', [$from, $to])
-            ->whereNotNull('duration_minutes')
-            ->sum('duration_minutes');
+        $planned = $this->calculateDowntimeMinutes($machine->id, [
+            MachineDowntimeCategory::PlannedMaintenance->value,
+            MachineDowntimeCategory::Changeover->value,
+        ], $from, $to);
 
-        $unplanned = (int) MachineDowntime::where('machine_id', $machine->id)
-            ->whereIn('category', [
-                MachineDowntimeCategory::Breakdown->value,
-                MachineDowntimeCategory::MaterialShortage->value,
-                MachineDowntimeCategory::NoOrder->value,
-            ])
-            ->whereBetween('start_time', [$from, $to])
-            ->whereNotNull('duration_minutes')
-            ->sum('duration_minutes');
+        $unplanned = $this->calculateDowntimeMinutes($machine->id, [
+            MachineDowntimeCategory::Breakdown->value,
+            MachineDowntimeCategory::MaterialShortage->value,
+            MachineDowntimeCategory::NoOrder->value,
+        ], $from, $to);
 
         $outputs = WorkOrderOutput::with('workOrder.mold')
             ->whereHas('workOrder', fn ($q) => $q->where('machine_id', $machine->id))
@@ -216,19 +208,31 @@ class OeeService
 
         // Downtime by category across all machines in scope.
         $downtimeQuery = MachineDowntime::query()
-            ->whereBetween('start_time', [$from, $to])
-            ->whereNotNull('duration_minutes');
+            ->where('start_time', '<=', $to)
+            ->where(function ($q) use ($from): void {
+                $q->whereNull('end_time')
+                    ->orWhere('end_time', '>=', $from);
+            });
         $downtimeQuery->whereIn('machine_id', $machines->pluck('id')->all());
-        $downtimeRows = $downtimeQuery
-            ->selectRaw('category, SUM(duration_minutes) as minutes')
-            ->groupBy('category')
-            ->orderByDesc('minutes')
-            ->get()
-            ->map(fn ($r) => [
-                'category' => $r->category instanceof \UnitEnum ? (string) $r->category->value : (string) $r->category,
-                'minutes' => (int) $r->minutes,
-            ])
-            ->all();
+        $downtimesForBreakdown = $downtimeQuery->get(['start_time', 'end_time', 'duration_minutes', 'category']);
+        $now = Carbon::now();
+        $minutesByCategory = [];
+        foreach ($downtimesForBreakdown as $d) {
+            $cat = $d->category instanceof \UnitEnum ? (string) $d->category->value : (string) $d->category;
+            $effStart = $d->start_time->greaterThan($from) ? $d->start_time : $from;
+            $endTime = $d->end_time ?? ($to->lessThan($now) ? $to : $now);
+            $effEnd = $endTime->lessThan($to) ? $endTime : $to;
+            $mins = $effEnd->greaterThan($effStart) ? (int) $effStart->diffInMinutes($effEnd, true) : 0;
+            $minutesByCategory[$cat] = ($minutesByCategory[$cat] ?? 0) + $mins;
+        }
+        arsort($minutesByCategory);
+        $downtimeRows = [];
+        foreach ($minutesByCategory as $cat => $mins) {
+            $downtimeRows[] = [
+                'category' => $cat,
+                'minutes' => $mins,
+            ];
+        }
 
         return [
             'range' => [
@@ -259,7 +263,7 @@ class OeeService
     {
         $start = $from->copy()->startOfDay();
         $end = $to->copy()->endOfDay();
-        $days = $start->diffInDays($end->copy()->startOfDay()) + 1;
+        $days = $start->diffInDays($end->copy()->startOfDay(), true) + 1;
         $stepDays = $days <= 92 ? 1 : 7;
         $buckets = [];
         for ($cursor = $start->copy(); $cursor->lte($end); $cursor->addDays($stepDays)) {
@@ -293,26 +297,34 @@ class OeeService
 
         $downtimes = DB::table('machine_downtimes')
             ->whereIn('machine_id', $machineIds)
-            ->whereBetween('start_time', [$from, $to])
-            ->whereNotNull('duration_minutes')
-            ->get(['machine_id', 'start_time', 'duration_minutes', 'category']);
+            ->where('start_time', '<=', $to)
+            ->where(function ($q) use ($from): void {
+                $q->whereNull('end_time')
+                    ->orWhere('end_time', '>=', $from);
+            })
+            ->get(['machine_id', 'start_time', 'end_time', 'duration_minutes', 'category']);
+        $now = Carbon::now();
         foreach ($downtimes as $downtime) {
-            $bucket = $this->bucketIndex(Carbon::parse($downtime->start_time), $buckets);
-            if ($bucket === null) {
-                continue;
-            }
-            $minutes = (int) $downtime->duration_minutes;
-            if (in_array($downtime->category, [
-                MachineDowntimeCategory::PlannedMaintenance->value,
-                MachineDowntimeCategory::Changeover->value,
-            ], true)) {
-                $aggregates[$bucket][$downtime->machine_id]['planned'] += $minutes;
-            } elseif (in_array($downtime->category, [
-                MachineDowntimeCategory::Breakdown->value,
-                MachineDowntimeCategory::MaterialShortage->value,
-                MachineDowntimeCategory::NoOrder->value,
-            ], true)) {
-                $aggregates[$bucket][$downtime->machine_id]['unplanned'] += $minutes;
+            $start = Carbon::parse($downtime->start_time);
+            $end = $downtime->end_time ? Carbon::parse($downtime->end_time) : ($to->lessThan($now) ? $to : $now);
+            foreach ($buckets as $index => $bucket) {
+                $effectiveStart = $start->greaterThan($bucket['start']) ? $start : $bucket['start'];
+                $effectiveEnd = $end->lessThan($bucket['end']) ? $end : $bucket['end'];
+                if ($effectiveEnd->greaterThan($effectiveStart)) {
+                    $minutes = (int) $effectiveStart->diffInMinutes($effectiveEnd, true);
+                    if (in_array($downtime->category, [
+                        MachineDowntimeCategory::PlannedMaintenance->value,
+                        MachineDowntimeCategory::Changeover->value,
+                    ], true)) {
+                        $aggregates[$index][$downtime->machine_id]['planned'] += $minutes;
+                    } elseif (in_array($downtime->category, [
+                        MachineDowntimeCategory::Breakdown->value,
+                        MachineDowntimeCategory::MaterialShortage->value,
+                        MachineDowntimeCategory::NoOrder->value,
+                    ], true)) {
+                        $aggregates[$index][$downtime->machine_id]['unplanned'] += $minutes;
+                    }
+                }
             }
         }
 
@@ -381,6 +393,32 @@ class OeeService
         }
 
         return null;
+    }
+
+    private function calculateDowntimeMinutes(int $machineId, array $categories, Carbon $from, Carbon $to): int
+    {
+        $downtimes = MachineDowntime::query()
+            ->where('machine_id', $machineId)
+            ->whereIn('category', $categories)
+            ->where('start_time', '<=', $to)
+            ->where(function ($q) use ($from): void {
+                $q->whereNull('end_time')
+                    ->orWhere('end_time', '>=', $from);
+            })
+            ->get(['start_time', 'end_time', 'duration_minutes']);
+
+        $totalMinutes = 0;
+        $now = Carbon::now();
+        foreach ($downtimes as $downtime) {
+            $effectiveStart = $downtime->start_time->greaterThan($from) ? $downtime->start_time : $from;
+            $endTime = $downtime->end_time ?? ($to->lessThan($now) ? $to : $now);
+            $effectiveEnd = $endTime->lessThan($to) ? $endTime : $to;
+            if ($effectiveEnd->greaterThan($effectiveStart)) {
+                $totalMinutes += (int) $effectiveStart->diffInMinutes($effectiveEnd, true);
+            }
+        }
+
+        return $totalMinutes;
     }
 
     private function metrics(

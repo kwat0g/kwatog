@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
  * `impersonate()` pins the auth context to a real `users` row for the call.
  *
  * Settings keys: `system_user.email` / `system_user.name` (renamed from the
- * legacy `edge.system_user.*` by migration 0450).
+ * legacy service-account keys by migration 0450).
  */
 class SystemUserResolver
 {

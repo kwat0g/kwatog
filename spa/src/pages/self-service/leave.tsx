@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { LuPlus } from '@/lib/icons';
+import { LuDownload, LuPlus } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { leaveRequestsApi } from '@/api/leave';
@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
+import { downloadAuthenticatedFile } from '@/api/download';
 import type { ApiValidationError } from '@/types';
 import type { SelfServiceLeaveType, SelfServiceLeaveBalanceSelf } from '@/types/self-service';
 import type { LeaveRequest } from '@/types/leave';
@@ -53,13 +54,6 @@ const schema = z
     path: ['half_day_period'],
   })
   .refine(
-    (d) => !d.start_date || !d.end_date || d.start_date.slice(0, 4) === d.end_date.slice(0, 4),
-    {
-      message: 'Submit separate leave requests for dates in different calendar years.',
-      path: ['end_date'],
-    },
-  )
-  .refine(
     (d) =>
       d.half_day_period !== 'none' ||
       !d.start_date ||
@@ -74,14 +68,19 @@ const schema = z
 
 type FormValues = z.infer<typeof schema>;
 
-// Business days (Mon–Sat) between two dates, capped for display sanity.
-function businessDaysBetween(start: string, end: string): number {
+// Leave credits use the Mon–Sat working-day calendar, excluding holidays.
+export function businessDaysBetween(
+  start: string,
+  end: string,
+  holidayDates: ReadonlySet<string> = new Set(),
+): number {
   const a = new Date(start + 'T00:00:00');
   const b = new Date(end + 'T00:00:00');
   if (b < a) return 0;
   let count = 0;
   for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() !== 0) count++;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (d.getDay() !== 0 && !holidayDates.has(key)) count++;
   }
   return count;
 }
@@ -118,6 +117,23 @@ const columns: Column<LeaveRequest>[] = [
     cell: (r) => <span className="text-muted block max-w-[280px] truncate">{r.reason || '—'}</span>,
   },
   {
+    key: 'document',
+    header: 'Document',
+    cell: (r) => r.has_document ? (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        icon={<LuDownload size={14} />}
+        onClick={() => void downloadAuthenticatedFile(leaveRequestsApi.documentUrl(r.id), {
+          errorMessage: 'Failed to download the supporting document.',
+        })}
+      >
+        Download
+      </Button>
+    ) : '—',
+  },
+  {
     key: 'status',
     header: 'Status',
     cell: (r) => (
@@ -146,7 +162,7 @@ export default function SelfServiceLeavePage() {
 
   const { data: leaveOptions } = useQuery({
     queryKey: ['leave-request-options'],
-    queryFn: leaveRequestsApi.options,
+    queryFn: () => leaveRequestsApi.options(),
     staleTime: 5 * 60_000,
   });
 
@@ -187,6 +203,13 @@ export default function SelfServiceLeavePage() {
   const startDate = watch('start_date');
   const endDate = watch('end_date');
   const halfDayPeriod = watch('half_day_period');
+  const { data: dateOptions, isLoading: isHolidayLookupLoading } = useQuery({
+    queryKey: ['leave-request-options', startDate, endDate],
+    queryFn: () => leaveRequestsApi.options({ from: startDate, to: endDate }),
+    enabled: Boolean(startDate && endDate && endDate >= startDate),
+    staleTime: 5 * 60_000,
+  });
+  const holidayDates = useMemo(() => new Set(dateOptions?.holiday_dates ?? []), [dateOptions]);
   const selectedBalance = selectedTypeId ? balanceMap[selectedTypeId] : null;
   const selectedType = selectedTypeId
     ? ((types ?? []).find((t) => t.id === selectedTypeId) ?? null)
@@ -194,9 +217,9 @@ export default function SelfServiceLeavePage() {
 
   const estimatedDays =
     halfDayPeriod === 'am' || halfDayPeriod === 'pm'
-      ? 0.5
+      ? (holidayDates.has(startDate) ? 0 : 0.5)
       : startDate && endDate
-        ? businessDaysBetween(startDate, endDate)
+        ? businessDaysBetween(startDate, endDate, holidayDates)
         : 0;
 
   const file = useMutation({
@@ -307,7 +330,15 @@ export default function SelfServiceLeavePage() {
           }}
           title="File Leave Request"
         >
-          <form onSubmit={handleSubmit((v) => file.mutate(v))} className="space-y-4 py-4">
+          <form onSubmit={handleSubmit((v) => {
+            if (estimatedDays <= 0) {
+              setError(v.half_day_period === 'none' ? 'end_date' : 'half_day_period', {
+                message: 'Leave must include at least one working day, excluding Sundays and public holidays.',
+              });
+              return;
+            }
+            file.mutate(v);
+          })} className="space-y-4 py-4">
             {!hasEmployeeLink && (
               <div className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
                 Your account is not linked to an employee record. Contact HR to file leave.
@@ -426,7 +457,7 @@ export default function SelfServiceLeavePage() {
               <Button
                 type="submit"
                 variant="primary"
-                disabled={file.isPending || !hasEmployeeLink}
+                disabled={file.isPending || isHolidayLookupLoading || !hasEmployeeLink}
                 loading={file.isPending}
               >
                 {file.isPending ? 'Submitting…' : 'Submit request'}

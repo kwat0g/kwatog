@@ -50,6 +50,10 @@
       <tr><td class="label">VAT (12%)</td><td class="v">{{ number_format((float) $bill->vat_amount, 2) }}</td></tr>
     @endif
     <tr class="grand"><td class="label">Total Amount</td><td class="v">PHP {{ number_format((float) $bill->total_amount, 2) }}</td></tr>
+    @if ((float) $bill->ewt_amount > 0)
+      <tr><td class="label">Less: EWT {{ $bill->withholding_tax_type?->atc() }} ({{ rtrim(rtrim(number_format((float) $bill->ewt_rate * 100, 2), '0'), '.') }}%)</td><td class="v">({{ number_format((float) $bill->ewt_amount, 2) }})</td></tr>
+      <tr><td class="label">Net Payable to Supplier</td><td class="v">{{ number_format((float) $bill->total_amount - (float) $bill->ewt_amount, 2) }}</td></tr>
+    @endif
     @if ((float) $bill->amount_paid > 0)
       <tr><td class="label">Paid</td><td class="v">{{ number_format((float) $bill->amount_paid, 2) }}</td></tr>
       <tr><td class="label">Balance</td><td class="v">{{ number_format((float) $bill->balance, 2) }}</td></tr>
@@ -66,6 +70,10 @@
           <th>Reference</th>
           <th>Cash Account</th>
           <th class="r">Amount</th>
+          @if ((float) $bill->ewt_amount > 0)
+            <th class="r">EWT</th>
+            <th class="r">Cash</th>
+          @endif
         </tr>
       </thead>
       <tbody>
@@ -76,6 +84,10 @@
             <td>{{ $p->reference_number }}</td>
             <td>{{ $p->cashAccount?->code }} — {{ $p->cashAccount?->name }}</td>
             <td class="r">{{ number_format((float) $p->amount, 2) }}</td>
+            @if ((float) $bill->ewt_amount > 0)
+              <td class="r">{{ number_format((float) $p->ewt_amount, 2) }}</td>
+              <td class="r">{{ number_format((float) ($p->cash_amount ?? $p->amount), 2) }}</td>
+            @endif
           </tr>
         @endforeach
       </tbody>

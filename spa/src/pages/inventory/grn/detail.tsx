@@ -3,7 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { LuTriangleAlert, LuCircleCheck, LuRefreshCw, LuCircleX, LuPackageCheck, LuSend } from '@/lib/icons';
+import {
+  LuTriangleAlert,
+  LuCircleCheck,
+  LuRefreshCw,
+  LuCircleX,
+  LuPackageCheck,
+  LuSend,
+} from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
 import { warehouseApi } from '@/api/inventory/warehouse';
@@ -21,461 +28,885 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { buildP2pChain } from '@/lib/chains';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 interface FinalizeLine {
- location_id: string;
- quantity_received: string;
- received_uom_code: string;
- lot_number: string;
- supplier_lot_reference: string;
- expiry_date: string;
- moisture_percentage: string;
- coa_document_path: string;
+  location_id: string;
+  quantity_received: string;
+  received_uom_code: string;
+  lot_number: string;
+  supplier_lot_reference: string;
+  expiry_date: string;
+  moisture_percentage: string;
+  coa_document_path: string;
 }
 
 const emptyFinalizeLine: FinalizeLine = {
- location_id: '',
- quantity_received: '0',
- received_uom_code: '',
- lot_number: '',
- supplier_lot_reference: '',
- expiry_date: '',
- moisture_percentage: '',
- coa_document_path: '',
+  location_id: '',
+  quantity_received: '0',
+  received_uom_code: '',
+  lot_number: '',
+  supplier_lot_reference: '',
+  expiry_date: '',
+  moisture_percentage: '',
+  coa_document_path: '',
 };
 
 export default function GrnDetailPage() {
- const { id = '' } = useParams<{ id: string }>();
- const qc = useQueryClient();
- const { can } = usePermission();
- const [confirmAccept, setConfirmAccept] = useState(false);
- const [confirmPartial, setConfirmPartial] = useState(false);
- const [confirmFinalize, setConfirmFinalize] = useState(false);
- const [confirmPostBill, setConfirmPostBill] = useState(false);
- const [rejectOpen, setRejectOpen] = useState(false);
- const [acceptMap, setAcceptMap] = useState<Record<string, string>>({});
- const [finalizeInput, setFinalizeInput] = useState<Record<string, FinalizeLine>>({});
+  const { id = '' } = useParams<{ id: string }>();
+  const qc = useQueryClient();
+  const { can } = usePermission();
+  const [confirmAccept, setConfirmAccept] = useState(false);
+  const [confirmPartial, setConfirmPartial] = useState(false);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
+  const [confirmPostBill, setConfirmPostBill] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectRemainderOpen, setRejectRemainderOpen] = useState(false);
+  const [acceptMap, setAcceptMap] = useState<Record<string, string>>({});
+  const [finalizeInput, setFinalizeInput] = useState<Record<string, FinalizeLine>>({});
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['inventory', 'grn', id],
- queryFn: () => grnApi.show(id),
- enabled: !!id,
- });
- useChainProgress('grn', id, ['inventory', 'grn', id]);
- const { data: grnOptions } = useQuery({
- queryKey: ['inventory', 'grn', 'options'],
- queryFn: grnApi.options,
- staleTime: 300_000,
- });
- const { data: warehouses } = useQuery({
- queryKey: ['inventory', 'warehouse', 'tree'],
- queryFn: () => warehouseApi.tree(),
- });
- const locations = useMemo(
- () => (warehouses ?? []).flatMap((w) =>
- (w.is_active ? (w.zones ?? []) : []).flatMap((z) => (z.locations ?? [])
-  .filter((l) => l.is_active && z.zone_type !== 'quarantine' && z.zone_type !== 'scrap')
-  .map((l) => ({
-  id: l.id,
-  label: `${w.code}-${z.code}-${l.code}`,
-  sub: `${w.name} / ${z.name}`,
- }))),
- ),
- [warehouses],
- );
-
- const accept = useMutation({
- mutationFn: (map?: Record<string, string>) => grnApi.accept(id, map),
- onSuccess: () => {
-  qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-  toast.success('GRN accepted, stock updated.');
-  setConfirmAccept(false);
-  setConfirmPartial(false);
- },
- onError: (e: AxiosError<{ message?: string }>) =>
-  toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
- });
- const reject = useMutation({
- mutationFn: (reason: string) => grnApi.reject(id, reason),
- onSuccess: () => {
-  qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-  toast.success('GRN rejected.');
-  setRejectOpen(false);
- },
- onError: (e: AxiosError<{ message?: string }>) =>
-  toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
- });
- const finalize = useMutation({
- mutationFn: () => grnApi.finalize(id, {
-  items: (data?.items ?? [])
-   .flatMap((l) => {
-    const v = finalizeInput[l.id];
-    if (!v?.location_id || !(Number(v.quantity_received) > 0)) return [];
-    return [{
-     purchase_order_item_id: l.purchase_order_item_id,
-     location_id: v.location_id,
-     quantity_received: v.quantity_received,
-     received_uom_code: v.received_uom_code.trim() || undefined,
-     lot_number: v.lot_number.trim() || undefined,
-     supplier_lot_reference: v.supplier_lot_reference.trim() || undefined,
-     expiry_date: v.expiry_date || undefined,
-     moisture_percentage: v.moisture_percentage.trim() || undefined,
-     coa_document_path: v.coa_document_path.trim() || undefined,
-    }];
-   }),
- }),
- onSuccess: () => {
-  qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-  toast.success('GRN finalized — goods sent to incoming QC.');
-  setConfirmFinalize(false);
- },
- onError: (e: AxiosError<{ message?: string }>) =>
-  toast.error(e.response?.data?.message ?? 'Failed to finalize GRN.'),
- });
-
- const updateFinalizeLine = (lineId: string, patch: Partial<FinalizeLine>) => {
-  setFinalizeInput((current) => ({
-   ...current,
-   [lineId]: { ...emptyFinalizeLine, ...current[lineId], ...patch },
-  }));
- };
- const retryIncomingQc = useMutation({
-  mutationFn: () => grnApi.retryIncomingQc(id),
-  onSuccess: () => {
-   qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-   toast.success('Incoming QC trigger retried.');
-  },
-  onError: (e: AxiosError<{ message?: string }>) =>
-   toast.error(e.response?.data?.message ?? 'Failed to retry incoming QC.'),
- });
- // 2026-08-08 — post the auto-created draft bill straight from the receipt.
- const postBill = useMutation({
- mutationFn: () => {
-  if (!data?.bill?.id) throw new Error('No bill to post.');
-  return billsApi.postDraft(data.bill.id);
- },
- onSuccess: () => {
-  qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-  qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
-  toast.success('Draft bill posted to AP + GL.');
-  setConfirmPostBill(false);
- },
- onError: (e: AxiosError<{ message?: string }>) =>
-  toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
- });
-
- const isEditable = data?.status === 'pending_qc' || data?.status === 'partial_accepted';
- const isDraft = data?.status === 'draft';
-
- useEffect(() => {
- // Pending GRNs start at zero accepted; continuation is cumulative and starts
- // from the quantities already posted into inventory.
- if (isEditable) {
-  const initial: Record<string, string> = {};
-  data?.items?.forEach((l) => {
-   initial[l.id] = data.status === 'partial_accepted' ? l.quantity_accepted : l.quantity_received;
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['inventory', 'grn', id],
+    queryFn: () => grnApi.show(id),
+    enabled: !!id,
   });
-  setAcceptMap(initial);
- } else {
-  setAcceptMap({});
- }
- // This intentionally resets only when the document/status changes, so a
- // background refetch does not overwrite quantities the operator is editing.
- // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [isEditable, data?.id, data?.status]);
+  useChainProgress('grn', id, ['inventory', 'grn', id]);
+  const { data: grnOptions } = useQuery({
+    queryKey: ['inventory', 'grn', 'options'],
+    queryFn: grnApi.options,
+    staleTime: 300_000,
+  });
+  const { data: warehouses } = useQuery({
+    queryKey: ['inventory', 'warehouse', 'tree'],
+    queryFn: () => warehouseApi.tree(),
+  });
+  const locations = useMemo(
+    () =>
+      (warehouses ?? []).flatMap((w) =>
+        (w.is_active ? (w.zones ?? []) : []).flatMap((z) =>
+          (z.locations ?? [])
+            .filter(
+              (l) =>
+                l.is_active &&
+                !l.is_blocked &&
+                z.zone_type !== 'quarantine' &&
+                z.zone_type !== 'scrap',
+            )
+            .map((l) => ({
+              id: l.id,
+              label: `${w.code}-${z.code}-${l.code}`,
+              sub: `${w.name} / ${z.name}`,
+            })),
+        ),
+      ),
+    [warehouses],
+  );
 
- if (isLoading) return <SkeletonTable rows={6} columns={5} />;
- if (isError || !data) return (
- <EmptyState icon="alert-circle" title="Failed to load GRN" action={<Button onClick={() => refetch()}>Retry</Button>} />
- );
+  const accept = useMutation({
+    mutationFn: (map?: Record<string, string>) => grnApi.accept(id, map),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN accepted, stock updated.');
+      setConfirmAccept(false);
+      setConfirmPartial(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
+  });
+  const reject = useMutation({
+    mutationFn: (reason: string) => grnApi.reject(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN rejected.');
+      setRejectOpen(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
+  });
+  const rejectRemainder = useMutation({
+    mutationFn: (reason: string) => grnApi.rejectRemainder(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders'] });
+      toast.success('Remainder rejected — supplier return opened');
+      setRejectRemainderOpen(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to reject remainder.'),
+  });
+  const finalize = useMutation({
+    mutationFn: () =>
+      grnApi.finalize(id, {
+        items: (data?.items ?? []).flatMap((l) => {
+          const v = finalizeInput[l.id];
+          if (!v?.location_id || !(Number(v.quantity_received) > 0)) return [];
+          return [
+            {
+              purchase_order_item_id: l.purchase_order_item_id,
+              location_id: v.location_id,
+              quantity_received: v.quantity_received,
+              received_uom_code: v.received_uom_code.trim() || undefined,
+              lot_number: v.lot_number.trim() || undefined,
+              supplier_lot_reference: v.supplier_lot_reference.trim() || undefined,
+              expiry_date: v.expiry_date || undefined,
+              moisture_percentage: v.moisture_percentage.trim() || undefined,
+              coa_document_path: v.coa_document_path.trim() || undefined,
+            },
+          ];
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN finalized — goods sent to incoming QC.');
+      setConfirmFinalize(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to finalize GRN.'),
+  });
 
- const hasPartial = isEditable && data.items?.some((l) => {
-  const qty = acceptMap[l.id];
-  return data.status === 'pending_qc' && qty !== undefined && Number(qty) < Number(l.quantity_received);
- });
- const hasAcceptanceIncrease = isEditable && data.items?.some((l) =>
-  Number(acceptMap[l.id] ?? l.quantity_accepted) > Number(l.quantity_accepted),
- );
- const acceptanceComplete = isEditable && data.items?.every((l) =>
-  Number(acceptMap[l.id] ?? l.quantity_accepted) >= Number(l.quantity_received),
- );
- const finalizeReady = isDraft && (data.items ?? []).some((l) => {
-  const v = finalizeInput[l.id];
-  return !!v?.location_id && Number(v.quantity_received) > 0;
- });
- const columnCount = 6 + (isDraft ? 2 : 0) + (isEditable ? 1 : 0);
- const incomingQcNeedsAttention = data.status === 'pending_qc'
-  && data.incoming_qc_handoff
-  && data.incoming_qc_handoff.status !== 'generated'
-  && data.incoming_qc_handoff.status !== 'not_required';
+  const updateFinalizeLine = (lineId: string, patch: Partial<FinalizeLine>) => {
+    setFinalizeInput((current) => ({
+      ...current,
+      [lineId]: { ...emptyFinalizeLine, ...current[lineId], ...patch },
+    }));
+  };
+  const retryIncomingQc = useMutation({
+    mutationFn: () => grnApi.retryIncomingQc(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('Incoming QC trigger retried.');
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to retry incoming QC.'),
+  });
+  const retryGl = useMutation({
+    mutationFn: () => grnApi.retryGl(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN GL posting retried.');
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to retry GRN GL posting.'),
+  });
+  // 2026-08-08 — post the auto-created draft bill straight from the receipt.
+  const postBill = useMutation({
+    mutationFn: () => {
+      if (!data?.bill?.id) throw new Error('No bill to post.');
+      return billsApi.postDraft(data.bill.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
+      toast.success('Draft bill posted to AP + GL.');
+      setConfirmPostBill(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to post bill.'),
+  });
 
- const variant = ({ draft: 'neutral', pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' } as const)[data.status];
+  // A rejected remainder closes the receipt; the API refuses further acceptance.
+  const isEditable =
+    data?.status === 'pending_qc' ||
+    (data?.status === 'partial_accepted' && !data?.remainder_rejected_at);
+  const isDraft = data?.status === 'draft';
 
- return (
- <div>
-  <PageHeader
-  title={<span className="font-mono">{data.grn_number}</span>}
-  backTo="/inventory/grn" backLabel="GRNs"
-  actions={
-   <div className="flex items-center gap-2">
-   <Chip variant={variant}>{grnOptions?.statuses?.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
-   {incomingQcNeedsAttention && can('quality.inspections.manage') && (
-    <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
-     Retry incoming QC
-    </Button>
-   )}
-   {isDraft && can('inventory.grn.create') && (
-    <Button variant="primary" size="sm" icon={<LuPackageCheck size={14} />}
-     onClick={() => setConfirmFinalize(true)} loading={finalize.isPending}
-     disabled={!finalizeReady}>Finalize receiving</Button>
-   )}
-   {isEditable && can('inventory.grn.create') && (
-    <>
-    {data.status === 'pending_qc' && <Button variant="secondary" size="xs" icon={<LuCircleX size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>}
-    {data.status === 'partial_accepted' || hasPartial ? (
-     <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => setConfirmPartial(true)}
-      loading={accept.isPending} disabled={accept.isPending || !hasAcceptanceIncrease}>{data.status === 'partial_accepted' ? (acceptanceComplete ? 'Accept remaining' : 'Accept additional') : 'Partial accept'}</Button>
-    ) : (
-     <Button variant="primary" size="sm" icon={<LuCircleCheck size={14} />} onClick={() => setConfirmAccept(true)}
-      loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
-    )}
-    </>
-   )}
-   </div>
-  }
-  />
-  <div className="px-5 py-4 space-y-4">
-  {isDraft && (
-   <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
-   <LuPackageCheck size={16} className="shrink-0 text-info-fg" />
-   <div>
-    <div className="font-medium">Expected receipt — awaiting goods</div>
-    <div className="text-muted">
-    This GRN was auto-created when the PO was sent to the supplier. When the goods arrive,
-    assign a bin and the received quantity per line, then finalize — the GRN moves to incoming QC.
-    </div>
-   </div>
-   </div>
-  )}
-  {incomingQcNeedsAttention && (
-   <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
-    <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
-    <div className="flex-1">
-     <div className="font-medium">Incoming QC handoff needs attention</div>
-     <div className="text-muted">{data.incoming_qc_handoff?.message ?? 'No incoming Quality inspection has been staged yet.'}</div>
-    </div>
-    {can('quality.inspections.manage') && (
-     <Button variant="secondary" size="sm" icon={<LuRefreshCw size={14} />} onClick={() => retryIncomingQc.mutate()} loading={retryIncomingQc.isPending}>
-      Retry trigger
-     </Button>
-    )}
-   </div>
-  )}
-  {data.bill && (
-  <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
-  <LuCircleCheck size={16} className="shrink-0 text-success-fg" />
-  <div className="flex-1">
-  <div className="font-medium">Supplier bill auto-created</div>
-  <div className="text-muted">
-  A draft AP bill was staged from this accepted receipt —{' '}
-  <Link to={`/accounting/bills/${data.bill.id}`} className="text-accent hover:underline font-mono">{data.bill.bill_number}</Link>
-  {' '}· {formatPeso(Number(data.bill.total_amount))} ·{' '}{data.bill.status_label ?? data.bill.status}.
-  {data.bill.status !== 'draft' ? ' Posted to the ledger.' : ' Review and post to record the payable.'}
-  </div>
-  </div>
-  {data.bill.status === 'draft' && can('accounting.bills.create') && (
-  <Button variant="secondary" size="sm" icon={<LuSend size={14} />} onClick={() => setConfirmPostBill(true)}>
-  Post bill
-  </Button>
-  )}
-  </div>
-  )}
-  <Panel title="Procure-to-pay chain">
-   {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
+  useEffect(() => {
+    // Pending GRNs start at zero accepted; continuation is cumulative and starts
+    // from the quantities already posted into inventory.
+    if (isEditable) {
+      const initial: Record<string, string> = {};
+      data?.items?.forEach((l) => {
+        initial[l.id] =
+          data.status === 'partial_accepted' ? l.quantity_accepted : l.quantity_received;
+      });
+      setAcceptMap(initial);
+    } else {
+      setAcceptMap({});
+    }
+    // This intentionally resets only when the document/status changes, so a
+    // background refetch does not overwrite quantities the operator is editing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditable, data?.id, data?.status]);
+
+  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
+  if (isError || !data)
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Failed to load GRN"
+        action={<Button onClick={() => refetch()}>Retry</Button>}
+      />
+    );
+
+  const hasPartial =
+    isEditable &&
+    data.items?.some((l) => {
+      const qty = acceptMap[l.id];
+      return (
+        data.status === 'pending_qc' &&
+        qty !== undefined &&
+        Number(qty) < Number(l.quantity_received)
+      );
+    });
+  const hasAcceptanceIncrease =
+    isEditable &&
+    data.items?.some(
+      (l) => Number(acceptMap[l.id] ?? l.quantity_accepted) > Number(l.quantity_accepted),
+    );
+  const acceptanceComplete =
+    isEditable &&
+    data.items?.every(
+      (l) => Number(acceptMap[l.id] ?? l.quantity_accepted) >= Number(l.quantity_received),
+    );
+  const finalizeReady =
+    isDraft &&
+    (data.items ?? []).some((l) => {
+      const v = finalizeInput[l.id];
+      return !!v?.location_id && Number(v.quantity_received) > 0;
+    });
+  const incomingQcNeedsAttention =
+    data.status === 'pending_qc' &&
+    data.incoming_qc_handoff &&
+    data.incoming_qc_handoff.status !== 'generated' &&
+    data.incoming_qc_handoff.status !== 'not_required';
+  // The API refuses acceptance until every incoming inspection has passed, and
+  // a passing verdict accepts the GRN on its own — so while QC is open there is
+  // nothing to accept here, only a 422 behind the button.
+  const awaitingIncomingQc =
+    data.status === 'pending_qc' &&
+    (!!incomingQcNeedsAttention ||
+      (!!data.qc_inspection && data.qc_inspection.status !== 'passed') ||
+      (data.items ?? []).some((l) => l.inspection && l.inspection.status !== 'passed'));
+  const canAcceptHere = isEditable && !awaitingIncomingQc;
+  const columnCount = 6 + (isDraft ? 2 : 0) + (canAcceptHere ? 1 : 0);
+  const glNeedsAttention =
+    (data.status === 'accepted' || data.status === 'partial_accepted') &&
+    !data.journal_entry &&
+    can('accounting.journal.post');
+
+  const variant = (
+    {
+      draft: 'neutral',
+      pending_qc: 'warning',
+      accepted: 'success',
+      partial_accepted: 'info',
+      rejected: 'danger',
+    } as const
+  )[data.status];
+
+  return (
+    <div>
+      <PageHeader
+        title={<span className="font-mono">{data.grn_number}</span>}
+        backTo="/inventory/grn"
+        backLabel="GRNs"
+        actions={
+          <div className="flex items-center gap-2">
+            <Chip variant={variant}>
+              {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
+                data.status}
+            </Chip>
+            {incomingQcNeedsAttention && can('quality.inspections.manage') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuRefreshCw size={14} />}
+                onClick={() => retryIncomingQc.mutate()}
+                loading={retryIncomingQc.isPending}
+              >
+                Retry incoming QC
+              </Button>
+            )}
+            {glNeedsAttention && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuRefreshCw size={14} />}
+                onClick={() => retryGl.mutate()}
+                loading={retryGl.isPending}
+              >
+                Retry GL posting
+              </Button>
+            )}
+            {isDraft && can('inventory.grn.create') && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<LuPackageCheck size={14} />}
+                onClick={() => setConfirmFinalize(true)}
+                loading={finalize.isPending}
+                disabled={!finalizeReady}
+              >
+                Finalize receiving
+              </Button>
+            )}
+            {isEditable && can('inventory.grn.create') && (
+              <>
+                {data.status === 'pending_qc' && (
+                  <Button
+                    variant="secondary"
+                    size="xs"
+                    icon={<LuCircleX size={14} />}
+                    onClick={() => setRejectOpen(true)}
+                  >
+                    Reject
+                  </Button>
+                )}
+                {!canAcceptHere ? null : data.status === 'partial_accepted' || hasPartial ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<LuCircleCheck size={14} />}
+                    onClick={() => setConfirmPartial(true)}
+                    loading={accept.isPending}
+                    disabled={accept.isPending || !hasAcceptanceIncrease}
+                  >
+                    {data.status === 'partial_accepted'
+                      ? acceptanceComplete
+                        ? 'Accept remaining'
+                        : 'Accept additional'
+                      : 'Partial accept'}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<LuCircleCheck size={14} />}
+                    onClick={() => setConfirmAccept(true)}
+                    loading={accept.isPending}
+                    disabled={accept.isPending}
+                  >
+                    Accept
+                  </Button>
+                )}
+                {data.can_reject_remainder && (
+                  <Button
+                    variant="secondary"
+                    size="xs"
+                    icon={<LuCircleX size={14} />}
+                    onClick={() => setRejectRemainderOpen(true)}
+                    loading={rejectRemainder.isPending}
+                  >
+                    Reject remainder
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        }
+      />
+      <div className="px-5 py-4 space-y-4">
+        {isDraft && (
+          <div className="flex items-center gap-3 rounded-md border border-info/40 bg-info-bg/10 px-4 py-3 text-sm">
+            <LuPackageCheck size={16} className="shrink-0 text-info-fg" />
+            <div>
+              <div className="font-medium">Expected receipt — awaiting goods</div>
+              <div className="text-muted">
+                This GRN was auto-created when the PO was sent to the supplier. When the goods
+                arrive, assign a bin and the received quantity per line, then finalize — the GRN
+                moves to incoming QC.
+              </div>
+            </div>
+          </div>
+        )}
+        {incomingQcNeedsAttention && (
+          <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+            <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
+            <div className="flex-1">
+              <div className="font-medium">Incoming QC handoff needs attention</div>
+              <div className="text-muted">
+                {data.incoming_qc_handoff?.message ??
+                  'No incoming Quality inspection has been staged yet.'}
+              </div>
+            </div>
+            {can('quality.inspections.manage') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuRefreshCw size={14} />}
+                onClick={() => retryIncomingQc.mutate()}
+                loading={retryIncomingQc.isPending}
+              >
+                Retry trigger
+              </Button>
+            )}
+          </div>
+        )}
+        {glNeedsAttention && (
+          <div className="flex items-center gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
+            <LuTriangleAlert size={16} className="shrink-0 text-warning-fg" />
+            <div className="flex-1">
+              <div className="font-medium">GRN GL handoff needs attention</div>
+              <div className="text-muted">
+                This accepted receipt has no linked inventory journal entry. Retry the idempotent
+                handoff after Accounting is available.
+              </div>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuRefreshCw size={14} />}
+              onClick={() => retryGl.mutate()}
+              loading={retryGl.isPending}
+            >
+              Retry posting
+            </Button>
+          </div>
+        )}
+        {data.bill && (
+          <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+            <LuCircleCheck size={16} className="shrink-0 text-success-fg" />
+            <div className="flex-1">
+              <div className="font-medium">Supplier bill auto-created</div>
+              <div className="text-muted">
+                A draft AP bill was staged from this accepted receipt —{' '}
+                <Link
+                  to={`/accounting/bills/${data.bill.id}`}
+                  className="text-accent hover:underline font-mono"
+                >
+                  {data.bill.bill_number}
+                </Link>{' '}
+                · {formatPeso(Number(data.bill.total_amount))} ·{' '}
+                {data.bill.status_label ?? data.bill.status}.
+                {data.bill.status !== 'draft'
+                  ? ' Posted to the ledger.'
+                  : ' Review and post to record the payable.'}
+              </div>
+            </div>
+            {data.bill.status === 'draft' && can('accounting.bills.create') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuSend size={14} />}
+                onClick={() => setConfirmPostBill(true)}
+              >
+                Post bill
+              </Button>
+            )}
+          </div>
+        )}
+        <Panel title="Procure-to-pay chain">
+          {/* 2026-08-08 — compact cross-document stepper: the whole chain at a glance.
     This receipt is the GRN step; upstream (PR/PO) and downstream (Bill/Paid)
     stay visible and clickable from here. */}
-   <ChainHeader steps={buildP2pChain({
-    pr: data.purchase_order?.purchase_request
-    ? { id: data.purchase_order.purchase_request.id, number: data.purchase_order.purchase_request.pr_number }
-    : null,
-    po: data.purchase_order ? { id: data.purchase_order.id, number: data.purchase_order.po_number } : null,
-    grns: [{ id: data.id, grn_number: data.grn_number, status: data.status, received_date: data.received_date }],
-    bills: data.bill
-    ? [{ id: data.bill.id, bill_number: data.bill.bill_number, status: data.bill.status }]
-    : [],
-   })} />
-  </Panel>
-  <Panel title="Header">
-   <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
-   <div><dt className="text-2xs uppercase tracking-wider text-muted">PO</dt><dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd></div>
-   <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
-   <div><dt className="text-2xs uppercase tracking-wider text-muted">Received</dt><dd className="font-mono">{formatDate(data.received_date)}</dd></div>
-   <div><dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt><dd>{data.receiver?.name ?? '—'}</dd></div>
-   {data.accepted_at && <div><dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt><dd className="font-mono">{formatDate(data.accepted_at)} · {data.acceptor?.name}</dd></div>}
-   {data.rejected_reason && <div className="col-span-4"><dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt><dd className="text-danger-fg">{data.rejected_reason}</dd></div>}
-   {data.qc_inspection && <div><dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt><dd>{can('quality.inspections.view') ? <Link to={`/quality/inspections/${data.qc_inspection.id}`} className="font-mono text-accent hover:underline">{data.qc_inspection.inspection_number}</Link> : <span className="font-mono">{data.qc_inspection.inspection_number}</span>} · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}</dd></div>}
-   {data.journal_entry && can('accounting.journal.view') && <div><dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt><dd><Link to={`/accounting/journal-entries/${data.journal_entry.id}`} className="font-mono text-accent hover:underline">{data.journal_entry.entry_number}</Link> · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}</dd></div>}
-   </dl>
-  </Panel>
-  <Panel title="Line items">
-   <div className="overflow-x-auto">
-   <table className={`${tableCls} min-w-[760px]`}>
-   <thead><tr className={theadTrCls}>
-    <Th>Item</Th>
-    <Th>Location</Th>
-    {isDraft && <Th>Bin (assign)</Th>}
-    <Th align="right">Received</Th>
-    {isDraft && <Th align="right">Qty received</Th>}
-    {isEditable && <Th align="right">Accept qty</Th>}
-    <Th align="right">Accepted</Th>
-    <Th align="right">Unit cost</Th>
-    <Th align="right">Total</Th>
-   </tr></thead>
-   <tbody>
-   {data.items?.map((l) => (
-    <Fragment key={l.id}>
-    <tr key={l.id} className={trCls}>
-    <Td>
-     <span className="font-mono">{l.item?.code}</span>
-     <div className="text-2xs text-muted">{l.item?.name}</div>
-     <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>{l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}</Chip>
-    </Td>
-    <Td mono>{l.location?.full_code ?? '—'}</Td>
-    {isDraft && (
-     <Td>
-     <Select
-      fieldSize="sm"
-      containerClassName="w-44"
-      aria-label={`Bin ${l.item?.code ?? l.id}`}
-      value={finalizeInput[l.id]?.location_id ?? ''}
-      onChange={(e) => updateFinalizeLine(l.id, { location_id: e.target.value })}
-     >
-      <option value="">Select bin…</option>
-      {locations.map((loc) => (
-       <option key={loc.id} value={loc.id}>{loc.label}</option>
-      ))}
-     </Select>
-     </Td>
-    )}
-    <Td align="right" mono>{Number(l.quantity_received).toFixed(3)}</Td>
-    {isDraft && (
-     <Td align="right">
-     <Input
-      type="number" min="0" step="0.001"
-      aria-label={`Qty ${l.item?.code ?? l.id}`}
-      value={finalizeInput[l.id]?.quantity_received ?? '0'}
-      onChange={(e) => updateFinalizeLine(l.id, { quantity_received: e.target.value })}
-      className="w-24 h-7 text-right font-mono"
-     />
-     </Td>
-    )}
-    {isEditable && (
-     <Td align="right">
-     <Input
-      type="number" min={data.status === 'partial_accepted' ? l.quantity_accepted : '0'} step="0.001" max={l.quantity_received}
-      value={acceptMap[l.id] ?? (data.status === 'partial_accepted' ? l.quantity_accepted : l.quantity_received)}
-      onChange={(e) => {
-       const v = e.target.value;
-       setAcceptMap((m) => ({ ...m, [l.id]: v }));
-      }}
-      className="w-24 h-7 text-right font-mono"
-     />
-     </Td>
-    )}
-    <Td align="right" mono>{Number(l.quantity_accepted).toFixed(3)}</Td>
-    <Td align="right" mono>{Number(l.unit_cost).toFixed(4)}</Td>
-    <Td align="right" mono>{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</Td>
-    </tr>
-    <tr className="border-b border-subtle bg-subtle/40">
-     <Td colSpan={columnCount}>
-     {isDraft ? (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
-       <Input fieldSize="sm" label="Received UOM" placeholder="Base / BAG" value={finalizeInput[l.id]?.received_uom_code ?? ''} onChange={(e) => updateFinalizeLine(l.id, { received_uom_code: e.target.value })} />
-       <Input fieldSize="sm" label="Lot number" maxLength={50} value={finalizeInput[l.id]?.lot_number ?? ''} onChange={(e) => updateFinalizeLine(l.id, { lot_number: e.target.value })} />
-       <Input fieldSize="sm" label="Supplier lot" maxLength={100} value={finalizeInput[l.id]?.supplier_lot_reference ?? ''} onChange={(e) => updateFinalizeLine(l.id, { supplier_lot_reference: e.target.value })} />
-       <Input fieldSize="sm" label="Expiry" type="date" value={finalizeInput[l.id]?.expiry_date ?? ''} onChange={(e) => updateFinalizeLine(l.id, { expiry_date: e.target.value })} />
-       <Input fieldSize="sm" label="Moisture %" inputMode="decimal" value={finalizeInput[l.id]?.moisture_percentage ?? ''} onChange={(e) => updateFinalizeLine(l.id, { moisture_percentage: e.target.value })} />
-       <Input fieldSize="sm" label="COA path" maxLength={500} value={finalizeInput[l.id]?.coa_document_path ?? ''} onChange={(e) => updateFinalizeLine(l.id, { coa_document_path: e.target.value })} />
+          <ChainHeader
+            steps={buildP2pChain({
+              pr: data.purchase_order?.purchase_request
+                ? {
+                    id: data.purchase_order.purchase_request.id,
+                    number: data.purchase_order.purchase_request.pr_number,
+                  }
+                : null,
+              po: data.purchase_order
+                ? { id: data.purchase_order.id, number: data.purchase_order.po_number }
+                : null,
+              grns: [
+                {
+                  id: data.id,
+                  grn_number: data.grn_number,
+                  status: data.status,
+                  received_date: data.received_date,
+                },
+              ],
+              bills: data.bill
+                ? [
+                    {
+                      id: data.bill.id,
+                      bill_number: data.bill.bill_number,
+                      status: data.bill.status,
+                    },
+                  ]
+                : [],
+            })}
+          />
+        </Panel>
+        <Panel title="Header">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">PO</dt>
+              <dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt>
+              <dd>{data.vendor?.name ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Received</dt>
+              <dd className="font-mono">{formatDate(data.received_date)}</dd>
+            </div>
+            <div>
+              <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
+              {/* A draft is only an expectation; its creator did not receive anything. */}
+              <dd>{isDraft ? '—' : (data.receiver?.name ?? '—')}</dd>
+            </div>
+            {data.accepted_at && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt>
+                <dd className="font-mono">
+                  {formatDate(data.accepted_at)} · {data.acceptor?.name}
+                </dd>
+              </div>
+            )}
+            {data.rejected_reason && (
+              <div className="col-span-4">
+                <dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt>
+                <dd className="text-danger-fg">{data.rejected_reason}</dd>
+              </div>
+            )}
+            {data.remainder_rejected_at && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Remainder rejected</dt>
+                <dd className="font-mono">
+                  {formatDate(data.remainder_rejected_at)} · {data.remainder_rejected_by?.name}
+                </dd>
+              </div>
+            )}
+            {data.remainder_rejected_reason && (
+              <div className="col-span-4">
+                <dt className="text-2xs uppercase tracking-wider text-muted">
+                  Remainder rejection reason
+                </dt>
+                <dd>{data.remainder_rejected_reason}</dd>
+              </div>
+            )}
+            {/* Incoming QC runs per line; each line shows its own inspection below. */}
+            {data.qc_inspection && !(data.items ?? []).some((l) => l.inspection) && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Incoming QC</dt>
+                <dd>
+                  {can('quality.inspections.view') ? (
+                    <Link
+                      to={`/quality/inspections/${data.qc_inspection.id}`}
+                      className="font-mono text-accent hover:underline"
+                    >
+                      {data.qc_inspection.inspection_number}
+                    </Link>
+                  ) : (
+                    <span className="font-mono">{data.qc_inspection.inspection_number}</span>
+                  )}{' '}
+                  · {data.qc_inspection.status_label ?? data.qc_inspection.status ?? '—'}
+                </dd>
+              </div>
+            )}
+            {data.journal_entry && can('accounting.journal.view') && (
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Inventory GL</dt>
+                <dd>
+                  <Link
+                    to={`/accounting/journal-entries/${data.journal_entry.id}`}
+                    className="font-mono text-accent hover:underline"
+                  >
+                    {data.journal_entry.entry_number}
+                  </Link>{' '}
+                  · {data.journal_entry.status_label ?? data.journal_entry.status ?? '—'}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </Panel>
+        <Panel title="Line items">
+          <div className="overflow-x-auto">
+            <table className={`${tableCls} min-w-[760px]`}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>Item</Th>
+                  <Th>Location</Th>
+                  {isDraft && <Th>Bin (assign)</Th>}
+                  <Th align="right">Received</Th>
+                  {isDraft && <Th align="right">Qty received</Th>}
+                  {canAcceptHere && <Th align="right">Accept qty</Th>}
+                  <Th align="right">Accepted</Th>
+                  <Th align="right">Unit cost</Th>
+                  <Th align="right">Total</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.items?.map((l) => (
+                  <Fragment key={l.id}>
+                    <tr key={l.id} className={trCls}>
+                      <Td>
+                        <span className="font-mono">{l.item?.code}</span>
+                        <div className="text-2xs text-muted">{l.item?.name}</div>
+                        <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>
+                          {l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}
+                        </Chip>
+                      </Td>
+                      <Td mono>{l.location?.full_code ?? '—'}</Td>
+                      {isDraft && (
+                        <Td>
+                          <Select
+                            fieldSize="sm"
+                            containerClassName="w-44"
+                            aria-label={`Bin ${l.item?.code ?? l.id}`}
+                            value={finalizeInput[l.id]?.location_id ?? ''}
+                            onChange={(e) =>
+                              updateFinalizeLine(l.id, { location_id: e.target.value })
+                            }
+                          >
+                            <option value="">Select bin…</option>
+                            {locations.map((loc) => (
+                              <option key={loc.id} value={loc.id}>
+                                {loc.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </Td>
+                      )}
+                      <Td align="right" mono>
+                        {formatQuantity(l.quantity_received)}
+                      </Td>
+                      {isDraft && (
+                        <Td align="right">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            aria-label={`Qty ${l.item?.code ?? l.id}`}
+                            value={finalizeInput[l.id]?.quantity_received ?? '0'}
+                            onChange={(e) =>
+                              updateFinalizeLine(l.id, { quantity_received: e.target.value })
+                            }
+                            className="w-24 h-7 text-right font-mono"
+                          />
+                          {l.quantity_outstanding != null && (
+                            <div className="mt-0.5 text-2xs text-muted font-mono tabular-nums">
+                              Due {l.quantity_outstanding}
+                            </div>
+                          )}
+                        </Td>
+                      )}
+                      {canAcceptHere && (
+                        <Td align="right">
+                          <Input
+                            type="number"
+                            min={data.status === 'partial_accepted' ? l.quantity_accepted : '0'}
+                            step="0.001"
+                            max={l.quantity_received}
+                            value={
+                              acceptMap[l.id] ??
+                              (data.status === 'partial_accepted'
+                                ? l.quantity_accepted
+                                : l.quantity_received)
+                            }
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setAcceptMap((m) => ({ ...m, [l.id]: v }));
+                            }}
+                            className="w-24 h-7 text-right font-mono"
+                          />
+                        </Td>
+                      )}
+                      <Td align="right" mono>
+                        {formatQuantity(l.quantity_accepted)}
+                      </Td>
+                      <Td align="right" mono>
+                        {Number(l.unit_cost).toFixed(4)}
+                      </Td>
+                      <Td align="right" mono>
+                        {formatPeso(Number(l.quantity_received) * Number(l.unit_cost))}
+                      </Td>
+                    </tr>
+                    <tr className="border-b border-subtle bg-subtle/40">
+                      <Td colSpan={columnCount}>
+                        {isDraft ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+                            <Input
+                              fieldSize="sm"
+                              label="Received UOM"
+                              placeholder="Base / BAG"
+                              value={finalizeInput[l.id]?.received_uom_code ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { received_uom_code: e.target.value })
+                              }
+                            />
+                            <Input
+                              fieldSize="sm"
+                              label="Lot number"
+                              maxLength={50}
+                              value={finalizeInput[l.id]?.lot_number ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { lot_number: e.target.value })
+                              }
+                            />
+                            <Input
+                              fieldSize="sm"
+                              label="Supplier lot"
+                              maxLength={100}
+                              value={finalizeInput[l.id]?.supplier_lot_reference ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { supplier_lot_reference: e.target.value })
+                              }
+                            />
+                            <Input
+                              fieldSize="sm"
+                              label="Expiry"
+                              type="date"
+                              value={finalizeInput[l.id]?.expiry_date ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { expiry_date: e.target.value })
+                              }
+                            />
+                            <Input
+                              fieldSize="sm"
+                              label="Moisture %"
+                              inputMode="decimal"
+                              value={finalizeInput[l.id]?.moisture_percentage ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { moisture_percentage: e.target.value })
+                              }
+                            />
+                            <Input
+                              fieldSize="sm"
+                              label="COA path"
+                              maxLength={500}
+                              value={finalizeInput[l.id]?.coa_document_path ?? ''}
+                              onChange={(e) =>
+                                updateFinalizeLine(l.id, { coa_document_path: e.target.value })
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
+                            <span>
+                              UOM:{' '}
+                              <span className="font-mono text-primary">
+                                {l.received_uom_code ?? 'base'}
+                              </span>
+                            </span>
+                            <span>
+                              Lot:{' '}
+                              <span className="font-mono text-primary">{l.lot_number ?? '—'}</span>
+                            </span>
+                            <span>
+                              Supplier lot:{' '}
+                              <span className="font-mono text-primary">
+                                {l.supplier_lot_reference ?? '—'}
+                              </span>
+                            </span>
+                            <span>
+                              Expiry:{' '}
+                              <span className="font-mono text-primary">{l.expiry_date ?? '—'}</span>
+                            </span>
+                            <span>
+                              Moisture:{' '}
+                              <span className="font-mono text-primary">
+                                {l.moisture_percentage ?? '—'}
+                                {l.moisture_percentage ? '%' : ''}
+                              </span>
+                            </span>
+                            <span>
+                              COA:{' '}
+                              <span className="font-mono text-primary">
+                                {l.coa_document_path ?? '—'}
+                              </span>{' '}
+                              ·{' '}
+                              {l.coa_verified
+                                ? 'Verified by Quality'
+                                : 'Pending Quality verification'}
+                            </span>
+                            {l.inspection && (
+                              <span>
+                                QC:{' '}
+                                {can('quality.inspections.view') ? (
+                                  <Link
+                                    to={`/quality/inspections/${l.inspection.id}`}
+                                    className="font-mono text-accent hover:underline"
+                                  >
+                                    {l.inspection.inspection_number}
+                                  </Link>
+                                ) : (
+                                  <span className="font-mono text-primary">
+                                    {l.inspection.inspection_number}
+                                  </span>
+                                )}{' '}
+                                · {l.inspection.status_label ?? l.inspection.status ?? '—'}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </Td>
+                    </tr>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       </div>
-     ) : (
-      <div className="flex flex-wrap gap-x-5 gap-y-1 text-2xs text-muted">
-       <span>UOM: <span className="font-mono text-primary">{l.received_uom_code ?? 'base'}</span></span>
-       <span>Lot: <span className="font-mono text-primary">{l.lot_number ?? '—'}</span></span>
-       <span>Supplier lot: <span className="font-mono text-primary">{l.supplier_lot_reference ?? '—'}</span></span>
-       <span>Expiry: <span className="font-mono text-primary">{l.expiry_date ?? '—'}</span></span>
-       <span>Moisture: <span className="font-mono text-primary">{l.moisture_percentage ?? '—'}{l.moisture_percentage ? '%' : ''}</span></span>
-       <span>COA: <span className="font-mono text-primary">{l.coa_document_path ?? '—'}</span> · {l.coa_verified ? 'Verified by Quality' : 'Pending Quality verification'}</span>
-      </div>
-     )}
-     </Td>
-    </tr>
-    </Fragment>
-   ))}
-   </tbody>
-   </table>
-   </div>
-  </Panel>
-  </div>
 
-  <ConfirmDialog
-  isOpen={confirmFinalize}
-  onClose={() => setConfirmFinalize(false)}
-  onConfirm={() => finalize.mutate()}
-  title="Finalize receiving?"
-  description="Assigning these bins and quantities records the goods as received. The GRN moves to incoming QC for inspection before stock is updated."
-  confirmLabel="Finalize GRN"
-  variant="primary"
-  pending={finalize.isPending}
-  />
+      <ConfirmDialog
+        isOpen={confirmFinalize}
+        onClose={() => setConfirmFinalize(false)}
+        onConfirm={() => finalize.mutate()}
+        title="Finalize receiving?"
+        description="Assigning these bins and quantities records the goods as received. The GRN moves to incoming QC for inspection before stock is updated."
+        confirmLabel="Finalize GRN"
+        variant="primary"
+        pending={finalize.isPending}
+      />
 
-  <ConfirmDialog
-  isOpen={confirmAccept}
-  onClose={() => setConfirmAccept(false)}
-  onConfirm={() => accept.mutate(undefined)}
-  title="Accept this GRN?"
-  description="Accepting will post stock movements to update inventory levels and weighted-average cost. This cannot be undone."
-  confirmLabel="Accept GRN"
-  variant="primary"
-  pending={accept.isPending}
-  />
+      <ConfirmDialog
+        isOpen={confirmAccept}
+        onClose={() => setConfirmAccept(false)}
+        onConfirm={() => accept.mutate(undefined)}
+        title="Accept this GRN?"
+        description="Accepting will post stock movements to update inventory levels and weighted-average cost. This cannot be undone."
+        confirmLabel="Accept GRN"
+        variant="primary"
+        pending={accept.isPending}
+      />
 
-  <ConfirmDialog
-  isOpen={confirmPartial}
-  onClose={() => setConfirmPartial(false)}
-  onConfirm={() => accept.mutate(acceptMap)}
-  title="Partially accept this GRN?"
-  description="Acceptance is cumulative. Only the increase since the last decision moves into inventory; previously accepted stock is never duplicated or reduced."
-  confirmLabel={data.status === 'partial_accepted' ? 'Accept quantities' : 'Partial accept'}
-  variant="primary"
-  pending={accept.isPending}
-  />
+      <ConfirmDialog
+        isOpen={confirmPartial}
+        onClose={() => setConfirmPartial(false)}
+        onConfirm={() => accept.mutate(acceptMap)}
+        title="Partially accept this GRN?"
+        description="Acceptance is cumulative. Only the increase since the last decision moves into inventory; previously accepted stock is never duplicated or reduced."
+        confirmLabel={data.status === 'partial_accepted' ? 'Accept quantities' : 'Partial accept'}
+        variant="primary"
+        pending={accept.isPending}
+      />
 
-  <ReasonDialog
-  isOpen={rejectOpen}
-  onClose={() => setRejectOpen(false)}
-  onConfirm={(reason) => reject.mutate(reason)}
-  title="Reject this GRN?"
-  description="The vendor delivery will be flagged as rejected. Reason is recorded for audit."
-  reasonLabel="Rejection reason"
-  reasonPlaceholder="e.g. Material failed incoming inspection (mould flash on pin 3)"
-  minLength={10}  confirmLabel="Reject"
-  variant="danger"
-  pending={reject.isPending}
-  />
+      <ReasonDialog
+        isOpen={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => reject.mutate(reason)}
+        title="Reject this GRN?"
+        description="The vendor delivery will be flagged as rejected. Reason is recorded for audit."
+        reasonLabel="Rejection reason"
+        reasonPlaceholder="e.g. Material failed incoming inspection (mould flash on pin 3)"
+        minLength={10}
+        confirmLabel="Reject"
+        variant="danger"
+        pending={reject.isPending}
+      />
 
-  <ConfirmDialog
-  isOpen={confirmPostBill}
-  onClose={() => setConfirmPostBill(false)}
-  onConfirm={() => postBill.mutate()}
-  title="Post draft bill to AP + GL?"
-  description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
-  confirmLabel="Post bill"
-  variant="primary"
-  pending={postBill.isPending}
-  />
-  </div>
+      <ReasonDialog
+        isOpen={rejectRemainderOpen}
+        onClose={() => setRejectRemainderOpen(false)}
+        onConfirm={(reason) => rejectRemainder.mutate(reason)}
+        title="Reject remainder?"
+        description="Received quantities not yet accepted go back to the supplier on a return. Accepted stock is unaffected, and the PO expects the returned quantity again unless you short-close it."
+        reasonLabel="Reason for remainder rejection"
+        reasonPlaceholder="e.g. Balance failed incoming inspection — wrong resin grade"
+        minLength={10}
+        confirmLabel="Reject remainder"
+        variant="danger"
+        pending={rejectRemainder.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmPostBill}
+        onClose={() => setConfirmPostBill(false)}
+        onConfirm={() => postBill.mutate()}
+        title="Post draft bill to AP + GL?"
+        description="Posting records the payable: it builds and posts the AP/expense journal entry (debit expense + VAT input, credit AP) and flips the bill to Unpaid. Review the auto-created amounts before posting."
+        confirmLabel="Post bill"
+        variant="primary"
+        pending={postBill.isPending}
+      />
+    </div>
   );
- }
+}

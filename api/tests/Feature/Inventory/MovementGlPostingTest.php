@@ -93,7 +93,7 @@ class MovementGlPostingTest extends TestCase
             createdBy: User::factory()->create()->id,
         ));
 
-        $this->assertMovementPosted($m, '1200', '50.00', '5000', '50.00');
+        $this->assertMovementPosted($m, '1200', '50.00', '5010', '50.00');
     }
 
     public function test_material_issue_debits_material_consumption_credits_inventory(): void

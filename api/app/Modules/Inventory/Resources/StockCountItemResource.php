@@ -37,6 +37,7 @@ class StockCountItemResource extends JsonResource
             'status_label'     => $this->status?->label(),
             'counted_by'       => $this->whenLoaded('counter', fn () => new UserResource($this->counter)),
             'counted_at'       => $this->counted_at?->toISOString(),
+            'verified_by'      => $this->whenLoaded('verifier', fn () => new UserResource($this->verifier)),
             'notes'            => $this->notes,
         ];
     }

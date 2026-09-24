@@ -94,4 +94,35 @@ class ReturnRequestApprovalChainTest extends TestCase
             ->assertJsonPath('data.approval_records.0.approver.name', $head->name)
             ->assertJsonPath('data.approval_records.1.action', 'pending');
     }
+
+    public function test_finance_only_rma_uses_a_finance_checker_and_is_visible_to_finance(): void
+    {
+        $submitter = $this->userWithRole('customer_service_officer');
+        $finance = $this->userWithRole('finance_officer');
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-FIN-'.substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => 'draft',
+            'finance_only' => true,
+            'finance_only_reason' => 'Non-stock service credit.',
+            'created_by' => $submitter->id,
+        ]);
+
+        $this->actingAs($submitter)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending_approval');
+
+        $this->actingAs($finance)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.approval_records.0.role_slug', 'finance_officer');
+
+        $this->actingAs($finance)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->assertSame($finance->id, (int) $rma->fresh()->finance_only_approved_by);
+    }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProductionSchedule extends Model
 {
-    use HasFactory, HasHashId;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'work_order_id', 'machine_id', 'mold_id',
@@ -25,12 +26,12 @@ class ProductionSchedule extends Model
     ];
 
     protected $casts = [
-        'status'          => ProductionScheduleStatus::class,
+        'status' => ProductionScheduleStatus::class,
         'scheduled_start' => 'datetime',
-        'scheduled_end'   => 'datetime',
-        'priority_order'  => 'integer',
-        'is_confirmed'    => 'boolean',
-        'confirmed_at'    => 'datetime',
+        'scheduled_end' => 'datetime',
+        'priority_order' => 'integer',
+        'is_confirmed' => 'boolean',
+        'confirmed_at' => 'datetime',
     ];
 
     public function workOrder(): BelongsTo

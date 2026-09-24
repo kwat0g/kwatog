@@ -84,7 +84,7 @@ class SupplierReturnShipOnDisposeTest extends TestCase
         $vendor   = Vendor::factory()->create(['created_by' => null]);
         $item     = Item::factory()->create();
         $location = WarehouseLocation::factory()->create();
-        $expense  = Account::query()->where('type', 'expense')->firstOrFail();
+        $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
         $po = PurchaseOrder::factory()->create([
             'vendor_id'    => $vendor->id,

@@ -45,8 +45,11 @@ export const portalAccessApi = {
  deactivateCustomer: (id: string) =>
   client.patch<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${id}/deactivate`).then((r) => r.data.data),
 
- reactivateCustomer: (id: string) =>
-  client.patch<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${id}/reactivate`).then((r) => r.data.data),
+  reactivateCustomer: (id: string) =>
+   client.patch<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${id}/reactivate`).then((r) => r.data.data),
+
+  revokeCustomerTokens: (id: string) =>
+   client.delete<ApiSuccess<CustomerPortalUser>>(`/b2b/portal-access/customers/${id}/tokens`).then((r) => r.data.data),
 
  // ── Delivery schedule review (customer + supplier submissions) ──
 

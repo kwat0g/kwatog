@@ -47,6 +47,7 @@ class RolePermissionSeeder extends Seeder
                 // `role?->slug === 'system_admin'` compare with no permission
                 // beside it to fall through to. This is that authority, named.
                 ['slug' => 'admin.delegations.manage_any',    'name' => 'Manage Any User\'s Approval Delegations'],
+                ['slug' => 'business_policies.view',          'name' => 'View Business Policies'],
             ],
 
             // HR
@@ -152,6 +153,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'loans.create',        'name' => 'Create Loan / Cash Advance'],
                 ['slug' => 'loans.approve',       'name' => 'Approve Loan'],
                 ['slug' => 'loans.write_off',     'name' => 'Write Off Loan'],
+                ['slug' => 'loans.write_off.request', 'name' => 'Request Loan Write-off'],
+                ['slug' => 'loans.write_off.approve', 'name' => 'Approve Loan Write-off'],
             ],
 
             // Accounting (Sprint 4 — Lean Accounting)
@@ -325,6 +328,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.sales_orders.confirm',       'name' => 'Confirm Sales Orders'],
                 ['slug' => 'crm.sales_orders.cancel',        'name' => 'Cancel Sales Orders'],
                 ['slug' => 'crm.so.create',                  'name' => 'Create Sales Orders (legacy)'],
+                ['slug' => 'crm.complaints.view',            'name' => 'View Complaints'],
                 ['slug' => 'crm.complaints.manage',          'name' => 'Manage Complaints'],
                 // Public contact-form inbox. Separate from leads on purpose —
                 // the form also catches job seekers and supplier pitches, and
@@ -343,6 +347,7 @@ class RolePermissionSeeder extends Seeder
                 // are kept for backward compat with seeded roles.
                 ['slug' => 'quality.inspections.view',     'name' => 'View Inspections'],
                 ['slug' => 'quality.inspections.manage',   'name' => 'Manage Inspections'],
+                ['slug' => 'quality.inspections.review',   'name' => 'Check High-Risk Inspections'],
                 // Sprint 7 Task 59: read access to inspection specs (separate
                 // from quality.specs.manage so production roles can browse
                 // tolerances without authoring them).
@@ -376,12 +381,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'assets.delete',              'name' => 'Delete Asset'],
                 ['slug' => 'assets.dispose',             'name' => 'Dispose Asset'],
                 // AS-03 — the seeded asset_disposal chain routes approval to
-                // finance_officer then system_admin, but the approve/reject
-                // endpoints gate on this slug, so both step roles must hold
-                // it or every submitted disposal stalls at step 1. Same
-                // defect class as M036 (purchase_request) and L-37
-                // (return_request). finance_officer receives it via
-                // module('assets'); system_admin via the wildcard.
+                // finance_officer then vice_president. Both step roles must
+                // hold this slug or every submitted disposal stalls.
                 ['slug' => 'assets.dispose.approve',     'name' => 'Approve / Reject Asset Disposals'],
                 ['slug' => 'assets.depreciation.view',   'name' => 'View Asset Depreciation'],
                 ['slug' => 'assets.depreciation.run',    'name' => 'Run Asset Depreciation'],
@@ -402,10 +403,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.recruitment.manage',       'name' => 'Create & Edit Job Postings'],
                 ['slug' => 'hr.recruitment.applications', 'name' => 'Manage Applications (stage, notes, interviews)'],
                 ['slug' => 'hr.recruitment.hire',         'name' => 'Mark Hired & Convert to Employee'],
-            ],
-            'asset_transfers' => [
-                ['slug' => 'assets.transfer',            'name' => 'Request Asset Transfer'],
-                ['slug' => 'assets.transfer.approve',    'name' => 'Approve Asset Transfer'],
             ],
             'dashboards' => [
                 ['slug' => 'dashboard.plant_manager.view', 'name' => 'View Plant Manager Dashboard'],
@@ -519,7 +516,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('leave'),
                     $this->module('hr_separation'),
                     $this->module('hr_recruitment'),
-                    $this->module('loans'),
+                     $this->module('loans'),
                     $this->selfService(),
                     [
                         'payroll.view',
@@ -568,18 +565,20 @@ class RolePermissionSeeder extends Seeder
                         'accounting.customers.manage',
                     ]),
                     $this->module('b2b'),
-                    // REC-02 — finance_officer approves transfers but cannot self-approve
-                    // one they requested (override withheld → system_admin only).
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
                     $this->module('crm_commissions'),
-                    $this->module('asset_transfers'),
                     $this->selfService(),
                     [
                         'dashboard.accounting.view',
                         'search.global', 'notifications.preferences.manage',
-                        'hr.profile_updates.finance_review',
+                         'hr.profile_updates.finance_review',
+                         'loans.write_off.request', 'loans.write_off.approve',
+                        // Finance is the sole checker for explicitly classified
+                        // non-stock customer credits; it needs to open the RMA
+                        // and act on its finance-only approval step.
+                        'return_management.view', 'return_management.approve',
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
                         'dashboard.chain_recovery.view', 'dashboard.chain_recovery.manage',
@@ -642,6 +641,8 @@ class RolePermissionSeeder extends Seeder
                         'accounting.statements.view',
                         'budgeting.view',
                         'budgeting.approve',
+                        'crm.view',
+                        'crm.complaints.view',
                         'dashboard.plant_manager.view',
                         'dashboard.view_bottlenecks',
                         'search.global',
@@ -661,7 +662,9 @@ class RolePermissionSeeder extends Seeder
                         'accounting.customers.manage',
                         'crm.products.view',
                         'crm.price_agreements.view',
+                        'crm.price_agreements.manage',
                         'crm.sales_orders.view',
+                        'crm.complaints.view',
                         'crm.complaints.manage',
                         'crm.inquiries.view',
                         'crm.inquiries.manage',
@@ -712,7 +715,9 @@ class RolePermissionSeeder extends Seeder
                         'mrp.plans.view', 'mrp.runs.view',
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
-                        'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                         'quality.inspections.review',
+                        'crm.view', 'crm.complaints.view',
                         // Read-only purchasing. The 2026-09-10 PR redesign made
                         // the chain money-only (Finance → VP) and removed the
                         // former "Manager" step, so `purchasing.pr.approve` is no
@@ -771,6 +776,8 @@ class RolePermissionSeeder extends Seeder
                         'production.schedule.view',
                         // Routings (process plans) are PPC's to author.
                         'production.routings.view', 'production.routings.manage',
+                        // PPC owns the finished-good catalog used by its BOMs and plans.
+                        'crm.view', 'crm.products.view', 'crm.products.manage',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -852,6 +859,7 @@ class RolePermissionSeeder extends Seeder
                         'return_management.inspect',
                         'purchasing.rfq.view', 'purchasing.rfq.quality_review',
                         'dashboard.quality.view',
+                        'crm.view', 'crm.complaints.view',
                         // REC-08 — QC can quarantine/release nonconforming stock via MRB.
                         'inventory.view',
                         'inventory.mrb.view',
@@ -1030,6 +1038,9 @@ class RolePermissionSeeder extends Seeder
                             // Self-scoped layout reset — every role (see
                             // catalog comment under 'dashboards').
                             'dashboard.layout.reset',
+                            // AppLayout reads the functional currency from
+                            // /business-policies on every page for every role.
+                            'business_policies.view',
                         ],
                     )));
 
@@ -1071,6 +1082,7 @@ class RolePermissionSeeder extends Seeder
             'hr.directory.view',
             'dashboard.action_center.view',
             'dashboard.layout.reset',
+            'business_policies.view',
         ];
 
         foreach ($roles as $slug => $definition) {

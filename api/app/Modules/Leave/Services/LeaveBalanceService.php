@@ -70,6 +70,8 @@ class LeaveBalanceService
 
     public function consume(int $employeeId, int $leaveTypeId, int $year, float $days): EmployeeLeaveBalance
     {
+        $this->assertPositiveDays($days);
+
         return DB::transaction(function () use ($employeeId, $leaveTypeId, $year, $days) {
             /** @var EmployeeLeaveBalance $bal */
             $bal = EmployeeLeaveBalance::query()
@@ -97,6 +99,8 @@ class LeaveBalanceService
 
     public function restore(int $employeeId, int $leaveTypeId, int $year, float $days): void
     {
+        $this->assertPositiveDays($days);
+
         DB::transaction(function () use ($employeeId, $leaveTypeId, $year, $days) {
             $bal = EmployeeLeaveBalance::query()
                 ->where('employee_id', $employeeId)
@@ -113,5 +117,12 @@ class LeaveBalanceService
             $bal->remaining = (float) $bal->total_credits - (float) $bal->used;
             $bal->save();
         });
+    }
+
+    private function assertPositiveDays(float $days): void
+    {
+        if (! is_finite($days) || $days <= 0) {
+            throw new BusinessRuleException('Leave days must be greater than zero.');
+        }
     }
 }

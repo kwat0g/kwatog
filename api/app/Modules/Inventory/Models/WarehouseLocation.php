@@ -23,7 +23,7 @@ class WarehouseLocation extends Model
         return \Database\Factories\WarehouseLocationFactory::new();
     }
 
-    protected $fillable = ['zone_id', 'code', 'rack', 'bin', 'is_active'];
+    protected $fillable = ['zone_id', 'code', 'rack', 'bin', 'is_active', 'is_blocked'];
 
     protected $casts = [
         'is_active' => 'boolean',

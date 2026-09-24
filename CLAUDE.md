@@ -3,21 +3,6 @@
 > Claude Code reads this automatically on every command. Read completely before executing any task.
 > References: `docs/README.md`, `docs/DESIGN-SYSTEM.md`, `docs/SCHEMA.md`, `docs/SEEDS.md`
 
-## DEFAULT TYPESAFE WORKFLOW
-
-The installed `typesafe-ai` skill is enabled by default for this project. Load it
-before acting on each task and assess whether a TypeSafe judgment improves the
-workflow. Use it for semantic routing, ranking, extraction, verification, or
-bounded interpretation; keep permissions, calculations, deterministic rules,
-control flow, and side effects in application code. Read the live TypeSafe docs
-before changing an integration, keep credentials server-side, and confidence-gate
-consequential decisions.
-
-For repository audits, collect deterministic evidence first, then use the
-read-only `audit:verify-scenarios --live` command one scenario at a time. Jev
-corroborates evidence; it does not replace tests, permissions, calculations, or
-code review.
-
 ## PROJECT
 
 Production-grade ERP for **Philippine Ogami Corporation** — Japanese-owned plastic injection molding manufacturer (200+ employees, FCIE Dasmariñas, Cavite). Makes wiper bushings, pivot caps, relay covers for Toyota, Nissan, Honda, Suzuki, Yamaha. IATF 16949 certified. Thesis project, 8 months, solo developer.
@@ -461,7 +446,7 @@ See the complete checklist at the bottom of `docs/PATTERNS.md`. Every checkbox m
 - Audit-row hygiene: prefer `$m->fill([…]); $m->status = E::Foo; $m->save();` (single save → one audit row) over `update() + forceFill()->save()` (two rows for one logical action).
 
 ### HasAuditLog + custom guards
-Under non-web guards (e.g. `auth:edge_device`, `auth:supplier_portal`), `Auth::id()` returns the non-User PK → `audit_logs` FK violation. Wrap writes via `App\Modules\Edge\Services\EdgeSystemUserResolver::impersonate(callable)` which pins `Auth::shouldUse('web')` + `onceUsingId($systemUserId)` for the call.
+Under non-web guards (e.g. `auth:supplier_portal`), `Auth::id()` returns the non-User PK → `audit_logs` FK violation. Wrap writes via `App\Common\Services\SystemUserResolver::impersonate(callable)` which pins `Auth::shouldUse('web')` + `onceUsingId($systemUserId)` for the call.
 
 ### Model namespace gotchas
 - `Customer` → `App\Modules\Accounting\Models\Customer` (NOT CRM)
@@ -484,7 +469,6 @@ escalation map. system_admin is IT only — never a business-process approver.
 ### Routing + middleware
 - Literal route segments declared BEFORE `{model}` bindings (e.g. `/vendors/ranking` before `/vendors/{vendor}/performance`) else they get param-bound.
 - Schedule entries → `api/routes/console.php` (Laravel 11). `Console\Kernel` does NOT exist.
-- Sanctum 4 abilities: `'ability' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class` registered in `bootstrap/app.php` aliases.
 - Module routes auto-mount under `/api/v1` via `App\Providers\ModuleServiceProvider`.
 - Frontend: NEVER set `'Content-Type': 'multipart/form-data'` on axios FormData requests — strips boundary. Let browser auto-set.
 
@@ -513,7 +497,7 @@ So when you use this convention:
 `NonConformanceReport::actions()` defines a default `orderBy('performed_at')`. Aggregate queries (`->selectRaw(... GROUP BY ...)`) must call `->reorder()` inside the closure or PG throws `SQLSTATE[42803]`.
 
 ### Shared helpers — REUSE before reinventing
-- `App\Modules\Edge\Services\EdgeSystemUserResolver` — guard impersonation (T2.x ingest paths).
+- `App\Common\Services\SystemUserResolver` — service-account impersonation for non-web guard writes.
 - `App\Modules\Production\Services\WorkOrderOutputService::record()` — idempotent output recording (mold shots + scrap rate + event). Reuse from any new output path.
 - `App\Modules\Maintenance\Services\PredictiveMaintenanceService::recordAndEvaluate()` — condition reading + breach gate + corrective MWO.
 - `App\Modules\Quality\Services\InspectionService::recordMeasurements()` — tolerance auto-eval + status transition + defect counting.

@@ -25,7 +25,7 @@
           &middot;
         @endif
         @if (!empty($company['certification']))
-          <span style="font-weight:600; color:#475569;">{{ $company['certification'] }}</span>
+          <span style="font-weight:bold; color:#475569;">{{ $company['certification'] }}</span>
         @endif
       </div>
     </td>

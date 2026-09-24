@@ -1,52 +1,111 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { GoodsReceiptNote, CreateGrnData, FinalizeGrnData } from '@/types/inventory';
+import type { PurchaseOrderItem } from '@/types/purchasing';
+
+export interface ReceivablePurchaseOrder {
+  id: string;
+  po_number: string;
+  status: string;
+  vendor: { id: string; name: string } | null;
+  items?: PurchaseOrderItem[];
+}
 
 export interface ReceiveGoodsData {
- purchase_order_id: string;
- received_date?: string;
- remarks?: string;
- items: Array<{
- purchase_order_item_id: string;
- item_id: string;
- location_id: string;
- quantity_received: string;
- unit_cost?: string;
- received_uom_code?: string;
- lot_number?: string;
- material_lot_number?: string;
- supplier_lot_reference?: string;
- expiry_date?: string;
- moisture_percentage?: string;
- coa_document_path?: string;
- remarks?: string;
- }>;
- qc: {
- result: 'passed' | 'failed' | 'passed_with_remarks' | 'pending';
- inspector_id?: string;
- checks?: Array<{ label: string; passed: boolean }>;
- remarks?: string;
- failure_reason?: string;
- disposition?: string;
- };
+  purchase_order_id: string;
+  received_date?: string;
+  remarks?: string;
+  items: Array<{
+    purchase_order_item_id: string;
+    item_id: string;
+    location_id: string;
+    quantity_received: string;
+    unit_cost?: string;
+    received_uom_code?: string;
+    lot_number?: string;
+    material_lot_number?: string;
+    supplier_lot_reference?: string;
+    expiry_date?: string;
+    moisture_percentage?: string;
+    coa_document_path?: string;
+    remarks?: string;
+  }>;
+  qc: {
+    result: 'passed' | 'failed' | 'passed_with_remarks' | 'pending';
+    inspector_id?: string;
+    checks?: Array<{ label: string; passed: boolean }>;
+    remarks?: string;
+    failure_reason?: string;
+    disposition?: string;
+  };
 }
 
 export const grnApi = {
- options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; default_qc_result: string } }>('/inventory/grn/options').then((r) => r.data.data),
- list: (params?: ListParams & { status?: string; vendor_id?: string; purchase_order_id?: string; from?: string; to?: string }) =>
- client.get<PaginatedResponse<GoodsReceiptNote>>('/inventory/grn', { params }).then((r) => r.data),
- show: (id: string) =>
- client.get<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}`).then((r) => r.data.data),
- retryIncomingQc: (id: string) =>
-  client.post<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/retry-incoming-qc`).then((r) => r.data.data),
- create: (data: CreateGrnData) =>
- client.post<ApiSuccess<GoodsReceiptNote>>('/inventory/grn', data).then((r) => r.data.data),
- finalize: (id: string, data: FinalizeGrnData) =>
- client.patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/finalize`, data).then((r) => r.data.data),
- accept: (id: string, item_accepted_map?: Record<number, string>) =>
- client.patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/accept`, { item_accepted_map }).then((r) => r.data.data),
- reject: (id: string, reason: string) =>
- client.patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/reject`, { reason }).then((r) => r.data.data),
- receiveGoods: (data: ReceiveGoodsData) =>
- client.post<{ data: GoodsReceiptNote; qc_result: string; disposition: string | null; stock_updated: boolean }>('/inventory/receive-goods', data).then((r) => r.data),
+  options: () =>
+    client
+      .get<{
+        data: { statuses: Array<{ value: string; label: string }>; default_qc_result: string };
+      }>('/inventory/grn/options')
+      .then((r) => r.data.data),
+  receivablePurchaseOrders: () =>
+    client
+      .get<PaginatedResponse<ReceivablePurchaseOrder>>('/inventory/grn/receivable-purchase-orders')
+      .then((r) => r.data),
+  receivablePurchaseOrder: (id: string) =>
+    client
+      .get<{ data: ReceivablePurchaseOrder }>(`/inventory/grn/receivable-purchase-orders/${id}`)
+      .then((r) => r.data.data),
+  list: (
+    params?: ListParams & {
+      status?: string;
+      vendor_id?: string;
+      purchase_order_id?: string;
+      from?: string;
+      to?: string;
+    },
+  ) =>
+    client
+      .get<PaginatedResponse<GoodsReceiptNote>>('/inventory/grn', { params })
+      .then((r) => r.data),
+  show: (id: string) =>
+    client.get<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}`).then((r) => r.data.data),
+  retryIncomingQc: (id: string) =>
+    client
+      .post<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/retry-incoming-qc`)
+      .then((r) => r.data.data),
+  retryGl: (id: string) =>
+    client
+      .post<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/retry-gl`)
+      .then((r) => r.data.data),
+  create: (data: CreateGrnData, idempotencyKey: string) =>
+    client
+      .post<
+        ApiSuccess<GoodsReceiptNote>
+      >('/inventory/grn', data, { headers: { 'Idempotency-Key': idempotencyKey } })
+      .then((r) => r.data.data),
+  finalize: (id: string, data: FinalizeGrnData) =>
+    client
+      .patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/finalize`, data)
+      .then((r) => r.data.data),
+  accept: (id: string, item_accepted_map?: Record<number, string>) =>
+    client
+      .patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/accept`, { item_accepted_map })
+      .then((r) => r.data.data),
+  reject: (id: string, reason: string) =>
+    client
+      .patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/reject`, { reason })
+      .then((r) => r.data.data),
+  rejectRemainder: (id: string, reason: string) =>
+    client
+      .patch<ApiSuccess<GoodsReceiptNote>>(`/inventory/grn/${id}/reject-remainder`, { reason })
+      .then((r) => r.data.data),
+  receiveGoods: (data: ReceiveGoodsData, idempotencyKey: string) =>
+    client
+      .post<{
+        data: GoodsReceiptNote;
+        qc_result: string;
+        disposition: string | null;
+        stock_updated: boolean;
+      }>('/inventory/receive-goods', data, { headers: { 'Idempotency-Key': idempotencyKey } })
+      .then((r) => r.data),
 };

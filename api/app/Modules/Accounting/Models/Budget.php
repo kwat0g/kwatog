@@ -31,7 +31,6 @@ class Budget extends Model
         'total_allocated',
         'total_spent',
         'total_committed',
-        'status',
         'submitted_by',
         'submitted_at',
         'approved_by',

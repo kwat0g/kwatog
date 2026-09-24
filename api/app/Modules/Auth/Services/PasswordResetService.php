@@ -107,6 +107,12 @@ class PasswordResetService
                 ]);
             }
 
+            if (Hash::check($newPassword, $user->password)) {
+                throw ValidationException::withMessages([
+                    'password' => 'Your new password must be different from your current password.',
+                ]);
+            }
+
             $recent = $user->passwordHistory()->limit($historyDepth)->pluck('password_hash');
             foreach ($recent as $oldHash) {
                 if (Hash::check($newPassword, $oldHash)) {
@@ -139,9 +145,10 @@ class PasswordResetService
                 ->pluck('id')
                 ->all();
 
-            if (! empty($keepIds)) {
-                $user->passwordHistory()->whereNotIn('id', $keepIds)->delete();
-            }
+            $historyQuery = $user->passwordHistory();
+            $keepIds === []
+                ? $historyQuery->delete()
+                : $historyQuery->whereNotIn('id', $keepIds)->delete();
 
             return $user;
         });

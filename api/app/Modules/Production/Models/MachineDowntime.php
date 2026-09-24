@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MachineDowntime extends Model
 {
-    use HasFactory, HasHashId;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'machine_id', 'work_order_id', 'start_time', 'end_time',

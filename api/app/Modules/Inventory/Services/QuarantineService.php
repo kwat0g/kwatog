@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -56,7 +57,7 @@ class QuarantineService
             ->with([
                 'item:id,code,name,unit_of_measure',
                 'sourceLocation.zone.warehouse', 'quarantineLocation.zone.warehouse', 'releaseLocation.zone.warehouse',
-                'ncr:id,ncr_number,status,affected_quantity,inspection_id',
+                'ncr:id,ncr_number,status,affected_quantity,disposition,inspection_id',
                 'ncr.inspection:id,inspection_number,stage,status,item_id,batch_quantity',
                 'inspection:id,inspection_number,stage,status,item_id,batch_quantity',
                 'holder:id,name', 'releaser:id,name',
@@ -96,7 +97,7 @@ class QuarantineService
         return $mrb->load([
             'item:id,code,name,unit_of_measure',
             'sourceLocation.zone.warehouse', 'quarantineLocation.zone.warehouse', 'releaseLocation.zone.warehouse',
-            'ncr:id,ncr_number,status,affected_quantity,inspection_id',
+            'ncr:id,ncr_number,status,affected_quantity,disposition,inspection_id',
             'ncr.inspection:id,inspection_number,stage,status,item_id,batch_quantity',
             'inspection:id,inspection_number,stage,status,item_id,batch_quantity',
             'holder:id,name', 'releaser:id,name',
@@ -172,7 +173,8 @@ class QuarantineService
      * @param array{
      *   item_id:int, quantity:string|float|int, source_location_id:int,
      *   quarantine_location_id?:int|null, ncr_id?:int|null,
-     *   inspection_id?:int|null, notes?:string|null
+     *   inspection_id?:int|null, notes?:string|null,
+     *   lot_number?:string|null, expiry_date?:string|null
      * } $data
      */
     public function hold(array $data, User $by, ?string $idempotencyKey = null): MaterialReviewRecord
@@ -277,6 +279,12 @@ class QuarantineService
                 referenceId: $mrb->id,
                 remarks: "MRB hold {$mrbNumber}",
                 createdBy: $by->id,
+                // Without a lot the ledger moves the bin's preferred lot, which
+                // is another receipt's material whenever the bin holds more
+                // than one lot of the item — quarantining good stock and
+                // leaving the suspect lot available.
+                lotNumber: ($data['lot_number'] ?? null) ?: null,
+                expiryDate: ($data['expiry_date'] ?? null) ?: null,
             ));
 
             $mrb->hold_movement_id = $movement->id;
@@ -284,6 +292,63 @@ class QuarantineService
 
             return $mrb;
         });
+    }
+
+    /**
+     * Hold multiple rework lines from a GRN in quarantine after MRB disposition (rework).
+     * Called after GRN partial acceptance when disposition = rework.
+     *
+     * @param \App\Modules\Inventory\Models\GoodsReceiptNote $grn
+     * @param array<int, NonConformanceReport> $reworkLines Map of grn_item_id → NCR
+     * @param User $by
+     */
+    public function holdMultipleForMrb(
+        \App\Modules\Inventory\Models\GoodsReceiptNote $grn,
+        array $reworkLines,
+        User $by,
+    ): void {
+        if (empty($reworkLines)) {
+            return;
+        }
+
+        $grn->loadMissing(['items.location']);
+
+        foreach ($grn->items as $line) {
+            $lineId = (int) $line->id;
+            if (! isset($reworkLines[$lineId])) {
+                continue;
+            }
+
+            $ncr = $reworkLines[$lineId];
+            $location = $line->location;
+            if (! $location) {
+                throw new BusinessRuleException(
+                    "GRN line {$line->id} for item {$line->item_id} has no location; cannot hold rework."
+                );
+            }
+
+            $quantity = (string) $line->quantity_accepted;
+            if (bccomp($quantity, '0', 3) <= 0) {
+                continue;
+            }
+
+            try {
+                $this->hold([
+                    'item_id'             => (int) $line->item_id,
+                    'quantity'            => $quantity,
+                    'source_location_id'  => (int) $location->id,
+                    'ncr_id'              => (int) $ncr->id,
+                    'inspection_id'       => $ncr->inspection_id ? (int) $ncr->inspection_id : null,
+                    'notes'               => "Rework hold for GRN {$grn->grn_number} line {$line->id}",
+                    'lot_number'          => $line->material_lot_number,
+                    'expiry_date'         => $line->expiry_date?->toDateString(),
+                ], $by, idempotencyKey: "grn-rework-{$grn->id}-{$lineId}");
+            } catch (BusinessRuleException $e) {
+                throw new BusinessRuleException(
+                    "Failed to hold rework for GRN line {$line->id}: " . $e->getMessage()
+                );
+            }
+        }
     }
 
     /**
@@ -329,6 +394,14 @@ class QuarantineService
             $releaseLocationId = null;
             $newStatus         = MrbStatus::Released;
 
+            // Release exactly the lot the hold quarantined, for the same
+            // reason hold() names it.
+            $holdMovement = $locked->hold_movement_id !== null
+                ? StockMovement::query()->find($locked->hold_movement_id)
+                : null;
+            $heldLot = $holdMovement?->lot_number;
+            $heldExpiry = $holdMovement?->expiry_date?->toDateString();
+
             switch ($dispo) {
                 case NcrDisposition::Rework:
                 case NcrDisposition::UseAsIs:
@@ -352,13 +425,15 @@ class QuarantineService
                         referenceId: $locked->id,
                         remarks: "MRB release ({$dispo->value}) {$locked->mrb_number}",
                         createdBy: $by->id,
+                        lotNumber: $heldLot,
+                        expiryDate: $heldExpiry,
                     ));
                     $releaseLocationId = $targetLocationId;
                     $newStatus = MrbStatus::Released;
                     break;
 
                 case NcrDisposition::Scrap:
-                    $this->resolveZoneLocation($quarantine, WarehouseZoneType::Scrap);
+                    $scrapLocation = $this->resolveZoneLocation($quarantine, WarehouseZoneType::Scrap);
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::Scrap,
                         itemId: $locked->item_id,
@@ -369,8 +444,13 @@ class QuarantineService
                         referenceId: $locked->id,
                         remarks: "MRB scrap {$locked->mrb_number}",
                         createdBy: $by->id,
+                        lotNumber: $heldLot,
+                        expiryDate: $heldExpiry,
                     ));
-                    $releaseLocationId = $fromId;
+                    // The scrap movement writes inventory off at its source;
+                    // this location is the physical scrap-bin trace, not a
+                    // second on-hand stock destination.
+                    $releaseLocationId = (int) $scrapLocation->id;
                     $newStatus = MrbStatus::Scrapped;
                     break;
 
@@ -385,6 +465,8 @@ class QuarantineService
                         referenceId: $locked->id,
                         remarks: "MRB return-to-supplier {$locked->mrb_number}",
                         createdBy: $by->id,
+                        lotNumber: $heldLot,
+                        expiryDate: $heldExpiry,
                     ));
                     $newStatus = MrbStatus::Returned;
                     break;
@@ -464,6 +546,7 @@ class QuarantineService
                     'unit_price'               => (string) ($poItem?->unit_price ?? $grnItem->unit_cost),
                     'reason'                   => "MRB {$mrb->mrb_number}: return to supplier",
                     'lot_number'               => $grnItem->material_lot_number,
+                    'stock_movement_id'        => $mrb->release_movement_id,
                     // The MRB moved stock but never touched the PO received
                     // quantity, so the RMA must reconcile the receipt exactly
                     // once. Its lines carry the released quantity as an already

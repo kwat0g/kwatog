@@ -34,6 +34,11 @@ class MoldResource extends JsonResource
             'status'                       => (string) $this->status?->value,
             'status_label'                 => $this->status?->label(),
             'location'                     => $this->location,
+            'asset'                        => $this->whenLoaded('asset', fn () => $this->asset ? [
+                'id' => $this->asset->hash_id,
+                'asset_code' => $this->asset->asset_code,
+                'name' => $this->asset->name,
+            ] : null),
             // Lifecycle manager.
             'commissioned_at'              => optional($this->commissioned_at)?->toDateString(),
             'decommissioned_at'            => optional($this->decommissioned_at)?->toDateString(),

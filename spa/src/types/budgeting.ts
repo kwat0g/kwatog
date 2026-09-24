@@ -1,5 +1,5 @@
 export interface FiscalYear {
- id: string;
+  id: string;
  year: number;
  start_date: string;
  end_date: string;
@@ -93,7 +93,7 @@ export interface BudgetVsActual {
 }
 
 export interface BudgetSyncRun {
- id: string;
+  request_id: string;
  fiscal_year_id: string | null;
  status: 'queued' | 'running' | 'completed' | 'failed';
  processed_lines: number;

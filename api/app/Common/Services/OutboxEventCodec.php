@@ -61,6 +61,7 @@ use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
 use BackedEnum;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionParameter;
@@ -267,7 +268,7 @@ class OutboxEventCodec
         };
     }
 
-    /** @param array{__type: string, class: mixed, id: mixed} $value */
+    /** @param array{__type: string, class: mixed, id: mixed, version?: mixed} $value */
     private function decodeModel(array $value, ?ReflectionType $expectedType, ReflectionParameter $parameter): Model
     {
         $class = $value['class'] ?? null;
@@ -283,6 +284,18 @@ class OutboxEventCodec
         $model = $class::query()->find($value['id'] ?? null);
         if (! $model) {
             throw new RuntimeException("Outbox model {$class}#{$value['id']} no longer exists.");
+        }
+
+        // Model markers carry the version that was published. Rehydrating the
+        // current row without checking it turns a stale retry/replay into a
+        // false event containing a later state. Old rows without a marker are
+        // still readable; all newly encoded rows include it.
+        if (array_key_exists('version', $value) && $value['version'] !== null) {
+            $publishedAt = Carbon::parse((string) $value['version']);
+            $currentAt = Carbon::parse((string) $model->getRawOriginal('updated_at'));
+            if (! $publishedAt->equalTo($currentAt)) {
+                throw new RuntimeException("Outbox model {$class}#{$value['id']} changed after publication.");
+            }
         }
 
         return $model;

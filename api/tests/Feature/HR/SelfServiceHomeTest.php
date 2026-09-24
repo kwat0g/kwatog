@@ -6,6 +6,8 @@ namespace Tests\Feature\HR;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -48,6 +50,24 @@ class SelfServiceHomeTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/v1/hr/self-service/home')
             ->assertStatus(403);
+    }
+
+    public function test_self_service_home_hides_errored_finalized_payroll(): void
+    {
+        $employee = Employee::factory()->create();
+        $user = User::factory()->create(['employee_id' => $employee->id]);
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill(['status' => 'finalized'])->save();
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+            'error_message' => 'Computation failed',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/v1/hr/self-service/home')
+            ->assertOk()
+            ->assertJsonPath('data.latest_payslip', null);
     }
 
     public function test_self_service_overtime_returns_the_effective_shift_schema(): void

@@ -9,7 +9,9 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemUomConversion;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\Uom;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\HR\Models\Department;
@@ -106,7 +108,7 @@ class MrpNettingTest extends TestCase
      * @param float $qtyPerUnit       units of material needed per finished unit
      * @param float $wasteFactor      waste % (e.g. 10 = 10 %)
      */
-    private function createBom(float $qtyPerUnit = 2.0, float $wasteFactor = 0.0): Bom
+    private function createBom(float $qtyPerUnit = 2.0, float $wasteFactor = 0.0, string $unit = 'pcs'): Bom
     {
         $bom = Bom::create([
             'product_id' => $this->product->id,
@@ -118,7 +120,7 @@ class MrpNettingTest extends TestCase
             'bom_id'            => $bom->id,
             'item_id'           => $this->material->id,
             'quantity_per_unit' => $qtyPerUnit,
-            'unit'              => 'pcs',
+            'unit'              => $unit,
             'waste_factor'      => $wasteFactor,
             'sort_order'        => 0,
         ]);
@@ -192,7 +194,12 @@ class MrpNettingTest extends TestCase
      * @param float  $received  poi.quantity_received
      * @param string $poStatus  purchase_orders.status — must be one of approved|sent|partially_received
      */
-    private function createInTransitPo(float $ordered, float $received = 0.0, string $poStatus = 'approved'): void
+    private function createInTransitPo(
+        float $ordered,
+        float $received = 0.0,
+        string $poStatus = 'approved',
+        string $unit = 'pcs',
+    ): void
     {
         $vendorId = DB::table('vendors')->insertGetId([
             'name'       => 'Test Vendor',
@@ -223,7 +230,7 @@ class MrpNettingTest extends TestCase
             'item_id'           => $this->material->id,
             'description'       => 'Test material',
             'quantity'          => $ordered,
-            'unit'              => 'pcs',
+            'unit'              => $unit,
             'unit_price'        => 5.00,
             'total'             => $ordered * 5,
             'quantity_received' => $received,
@@ -300,7 +307,7 @@ class MrpNettingTest extends TestCase
         $this->assertTrue($pr->is_auto_generated, 'PR must be flagged is_auto_generated');
 
         $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
-        // net = 20 - 8 = 12, stored rounded to 2 decimal places
+        // net = 20 - 8 = 12, stored at purchase quantity precision.
         $this->assertSame('12.00', $prItem->quantity, 'PR item qty must equal net shortage (12)');
     }
 
@@ -834,6 +841,52 @@ class MrpNettingTest extends TestCase
             ->where('item_id', $this->material->id)
             ->firstOrFail();
 
-        $this->assertSame('12.34', $prItem->quantity, 'net 12.34 with no MOQ must order the exact 2dp net');
+        $this->assertSame('12.34', $prItem->quantity, 'net 12.34 with no MOQ must retain 3dp quantity precision');
+    }
+
+    public function test_thousandth_moq_does_not_round_purchase_quantity_up_to_a_hundredth(): void
+    {
+        $this->material->update(['minimum_order_quantity' => '0.001']);
+        $this->createBom(qtyPerUnit: 0.001, wasteFactor: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 1);
+
+        $plan = $this->engine->runForSalesOrder($so);
+        $prItem = PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('0.001', (string) $prItem->quantity);
+    }
+
+    public function test_in_transit_po_quantity_is_converted_from_purchase_uom_to_item_base_uom(): void
+    {
+        $this->material->update(['unit_of_measure' => 'KG']);
+        $kg = Uom::create(['code' => 'KG', 'name' => 'Kilogram']);
+        $bag = Uom::create(['code' => 'BAG', 'name' => 'Bag']);
+        ItemUomConversion::create([
+            'item_id' => $this->material->id,
+            'from_uom_id' => $bag->id,
+            'to_uom_id' => $kg->id,
+            'factor' => '25.000000',
+        ]);
+        $this->createBom(qtyPerUnit: 1.0, wasteFactor: 0.0, unit: 'KG');
+        $this->createInTransitPo(ordered: 2, received: 1, poStatus: 'partially_received', unit: 'BAG');
+        $so = $this->createConfirmedSo(lineQty: 30);
+
+        $plan = $this->engine->runForSalesOrder($so);
+        $prItem = PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        // One received bag leaves one bag (25 kg) in transit, against 30 kg demand.
+        $this->assertSame('5.00', (string) $prItem->quantity);
     }
 }

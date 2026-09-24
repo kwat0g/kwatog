@@ -74,6 +74,10 @@ class ShiftAssignmentService
 
     private function replaceForEmployee(int $employeeId, int $shiftId, Carbon $effective, ?string $endDate): void
     {
+        if (! Shift::query()->whereKey($shiftId)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Only active shifts can be assigned.');
+        }
+
         $newStart = $effective->copy()->startOfDay();
         $newEnd = $endDate !== null ? Carbon::parse($endDate)->startOfDay() : null;
         $assignments = EmployeeShiftAssignment::query()

@@ -14,6 +14,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
+import { localIsoDate } from '@/lib/formatDate';
 
 const schema = z.object({
  department_id: z.string().min(1, 'Required'),
@@ -42,7 +43,7 @@ export default function BulkAssignShiftPage() {
  formState: { errors, isSubmitting },
  } = useForm<FormValues>({
  resolver: zodResolver(schema),
- defaultValues: { effective_date: new Date().toISOString().slice(0, 10) },
+ defaultValues: { effective_date: localIsoDate() },
  });
 
  const mutation = useMutation({

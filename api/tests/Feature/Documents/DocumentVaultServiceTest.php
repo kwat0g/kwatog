@@ -53,6 +53,18 @@ class DocumentVaultServiceTest extends TestCase
             ->store('', DocumentType::Invoice, $this->fakeEntity(), $this->makeUser());
     }
 
+    public function test_read_bytes_rejects_a_corrupted_blob(): void
+    {
+        Storage::fake('local');
+        $vault = app(DocumentVaultService::class);
+        $doc = $vault->store('ORIGINAL', DocumentType::Invoice, $this->fakeEntity(), $this->makeUser());
+
+        Storage::disk('local')->put($doc->file_path, 'CORRUPTED');
+
+        $this->expectException(\RuntimeException::class);
+        $vault->readBytes($doc->fresh());
+    }
+
     public function test_regenerate_replaces_blob_and_archives_old_row(): void
     {
         Storage::fake('local');

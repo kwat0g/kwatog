@@ -262,6 +262,10 @@ class CocAutoAttachOnConfirmTest extends TestCase
                 'reject_count'      => 1,
                 'defect_count'      => $status === InspectionStatus::Passed ? 0 : 1,
                 'inspector_id'      => $user->id,
+                'reviewed_by'       => $status === InspectionStatus::Passed
+                    ? User::factory()->create(['role_id' => $user->role_id])->id
+                    : null,
+                'reviewed_at'       => $status === InspectionStatus::Passed ? now() : null,
                 'completed_at'      => now(),
             ]);
 

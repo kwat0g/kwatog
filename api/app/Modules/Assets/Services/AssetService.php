@@ -20,6 +20,9 @@ use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Models\AssetDepreciation;
 use App\Modules\Assets\Models\AssetTransfer;
 use App\Modules\Auth\Models\User;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
+use App\Modules\SupplyChain\Models\Vehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,7 +43,13 @@ class AssetService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = Asset::query()->with('department:id,name,code', 'disposalRequester:id,name');
+        $q = Asset::query()->with([
+            'department:id,name,code',
+            'disposalRequester:id,name',
+            'machine:id,asset_id,machine_code,name',
+            'mold:id,asset_id,mold_code,name',
+            'vehicle:id,asset_id,plate_number,name',
+        ]);
 
         foreach (['category', 'status', 'department_id'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);
@@ -67,7 +76,82 @@ class AssetService
             'depreciations.journalEntry:id',
             'disposalRequester:id,name',
             'approvalRecords.approver:id,name',
+            'machine:id,asset_id,machine_code,name',
+            'mold:id,asset_id,mold_code,name',
+            'vehicle:id,asset_id,plate_number,name',
         ]);
+    }
+
+    /**
+     * Associate an operational record through its existing asset_id column.
+     * The Assets module owns this write so no second polymorphic link is
+     * introduced beside the canonical foreign key.
+     *
+     * @param array{target_type:string, target_id:int|null} $data
+     */
+    public function associate(Asset $asset, array $data): Asset
+    {
+        return DB::transaction(function () use ($asset, $data): Asset {
+            $locked = Asset::query()->lockForUpdate()->findOrFail($asset->getKey());
+            if ($locked->status === AssetStatus::Disposed) {
+                throw new BusinessRuleException('Disposed assets cannot be associated with operational records.');
+            }
+
+            if ($data['target_id'] === null) {
+                foreach ([Machine::class, Mold::class, Vehicle::class] as $modelClass) {
+                    $modelClass::query()
+                        ->where('asset_id', $locked->getKey())
+                        ->lockForUpdate()
+                        ->get()
+                        ->each(fn ($target) => $target->forceFill(['asset_id' => null])->save());
+                }
+
+                return $this->loadAssociationRelations($locked->fresh());
+            }
+
+            $type = (string) $data['target_type'];
+            $expectedCategory = AssetCategory::from($type);
+            $actualCategory = $locked->category instanceof AssetCategory
+                ? $locked->category
+                : AssetCategory::from((string) $locked->category);
+            if ($actualCategory !== $expectedCategory) {
+                throw new BusinessRuleException("A {$actualCategory->value} asset can only be associated with a {$actualCategory->value} record.");
+            }
+
+            $modelClass = match ($type) {
+                AssetCategory::Machine->value => Machine::class,
+                AssetCategory::Mold->value => Mold::class,
+                AssetCategory::Vehicle->value => Vehicle::class,
+            };
+            $target = $modelClass::query()->lockForUpdate()->find($data['target_id']);
+            if (! $target) {
+                throw new BusinessRuleException('The selected operational record does not exist or is archived.');
+            }
+            if ($target->asset_id !== null && (int) $target->asset_id !== (int) $locked->getKey()) {
+                throw new BusinessRuleException('The selected operational record is already associated with another asset.');
+            }
+
+            foreach ([Machine::class, Mold::class, Vehicle::class] as $otherClass) {
+                if ($otherClass === $modelClass) {
+                    continue;
+                }
+                if ($otherClass::query()->where('asset_id', $locked->getKey())->lockForUpdate()->exists()) {
+                    throw new BusinessRuleException('This asset already has an association; clear it before changing the operational record.');
+                }
+            }
+
+            if ($modelClass::query()
+                ->where('asset_id', $locked->getKey())
+                ->where('id', '<>', $target->getKey())
+                ->lockForUpdate()
+                ->exists()) {
+                throw new BusinessRuleException('This asset is already associated with another operational record; clear it first.');
+            }
+
+            $target->forceFill(['asset_id' => $locked->getKey()])->save();
+
+            return $this->loadAssociationRelations($locked->fresh());
+        });
     }
 
     public function create(array $data): Asset
@@ -373,6 +457,9 @@ class AssetService
             if (! $this->approvals->isFullyApproved($locked)) {
                 throw new BusinessRuleException('Asset disposal requires an approved disposal request; submit one for approval first.');
             }
+            if ($this->hasOperationalAssociation($locked)) {
+                throw new BusinessRuleException('Disassociate this asset from its machine, mold or vehicle before disposal.');
+            }
 
             $disposedDate = CarbonImmutable::parse((string) ($data['disposed_date'] ?? now()->toDateString()))->startOfDay();
             $acquisitionDate = CarbonImmutable::parse($locked->acquisition_date->toDateString())->startOfDay();
@@ -491,5 +578,21 @@ class AssetService
 
             $locked->delete();
         });
+    }
+
+    private function hasOperationalAssociation(Asset $asset): bool
+    {
+        return Machine::query()->where('asset_id', $asset->getKey())->exists()
+            || Mold::query()->where('asset_id', $asset->getKey())->exists()
+            || Vehicle::query()->where('asset_id', $asset->getKey())->exists();
+    }
+
+    private function loadAssociationRelations(Asset $asset): Asset
+    {
+        return $asset->load([
+            'machine:id,asset_id,machine_code,name',
+            'mold:id,asset_id,mold_code,name',
+            'vehicle:id,asset_id,plate_number,name',
+        ]);
     }
 }

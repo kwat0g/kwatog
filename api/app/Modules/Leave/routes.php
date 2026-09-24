@@ -35,6 +35,8 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::get('/requests/options', [LeaveRequestController::class, 'options'])->middleware('permission:leave.view');
     Route::get('/requests', [LeaveRequestController::class, 'index'])->middleware('permission:leave.view');
     Route::post('/requests', [LeaveRequestController::class, 'store'])->middleware('permission:leave.create');
+    Route::get('/requests/{leaveRequest}/document', [LeaveRequestController::class, 'downloadDocument'])
+        ->middleware('permission:leave.view');
     Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
     Route::patch('/requests/{leaveRequest}/approve-dept', [LeaveRequestController::class, 'approveDept'])->middleware('permission:leave.approve_dept');
     Route::patch('/requests/{leaveRequest}/approve-hr', [LeaveRequestController::class, 'approveHR'])->middleware('permission:leave.approve_hr');

@@ -34,7 +34,10 @@ class PositionService
         }
 
         $sort = $filters['sort'] ?? 'title';
-        $dir = $filters['direction'] ?? 'asc';
+        $dir = strtolower((string) ($filters['direction'] ?? 'asc'));
+        if (! in_array($dir, ['asc', 'desc'], true)) {
+            $dir = 'asc';
+        }
         if (in_array($sort, ['title', 'salary_grade'], true)) {
             $query->orderBy($sort, $dir);
         }

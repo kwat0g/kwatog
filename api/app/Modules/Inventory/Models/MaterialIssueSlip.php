@@ -21,6 +21,7 @@ class MaterialIssueSlip extends Model
         'slip_number', 'work_order_id', 'issued_date',
         'issued_by', 'created_by', 'status',
         'total_value', 'reference_text', 'remarks',
+        'idempotency_key', 'idempotency_fingerprint',
     ];
 
     protected $casts = [

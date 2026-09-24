@@ -58,7 +58,7 @@ class CustomerAuthController
         );
 
         /** @var CustomerPortalUser $user */
-        $user = $user->load('customer:id,name');
+        $user = $user->load('customer:id,name,is_active');
 
         return response()->json([
             'data' => ['user' => new CustomerPortalUserResource($user)],
@@ -104,7 +104,7 @@ class CustomerAuthController
     public function me(Request $request): JsonResponse
     {
         /** @var \App\Modules\B2B\Models\CustomerPortalUser $user */
-        $user = $request->user('customer_portal')->load('customer:id,name');
+        $user = $request->user('customer_portal')->load('customer:id,name,is_active');
 
         return response()->json(['data' => new CustomerPortalUserResource($user)]);
     }

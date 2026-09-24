@@ -52,7 +52,7 @@ class NcrService
     {
         $q = NonConformanceReport::query()->with([
             'product:id,part_number,name',
-            'inspection:id,inspection_number,stage,status',
+            'inspection:id,inspection_number,stage,status,entity_type,entity_id',
             'creator:id,name,role_id',
             'assignee:id,name',
             'reworkWorkOrder:id,wo_number,status,quantity_target',
@@ -78,10 +78,11 @@ class NcrService
     {
         return $ncr->load([
             'product:id,part_number,name',
-            'inspection:id,inspection_number,stage,status,product_id',
+            'inspection:id,inspection_number,stage,status,product_id,entity_type,entity_id',
             'creator:id,name,role_id',
             'assignee:id,name',
             'closer:id,name',
+            'mrbDecider:id,name',
             'recurrenceOf:id,ncr_number',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
             'reworkWorkOrder:id,wo_number,status,quantity_target',
@@ -165,16 +166,24 @@ class NcrService
                 ? NcrSeverity::High->value
                 : NcrSeverity::Medium->value);
 
+        // Build description: for lot_checklist, mention the defect count found in sample.
+        $descriptionBase = 'Automated NCR from inspection '.$inspection->inspection_number.': ';
+        if ($inspection->inspection_mode && $inspection->inspection_mode->value === 'lot_checklist' && $inspection->sample_defect_count !== null) {
+            $descriptionBase .= $inspection->sample_defect_count.' defective piece(s) found in a sample of '
+                              .$inspection->sample_size.' (accept ≤ '.$inspection->accept_count.')';
+        } else {
+            $descriptionBase .= $inspection->defect_count.' defect(s)';
+        }
+        $descriptionBase .= ' on '.$inspection->stage->value.' stage'
+                          .($criticalFail ? ' (critical parameter failure)' : '').'.';
+
         try {
             $ncr = $this->create([
                 'source'             => NcrSource::InspectionFail->value,
                 'severity'           => $severity,
                 'product_id'         => $inspection->product_id,
                 'inspection_id'      => $inspection->id,
-                'defect_description' => 'Automated NCR from inspection '.$inspection->inspection_number.': '
-                                       .$inspection->defect_count.' defect(s) on '
-                                       .$inspection->stage->value.' stage'
-                                       .($criticalFail ? ' (critical parameter failure)' : '').'.',
+                'defect_description' => $descriptionBase,
                 'affected_quantity'  => $inspection->batch_quantity,
                 'is_auto_generated'  => true,
             ], $by);
@@ -255,26 +264,162 @@ class NcrService
         });
     }
 
-    public function setDisposition(NonConformanceReport $ncr, string $disposition, ?string $rootCause, ?string $correctiveAction): NonConformanceReport
-    {
+    /**
+     * Set NCR disposition.
+     *
+     * For a failed incoming (GRN) inspection with MRB review on, this IS the
+     * Material Review Board decision: it is recorded with its decider and the
+     * receipt is settled in the same transaction (see GrnService::settleIncomingQc).
+     * use_as_is is a concession, so the inspector who failed the lot cannot
+     * grant it. $mrbAcceptedQuantity (return_to_supplier/scrap only) is the
+     * number of good pieces kept after sorting; the rest goes back.
+     */
+    public function setDisposition(
+        NonConformanceReport $ncr,
+        string $disposition,
+        ?string $rootCause,
+        ?string $correctiveAction,
+        ?User $by = null,
+        ?string $mrbAcceptedQuantity = null,
+    ): NonConformanceReport {
         if ($ncr->status->isTerminal()) {
             throw new BusinessRuleException('NCR is already closed.');
         }
-        return DB::transaction(function () use ($ncr, $disposition, $rootCause, $correctiveAction) {
-            // Lock-then-guard: a stale disposition must not flip a concurrently
-            // closed NCR back to in_progress.
+        $dispositionEnum = NcrDisposition::from($disposition);
+
+        return DB::transaction(function () use ($ncr, $dispositionEnum, $rootCause, $correctiveAction, $by, $mrbAcceptedQuantity) {
+            // Lock-then-guard: a stale disposition must not flip a concurrently closed NCR back to in_progress.
             $locked = NonConformanceReport::query()->lockForUpdate()->findOrFail($ncr->getKey());
             if ($locked->status->isTerminal()) {
                 throw new BusinessRuleException('NCR is already closed.');
             }
-            $locked->forceFill([
-                'disposition'       => NcrDisposition::from($disposition)->value,
+
+            // The MRB decision settled the receipt (stock in, remainder rejected).
+            // A different disposition afterwards would contradict what inventory
+            // already did; root cause / corrective action stay editable.
+            $currentDisposition = $locked->disposition instanceof NcrDisposition
+                ? $locked->disposition->value
+                : $locked->disposition;
+            if ($locked->mrb_decided_at !== null
+                && ($currentDisposition !== $dispositionEnum->value || $mrbAcceptedQuantity !== null)) {
+                throw new BusinessRuleException(
+                    'The Material Review Board decision is final: the receipt was settled against it.'
+                );
+            }
+
+            $grn = $this->pendingIncomingGrnForMrb($locked);
+            $mrbQuantity = $grn !== null
+                ? $this->validateMrbDecision($locked, $grn, $dispositionEnum, $by, $mrbAcceptedQuantity)
+                : null;
+            if ($grn === null && $mrbAcceptedQuantity !== null) {
+                throw new BusinessRuleException(
+                    'Good pieces kept after sorting can only be recorded while the receipt is waiting for the MRB decision.'
+                );
+            }
+
+            $fill = [
+                'disposition'       => $dispositionEnum->value,
                 'root_cause'        => $rootCause ?: $locked->root_cause,
                 'corrective_action' => $correctiveAction ?: $locked->corrective_action,
                 'status'            => NcrStatus::InProgress->value,
-            ])->save();
+            ];
+            if ($grn !== null) {
+                $fill['mrb_accepted_quantity'] = $mrbQuantity;
+                $fill['mrb_decided_by'] = $by->id;
+                $fill['mrb_decided_at'] = now();
+            }
+            $locked->forceFill($fill)->save();
+
+            if ($grn !== null) {
+                app(\App\Modules\Inventory\Services\GrnService::class)->settleIncomingQc($grn, $by);
+            }
+
             return $this->show($locked);
         });
+    }
+
+    /** True while this NCR's disposition would decide a pending incoming receipt. */
+    public function awaitsMrbDecision(NonConformanceReport $ncr): bool
+    {
+        return $this->pendingIncomingGrnForMrb($ncr) !== null;
+    }
+
+    /**
+     * The receipt an incoming NCR still decides: an incoming GRN inspection
+     * whose GRN is pending_qc while MRB review is on. Null means the
+     * disposition is a record only (legacy auto-rejected receipt, other stages).
+     */
+    private function pendingIncomingGrnForMrb(NonConformanceReport $ncr): ?\App\Modules\Inventory\Models\GoodsReceiptNote
+    {
+        $inspection = $ncr->inspection;
+        if (! $inspection || $inspection->stage !== InspectionStage::Incoming) {
+            return null;
+        }
+        $entityType = $inspection->entity_type instanceof \BackedEnum
+            ? $inspection->entity_type->value
+            : (string) $inspection->entity_type;
+        if ($entityType !== 'grn' || ! $inspection->entity_id) {
+            return null;
+        }
+        if (! $this->settings->requiredBool('quality.incoming_failure.mrb_review', true)) {
+            return null;
+        }
+
+        $grn = \App\Modules\Inventory\Models\GoodsReceiptNote::query()->find((int) $inspection->entity_id);
+
+        return $grn && $grn->status === \App\Modules\Inventory\Enums\GrnStatus::PendingQc ? $grn : null;
+    }
+
+    /** @return string|null the normalised sorted-good quantity */
+    private function validateMrbDecision(
+        NonConformanceReport $ncr,
+        \App\Modules\Inventory\Models\GoodsReceiptNote $grn,
+        NcrDisposition $disposition,
+        ?User $by,
+        ?string $mrbAcceptedQuantity,
+    ): ?string {
+        if ($by === null) {
+            throw new BusinessRuleException('An MRB decision on a pending receipt must record who made it.');
+        }
+        $inspection = $ncr->inspection;
+
+        // A concession overrides a failed verdict; the inspector who failed
+        // the lot cannot also be the one who waives it.
+        if ($disposition === NcrDisposition::UseAsIs
+            && $inspection->inspector_id
+            && (int) $by->id === (int) $inspection->inspector_id) {
+            throw new BusinessRuleException(
+                'Use-as-is is a concession: it must be granted by someone other than the inspector who failed the lot.'
+            );
+        }
+
+        if ($mrbAcceptedQuantity === null || $mrbAcceptedQuantity === '') {
+            return null;
+        }
+        if (! in_array($disposition, [NcrDisposition::ReturnToSupplier, NcrDisposition::Scrap], true)) {
+            throw new BusinessRuleException('Good pieces kept after sorting apply only to return-to-supplier or scrap.');
+        }
+        if (! preg_match('/^\d+(\.\d{1,3})?$/', trim($mrbAcceptedQuantity))) {
+            throw new BusinessRuleException('Good pieces kept must be a non-negative number with at most 3 decimals.');
+        }
+        $qty = bcadd(trim($mrbAcceptedQuantity), '0', 3);
+
+        if ($inspection->grn_item_id === null && $grn->items()->count() > 1) {
+            throw new BusinessRuleException(
+                'This inspection covers several receipt lines; sort per line or return the whole lot.'
+            );
+        }
+        $line = $inspection->grn_item_id
+            ? GrnItem::query()->find((int) $inspection->grn_item_id)
+            : $grn->items()->first();
+        $limit = (string) ($line?->quantity_received ?? $ncr->affected_quantity ?? '0');
+        if (bccomp($qty, $limit, 3) >= 0) {
+            throw new BusinessRuleException(
+                "Good pieces kept must be fewer than the {$limit} received; if the whole lot is good, use use-as-is."
+            );
+        }
+
+        return bccomp($qty, '0', 3) === 0 ? null : $qty;
     }
 
     /**

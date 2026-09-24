@@ -27,7 +27,9 @@ class SyncBudgetActuals implements ShouldQueue
 
     public const TIMEOUT_SECONDS = 120;
 
-    public int $tries = 1;
+    // This job is currently executed by the queued listener as one unit; the
+    // listener owns retries. Do not advertise a nested retry policy that is
+    // never consulted.
     public int $timeout = self::TIMEOUT_SECONDS;
 
     public function __construct(

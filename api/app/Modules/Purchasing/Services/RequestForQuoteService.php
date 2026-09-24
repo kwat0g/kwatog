@@ -9,6 +9,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
@@ -67,9 +68,14 @@ class RequestForQuoteService
             'purchaseRequest:id,pr_number,department_id',
             'purchaseRequest.department:id,name,code',
             'creator:id,name',
+            // Unordered, Postgres returns an updated row last, so a supplier
+            // that responded jumped to the end of every list and select.
+            'items' => fn ($q) => $q->orderBy('id'),
             'items.item:id,code,name,unit_of_measure',
+            'invitations' => fn ($q) => $q->orderBy('id'),
             'invitations.vendor:id,name,email',
-            'quotes' => fn ($q) => $q->where('is_current', true)->with(['vendor:id,name', 'items.rfqItem']),
+            'quotes' => fn ($q) => $q->where('is_current', true)->orderBy('id')->with(['vendor:id,name', 'items.rfqItem']),
+            'awards' => fn ($q) => $q->orderBy('id'),
             'awards.vendor:id,name',
             'awards.rfqItem',
             'awards.quote',
@@ -111,6 +117,16 @@ class RequestForQuoteService
             $rfq->forceFill(['status' => RfqStatus::Draft])->save();
 
             foreach ($locked->items as $line) {
+                // RFQ per-line delivery date falls back to PR's required_delivery_date
+                // when the per-line value is missing or empty — but only while that date
+                // is still ahead, matching the after:today rule on entered dates, so a
+                // lapsed need-by never becomes an overdue-at-birth PO via the award.
+                $deliveryDate = $data['required_delivery_dates'][$line->id] ?? null;
+                if (! $deliveryDate || trim((string) $deliveryDate) === '') {
+                    $prDate = $locked->required_delivery_date?->toDateString();
+                    $deliveryDate = $prDate !== null && $prDate > now()->toDateString() ? $prDate : null;
+                }
+
                 $rfq->items()->create([
                     'purchase_request_item_id' => $line->id,
                     'item_id' => $line->item_id,
@@ -118,7 +134,7 @@ class RequestForQuoteService
                     'specification' => $data['specifications'][$line->id] ?? null,
                     'quantity' => (string) $line->quantity,
                     'unit' => $line->unit,
-                    'required_delivery_date' => $data['required_delivery_dates'][$line->id] ?? null,
+                    'required_delivery_date' => $deliveryDate,
                     'allow_partial_quantity' => (bool) ($data['allow_partial_quantity'][$line->id] ?? true),
                     'allow_substitute' => false,
                 ]);
@@ -129,6 +145,14 @@ class RequestForQuoteService
                 $vendorId = (int) $invitation['vendor_id'];
                 if (isset($seenVendors[$vendorId])) {
                     throw new BusinessRuleException('A supplier may only be invited once per RFQ.');
+                }
+                // Vendor must be active to invite to an RFQ.
+                $vendor = Vendor::withTrashed()->find($vendorId);
+                if (! $vendor || ! $vendor->isPurchasable()) {
+                    $vendorName = $vendor?->name ?? "Vendor #{$vendorId}";
+                    throw new BusinessRuleException(
+                        "Vendor {$vendorName} is inactive. Reactivate it or choose another supplier."
+                    );
                 }
                 $seenVendors[$vendorId] = true;
                 if (! $this->isQualifiedForRfq($locked, $vendorId) && trim((string) ($invitation['exception_reason'] ?? '')) === '') {
@@ -292,6 +316,24 @@ class RequestForQuoteService
                 'period' => sprintf('%04d-%02d', $snapshot->period_year, $snapshot->period_month),
             ] : null);
         }
+        // Freight, other charges and exclusive VAT are quoted once per
+        // quotation, so a line's own delivered cost omits them. Spread them over
+        // the quoted lines by value; ranking on the bare line let a cheap unit
+        // price with heavy freight beat a lower total delivered cost.
+        foreach ($shown->quotes as $quote) {
+            $quoted = $quote->items->filter(fn ($line) => ($line->response_status?->value ?? (string) $line->response_status) === 'quoted');
+            $base = Money::add('0', ...$quoted->map(static fn ($line): string => (string) $line->line_total_delivered_cost)->all());
+            $lineVat = Money::add('0', ...$quoted->map(static fn ($line): string => (string) $line->line_vat_amount)->all());
+            $header = Money::add(
+                (string) $quote->freight_amount,
+                (string) $quote->other_charges,
+                ! $quote->vat_inclusive && Money::isZero($lineVat) ? (string) $quote->vat_amount : '0',
+            );
+            foreach ($quoted as $line) {
+                $share = Money::isZero($base) ? '0' : Money::div(bcmul($header, (string) $line->line_total_delivered_cost, 8), $base, 8);
+                $line->setAttribute('allocated_delivered_cost', Money::add((string) $line->line_total_delivered_cost, $share));
+            }
+        }
         foreach ($shown->items as $item) {
             $candidates = $shown->quotes->flatMap(fn ($quote) => $quote->items->filter(
                 fn ($line) => (int) $line->request_for_quote_item_id === (int) $item->id
@@ -299,7 +341,7 @@ class RequestForQuoteService
                     && ($line->compliance_status?->value ?? (string) $line->compliance_status) !== 'blocking'
                     && Money::gt((string) $line->offered_quantity, '0'),
             ));
-            $best = $candidates->sortBy(fn ($line) => Money::div((string) $line->line_total_delivered_cost, (string) $line->offered_quantity))->first();
+            $best = $candidates->sortBy(fn ($line) => Money::div((string) $line->allocated_delivered_cost, (string) $line->offered_quantity, 8))->first();
             foreach ($candidates as $line) {
                 $line->setAttribute('is_recommended', $best !== null && $line->id === $best->id);
             }

@@ -208,11 +208,15 @@ class CreateDeliveryDriverGateTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'GT-BATCH-' . substr(uniqid(), -8),
         ]);
+        $reviewer = User::factory()->create(['role_id' => $role->id]);
 
         Inspection::create([
             'inspection_number' => 'QC-GT-' . substr(uniqid(), -8),
             'stage'             => InspectionStage::Outgoing->value,
             'status'            => InspectionStatus::Passed->value,
+            'inspector_id'      => $user->id,
+            'reviewed_by'       => $reviewer->id,
+            'reviewed_at'       => now(),
             'product_id'        => $product->id,
             'entity_type'       => InspectionEntityType::WorkOrder->value,
             'entity_id'         => $workOrder->id,

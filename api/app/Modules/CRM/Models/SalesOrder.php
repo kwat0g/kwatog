@@ -34,6 +34,7 @@ class SalesOrder extends Model
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
         'notes', 'submission_source', 'mrp_plan_id', 'created_by', 'incoterm', 'confirmed_at',
         'customer_confirmation_requested_at',
+        'portal_idempotency_key', 'portal_idempotency_fingerprint',
         'in_production_at', 'partially_delivered_at', 'delivered_at',
         'invoiced_at', 'paid_at', 'closed_at', 'cancelled_at',
     ];
@@ -131,6 +132,25 @@ class SalesOrder extends Model
     public function scopeStatus(Builder $q, SalesOrderStatus|string $status): Builder
     {
         return $q->where('status', $status instanceof SalesOrderStatus ? $status->value : $status);
+    }
+
+    /**
+     * Orders whose demand MRP still owns: every non-terminal SO with at least
+     * one undelivered line.
+     *
+     * Status alone is wrong. Invoice finalize promotes the SO to `invoiced`
+     * on the FIRST finalized invoice, so a partially shipped order reads
+     * `invoiced` while it still has goods to make and ship — a status-only
+     * filter silently drops that remaining demand from replanning.
+     */
+    public function scopePlanningRelevant(Builder $q): Builder
+    {
+        return $q->whereNotIn('status', [
+            SalesOrderStatus::Draft->value,
+            SalesOrderStatus::Cancelled->value,
+            SalesOrderStatus::Closed->value,
+        ])->whereHas('items', fn (Builder $items): Builder => $items
+            ->whereColumn('quantity_delivered', '<', 'quantity'));
     }
 
     public function getIsEditableAttribute(): bool

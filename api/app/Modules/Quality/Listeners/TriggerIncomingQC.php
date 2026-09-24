@@ -12,6 +12,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
@@ -73,14 +74,19 @@ class TriggerIncomingQC implements ShouldQueue
                 $existing = 0;
                 $eligible = 0;
                 foreach ($grn->items as $line) {
-                    if (! $line->item) {
+                    $item = $line->item ?? Item::withTrashed()->find($line->item_id);
+                    if (! $item) {
                         continue;
                     }
 
-                    $batchQuantity = (int) (float) $line->quantity_received;
-                    if ($batchQuantity < 1) {
+                    $qtyReceived = (string) $line->quantity_received;
+                    if (bccomp($qtyReceived, '0', 3) <= 0) {
                         continue;
                     }
+                    $truncated = (int) bcdiv($qtyReceived, '1', 0);
+                    $batchQuantity = bccomp($qtyReceived, (string) $truncated, 3) > 0
+                        ? $truncated + 1
+                        : max(1, $truncated);
                     $eligible++;
 
                     $hasInspection = Inspection::query()
@@ -93,7 +99,7 @@ class TriggerIncomingQC implements ShouldQueue
                     }
 
                     $plan = $this->qualityPlans->activeFor(
-                        $line->item,
+                        $item,
                         $grn->vendor_id,
                         $grn->received_date?->toDateString(),
                     );
@@ -102,7 +108,7 @@ class TriggerIncomingQC implements ShouldQueue
                         $this->inspections->createIncomingFromPlan($plan, $line, $grn, $grn->receiver);
                     } else {
                         $this->inspections->createIncomingForItem(
-                            $line->item,
+                            $item,
                             $batchQuantity,
                             $grn->id,
                             $grn->receiver,

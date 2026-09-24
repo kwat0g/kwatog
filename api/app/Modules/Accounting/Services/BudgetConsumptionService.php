@@ -35,6 +35,14 @@ final class BudgetConsumptionService
     ];
 
     /**
+     * Bill statuses that represent a committed/posted state (money is owed/pledged).
+     * Draft bills are not yet acknowledged; Cancelled never happened.
+     *
+     * @var array<int, string>
+     */
+    private const COMMITTED_BILL_STATUSES = ['unpaid', 'partial', 'paid'];
+
+    /**
      * Hydrate exact derived totals onto the supplied models.
      *
      * @param Collection<int, Budget> $budgets
@@ -96,7 +104,8 @@ final class BudgetConsumptionService
             $actual = $actuals[$this->accountKey((int) $row->fiscal_year_id, (int) $row->account_id)] ?? Money::zero();
             $share = Money::isZero($pool)
                 ? Money::div($actual, (string) ($accountCounts[$this->accountKey((int) $row->fiscal_year_id, (int) $row->account_id)] ?? 1), Money::INNER)
-                : Money::mul($actual, Money::div((string) $row->annual_total, $pool, Money::INNER));
+                // Multiply before dividing — a 4 dp share ratio misallocates large actuals.
+                : Money::div(bcmul($actual, (string) $row->annual_total, 8), $pool, 8);
             $result[(int) $row->line_id] = Money::round2($share);
         }
 
@@ -226,7 +235,7 @@ final class BudgetConsumptionService
                 $actual = $actuals[$accountKey] ?? Money::zero();
                 $share = Money::isZero($pool)
                     ? Money::div($actual, (string) ($accountCounts[$accountKey] ?? 1), Money::INNER)
-                    : Money::mul($actual, Money::div((string) $row->annual_total, $pool, Money::INNER));
+                    : Money::div(bcmul($actual, (string) $row->annual_total, 8), $pool, 8);
                 $spent = Money::add($spent, $share);
             }
 
@@ -235,7 +244,7 @@ final class BudgetConsumptionService
             $committedTotal = $committed[$departmentKey] ?? Money::zero();
             $budgetCommitted = Money::isZero($departmentPool)
                 ? Money::zero()
-                : Money::mul($committedTotal, Money::div($allocated, $departmentPool, Money::INNER));
+                : Money::div(bcmul($committedTotal, $allocated, 8), $departmentPool, 8);
 
             $spent = Money::round2($spent);
             $budgetCommitted = Money::round2($budgetCommitted);
@@ -294,24 +303,35 @@ final class BudgetConsumptionService
     /**
      * PO statuses that still represent committed spend: the enum's open set
      * (approved/sent/acknowledged/supplier_proposed/supplier_declined/
-     * partially_received) plus fully received orders that remain unbilled
+     * partially_received) plus fully received/closed orders that remain unbilled
      * (the query nets billed amounts out).
      *
      * @return list<PurchaseOrderStatus>
      */
     private function committedPoStatuses(): array
     {
-        return [...PurchaseOrderStatus::open(), PurchaseOrderStatus::Received];
+        return [...PurchaseOrderStatus::open(), PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed];
     }
 
     /** @return array<string, string> */
     private function committedTotals(array $fiscalYearIds): array
     {
+        // Bills that have been committed/posted (not Draft, not Cancelled).
+        // Draft bills are auto-created but not yet owed; Cancelled never happened.
         $billedTotals = DB::table('bills')
             ->whereNotNull('purchase_order_id')
             ->select('purchase_order_id')
-            ->selectRaw("COALESCE(SUM(CASE WHEN status <> 'cancelled' THEN total_amount ELSE 0 END), 0) AS billed_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN status IN ('".implode("','", self::COMMITTED_BILL_STATUSES)."') THEN total_amount ELSE 0 END), 0) AS billed_total")
             ->groupBy('purchase_order_id');
+
+        // For open statuses, use ordered value (po.total_amount).
+        // For closed/received statuses, only the ACCEPTED share is still owed
+        // (rejected goods go back to the supplier). The share is scaled onto
+        // po.total_amount so VAT and agreed freight/charges stay in the same
+        // basis as billed_total (bills.total_amount) that nets against it.
+        $receivedValues = DB::table('purchase_order_items as poi')
+            ->selectRaw('poi.purchase_order_id, COALESCE(SUM(poi.quantity_accepted * poi.unit_price), 0) AS accepted_value, COALESCE(SUM(poi.quantity * poi.unit_price), 0) AS ordered_value')
+            ->groupBy('poi.purchase_order_id');
 
         return DB::table('purchase_orders as po')
             ->join('purchase_requests as pr', 'pr.id', '=', 'po.purchase_request_id')
@@ -320,11 +340,21 @@ final class BudgetConsumptionService
                     ->on('po.date', '<=', 'fy.end_date');
             })
             ->leftJoinSub($billedTotals, 'billed', 'billed.purchase_order_id', '=', 'po.id')
+            ->leftJoinSub($receivedValues, 'received', 'received.purchase_order_id', '=', 'po.id')
             ->whereIn('fy.id', $fiscalYearIds)
             ->whereIn('po.status', $this->committedPoStatuses())
             ->whereNull('po.deleted_at')
             ->whereNull('pr.deleted_at')
-            ->selectRaw("fy.id AS fiscal_year_id, pr.department_id, COALESCE(SUM(CASE WHEN po.total_amount - COALESCE(billed.billed_total, 0) > 0 THEN po.total_amount - COALESCE(billed.billed_total, 0) ELSE 0 END), 0) AS committed")
+            ->selectRaw("fy.id AS fiscal_year_id, pr.department_id, COALESCE(SUM(CASE
+                WHEN po.status IN ('closed', 'received') THEN
+                    CASE WHEN COALESCE(po.total_amount * received.accepted_value / NULLIF(received.ordered_value, 0), 0) - COALESCE(billed.billed_total, 0) > 0
+                         THEN COALESCE(po.total_amount * received.accepted_value / NULLIF(received.ordered_value, 0), 0) - COALESCE(billed.billed_total, 0)
+                         ELSE 0 END
+                ELSE
+                    CASE WHEN po.total_amount - COALESCE(billed.billed_total, 0) > 0
+                         THEN po.total_amount - COALESCE(billed.billed_total, 0)
+                         ELSE 0 END
+            END), 0) AS committed")
             ->groupBy('fy.id', 'pr.department_id')
             ->get()
             ->mapWithKeys(fn ($row): array => [

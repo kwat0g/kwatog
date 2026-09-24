@@ -68,9 +68,11 @@ class AlertEngineService
         string $message,
         ?Model $entity = null,
         array $metadata = [],
+        ?string $entityType = null,
+        int|string|null $entityId = null,
     ): Alert {
-        $entityType = $entity?->getMorphClass();
-        $entityId = $entity?->getKey();
+        $entityType ??= $entity?->getMorphClass();
+        $entityId ??= $entity?->getKey();
         $conditionKey = Alert::conditionKeyFor($type, $entityType, $entityId);
 
         if ($this->currentCheck !== null && $this->runContext !== null) {

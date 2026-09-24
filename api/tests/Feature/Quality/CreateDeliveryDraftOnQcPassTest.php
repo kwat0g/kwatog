@@ -157,6 +157,7 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
     {
         $role = Role::firstOrCreate(['slug' => 'l7_test'], ['name' => 'L7 Test']);
         $user = User::factory()->create(['role_id' => $role->id]);
+        $checker = User::factory()->create(['is_active' => true]);
 
         $customer = Customer::create([
             'name' => 'Cust '.uniqid(),
@@ -230,6 +231,9 @@ class CreateDeliveryDraftOnQcPassTest extends TestCase
             'sample_size' => 5,
             'accept_count' => 0,
             'reject_count' => 1,
+            'inspector_id' => $user->id,
+            'reviewed_by' => $checker->id,
+            'reviewed_at' => now(),
             'defect_count' => 0,
             'completed_at' => now(),
         ]);

@@ -15,6 +15,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 /**
@@ -214,6 +215,14 @@ class RbacConcurrencyTest extends TestCase
             $this->fixturePermissionIds[] = $permissionCreate->id;
         }
 
+        $adminRole = Role::query()->firstOrCreate(
+            ['slug' => 'system_admin'],
+            ['name' => 'System Administrator', 'is_system' => true],
+        );
+        $adminRole->permissions()->syncWithoutDetaching([$permissionView->id, $permissionCreate->id]);
+        $admin = User::factory()->create(['role_id' => $adminRole->id]);
+        $this->fixtureUserIds[] = $admin->id;
+
         $role = Role::create([
             'name' => 'Concurrent Role',
             'slug' => 'concurrent_role_'.uniqid(),
@@ -232,6 +241,7 @@ class RbacConcurrencyTest extends TestCase
         if ($pid === 0) {
             fclose($parentSocket);
             $this->reconnectAfterFork();
+            Auth::onceUsingId($admin->id);
             fwrite($childSocket, "ready\n");
             fgets($childSocket);
 
@@ -251,6 +261,7 @@ class RbacConcurrencyTest extends TestCase
 
         fclose($childSocket);
         $this->reconnectAfterFork();
+        Auth::onceUsingId($admin->id);
         stream_set_timeout($parentSocket, 30);
         $this->assertSame('ready', trim((string) fgets($parentSocket)));
         fwrite($parentSocket, "go\n");

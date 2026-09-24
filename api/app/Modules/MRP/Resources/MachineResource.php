@@ -23,6 +23,11 @@ class MachineResource extends JsonResource
             'status_label'             => $this->status?->label(),
             'is_available_now'         => (bool) $this->is_available_now,
             'compatible_molds_count'   => (int) ($this->compatible_molds_count ?? 0),
+            'asset'                    => $this->whenLoaded('asset', fn () => $this->asset ? [
+                'id' => $this->asset->hash_id,
+                'asset_code' => $this->asset->asset_code,
+                'name' => $this->asset->name,
+            ] : null),
             'compatible_molds'         => $this->whenLoaded('compatibleMolds', fn () =>
                 $this->compatibleMolds->map(fn ($m) => [
                     'id' => $m->hash_id, 'mold_code' => $m->mold_code, 'name' => $m->name,

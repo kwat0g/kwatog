@@ -22,7 +22,7 @@ class ConfirmWorkOrderRequest extends FormRequest
     {
         return [
             'machine_id' => Machine::class,
-            'mold_id'    => Mold::class,
+            'mold_id' => Mold::class,
         ];
     }
 
@@ -30,7 +30,7 @@ class ConfirmWorkOrderRequest extends FormRequest
     {
         return [
             'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
-            'mold_id'    => ['nullable', 'integer', 'exists:molds,id'],
+            'mold_id' => ['nullable', 'integer', 'exists:molds,id'],
         ];
     }
 }

@@ -24,16 +24,17 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { cn } from '@/lib/cn';
 import type { PurchaseRequestPriority, PurchaseRequestSourcingMethod } from '@/types/purchasing';
 import { formatPeso } from '@/lib/formatNumber';
+import { localIsoDate } from '@/lib/formatDate';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-const lineSchema = z.object({
+export const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),
   quantity: z
     .string()
-    .regex(/^\d+(\.\d{1,2})?$/, 'Up to 2 decimals.')
+    .regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.')
     .refine((v) => Number(v) > 0, 'Must be > 0.'),
   unit: z.string().max(20).optional().or(z.literal('')),
   estimated_unit_price: z
@@ -44,13 +45,19 @@ const lineSchema = z.object({
   purpose: z.string().max(200).optional().or(z.literal('')),
 });
 
-const schema = z.object({
-  priority: z.string().min(1, 'Priority is required.'),
-  sourcing_method: z.string().min(1, 'Choose Direct PO or Competitive RFQ.'),
-  department_id: z.string().optional().or(z.literal('')),
-  reason: z.string().max(1000).optional().or(z.literal('')),
-  items: z.array(lineSchema).min(1, 'Add at least one line.'),
-});
+const schema = z
+  .object({
+    priority: z.string().min(1, 'Priority is required.'),
+    sourcing_method: z.string().min(1, 'Choose Direct PO or Competitive RFQ.'),
+    department_id: z.string().optional().or(z.literal('')),
+    required_delivery_date: z.string().optional().or(z.literal('')),
+    reason: z.string().max(1000).optional().or(z.literal('')),
+    items: z.array(lineSchema).min(1, 'Add at least one line.'),
+  })
+  .refine((data) => !data.required_delivery_date || data.required_delivery_date >= localIsoDate(), {
+    message: 'Must be today or later.',
+    path: ['required_delivery_date'],
+  });
 type V = z.infer<typeof schema>;
 
 export default function CreatePurchaseRequestPage() {
@@ -88,6 +95,7 @@ export default function CreatePurchaseRequestPage() {
       // pre-selected. The auth store can hydrate after first paint, so an
       // effect below re-applies it once the user (and their department) load.
       department_id: isDepartmentLocked && ownDepartmentId ? ownDepartmentId : '',
+      required_delivery_date: '',
       reason: '',
       items: [
         {
@@ -137,8 +145,8 @@ export default function CreatePurchaseRequestPage() {
       setValue(`items.${index}.description`, item.description || item.name);
       setValue(`items.${index}.unit`, item.unit_of_measure);
       // items.standard_cost is decimal(15,4) — e.g. "0.5000". The schema (and the
-      // purchase_request_items column) allow at most 2 decimals, so normalize
-      // here or the auto-filled value fails its own validation.
+      // estimated_unit_price remains money at 2 decimals, so normalize here
+      // or the auto-filled value fails its own validation.
       setValue(`items.${index}.estimated_unit_price`, Number(item.standard_cost || 0).toFixed(2));
     } else {
       setValue(`items.${index}.unit`, '');
@@ -150,10 +158,11 @@ export default function CreatePurchaseRequestPage() {
       purchaseRequestsApi
         .create({
           reason: values.reason?.trim() || undefined,
-            priority: values.priority as PurchaseRequestPriority,
-            sourcing_method: values.sourcing_method as PurchaseRequestSourcingMethod,
+          priority: values.priority as PurchaseRequestPriority,
+          sourcing_method: values.sourcing_method as PurchaseRequestSourcingMethod,
           department_id:
             (isDepartmentLocked ? ownDepartmentId : values.department_id || null) ?? undefined,
+          required_delivery_date: values.required_delivery_date || null,
           items: values.items.map((l) => ({
             item_id: l.item_id || null,
             description: l.description.trim(),
@@ -206,7 +215,7 @@ export default function CreatePurchaseRequestPage() {
         className="max-w-6xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Header">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Select
               label="Priority"
               required
@@ -247,6 +256,17 @@ export default function CreatePurchaseRequestPage() {
                 </option>
               ))}
             </Select>
+            <div>
+              <Input
+                label="Needed by"
+                type="date"
+                {...register('required_delivery_date')}
+                error={errors.required_delivery_date?.message}
+              />
+              <p className="mt-1 text-xs text-muted">
+                When the material must arrive. Drives the PO's expected delivery date.
+              </p>
+            </div>
             <Textarea
               label="Reason"
               rows={2}
@@ -310,7 +330,9 @@ export default function CreatePurchaseRequestPage() {
                         containerClassName="w-96"
                         className="font-mono"
                         aria-label="Item"
-                        title={watched[i]?.item_id ? itemById.get(watched[i].item_id)?.name : undefined}
+                        title={
+                          watched[i]?.item_id ? itemById.get(watched[i].item_id)?.name : undefined
+                        }
                         value={watched[i]?.item_id ?? ''}
                         onChange={(e) => onLineItemChange(i, e.target.value)}
                       >
@@ -451,17 +473,16 @@ export default function CreatePurchaseRequestPage() {
         description={
           pendingDraft ? (
             <>
-              The PR will enter the approval workflow immediately: Finance first, then the
-              Vice President when the total is ₱50,000 or more. Edits are not allowed once
-              submitted.
+              The PR will enter the approval workflow immediately: Finance first, then the Vice
+              President when the total is ₱50,000 or more. Edits are not allowed once submitted.
               {/* The old copy promised an urgent-skip of the (then) department-head
                   step. That step and the purchasing.urgent_skip_limit setting were
                   removed in the 2026-09-10 chain redesign — urgency is now a
                   priority flag and notification only, so the notice says so. */}
               {(pendingDraft.priority === 'urgent' || pendingDraft.priority === 'critical') && (
                 <span className="block mt-1 text-warning-fg">
-                  Urgent requests are flagged for priority handling and highlighted to
-                  approvers, but the approval chain is the same.
+                  Urgent requests are flagged for priority handling and highlighted to approvers,
+                  but the approval chain is the same.
                 </span>
               )}
             </>

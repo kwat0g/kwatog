@@ -22,6 +22,7 @@ import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
 import { fromCents, toCents } from './money';
+import { localIsoDate } from '@/lib/formatDate';
 
 const amountSchema = z.string()
  .regex(/^\d+(\.\d{1,2})?$/, 'Use an amount with up to two decimals.')
@@ -58,7 +59,7 @@ export default function CreateJournalEntryPage() {
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
- date: new Date().toISOString().slice(0, 10),
+ date: localIsoDate(),
  description: '',
  lines: [
  { account_id: '', debit: '', credit: '', description: '' },

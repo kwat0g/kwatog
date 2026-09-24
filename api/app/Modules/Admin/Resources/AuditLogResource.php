@@ -20,8 +20,8 @@ class AuditLogResource extends JsonResource
             'source_command' => $this->source_command,
             'correlation_id' => $this->correlation_id,
             'reason'      => $this->reason,
-            'old_values'  => $this->old_values,
-            'new_values'  => $this->new_values,
+            'old_values'  => AuditDiffBuilder::publicValues((array) ($this->old_values ?? [])),
+            'new_values'  => AuditDiffBuilder::publicValues((array) ($this->new_values ?? [])),
             'diff'        => AuditDiffBuilder::build(
                 (string) $this->model_type,
                 (array) ($this->old_values ?? []),

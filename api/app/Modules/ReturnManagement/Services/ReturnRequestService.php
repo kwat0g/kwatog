@@ -7,15 +7,19 @@ namespace App\Modules\ReturnManagement\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
@@ -26,12 +30,14 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\NcrService;
 use App\Modules\ReturnManagement\Enums\DispositionType;
@@ -146,7 +152,13 @@ class ReturnRequestService
 
         $salesOrderModels = SalesOrder::query()
             ->where('customer_id', $customerId)
-            ->where('status', '<>', 'cancelled')
+            ->whereIn('status', [
+                SalesOrderStatus::PartiallyDelivered->value,
+                SalesOrderStatus::Delivered->value,
+                SalesOrderStatus::Invoiced->value,
+                SalesOrderStatus::Paid->value,
+                SalesOrderStatus::Closed->value,
+            ])
             ->with('items')
             ->latest('date')
             ->limit(100)
@@ -154,7 +166,7 @@ class ReturnRequestService
 
         $deliveryModels = Delivery::query()
             ->whereHas('salesOrder', fn ($query) => $query->where('customer_id', $customerId))
-            ->whereNotIn('status', ['cancelled'])
+            ->whereIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value])
             ->with(['salesOrder:id,so_number', 'items.salesOrderItem'])
             ->latest('delivered_at')
             ->limit(100)
@@ -551,6 +563,8 @@ class ReturnRequestService
                 'lot_number'                 => $line['lot_number'] ?? null,
                 'source_grn_item_id'         => $line['grn_item_id'] ?? null,
                 'source_po_item_id'          => $line['purchase_order_item_id'] ?? null,
+                'source_bill_item_id'        => $line['source_bill_item_id'] ?? null,
+                'stock_movement_id'          => $line['stock_movement_id'] ?? null,
                 'reversal_already_applied'   => $reversed,
             ];
         }
@@ -576,6 +590,26 @@ class ReturnRequestService
                 }
 
                 $billId = $this->openBillForReturn($goodsReceiptNoteId, $purchaseOrderId);
+                if ($billId !== null) {
+                    foreach ($items as $index => $line) {
+                        if (! empty($line['source_bill_item_id']) || empty($line['item_id'])) {
+                            continue;
+                        }
+                        $billItems = BillItem::query()
+                            ->where('bill_id', $billId)
+                            ->where('item_id', $line['item_id'])
+                            ->lockForUpdate()
+                            ->get();
+                        if ($billItems->count() > 1) {
+                            throw new BusinessRuleException(
+                                'The supplier credit cannot choose a bill line automatically because the bill contains multiple lines for the returned item.'
+                            );
+                        }
+                        if ($billItems->count() === 1) {
+                            $items[$index]['source_bill_item_id'] = $billItems->first()->id;
+                        }
+                    }
+                }
 
                 $rma = ReturnRequest::create([
                     'rma_number'             => $this->nextRmaNumber(),
@@ -644,6 +678,7 @@ class ReturnRequestService
             'reversal_already_applied' => (bool) ($source['reversal_already_applied'] ?? true),
             'stock_movement_quantity'  => $line->quantity,
             'receipt_recorded'         => true,
+            'stock_movement_id'        => $source['stock_movement_id'] ?? null,
             'returned_quantity'        => (string) $line->returned_quantity === '0.000'
                 ? $line->quantity
                 : $line->returned_quantity,
@@ -656,12 +691,15 @@ class ReturnRequestService
      */
     private function openBillForReturn(?int $goodsReceiptNoteId, ?int $purchaseOrderId): ?int
     {
-        $openStatuses = [BillStatus::Unpaid->value, BillStatus::Partial->value];
+        // Paid bills still need to remain the source of the vendor credit. The
+        // resulting credit stays finalized and unapplied as a supplier balance
+        // until Finance records a refund or offsets a later payable.
+        $creditableStatuses = [BillStatus::Unpaid->value, BillStatus::Partial->value, BillStatus::Paid->value];
 
         if ($goodsReceiptNoteId !== null) {
             $billId = Bill::query()
                 ->where('goods_receipt_note_id', $goodsReceiptNoteId)
-                ->whereIn('status', $openStatuses)
+                ->whereIn('status', $creditableStatuses)
                 ->orderByDesc('id')
                 ->value('id');
             if ($billId) {
@@ -670,9 +708,14 @@ class ReturnRequestService
         }
 
         if ($purchaseOrderId !== null) {
+            // When a specific GRN is given, never fall back to a bill tied to a
+            // different receipt — that would incorrectly credit a bill for different
+            // goods. Only pick bills with no GRN, or bills tied to the same GRN
+            // (which we already tried above if goodsReceiptNoteId was given).
             $billId = Bill::query()
                 ->where('purchase_order_id', $purchaseOrderId)
-                ->whereIn('status', $openStatuses)
+                ->whereIn('status', $creditableStatuses)
+                ->where(fn ($q) => $q->whereNull('goods_receipt_note_id')->orWhere('goods_receipt_note_id', $goodsReceiptNoteId))
                 ->orderByDesc('id')
                 ->value('id');
             if ($billId) {
@@ -797,6 +840,7 @@ class ReturnRequestService
         }
 
         $source = $this->resolveSource($rma, $item, $allowIncompleteSupplier);
+        $this->assertCustomerProductItemMapping($rma, $item);
         $unitPrice = $source['unit_price'] ?? (string) ($item['unit_price'] ?? '');
         if ($unitPrice === '') {
             throw new BusinessRuleException('Each return line needs a source price or a finance-only unit price.');
@@ -827,6 +871,52 @@ class ReturnRequestService
             'serial_number'              => $item['serial_number'] ?? null,
             'source'                     => $source,
         ];
+    }
+
+    /** Enforce the finished-good product/item convention at every RMA boundary. */
+    private function assertCustomerProductItemMapping(ReturnRequest $rma, array $item): void
+    {
+        if ($rma->type !== ReturnRequestType::CustomerReturn || $rma->finance_only
+            || empty($item['item_id']) || empty($item['product_id'])) {
+            return;
+        }
+
+        $mappedItemId = $this->finishedGoodItemId((int) $item['product_id']);
+        if ($mappedItemId === null || $mappedItemId !== (int) $item['item_id']) {
+            throw new BusinessRuleException('The returned product does not map to the returned finished-good item.');
+        }
+    }
+
+    /** Recheck mutable source state before the irreversible disposition effects. */
+    private function assertSourcesCurrent(ReturnRequest $rma): void
+    {
+        if ($rma->finance_only) {
+            return;
+        }
+
+        foreach ($rma->items as $line) {
+            $item = $line->getAttributes();
+            $this->assertCustomerProductItemMapping($rma, $item);
+            $hasSource = collect([
+                $item['source_invoice_item_id'] ?? null,
+                $item['source_sales_order_item_id'] ?? null,
+                $item['source_delivery_item_id'] ?? null,
+                $item['source_po_item_id'] ?? null,
+                $item['source_grn_item_id'] ?? null,
+            ])->contains(static fn ($id): bool => $id !== null);
+
+            if (! $hasSource) {
+                if (($rma->type === ReturnRequestType::CustomerReturn && $line->item_id)
+                    || $rma->type === ReturnRequestType::SupplierReturn) {
+                    throw new BusinessRuleException('Every stockable return line requires complete source lineage before disposition.');
+                }
+                continue;
+            }
+
+            if ($this->resolveSource($rma, $item, false) === null) {
+                throw new BusinessRuleException('Every submitted return line needs complete source lineage.');
+            }
+        }
     }
 
     /**
@@ -860,6 +950,9 @@ class ReturnRequestService
 
             if ($kind === 'invoice_item') {
                 $source = InvoiceItem::query()->with(['invoice.salesOrder'])->lockForUpdate()->findOrFail($id);
+                if (! in_array($source->invoice->status, [InvoiceStatus::Finalized, InvoiceStatus::Partial, InvoiceStatus::Paid], true)) {
+                    throw new BusinessRuleException('Customer returns can only use a finalized, partially paid, or paid invoice.');
+                }
                 if (! $rma->invoice_id || (int) $source->invoice_id !== (int) $rma->invoice_id) {
                     throw new BusinessRuleException('Return invoice-line provenance must belong to the RMA invoice.');
                 }
@@ -882,11 +975,24 @@ class ReturnRequestService
             }
 
             if ($kind === 'sales_order_item') {
-                $source = SalesOrderItem::query()->with('salesOrder')->lockForUpdate()->findOrFail($id);
+                $source = SalesOrderItem::query()->lockForUpdate()->findOrFail($id);
+                $salesOrder = SalesOrder::withTrashed()->lockForUpdate()->find($source->sales_order_id);
+                if (! $salesOrder || $salesOrder->trashed()) {
+                    throw new BusinessRuleException('Customer returns cannot use an archived sales order.');
+                }
+                if (! in_array($salesOrder->status, [
+                    \App\Modules\CRM\Enums\SalesOrderStatus::PartiallyDelivered,
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Delivered,
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Invoiced,
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Paid,
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Closed,
+                ], true)) {
+                    throw new BusinessRuleException('Customer returns can only use a partially delivered or completed sales order.');
+                }
                 if (! $rma->sales_order_id || (int) $source->sales_order_id !== (int) $rma->sales_order_id) {
                     throw new BusinessRuleException('Return sales-order-line provenance must belong to the RMA order.');
                 }
-                if ((int) $source->salesOrder->customer_id !== (int) $rma->customer_id) {
+                if ((int) $salesOrder->customer_id !== (int) $rma->customer_id) {
                     throw new BusinessRuleException('Return sales-order-line provenance belongs to another customer.');
                 }
                 if ($productId !== null && (int) $source->product_id !== $productId) {
@@ -901,14 +1007,24 @@ class ReturnRequestService
                 ];
             }
 
-            $source = DeliveryItem::query()->with('salesOrderItem.salesOrder')->lockForUpdate()->findOrFail($id);
-            if (! $rma->sales_order_id || (int) $source->salesOrderItem->sales_order_id !== (int) $rma->sales_order_id) {
+            $source = DeliveryItem::query()->with('salesOrderItem')->lockForUpdate()->findOrFail($id);
+            $delivery = Delivery::query()->lockForUpdate()->findOrFail($source->delivery_id);
+            if (! in_array($delivery->status, [DeliveryStatus::Delivered, DeliveryStatus::Confirmed], true)) {
+                throw new BusinessRuleException('Customer returns can only use a delivered or confirmed delivery.');
+            }
+            $salesOrderItem = SalesOrderItem::query()->lockForUpdate()->findOrFail($source->sales_order_item_id);
+            $salesOrder = SalesOrder::withTrashed()->lockForUpdate()->find($salesOrderItem->sales_order_id);
+            if (! $salesOrder || $salesOrder->trashed()) {
+                throw new BusinessRuleException('Customer returns cannot use an archived sales order.');
+            }
+            if (! $rma->sales_order_id || (int) $salesOrderItem->sales_order_id !== (int) $rma->sales_order_id
+                || (int) $delivery->sales_order_id !== (int) $rma->sales_order_id) {
                 throw new BusinessRuleException('Return delivery-line provenance must belong to the RMA order.');
             }
-            if ((int) $source->salesOrderItem->salesOrder->customer_id !== (int) $rma->customer_id) {
+            if ((int) $salesOrder->customer_id !== (int) $rma->customer_id) {
                 throw new BusinessRuleException('Return delivery-line provenance belongs to another customer.');
             }
-            if ($productId !== null && (int) $source->salesOrderItem->product_id !== $productId) {
+            if ($productId !== null && (int) $salesOrderItem->product_id !== $productId) {
                 throw new BusinessRuleException('Return delivery-line provenance does not match the returned product.');
             }
 
@@ -933,8 +1049,27 @@ class ReturnRequestService
             throw new BusinessRuleException('Supplier returns require a vendor and source purchase order.');
         }
 
-        $poItem = PurchaseOrderItem::query()->with('purchaseOrder')->lockForUpdate()->findOrFail((int) $item['source_po_item_id']);
+        $poItem = PurchaseOrderItem::query()->lockForUpdate()->findOrFail((int) $item['source_po_item_id']);
+        $purchaseOrder = PurchaseOrder::withTrashed()->lockForUpdate()->find($poItem->purchase_order_id);
+        if (! $purchaseOrder || $purchaseOrder->trashed()) {
+            throw new BusinessRuleException('Supplier returns cannot use an archived purchase order.');
+        }
         $grnItem = GrnItem::query()->with('grn')->lockForUpdate()->findOrFail((int) $item['source_grn_item_id']);
+        if (! in_array($purchaseOrder->status, [
+            PurchaseOrderStatus::Approved,
+            PurchaseOrderStatus::Sent,
+            PurchaseOrderStatus::Acknowledged,
+            PurchaseOrderStatus::SupplierProposed,
+            PurchaseOrderStatus::PartiallyReceived,
+            PurchaseOrderStatus::Received,
+            PurchaseOrderStatus::Closed,
+        ], true)) {
+            throw new BusinessRuleException('Supplier returns cannot use a draft, pending, declined, or cancelled purchase order.');
+        }
+        $alreadyReversed = (bool) ($item['reversal_already_applied'] ?? false);
+        if (! $alreadyReversed && ! in_array($grnItem->grn->status, GrnStatus::billable(), true)) {
+            throw new BusinessRuleException('Supplier returns can only use an accepted or partially accepted GRN.');
+        }
         if ((int) $poItem->purchase_order_id !== (int) $rma->purchase_order_id
             || (int) $poItem->item_id !== (int) $item['item_id']
             || (int) $grnItem->purchase_order_item_id !== (int) $poItem->id
@@ -942,13 +1077,33 @@ class ReturnRequestService
             || (int) $grnItem->grn->vendor_id !== (int) $rma->vendor_id) {
             throw new BusinessRuleException('Supplier-return source documents do not match the RMA vendor, PO, or item.');
         }
-        if ($grnItem->material_lot_number && trim((string) ($item['lot_number'] ?? '')) === '') {
-            throw new BusinessRuleException('Controlled returned stock requires lot provenance from the source receipt.');
+        if ($grnItem->material_lot_number) {
+            $lot = trim((string) ($item['lot_number'] ?? ''));
+            if ($lot === '') {
+                throw new BusinessRuleException('Controlled returned stock requires lot provenance from the source receipt.');
+            }
+            if ($lot !== (string) $grnItem->material_lot_number) {
+                throw new BusinessRuleException('Supplier-return lot provenance does not match the source receipt lot.');
+            }
+        }
+
+        $bill = null;
+        if ($rma->bill_id) {
+            $bill = Bill::query()->lockForUpdate()->findOrFail((int) $rma->bill_id);
+            if ((int) $bill->vendor_id !== (int) $rma->vendor_id
+                || (int) $bill->purchase_order_id !== (int) $rma->purchase_order_id
+                || ($bill->goods_receipt_note_id !== null
+                    && (int) $bill->goods_receipt_note_id !== (int) $grnItem->goods_receipt_note_id)) {
+                throw new BusinessRuleException('Supplier-return bill provenance must belong to the RMA vendor, PO, and source GRN.');
+            }
+            if (! in_array($bill->status, [BillStatus::Unpaid, BillStatus::Partial, BillStatus::Paid], true)) {
+                throw new BusinessRuleException('Supplier returns can only use an unpaid, partially paid, or paid bill.');
+            }
         }
 
         $sourcePrice = (string) $poItem->unit_price;
         if ($hasBill) {
-            if (! $rma->bill_id) {
+            if (! $bill) {
                 throw new BusinessRuleException('A source bill line requires the RMA bill.');
             }
             $billItem = BillItem::query()->lockForUpdate()->findOrFail((int) $item['source_bill_item_id']);
@@ -1183,7 +1338,10 @@ class ReturnRequestService
 
             $locked->update(['status' => ReturnRequestStatus::PendingApproval]);
             try {
-                $this->approvals->submit($locked, 'return_request');
+                $workflowType = $locked->finance_only
+                    ? 'finance_only_return_request'
+                    : 'return_request';
+                $this->approvals->submit($locked, $workflowType);
             } catch (\Throwable $e) {
                 // A swallowed failure here used to strand the RMA: the status
                 // flipped to pending_approval while no approval records existed,
@@ -1563,6 +1721,7 @@ class ReturnRequestService
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
+            $this->assertSourcesCurrent($rma);
             $this->ensureReturnInspectionsReady($rma, $dispositions);
             $this->assertDispositionMatrix($rma, $dispositions);
 
@@ -1611,25 +1770,10 @@ class ReturnRequestService
                     'disposition_notes' => $disp['notes'] ?? null,
                 ]);
 
-                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id && ! $item->ncr_id) {
-                    $ncr = app(NcrService::class)->create([
-                        'source'             => 'customer_complaint',
-                        'severity'           => 'medium',
-                        'product_id'         => $item->product_id,
-                        'defect_description' => "Auto-created from RMA {$rma->rma_number}. "
-                            . "Disposition: {$disp['disposition']}. "
-                            . ($disp['notes'] ?? ''),
-                        // Same settled-quantity rule as every other consumer,
-                        // rounded UP: an NCR covering 8.4 units affects 9, and
-                        // truncating understated the defect on the Pareto data.
-                        'affected_quantity'  => $this->wholeUnits($this->settledQuantity($item)),
-                        'is_auto_generated'  => true,
-                    ], $by);
-                    $item->update(['ncr_id' => $ncr->id]);
-                }
             }
 
             $rma->load('items');
+            $this->createDispositionNcrs($rma, $by);
             if ($rma->type === ReturnRequestType::CustomerReturn) {
                 // 2026-08-08 — draft customer credit note, one line per returned
                 // item (only what was actually sent back and kept — lines routed
@@ -1669,6 +1813,74 @@ class ReturnRequestService
         event(new ReturnRequestUpdated($updated, 'disposition recorded'));
 
         return $updated;
+    }
+
+    /**
+     * Link one NCR to the return inspection for each affected product. Failed
+     * return inspections already create an NCR; reusing its unique
+     * inspection_id avoids a second corrective-action case at disposition.
+     */
+    private function createDispositionNcrs(ReturnRequest $rma, User $by): void
+    {
+        if ($rma->type !== ReturnRequestType::CustomerReturn) {
+            return;
+        }
+
+        $affected = $rma->items
+            ->filter(static fn (ReturnRequestItem $item): bool => $item->product_id !== null
+                && in_array($item->disposition, [DispositionType::Scrap->value, DispositionType::Rework->value], true))
+            ->groupBy('product_id');
+
+        foreach ($affected as $productId => $lines) {
+            $inspection = Inspection::query()
+                ->where('entity_type', InspectionEntityType::ReturnRequest->value)
+                ->where('entity_id', $rma->id)
+                ->where('stage', InspectionStage::CustomerReturn->value)
+                ->where('product_id', (int) $productId)
+                ->whereIn('status', [InspectionStatus::Passed->value, InspectionStatus::Failed->value])
+                ->orderByDesc('id')
+                ->first();
+
+            $linkedNcrId = $lines->first(static fn (ReturnRequestItem $item): bool => $item->ncr_id !== null)?->ncr_id;
+            $ncr = $linkedNcrId !== null
+                ? NonConformanceReport::query()->find((int) $linkedNcrId)
+                : null;
+            if (! $ncr && $inspection) {
+                $ncr = NonConformanceReport::query()
+                    ->where('inspection_id', $inspection->id)
+                    ->first();
+            }
+
+            if (! $ncr) {
+                if (! $inspection) {
+                    throw new BusinessRuleException('A terminal Quality inspection is required before creating the disposition NCR.');
+                }
+
+                $quantity = '0.000';
+                $dispositions = [];
+                foreach ($lines as $line) {
+                    $quantity = bcadd($quantity, $this->settledQuantity($line), 3);
+                    $dispositions[] = (string) $line->disposition;
+                }
+
+                $ncr = app(NcrService::class)->create([
+                    'source' => 'customer_complaint',
+                    'severity' => 'medium',
+                    'product_id' => (int) $productId,
+                    'inspection_id' => $inspection->id,
+                    'defect_description' => "Auto-created from RMA {$rma->rma_number}. Disposition: "
+                        .implode(', ', array_unique($dispositions)).'.',
+                    'affected_quantity' => $this->wholeUnits($quantity),
+                    'is_auto_generated' => true,
+                ], $by);
+            }
+
+            foreach ($lines as $line) {
+                if ((int) $line->ncr_id !== (int) $ncr->id) {
+                    $line->update(['ncr_id' => $ncr->id]);
+                }
+            }
+        }
     }
 
     /**
@@ -1811,6 +2023,7 @@ class ReturnRequestService
 
         $creditLines = [];
         $replacementLines = [];
+        $replacedByPoItem = [];
         foreach ($returnedItems->sortBy('source_grn_item_id') as $item) {
             if (! $item->source_grn_item_id || ! $item->source_po_item_id) {
                 throw new BusinessRuleException('Each supplier-return line requires source GRN and PO lines.');
@@ -1835,9 +2048,7 @@ class ReturnRequestService
             // again: the PO received quantity already sits below this line's
             // receipt, and the GRN running totals were left untouched. The
             // quantity bounds are skipped with the reduction for the same
-            // reason — they describe a receipt that no longer exists. The
-            // supplier credit below still runs, so the caller gets paid the
-            // refund exactly once.
+            // reason — they describe a receipt that no longer exists.
             if (! (bool) $item->reversal_already_applied) {
                 if (bccomp($quantity, (string) $grnItem->quantity_received, 3) > 0
                     || bccomp($quantity, (string) $grnItem->quantity_accepted, 3) > 0
@@ -1859,6 +2070,27 @@ class ReturnRequestService
             // active would subtract the shipped quantity a second time from
             // future availability.
             $this->releaseSourceAllocation($item);
+
+            // Track replaced quantities by PO item for later validation when
+            // creating replacement PO.
+            $replacedByPoItem[(int) $poItem->id] = bcadd($replacedByPoItem[(int) $poItem->id] ?? '0', $quantity, 3);
+
+            // A replacement is still owed for rejected goods, so this is
+            // collected before the credit skip below.
+            $replacementLines[] = [
+                'item_id'    => $item->item_id,
+                'description' => $poItem->description,
+                'quantity'   => $quantity,
+                'unit'       => $poItem->unit,
+                'unit_price' => (string) $poItem->unit_price,
+            ];
+
+            // Goods rejected before acceptance were never billed (every bill
+            // path bills quantity_accepted), so there is no payable to credit.
+            // Only returns of accepted goods (MRB/quarantine, manual) credit.
+            if ((bool) $item->reversal_already_applied) {
+                continue;
+            }
 
             // Prefer the credited bill line's own expense account — it is what
             // the payable debited. A system-opened line has no bill-item link
@@ -1887,13 +2119,6 @@ class ReturnRequestService
             if (bccomp($amount, '0', 2) > 0) {
                 $creditLines[$accountId] = bcadd($creditLines[$accountId] ?? '0', $amount, 2);
             }
-            $replacementLines[] = [
-                'item_id'    => $item->item_id,
-                'description' => $poItem->description,
-                'quantity'   => $quantity,
-                'unit'       => $poItem->unit,
-                'unit_price' => (string) $poItem->unit_price,
-            ];
         }
 
         $this->recalculatePurchaseOrderReceiptStatus($rma, $by);
@@ -1930,20 +2155,61 @@ class ReturnRequestService
         }
 
         if ($createReplacementPo) {
+            // Re-read the original PO to check if we should close it. The replacement
+            // takes over what the original owed, so the original must stop owing it.
+            $original = PurchaseOrder::query()->lockForUpdate()->findOrFail($rma->purchase_order_id);
+            $closeOriginal = $original->short_closed_at === null && ! in_array($original->status, [PurchaseOrderStatus::Closed, PurchaseOrderStatus::Cancelled], true);
+
+            if ($closeOriginal) {
+                // Verify that the original PO only owes the returned quantity.
+                // For each item on the original, check that undelivered = replaced qty.
+                foreach ($original->items()->get(['id', 'quantity', 'quantity_received']) as $line) {
+                    $owed = bcsub((string) $line->quantity, (string) $line->quantity_received, 3);
+                    // Treat negative as '0' (edge case: if a line somehow has more received than ordered)
+                    $owed = bccomp($owed, '0', 3) >= 0 ? $owed : '0';
+                    $replaced = $replacedByPoItem[(int) $line->id] ?? '0';
+
+                    if (bccomp($owed, $replaced, 3) !== 0) {
+                        throw new BusinessRuleException("PO {$original->po_number} still expects other undelivered quantity, so the supplier re-delivers the returned goods against it. Dispose without a replacement PO, or short-close {$original->po_number} first.");
+                    }
+                }
+            }
+
             $replacement = $this->purchaseOrders->create([
                 'vendor_id'           => $rma->vendor_id,
                 'date'                => now()->toDateString(),
-                'is_vatable'          => $this->taxPolicy->isVatRegistered(),
+                'is_vatable'          => (bool) ($rma->bill?->is_vatable
+                    ?? $rma->purchaseOrder?->is_vatable
+                    ?? $this->taxPolicy->isVatRegistered()),
                 'remarks'             => "Replacement for supplier RMA {$rma->rma_number}",
                 'items'               => $replacementLines,
             ], $by, true);
             $rma->update(['replacement_purchase_order_id' => $replacement->id]);
+
+            // After the replacement PO is created, short-close the original if it
+            // only owed the returned goods. The replacement takes over that obligation.
+            if ($closeOriginal) {
+                $this->purchaseOrders->shortClose(
+                    $original->fresh(),
+                    "Returned quantity re-ordered on replacement PO {$replacement->po_number} (RMA {$rma->rma_number}).",
+                    $by,
+                    true // systemAction flag — skip ownership check
+                );
+            }
         }
     }
 
     private function recalculatePurchaseOrderReceiptStatus(ReturnRequest $rma, User $by): void
     {
         $po = $rma->purchaseOrder()->lockForUpdate()->firstOrFail();
+
+        // A short-closed PO stays closed; the buyer already decided nothing more
+        // comes against it, so a later return is credited or re-ordered, never
+        // re-expected here.
+        if ($po->short_closed_at !== null) {
+            return;
+        }
+
         // Decimal-safe: PO quantities are decimal, and a float comparison can
         // classify a fully-received fractional PO as partially received (or the
         // reverse) at the boundary. bccomp at 3 dp is the column's precision.
@@ -2381,10 +2647,14 @@ class ReturnRequestService
                 referenceId: $rma->id,
                 remarks: "RMA {$rma->rma_number}: Supplier return",
                 createdBy: $by->id,
+                lotNumber: $line->lot_number,
             ));
         }
 
-        $line->update(['stock_movement_quantity' => $qty]);
+        $line->update([
+            'stock_movement_quantity' => $qty,
+            'stock_movement_id' => $movement->id,
+        ]);
 
         return $movement;
     }

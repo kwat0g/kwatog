@@ -39,15 +39,17 @@ class BillItemIdTest extends TestCase
         ]);
     }
 
-    public function test_bill_create_persists_item_id_from_request(): void
+    public function test_service_bill_rejects_inventory_item_id(): void
     {
         $user = $this->newUser();
         $vendor = Vendor::create(['name' => 'Acme', 'payment_terms_days' => 30]);
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
         $item = Item::factory()->create();
-
         $svc = app(BillService::class);
-        $bill = $svc->create([
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('Service bills cannot reference inventory items');
+
+        $svc->create([
             'bill_number' => 'INV-FK-001',
             'vendor_id'   => $vendor->hash_id,
             'date'        => '2026-04-10',
@@ -66,10 +68,6 @@ class BillItemIdTest extends TestCase
             ],
         ], $user);
 
-        $row = BillItem::query()->where('bill_id', $bill->id)->firstOrFail();
-        $this->assertSame($item->id, $row->item_id,
-            'BillItem.item_id must be persisted from request payload (decoded HashID).');
-        $this->assertNotNull($row->item, 'item() relation must hydrate.');
     }
 
     public function test_bill_create_accepts_null_item_id(): void

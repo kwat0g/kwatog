@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\OutboxService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
@@ -16,11 +18,16 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionMode;
+use App\Modules\Quality\Enums\InspectionOutcome;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Models\CalibrationRecord;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
@@ -52,6 +59,7 @@ class InspectionService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly InspectionStateMachine $states,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -61,6 +69,7 @@ class InspectionService
                 'product:id,part_number,name',
                 'item:id,code,name',
                 'inspector:id,name,role_id',
+                'reviewer:id,name,role_id',
                 'spec:id,product_id,version',
                 'specRevision:id,inspection_spec_id,version,created_by,notes',
                 'qualityPlan:id,item_id,vendor_id,version,sampling_method',
@@ -131,6 +140,7 @@ class InspectionService
             'product:id,part_number,name',
             'item:id,code,name',
             'inspector:id,name,role_id',
+            'reviewer:id,name,role_id',
             'spec:id,product_id,version,is_active',
             'specRevision:id,inspection_spec_id,version,created_by,notes',
             'specRevision.creator:id,name,role_id',
@@ -139,6 +149,7 @@ class InspectionService
             'grnItem.grn:id,grn_number,status',
             'qualityPlan:id,item_id,vendor_id,version,sampling_method',
             'workOrderOutput.workOrder:id,wo_number,product_id',
+            'calibrationRecord:id,equipment_code,name,status',
             'measurements' => fn ($q) => $q->orderBy('sample_index')->orderBy('id'),
         ]);
 
@@ -158,19 +169,21 @@ class InspectionService
             throw new BusinessRuleException('Incoming inspection requires a positive batch quantity.');
         }
         $plan = AqlSampleSizeService::forBatch($batchQuantity);
+        $sampleSize = (int) $plan['sample_size'];
 
-        return DB::transaction(function () use ($item, $batchQuantity, $grnId, $by, $notes, $plan, $grnItemId) {
+        return DB::transaction(function () use ($item, $batchQuantity, $grnId, $by, $notes, $plan, $sampleSize, $grnItemId) {
             $inspection = Inspection::query()->create([
                 'inspection_number' => $this->sequences->generate('inspection'),
                 'stage' => InspectionStage::Incoming->value,
                 'status' => InspectionStatus::Draft->value,
+                'inspection_mode' => InspectionMode::LotChecklist->value,
                 'product_id' => null,
                 'item_id' => $item->id,
                 'entity_type' => InspectionEntityType::Grn->value,
                 'entity_id' => $grnId,
                 'grn_item_id' => $grnItemId,
                 'batch_quantity' => $batchQuantity,
-                'sample_size' => (int) $plan['sample_size'],
+                'sample_size' => $sampleSize,
                 'aql_code' => (string) $plan['code'],
                 'accept_count' => (int) $plan['accept'],
                 'reject_count' => (int) $plan['reject'],
@@ -179,14 +192,35 @@ class InspectionService
                 'notes' => $notes,
             ]);
 
-            InspectionMeasurement::query()->create([
-                'inspection_id' => $inspection->id,
-                'sample_index' => 1,
-                'parameter_name' => 'Overall incoming material verdict',
-                'parameter_type' => 'visual',
-                'is_critical' => true,
-                'is_pass' => null,
-            ]);
+            // For lot-checklist mode, create the default checklist rows instead of
+            // a sample_size × 1 matrix. Each checklist item gets one row with
+            // sample_index = 1 (not variable by sample).
+            $defaultChecklist = $this->settings->get('quality.incoming.default_checklist', []);
+            $timestamp = now()->toDateTimeString();
+            $checklistRows = [];
+
+            foreach ((array) $defaultChecklist as $check) {
+                // Validate and skip entries with missing/empty parameter names.
+                $paramName = trim((string) ($check['parameter_name'] ?? ''));
+                if ($paramName === '') {
+                    continue;
+                }
+
+                $checklistRows[] = [
+                    'inspection_id' => $inspection->id,
+                    'sample_index' => 1,
+                    'parameter_name' => $paramName,
+                    'parameter_type' => InspectionParameterType::Visual->value,
+                    'is_critical' => (bool) ($check['is_critical'] ?? false),
+                    'is_pass' => null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+
+            if ($checklistRows !== []) {
+                InspectionMeasurement::query()->insert($checklistRows);
+            }
 
             DB::table('goods_receipt_notes')
                 ->where('id', $grnId)
@@ -204,13 +238,17 @@ class InspectionService
         GoodsReceiptNote $grn,
         ?User $by = null,
     ): Inspection {
-        $batchQuantity = (int) (float) $line->quantity_received;
-        if ($batchQuantity < 1) {
+        $qtyReceived = (string) $line->quantity_received;
+        if (bccomp($qtyReceived, '0', 3) <= 0) {
             throw new BusinessRuleException('Incoming inspection requires a positive received quantity.');
         }
+        $truncated = (int) bcdiv($qtyReceived, '1', 0);
+        $batchQuantity = bccomp($qtyReceived, (string) $truncated, 3) > 0
+            ? $truncated + 1
+            : max(1, $truncated);
         $aql = AqlSampleSizeService::forBatch($batchQuantity);
         $sampleSize = match ($qualityPlan->sampling_method) {
-            'full' => $batchQuantity,
+            'full' => $this->boundedFullSampleSize($batchQuantity),
             'fixed' => min($batchQuantity, max(1, (int) $qualityPlan->fixed_sample_size)),
             default => (int) $aql['sample_size'],
         };
@@ -222,6 +260,7 @@ class InspectionService
                 'inspection_number' => $this->sequences->generate('inspection'),
                 'stage' => InspectionStage::Incoming->value,
                 'status' => InspectionStatus::Draft->value,
+                'inspection_mode' => InspectionMode::LotChecklist->value,
                 'item_id' => $line->item_id,
                 'item_quality_plan_id' => $qualityPlan->id,
                 'entity_type' => InspectionEntityType::Grn->value,
@@ -237,21 +276,27 @@ class InspectionService
                 'notes' => "Quality plan v{$qualityPlan->version}; GRN {$grn->grn_number}.",
             ]);
 
-            $this->insertScaffoldRows(
-                $inspection->id,
-                $sampleSize,
-                $qualityPlan->parameters,
-                static function (int $sampleIndex, array $parameter, int $inspectionId, string $timestamp): array {
-                    return [
-                        'inspection_id' => $inspectionId,
+            // For lot-checklist mode: split parameters into checklist (no tolerance)
+            // and piece rows (with tolerance).
+            $timestamp = now()->toDateTimeString();
+            $measuredPieces = $this->settings->requiredInt('quality.incoming.measured_pieces', 1, 1000);
+            $checklistRows = [];
+            $pieceRows = [];
+
+            foreach ((array) $qualityPlan->parameters as $parameter) {
+                $hasToler = isset($parameter['tolerance_min']) && isset($parameter['tolerance_max']);
+                if (! $hasToler) {
+                    // Checklist row: sample_index = 1 only.
+                    $checklistRows[] = [
+                        'inspection_id' => $inspection->id,
                         'inspection_spec_item_id' => null,
-                        'sample_index' => $sampleIndex,
+                        'sample_index' => 1,
                         'parameter_name' => $parameter['parameter_name'],
                         'parameter_type' => $parameter['parameter_type'],
                         'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
                         'nominal_value' => $parameter['nominal_value'] ?? null,
-                        'tolerance_min' => $parameter['tolerance_min'] ?? null,
-                        'tolerance_max' => $parameter['tolerance_max'] ?? null,
+                        'tolerance_min' => null,
+                        'tolerance_max' => null,
                         'measured_value' => null,
                         'is_critical' => (bool) ($parameter['is_critical'] ?? false),
                         'is_pass' => null,
@@ -259,8 +304,37 @@ class InspectionService
                         'created_at' => $timestamp,
                         'updated_at' => $timestamp,
                     ];
-                },
-            );
+                } else {
+                    // Piece rows: sample_index = 1..min(measured_pieces, sample_size).
+                    for ($sampleIndex = 1; $sampleIndex <= min($measuredPieces, $sampleSize); $sampleIndex++) {
+                        $pieceRows[] = [
+                            'inspection_id' => $inspection->id,
+                            'inspection_spec_item_id' => null,
+                            'sample_index' => $sampleIndex,
+                            'parameter_name' => $parameter['parameter_name'],
+                            'parameter_type' => $parameter['parameter_type'],
+                            'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
+                            'nominal_value' => $parameter['nominal_value'] ?? null,
+                            'tolerance_min' => $parameter['tolerance_min'] ?? null,
+                            'tolerance_max' => $parameter['tolerance_max'] ?? null,
+                            'measured_value' => null,
+                            'is_critical' => (bool) ($parameter['is_critical'] ?? false),
+                            'is_pass' => null,
+                            'notes' => $parameter['notes'] ?? null,
+                            'created_at' => $timestamp,
+                            'updated_at' => $timestamp,
+                        ];
+                    }
+                }
+            }
+
+            $allRows = array_merge($checklistRows, $pieceRows);
+            if ($allRows !== []) {
+                // Batch insert to avoid OOM on large sets.
+                foreach (array_chunk($allRows, 500) as $batch) {
+                    InspectionMeasurement::query()->insert($batch);
+                }
+            }
 
             GoodsReceiptNote::query()->whereKey($grn->id)->whereNull('qc_inspection_id')
                 ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
@@ -329,6 +403,18 @@ class InspectionService
             throw new BusinessRuleException("Inspection spec for {$product->part_number} has no immutable revision.");
         }
 
+        $calibrationRecordId = isset($data['calibration_record_id']) && (int) $data['calibration_record_id'] > 0
+            ? (int) $data['calibration_record_id']
+            : null;
+        if ($calibrationRecordId !== null) {
+            $record = CalibrationRecord::query()->findOrFail($calibrationRecordId);
+            if (in_array($record->status, [CalibrationStatus::Overdue, CalibrationStatus::Retired], true)) {
+                throw new BusinessRuleException(
+                    "Equipment {$record->equipment_code} is {$record->status->value} and cannot be used for inspection."
+                );
+            }
+        }
+
         // Automatic in-process/outgoing listeners may already have opened the
         // inspection before the operator reaches this form. Reusing that row is
         // the safe idempotent result; inserting a second row would hit the
@@ -360,14 +446,14 @@ class InspectionService
             $accept = $plan['accept'];
             $reject = $plan['reject'];
         } else {
-            $sample = $batchQty;
+            $sample = $this->boundedFullSampleSize($batchQty);
             $code = null;
             $accept = 0;
             $reject = 1;
         }
 
         return DB::transaction(function () use (
-            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output
+            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output, $calibrationRecordId
         ) {
             $insp = Inspection::query()->create([
                 'inspection_number' => $this->sequences->generate('inspection'),
@@ -387,6 +473,7 @@ class InspectionService
                 'reject_count' => $reject,
                 'defect_count' => 0,
                 'inspector_id' => $by->id,
+                'calibration_record_id' => $calibrationRecordId,
                 'started_at' => now(),
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -451,6 +538,9 @@ class InspectionService
         if ($inspection->status->isTerminal()) {
             throw new BusinessRuleException('Inspection is already finalised.');
         }
+        if ($inspection->status === InspectionStatus::AwaitingReview) {
+            throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
+        }
 
         return DB::transaction(function () use ($inspection, $rows, $by) {
             // Route-bound inspection models can be stale when a completion or
@@ -461,6 +551,9 @@ class InspectionService
                 ->findOrFail($inspection->id);
             if ($lockedInspection->status->isTerminal()) {
                 throw new BusinessRuleException('Inspection is already finalised.');
+            }
+            if ($lockedInspection->status === InspectionStatus::AwaitingReview) {
+                throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
             }
 
             $measurements = InspectionMeasurement::query()
@@ -549,6 +642,121 @@ class InspectionService
     }
 
     /**
+     * Record lot-checklist results: checklist verdicts, piece measurements, and defect count.
+     *
+     * @param  array{checklist?: list<array{measured_value?: float|string|null, is_pass?: bool|null, notes?: string|null}>, measurements?: list<array{measured_value?: float|string|null}>, sample_defect_count?: ?int, complete?: bool}  $data
+     */
+    public function recordLotResult(Inspection $inspection, array $data, User $by): Inspection
+    {
+        if ($inspection->status->isTerminal()) {
+            throw new BusinessRuleException('Inspection is already finalised.');
+        }
+        if ($inspection->status === InspectionStatus::AwaitingReview) {
+            throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
+        }
+
+        if ($inspection->inspection_mode !== InspectionMode::LotChecklist) {
+            throw new BusinessRuleException('recordLotResult is only available for lot-checklist inspections.');
+        }
+
+        return DB::transaction(function () use ($inspection, $data, $by) {
+            $lockedInspection = Inspection::query()
+                ->lockForUpdate()
+                ->findOrFail($inspection->id);
+            if ($lockedInspection->status->isTerminal()) {
+                throw new BusinessRuleException('Inspection is already finalised.');
+            }
+            if ($lockedInspection->status === InspectionStatus::AwaitingReview) {
+                throw new BusinessRuleException('Inspection is awaiting checker review and its evidence is locked.');
+            }
+
+            // Fetch all measurement rows for validation.
+            $allRows = InspectionMeasurement::query()
+                ->where('inspection_id', $lockedInspection->id)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            // Convert checklist and measurements into the format recordMeasurements expects,
+            // validating that each ID belongs to this inspection and is the correct type.
+            $checklistMap = [];
+            if (isset($data['checklist']) && is_array($data['checklist'])) {
+                foreach ($data['checklist'] as $item) {
+                    $id = $item['_id'] ?? (isset($item['id']) ? InspectionMeasurement::tryDecodeHash((string) $item['id']) : null);
+                    if (! $id) {
+                        throw new BusinessRuleException('Invalid or missing checklist measurement ID.');
+                    }
+
+                    $row = $allRows->get((int) $id);
+                    if (! $row) {
+                        throw new BusinessRuleException('Checklist measurement ID does not belong to this inspection.');
+                    }
+
+                    // Checklist rows must have no tolerance.
+                    if ($row->tolerance_min !== null || $row->tolerance_max !== null) {
+                        throw new BusinessRuleException('Checklist item must not have tolerance bounds.');
+                    }
+
+                    $checklistMap[(int) $id] = $item;
+                }
+            }
+
+            $measurementMap = [];
+            if (isset($data['measurements']) && is_array($data['measurements'])) {
+                foreach ($data['measurements'] as $item) {
+                    $id = $item['_id'] ?? (isset($item['id']) ? InspectionMeasurement::tryDecodeHash((string) $item['id']) : null);
+                    if (! $id) {
+                        throw new BusinessRuleException('Invalid or missing measurement ID.');
+                    }
+
+                    $row = $allRows->get((int) $id);
+                    if (! $row) {
+                        throw new BusinessRuleException('Measurement ID does not belong to this inspection.');
+                    }
+
+                    // Piece rows must have a tolerance.
+                    if ($row->tolerance_min === null || $row->tolerance_max === null) {
+                        throw new BusinessRuleException('Measurement must have tolerance bounds.');
+                    }
+
+                    $measurementMap[(int) $id] = $item;
+                }
+            }
+
+            // Preserve measurement IDs as array keys; array_merge() reindexes
+            // numeric keys and turns valid rows into foreign-row errors.
+            $allMeasurementMap = $checklistMap + $measurementMap;
+
+            // Use recordMeasurements to apply and auto-evaluate rows.
+            if ($allMeasurementMap !== []) {
+                $this->recordMeasurements($lockedInspection, $allMeasurementMap, $by);
+                $lockedInspection = $lockedInspection->fresh();
+            }
+
+            // Set sample_defect_count if provided (only for lot_checklist).
+            if (isset($data['sample_defect_count'])) {
+                $defectCount = (int) $data['sample_defect_count'];
+                if ($defectCount < 0) {
+                    throw new BusinessRuleException('sample_defect_count cannot be negative.');
+                }
+                if ($defectCount > (int) $lockedInspection->sample_size) {
+                    throw new BusinessRuleException(
+                        "sample_defect_count ({$defectCount}) cannot exceed sample_size ({$lockedInspection->sample_size})."
+                    );
+                }
+                $lockedInspection->forceFill(['sample_defect_count' => $defectCount])->save();
+            }
+
+            // If complete=true, finalize the inspection.
+            if ($data['complete'] ?? false) {
+                return $this->complete($lockedInspection->fresh(), $by);
+            }
+
+            return $this->show($lockedInspection->fresh());
+        });
+    }
+
+    /**
      * Finalise the inspection. Computes pass/fail from current measurements:
      *  - any critical fail → Failed
      *  - defect_count > accept_count → Failed
@@ -557,7 +765,7 @@ class InspectionService
      */
     public function complete(Inspection $inspection, User $by): Inspection
     {
-        if ($inspection->status->isTerminal()) {
+        if ($inspection->status->isTerminal() || $inspection->status === InspectionStatus::AwaitingReview) {
             throw new BusinessRuleException('Inspection is already finalised.');
         }
 
@@ -568,7 +776,7 @@ class InspectionService
             $lockedInspection = Inspection::query()
                 ->lockForUpdate()
                 ->findOrFail($inspection->id);
-            if ($lockedInspection->status->isTerminal()) {
+            if ($lockedInspection->status->isTerminal() || $lockedInspection->status === InspectionStatus::AwaitingReview) {
                 throw new BusinessRuleException('Inspection is already finalised.');
             }
 
@@ -586,72 +794,163 @@ class InspectionService
                 throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
             }
 
-            $sampledUnits = $rows->pluck('sample_index')->unique()->count();
-            $declaredSample = (int) $lockedInspection->sample_size;
-            if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
-                throw new BusinessRuleException(
-                    "Cannot complete: inspection declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
-                );
+            // For lot_checklist mode, we use sample_defect_count (reported defects)
+            // combined with any critical failures. For per_unit mode, we count
+            // distinct sample indices with failures.
+            if ($lockedInspection->inspection_mode === InspectionMode::LotChecklist) {
+                if ($lockedInspection->sample_defect_count === null) {
+                    throw new BusinessRuleException(
+                        'Enter the number of defective pieces found in the sample (0 if none).'
+                    );
+                }
+
+                // Defect count is the max of reported defects and any failed piece rows.
+                // Checklist (sample_index=1, no tolerance) failures go to critical_fail.
+                $reportedDefects = (int) $lockedInspection->sample_defect_count;
+                $failedPieces = $rows
+                    ->where('is_pass', false)
+                    ->where(fn (InspectionMeasurement $r) => $r->tolerance_min !== null || $r->tolerance_max !== null)
+                    ->pluck('sample_index')
+                    ->unique()
+                    ->count();
+                $defects = max($reportedDefects, $failedPieces);
+                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
+            } else {
+                // Per-unit mode: count distinct sample indices with any failure.
+                $sampledUnits = $rows->pluck('sample_index')->unique()->count();
+                $declaredSample = (int) $lockedInspection->sample_size;
+                if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
+                    throw new BusinessRuleException(
+                        "Cannot complete: inspection declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
+                    );
+                }
+
+                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
+                $defects = $rows->where('is_pass', false)->pluck('sample_index')->unique()->count();
             }
 
-            $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-            // AQL counts DEFECTIVE UNITS: a sample unit (one Sample index) that
-            // failed at least one parameter is one defect. See recordMeasurements().
-            $defects = $rows->where('is_pass', false)->pluck('sample_index')->unique()->count();
-            $accept = (int) $lockedInspection->accept_count;
+            if ($lockedInspection->calibration_record_id) {
+                $record = CalibrationRecord::query()->find((int) $lockedInspection->calibration_record_id);
+                if ($record && in_array($record->status, [CalibrationStatus::Overdue, CalibrationStatus::Retired], true)) {
+                    throw new BusinessRuleException(
+                        "Cannot complete: measuring equipment {$record->equipment_code} is {$record->status->value}."
+                    );
+                }
+            }
 
+            $accept = (int) $lockedInspection->accept_count;
             $passed = ! $criticalFail && $defects <= $accept;
             $targetStatus = $passed ? InspectionStatus::Passed : InspectionStatus::Failed;
+
+            // Completion may legally resolve a fully submitted draft. The
+            // checker gate still records the intermediate lifecycle step.
+            if ($lockedInspection->status === InspectionStatus::Draft) {
+                $lockedInspection->setAttribute('status', InspectionStatus::InProgress);
+            }
+
+            if ($lockedInspection->requiresMakerChecker()) {
+                $this->states->assertAllowed($lockedInspection, InspectionStatus::AwaitingReview);
+
+                $lockedInspection->forceFill([
+                    'status' => InspectionStatus::AwaitingReview->value,
+                    'proposed_result' => $targetStatus->value,
+                    'defect_count' => $defects,
+                    'accepted_quantity' => 0,
+                    'completed_at' => null,
+                    'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
+                ])->save();
+
+                return $this->show($lockedInspection->fresh());
+            }
 
             // A direct completion of a fully resolved draft is kept
             // compatible with existing callers, but still passes through the
             // same explicit draft → in_progress → terminal transition map.
-            if ($lockedInspection->status === InspectionStatus::Draft) {
-                $lockedInspection->setAttribute('status', InspectionStatus::InProgress);
-            }
             $this->states->assertAllowed($lockedInspection, $targetStatus);
 
-            $lockedInspection->forceFill([
-                'status' => $targetStatus->value,
-                'defect_count' => $defects,
-                'accepted_quantity' => $passed && $lockedInspection->stage === InspectionStage::Outgoing
-                    ? (int) $lockedInspection->batch_quantity
-                    : 0,
-                'completed_at' => now(),
-                'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
-            ])->save();
-            $eventInspection = $lockedInspection->fresh();
+            return $this->finalizeTerminal($lockedInspection, $targetStatus, $by, $defects);
+        });
+    }
 
-            // Sprint 7 Task 61: auto-open an NCR when the inspection failed.
-            // Keep the corrective-action record in this transaction: a failed
-            // inspection without its NCR is an IATF traceability gap, and an
-            // afterCommit callback could be lost if the worker dies first.
-            if (! $passed) {
-                app(NcrService::class)->openFromInspectionFailure(
-                    $eventInspection->load('measurements'),
-                    $by,
-                );
+    /**
+     * Finalize a high-risk result after a different user has checked it.
+     */
+    public function review(Inspection $inspection, string $decision, ?string $remarks, User $by): Inspection
+    {
+        $targetStatus = InspectionStatus::tryFrom($decision);
+        if (! in_array($targetStatus, [InspectionStatus::Passed, InspectionStatus::Failed], true)) {
+            throw new BusinessRuleException('Inspection review decision must be passed or failed.');
+        }
 
-                // The failure cascade is also recorded in this transaction;
-                // queue publication waits for commit and is replayable.
-                app(OutboxService::class)->record(
-                    new InspectionFailed($eventInspection),
-                );
-            } else {
-                // Inspection passed → drive the outgoing-delivery /
-                // incoming-bill cascades through the durable outbox.
-                app(OutboxService::class)->record(
-                    new InspectionPassed($eventInspection),
-                );
+        return DB::transaction(function () use ($inspection, $targetStatus, $remarks, $by) {
+            $lockedInspection = Inspection::query()
+                ->lockForUpdate()
+                ->findOrFail($inspection->id);
+
+            if ($lockedInspection->status !== InspectionStatus::AwaitingReview) {
+                throw new BusinessRuleException('Only inspections awaiting review can be checked.');
+            }
+            if (! $lockedInspection->inspector_id) {
+                throw new BusinessRuleException('Inspection has no maker; the result cannot be checked.');
+            }
+            if ((int) $lockedInspection->inspector_id === (int) $by->id) {
+                throw new ForbiddenActionException('You cannot review an inspection you performed.');
             }
 
-            return $this->show($eventInspection);
+            $remarks = $remarks !== null ? trim($remarks) : null;
+            $proposed = $lockedInspection->proposed_result instanceof InspectionOutcome
+                ? $lockedInspection->proposed_result
+                : InspectionOutcome::tryFrom((string) $lockedInspection->proposed_result);
+            if (! $proposed) {
+                throw new BusinessRuleException('Inspection has no valid proposed result; review is blocked.');
+            }
+            if ($targetStatus === InspectionStatus::Failed || $targetStatus->value !== $proposed->value) {
+                if (! $remarks) {
+                    throw new BusinessRuleException('Remarks are required for a failed disposition or override.');
+                }
+            }
+
+            $this->states->assertAllowed($lockedInspection, $targetStatus);
+            $lockedInspection->forceFill([
+                'reviewed_by' => $by->id,
+                'reviewed_at' => now(),
+                'review_remarks' => $remarks,
+            ])->save();
+
+            return $this->finalizeTerminal($lockedInspection, $targetStatus, $by);
         });
+    }
+
+    private function finalizeTerminal(Inspection $inspection, InspectionStatus $targetStatus, User $by, ?int $defects = null): Inspection
+    {
+        $inspection->forceFill([
+            'status' => $targetStatus->value,
+            'defect_count' => $defects ?? (int) $inspection->defect_count,
+            'accepted_quantity' => $targetStatus === InspectionStatus::Passed
+                && $inspection->stage === InspectionStage::Outgoing
+                ? (int) $inspection->batch_quantity
+                : 0,
+            'completed_at' => now(),
+            'inspector_id' => $inspection->inspector_id ?? $by->id,
+        ])->save();
+        $eventInspection = $inspection->fresh();
+
+        if ($targetStatus === InspectionStatus::Failed) {
+            app(NcrService::class)->openFromInspectionFailure(
+                $eventInspection->load('measurements'),
+                $by,
+            );
+            app(OutboxService::class)->record(new InspectionFailed($eventInspection));
+        } else {
+            app(OutboxService::class)->record(new InspectionPassed($eventInspection));
+        }
+
+        return $this->show($eventInspection);
     }
 
     public function cancel(Inspection $inspection, ?string $reason, User $by): Inspection
     {
-        if ($inspection->status->isTerminal()) {
+        if ($inspection->status->isTerminal() || $inspection->status === InspectionStatus::AwaitingReview) {
             throw new BusinessRuleException('Inspection is already finalised.');
         }
 
@@ -662,7 +961,7 @@ class InspectionService
             $lockedInspection = Inspection::query()
                 ->lockForUpdate()
                 ->findOrFail($inspection->id);
-            if ($lockedInspection->status->isTerminal()) {
+            if ($lockedInspection->status->isTerminal() || $lockedInspection->status === InspectionStatus::AwaitingReview) {
                 throw new BusinessRuleException('Inspection is already finalised.');
             }
 
@@ -682,8 +981,8 @@ class InspectionService
     /**
      * Insert a sample × parameter scaffold in bounded batches.
      *
-     * @param iterable<mixed> $parameters
-     * @param callable(int, mixed, int, string): array<string, mixed> $rowFactory
+     * @param  iterable<mixed>  $parameters
+     * @param  callable(int, mixed, int, string): array<string, mixed>  $rowFactory
      */
     private function insertScaffoldRows(
         int $inspectionId,
@@ -707,6 +1006,18 @@ class InspectionService
         if ($rows !== []) {
             InspectionMeasurement::query()->insert($rows);
         }
+    }
+
+    private function boundedFullSampleSize(int $batchQuantity): int
+    {
+        $maximum = $this->settings->requiredInt('quality.full_sampling.max_units', 1, 1000000);
+        if ($batchQuantity > $maximum) {
+            throw new BusinessRuleException(
+                "Full sampling is limited to {$maximum} unit(s); use a finite quality plan for larger batches.",
+            );
+        }
+
+        return $batchQuantity;
     }
 
     private function attachEntityContext(Inspection $inspection): Inspection

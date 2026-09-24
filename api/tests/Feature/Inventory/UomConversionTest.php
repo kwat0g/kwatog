@@ -166,7 +166,13 @@ class UomConversionTest extends TestCase
 
         // Accept the GRN → stock level must hold 50 KG.
         Inspection::query()->findOrFail($grn->fresh()->qc_inspection_id)
-            ->update(['status' => 'passed']);
+            ->update([
+                'status' => 'passed',
+                'inspector_id' => $user->id,
+                // Maker-checker: a pass counts only once a different user checks it.
+                'reviewed_by' => User::factory()->create()->id,
+                'reviewed_at' => now(),
+            ]);
         $grnSvc->accept($grn->fresh(), $user);
 
         $level = StockLevel::where('item_id', $item->id)

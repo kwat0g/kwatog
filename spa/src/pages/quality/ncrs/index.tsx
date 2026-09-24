@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { cn } from '@/lib/cn';
 import type { Ncr, NcrSeverity, NcrStatus } from '@/types/quality';
+import { formatDateIso } from '@/lib/formatDate';
 
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -49,7 +50,9 @@ export default function NcrsListPage() {
   const [filters, setFilters] = useUrlFilters<NcrListParams>(DEFAULT_FILTERS);
   const [bulkRows, setBulkRows] = useState<Ncr[]>([]);
   const [confirmBulkClose, setConfirmBulkClose] = useState(false);
-  const [bulkResult, setBulkResult] = useState<Awaited<ReturnType<typeof ncrsApi.bulkClose>> | null>(null);
+  const [bulkResult, setBulkResult] = useState<Awaited<
+    ReturnType<typeof ncrsApi.bulkClose>
+  > | null>(null);
   const [tableInstance, setTableInstance] = useState(0);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -156,7 +159,7 @@ export default function NcrsListPage() {
       key: 'closed',
       header: 'Closed',
       align: 'right',
-      cell: (r) => <NumCell>{r.closed_at?.slice(0, 10) ?? '—'}</NumCell>,
+      cell: (r) => <NumCell>{formatDateIso(r.closed_at)}</NumCell>,
     },
   ];
 
@@ -188,7 +191,11 @@ export default function NcrsListPage() {
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'NCR' : 'NCRs'}` : undefined}
         actions={
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="secondary" onClick={() => navigate('/quality/ncrs/effectiveness')}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => navigate('/quality/ncrs/effectiveness')}
+            >
               CAPA due checks
             </Button>
             {can('quality.ncr.manage') ? (
@@ -215,11 +222,15 @@ export default function NcrsListPage() {
         <div className="px-5 pt-4">
           <Panel title="Bulk close results">
             <p className="text-sm text-secondary">
-              {bulkResult.summary.success} closed · {bulkResult.summary.skipped} skipped · {bulkResult.summary.failed} failed
+              {bulkResult.summary.success} closed · {bulkResult.summary.skipped} skipped ·{' '}
+              {bulkResult.summary.failed} failed
             </p>
             <ul className="mt-2 space-y-1 text-xs">
               {bulkResult.results.map((result) => (
-                <li key={`${result.ncr_id}-${result.status}`} className={result.status === 'failed' ? 'text-danger-fg' : 'text-secondary'}>
+                <li
+                  key={`${result.ncr_id}-${result.status}`}
+                  className={result.status === 'failed' ? 'text-danger-fg' : 'text-secondary'}
+                >
                   <span className="font-mono">{result.ncr_id}</span> — {result.message}
                 </li>
               ))}
@@ -241,9 +252,7 @@ export default function NcrsListPage() {
       )}
       {data && <EightDProgress rows={data.data} />}
 
-      {data && data.data.length === 0 && (
-        <ListEmptyState />
-      )}
+      {data && data.data.length === 0 && <ListEmptyState />}
 
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
@@ -252,20 +261,26 @@ export default function NcrsListPage() {
             tableKey="ncrs"
             selectable={can('quality.ncr.manage')}
             getRowId={(row) => row.id}
-            bulkActions={can('quality.ncr.manage') ? [{
-              label: 'Close selected',
-              variant: 'primary',
-              onClick: (rows) => {
-                setBulkRows(rows);
-                setConfirmBulkClose(true);
-              },
-            }] : undefined}
+            bulkActions={
+              can('quality.ncr.manage')
+                ? [
+                    {
+                      label: 'Close selected',
+                      variant: 'primary',
+                      onClick: (rows) => {
+                        setBulkRows(rows);
+                        setConfirmBulkClose(true);
+                      },
+                    },
+                  ]
+                : undefined
+            }
             onRowClick={(r) => navigate(`/quality/ncrs/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
- onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
+            onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
           />
         </div>
       )}

@@ -271,15 +271,17 @@ month, or via *Admin → Depreciation Runs* on demand. Idempotent.
 
 Click **Dispose** on the asset detail page, enter the disposal amount, and
 submit. The request goes through the asset disposal approval chain
-(finance officer → system admin); once the final step approves, the system
+(finance officer → vice president); once the final step approves, the system
 posts a balanced JE that nets accumulated depreciation against cost and
 books gain/loss. A rejected or cancelled request leaves the asset active
 with no journal entry.
 
-### 14.4 QR labels
+### 14.4 Asset QR code
 
-Click **Print QR Labels** on a multi-row selection in the assets list to
-generate a printable label sheet (camera-scan opens the asset detail).
+Open an asset detail page and use its QR panel to display or download the QR
+image. The API returns a JSON deep-link payload; the SPA renders the image and
+camera scans open the hashed asset detail URL. Batch label sheets are not part
+of the current scope.
 
 ## 15. Separation & Clearance
 

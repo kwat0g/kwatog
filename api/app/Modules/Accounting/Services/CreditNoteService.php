@@ -119,6 +119,7 @@ class CreditNoteService
                 ? Bill::query()->lockForUpdate()->findOrFail($billId)
                 : null;
             $this->assertSourceParty($type, $customerId, $vendorId, $sourceInvoice, $sourceBill);
+            $this->assertSourceState($sourceInvoice, $sourceBill);
             $isVatable = $sourceInvoice !== null
                 ? (bool) $sourceInvoice->is_vatable
                 : ($sourceBill !== null
@@ -193,9 +194,13 @@ class CreditNoteService
 
             $this->periods->assertPostingAllowed($locked->date->toDateString());
             $locked->loadMissing('lines');
+            $this->assertSourceState(
+                $locked->invoice_id ? Invoice::query()->lockForUpdate()->find($locked->invoice_id) : null,
+                $locked->bill_id ? Bill::query()->lockForUpdate()->find($locked->bill_id) : null,
+            );
 
             $lines = $this->buildGlLines($locked);
-            $number = $this->sequences->generate('credit_note');
+            $number = $this->sequences->generate('credit_note', $locked->date);
 
             $je = $this->journals->create([
                 'date'           => $locked->date->toDateString(),
@@ -339,6 +344,51 @@ class CreditNoteService
     }
 
     /**
+     * Void an unapplied finalized credit note by reversing its posted JE.
+     * Applied credits are intentionally immutable: their applications must be
+     * unwound as a separate controlled operation before the note can be voided.
+     */
+    public function void(CreditNote $cn, User $by, string $reason): CreditNote
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new BusinessRuleException('A reason is required to void a credit note.');
+        }
+
+        return DB::transaction(function () use ($cn, $by, $reason): CreditNote {
+            $locked = CreditNote::query()->lockForUpdate()->findOrFail($cn->getKey());
+            if ($locked->status !== CreditNoteStatus::Finalized) {
+                throw new BusinessRuleException(
+                    'Only an unapplied finalized credit note can be voided; an applied credit note must be unwound before it can be voided.',
+                );
+            }
+            if (! Money::isZero((string) $locked->applied_amount)) {
+                throw new BusinessRuleException('An applied credit note must be unwound before it can be voided.');
+            }
+            if (! $locked->journal_entry_id) {
+                throw new BusinessRuleException('The credit note has no posted journal entry to reverse.');
+            }
+
+            $journal = JournalEntry::query()->lockForUpdate()->findOrFail($locked->journal_entry_id);
+            if ($journal->status !== JournalEntryStatus::Posted) {
+                throw new BusinessRuleException('The credit note journal entry is no longer posted.');
+            }
+
+            $reversal = $this->journals->reverse($journal, $by, $locked->date, $reason);
+            $locked->forceFill([
+                'status' => CreditNoteStatus::Void,
+                'balance' => '0.00',
+                'voided_by' => $by->id,
+                'void_reversal_journal_entry_id' => $reversal->id,
+                'voided_at' => now(),
+                'void_reason' => $reason,
+            ])->save();
+
+            return $locked->fresh(['lines', 'voidReversalJournalEntry']);
+        });
+    }
+
+    /**
      * Build the VAT-reversing GL lines. Customer credit reverses the invoice
      * booking (DR revenue, DR VAT-output, CR AR); supplier credit reverses the
      * bill booking (DR AP, CR expense, CR VAT-input).
@@ -392,6 +442,39 @@ class CreditNoteService
         }
         if ($cn->type === CreditNoteType::Supplier && ! $cn->vendor_id) {
             throw new BusinessRuleException('A supplier credit note requires a vendor.');
+        }
+    }
+
+    /**
+     * A credit note against a source document reverses that document's GL
+     * booking, so the source must actually have a posted one and must not
+     * already have been reversed. Draft sources were never booked; cancelled
+     * sources were already unwound. Referencing either posts a credit JE
+     * against nothing and desynchronises the subledger from the GL.
+     */
+    private function assertSourceState(?Invoice $invoice, ?Bill $bill): void
+    {
+        if ($invoice !== null && ! in_array($invoice->status, [
+            InvoiceStatus::Finalized,
+            InvoiceStatus::Partial,
+            InvoiceStatus::Paid,
+        ], true)) {
+            throw new BusinessRuleException('A credit note can only reference a finalized, partially paid, or paid invoice.');
+        }
+        if ($bill !== null && ! in_array($bill->status, [
+            BillStatus::Unpaid,
+            BillStatus::Partial,
+            BillStatus::Paid,
+        ], true)) {
+            throw new BusinessRuleException('A credit note can only reference an unpaid, partially paid, or paid bill.');
+        }
+
+        $journalEntryId = $invoice?->journal_entry_id ?? $bill?->journal_entry_id;
+        if ($journalEntryId !== null && ! JournalEntry::query()
+            ->whereKey($journalEntryId)
+            ->where('status', JournalEntryStatus::Posted)
+            ->exists()) {
+            throw new BusinessRuleException('The credit note source does not have a posted journal entry.');
         }
     }
 

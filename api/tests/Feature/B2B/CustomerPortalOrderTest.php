@@ -30,6 +30,8 @@ class CustomerPortalOrderTest extends TestCase
 {
     use RefreshDatabase;
 
+    private int $orderRequestNumber = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,6 +72,14 @@ class CustomerPortalOrderTest extends TestCase
             'effective_from' => now()->subDay()->toDateString(),
             'effective_to' => now()->addMonth()->toDateString(),
             'pricing_method' => PricingMethod::Flat->value,
+        ]);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function postOrder(array $payload, ?string $key = null): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/api/v1/b2b/customer/orders', $payload, [
+            'Idempotency-Key' => $key ?? 'customer-order-test-'.(++$this->orderRequestNumber),
         ]);
     }
 
@@ -157,7 +167,7 @@ class CustomerPortalOrderTest extends TestCase
 
         $this->actAs($user);
 
-        $response = $this->postJson('/api/v1/b2b/customer/orders', [
+        $response = $this->postOrder([
             'items' => [
                 ['product_id' => $product->hash_id, 'quantity' => 4, 'delivery_date' => now()->addDays(7)->toDateString()],
             ],
@@ -194,7 +204,7 @@ class CustomerPortalOrderTest extends TestCase
         $this->agreement($customer, $product, '1000.00');
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 2, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -215,7 +225,7 @@ class CustomerPortalOrderTest extends TestCase
         $product = Product::factory()->create();
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 1, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -234,7 +244,7 @@ class CustomerPortalOrderTest extends TestCase
         $this->agreement($otherCustomer, $product, '99.00');
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 1, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -252,7 +262,7 @@ class CustomerPortalOrderTest extends TestCase
         $this->agreement($customer, $product);
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'date' => now()->toDateString(),
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 1, 'delivery_date' => now()->subDay()->toDateString()],
@@ -269,7 +279,7 @@ class CustomerPortalOrderTest extends TestCase
         $user = $this->makePortalUser($customer);
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => 'not-a-real-hash', 'quantity' => 1, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -289,7 +299,7 @@ class CustomerPortalOrderTest extends TestCase
         $systemUser = app(SystemUserResolver::class)->user();
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 1, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -320,7 +330,7 @@ class CustomerPortalOrderTest extends TestCase
         $sales = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
         $this->actAs($user)
-            ->postJson('/api/v1/b2b/customer/orders', [
+            ->postOrder([
                 'items' => [
                     ['product_id' => $product->hash_id, 'quantity' => 1, 'delivery_date' => now()->addDays(3)->toDateString()],
                 ],
@@ -342,4 +352,82 @@ class CustomerPortalOrderTest extends TestCase
         $this->assertNotNull($notification);
         $this->assertStringContainsString($so->so_number, $notification->data);
     }
+
+    public function test_place_order_replays_the_original_result_for_the_same_key_and_payload(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+        $payload = [
+            'items' => [[
+                'product_id' => $product->hash_id,
+                'quantity' => '2.00',
+                'delivery_date' => now()->addDays(4)->toDateString(),
+            ]],
+        ];
+
+        $this->actAs($user);
+        $first = $this->postOrder($payload, 'portal-order-replay-01')->assertCreated()->json('data.id');
+        $replay = $this->postOrder($payload, 'portal-order-replay-01')->assertOk()->json('data.id');
+
+        $this->assertSame($first, $replay);
+        $this->assertSame(1, SalesOrder::query()->where('customer_id', $customer->id)->count());
+        $this->assertSame(1, AuditLog::query()->where('action', 'customer.order.placed')->count());
+    }
+
+    public function test_place_order_rejects_a_key_reused_for_a_different_payload(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+        $payload = [
+            'items' => [[
+                'product_id' => $product->hash_id,
+                'quantity' => '2.00',
+                'delivery_date' => now()->addDays(4)->toDateString(),
+            ]],
+        ];
+
+        $this->actAs($user);
+        $this->postOrder($payload, 'portal-order-replay-02')->assertCreated();
+        $payload['items'][0]['quantity'] = '3.00';
+
+        $this->postOrder($payload, 'portal-order-replay-02')->assertStatus(422);
+        $this->assertSame(1, SalesOrder::query()->where('customer_id', $customer->id)->count());
+    }
+
+    public function test_place_order_requires_an_idempotency_key(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $product = Product::factory()->create();
+        $this->agreement($customer, $product);
+
+        $this->actAs($user)
+            ->postJson('/api/v1/b2b/customer/orders', ['items' => [[
+                'product_id' => $product->hash_id,
+                'quantity' => '1.00',
+                'delivery_date' => now()->addDays(4)->toDateString(),
+            ]]])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('idempotency_key');
+    }
+
+    public function test_customer_portal_order_writes_are_rate_limited_per_user(): void
+    {
+        $user = $this->makePortalUser();
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $this->actingAs($user, 'customer_portal')
+                ->postJson('/api/v1/b2b/customer/orders', [])
+                ->assertStatus(422);
+        }
+
+        $this->actingAs($user, 'customer_portal')
+            ->postJson('/api/v1/b2b/customer/orders', [])
+            ->assertStatus(429);
+    }
+
 }

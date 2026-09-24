@@ -65,10 +65,6 @@ class CheckPasswordExpiry
 
     private function usesInternalSanctumGuard(Request $request): bool
     {
-        if ($request->is('api/v1/edge/*')) {
-            return false;
-        }
-
         $route = $request->route();
         if (! is_object($route) || ! method_exists($route, 'gatherMiddleware')) {
             return false;

@@ -177,8 +177,8 @@ class PriceAgreementService
      *
      * - If pricing_method = 'tiered' and tiers are defined, the highest tier
      *   whose min_qty <= quantity is selected.
-     * - If no tier applies (quantity below all min_qty), the first (lowest) tier
-     *   is used as a fallback.
+     * - If no tier applies (quantity below all min_qty), the agreement's base
+     *   price applies until the first volume threshold is reached.
      * - If pricing_method = 'flat' or tiers is null/empty, the flat price is returned.
      */
     public function resolveUnitPrice(PriceAgreement $agreement, string|int $quantity = 1): string
@@ -193,9 +193,7 @@ class PriceAgreementService
                 return Money::round2((string) ($best['unit_price'] ?? $agreement->price));
             }
 
-            // Quantity is below the smallest tier's min_qty — use the lowest tier price.
-            $lowest = $tiers->last();
-            return Money::round2((string) ($lowest['unit_price'] ?? $agreement->price));
+            return Money::round2((string) $agreement->price);
         }
 
         return Money::round2((string) $agreement->price);

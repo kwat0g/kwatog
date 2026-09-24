@@ -9,9 +9,7 @@ export interface SupplierPortalUser {
  must_change_password: boolean;
  is_active: boolean;
  status: 'active' | 'inactive' | 'locked' | 'pending';
- failed_login_attempts: number;
- locked_until: string | null;
- deleted_at: string | null;
+  deleted_at: string | null;
  vendor: { id: string; name: string } | null;
  last_login_at: string | null;
  created_at: string;
@@ -26,9 +24,7 @@ export interface CustomerPortalUser {
  must_change_password: boolean;
  is_active: boolean;
  status: 'active' | 'inactive' | 'locked' | 'pending';
- failed_login_attempts: number;
- locked_until: string | null;
- deleted_at: string | null;
+  deleted_at: string | null;
  customer: { id: string; name: string } | null;
  last_login_at: string | null;
  created_at: string;
@@ -170,9 +166,68 @@ export interface PortalSoDetail extends PortalSoSummary {
  }>;
  customer?: { id: string; name: string };
  notes?: string;
- payment_terms_days?: number;
- delivery_terms?: string;
- submission_source?: string;
+  payment_terms_days?: number;
+  delivery_terms?: string;
+  submission_source?: string;
+  capabilities?: { can_respond: boolean; can_confirm: boolean };
+  latest_response?: {
+    id: string;
+    type: 'accept' | 'propose' | 'decline' | string;
+    status: string;
+    proposed_delivery_date: string | null;
+    notes: string | null;
+    responded_at: string | null;
+    resolved_at: string | null;
+    resolution_notes: string | null;
+    items: Array<{
+      sales_order_item_id: string | null;
+      proposed_quantity: string | null;
+      proposed_unit_price: string | null;
+      reason: string | null;
+    }>;
+  } | null;
+}
+
+export interface PortalReturnRequest {
+  id: string;
+  rma_number: string;
+  type: string;
+  status: string;
+  status_label: string;
+  reason_code: string | null;
+  reason_description: string | null;
+  customer_notes: string | null;
+  resolution: string | null;
+  return_date: string | null;
+  created_at: string;
+  items?: Array<{
+    id: string;
+    product: { id: string; part_number: string; name: string } | null;
+    quantity: string;
+    unit_price: string;
+    total: string;
+    reason: string | null;
+    condition: string | null;
+    disposition: string | null;
+  }>;
+}
+
+export interface PortalReturnSourceLine {
+  id: string;
+  product_id: string | null;
+  item_id: string | null;
+  quantity: string;
+  remaining_quantity: string;
+  unit_price: string;
+  label: string;
+}
+
+export interface PortalReturnSourceOptions {
+  customer: {
+    invoices: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
+    salesOrders: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
+    deliveries: Array<{ id: string; label: string; lines: PortalReturnSourceLine[] }>;
+  };
 }
 
 // ── Shared portal types ──────────────────────────────
@@ -355,9 +410,10 @@ export interface StatementOfAccount {
  total_outstanding: string;
  aging: {
  current: string;
- d30_days: string;
- d60_days: string;
- d90_plus: string;
+    d1_30: string;
+    d31_60: string;
+    d61_90: string;
+    d91_plus: string;
  };
  aging_options: Array<{ value: keyof StatementOfAccount['aging']; label: string }>;
  transactions: Array<{

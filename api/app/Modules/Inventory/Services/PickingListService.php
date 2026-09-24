@@ -41,32 +41,6 @@ class PickingListService
     }
 
     /**
-     * Generate picking list for a work order from its bill of materials (future use).
-     */
-    public function generateForWorkOrder(int $workOrderId, array $materials): array
-    {
-        $pickingLines = [];
-        foreach ($materials as $material) {
-            $itemId = (int) $material['item_id'];
-            $qtyRequired = (string) $material['quantity'];
-            $suggestions = $this->findBestLocations($itemId, $qtyRequired);
-            $pickingLines[] = [
-                'item_id'          => $itemId,
-                'item_code'        => $material['item_code'] ?? null,
-                'item_name'        => $material['item_name'] ?? null,
-                'unit_of_measure'  => $material['unit_of_measure'] ?? '',
-                'quantity_required' => $qtyRequired,
-                'suggestions'      => $suggestions,
-            ];
-        }
-
-        return [
-            'work_order'  => "#{$workOrderId}",
-            'lines'       => $pickingLines,
-        ];
-    }
-
-    /**
      * For a given MaterialIssueSlipItem, find the best location(s) to pick from.
      */
     private function suggestPickLocations(MaterialIssueSlipItem $misItem): array
@@ -77,13 +51,14 @@ class PickingListService
         // If a specific location was set on the MIS item, prefer it
         if ($misItem->location_id) {
             $loc = WarehouseLocation::with('zone.warehouse')->find($misItem->location_id);
+            $usable = $loc?->is_active && $loc->zone?->warehouse?->is_active;
             return [
                 'item_id'          => $itemId,
                 'item_code'        => $misItem->item?->code,
                 'item_name'        => $misItem->item?->name,
                 'unit_of_measure'  => $misItem->item?->unit_of_measure ?? '',
                 'quantity_required' => $qtyRequired,
-                'preferred_location' => $loc ? [
+                'preferred_location' => $usable ? [
                     'id'        => $loc->id,
                     'code'      => $loc->code,
                     'full_code' => $loc->full_code,
@@ -126,6 +101,9 @@ class PickingListService
         $stockLevels = StockLevel::query()
             ->where('item_id', $itemId)
             ->whereRaw('(quantity - reserved_quantity) > 0')
+            ->whereHas('location', fn ($locations) => $locations
+                ->where('is_active', true)
+                ->whereHas('zone.warehouse', fn ($warehouses) => $warehouses->where('is_active', true)))
             // REC-08 — never suggest quarantine/scrap-zone stock (held under MRB).
             ->whereHas('location.zone', function ($q) {
                 $q->whereNotIn('zone_type', [

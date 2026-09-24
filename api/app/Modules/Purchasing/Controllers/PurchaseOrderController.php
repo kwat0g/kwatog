@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\Purchasing\Requests\CancelPurchaseOrderRequest;
+use App\Modules\Purchasing\Requests\ShortClosePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\StorePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\UpdatePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\RejectPurchaseOrderRequest;
@@ -94,9 +95,9 @@ class PurchaseOrderController
         return response()->json(['message' => 'Purchase order restored.']);
     }
 
-    public function submit(PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    public function submit(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
-        try { $po = $this->service->submit($purchaseOrder); }
+        try { $po = $this->service->submit($purchaseOrder, $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }
@@ -140,6 +141,13 @@ class PurchaseOrderController
     public function close(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->close($purchaseOrder, $request->user()); }
+        catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
+        return new PurchaseOrderResource($this->service->show($po));
+    }
+
+    public function shortClose(ShortClosePurchaseOrderRequest $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    {
+        try { $po = $this->service->shortClose($purchaseOrder, $request->validated()['reason'], $request->user()); }
         catch (BusinessRuleException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }

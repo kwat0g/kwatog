@@ -20,6 +20,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -48,7 +49,7 @@ class AssetDisposalMonthDepreciationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class]);
+        $this->seed([ChartOfAccountsSeeder::class, RolePermissionSeeder::class, SettingsSeeder::class, WorkflowSeeder::class]);
     }
 
     protected function tearDown(): void
@@ -60,8 +61,17 @@ class AssetDisposalMonthDepreciationTest extends TestCase
     private function user(): User
     {
         return User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
         ]);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function dispose(Asset $asset, array $data): void
+    {
+        $svc = app(AssetService::class);
+        $svc->requestDisposal($asset, $data, User::factory()->withRole('finance_officer')->create());
+        $svc->approveDisposal($asset, User::factory()->withRole('finance_officer')->create());
+        $svc->approveDisposal($asset, $this->user());
     }
 
     /** @param array<string, mixed> $overrides */
@@ -146,11 +156,11 @@ class AssetDisposalMonthDepreciationTest extends TestCase
         $this->depreciationService()->runBackfillTo(2026, 8, $by);
         $this->assertSame('3000.00', $asset->fresh()->accumulated_depreciation);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->dispose($asset, [
             'disposal_amount' => '5000.00',
             'disposed_date' => '2026-09-15',
             'remarks' => 'Sold at auction',
-        ], $by);
+        ]);
 
         // The catch-up posted exactly one September charge for this asset.
         $september = AssetDepreciation::query()
@@ -208,11 +218,11 @@ class AssetDisposalMonthDepreciationTest extends TestCase
         $this->depreciationService()->runBackfillTo(2026, 3, $by);
         $this->assertSame('600.00', $asset->fresh()->accumulated_depreciation);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->dispose($asset, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-06-10',
             'remarks' => 'Scrapped — beyond economical repair',
-        ], $by);
+        ]);
 
         // April, May and June were caught up inside the disposal.
         $rows = $this->rowsFor($asset);
@@ -252,11 +262,11 @@ class AssetDisposalMonthDepreciationTest extends TestCase
         $this->assertSame('1800.00', $asset->fresh()->accumulated_depreciation);
         $journalsBefore = JournalEntry::query()->count();
 
-        app(AssetService::class)->dispose($asset, [
+        $this->dispose($asset, [
             'disposal_amount' => '7000.00',
             'disposed_date' => '2026-09-30',
             'remarks' => 'Sold to a second-hand dealer',
-        ], $by);
+        ]);
 
         $this->assertCount(9, $this->rowsFor($asset));
         $this->assertSame(0, JournalEntry::query()->where('description', 'like', '%(disposal catch-up)%')->count());
@@ -282,11 +292,11 @@ class AssetDisposalMonthDepreciationTest extends TestCase
         $this->assertSame('1600.00', $disposed->fresh()->accumulated_depreciation);
         $this->assertSame('3200.00', $kept->fresh()->accumulated_depreciation);
 
-        app(AssetService::class)->dispose($disposed, [
+        $this->dispose($disposed, [
             'disposal_amount' => '0.00',
             'disposed_date' => '2026-09-15',
             'remarks' => 'Written off',
-        ], $by);
+        ]);
 
         // The September run must post for the remaining asset while a
         // catch-up row for the disposed asset already occupies the month.

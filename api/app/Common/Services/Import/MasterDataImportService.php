@@ -25,7 +25,7 @@ use Throwable;
  * Owns CSV parsing, dry-run validation, atomic commit, batch tracking, and
  * rollback. Per-entity logic lives in EntityImporter implementations, resolved
  * from the registry below. Adding a new entity = write an importer + register
- * it here (customers/vendors/employees/BOMs/molds/machines are the follow-on).
+ * it here. The registry below is the complete set of supported import types.
  *
  * Master-data cutover is all-or-nothing: if ANY row is invalid, commit()
  * imports nothing and returns the full error list, so a partial chart of
@@ -88,6 +88,17 @@ class MasterDataImportService
         return app($class);
     }
 
+    private function safeError(Throwable $exception): string
+    {
+        if ($exception instanceof BusinessRuleException || $exception instanceof \Illuminate\Validation\ValidationException) {
+            return $exception->getMessage();
+        }
+
+        report($exception);
+
+        return 'This row could not be imported due to a data error.';
+    }
+
     /**
      * Validate a CSV without writing anything.
      *
@@ -110,7 +121,7 @@ class MasterDataImportService
                     $importer->importRow($row);
                     $valid++;
                 } catch (Throwable $e) {
-                    $errors[] = ['row' => $i + 2, 'message' => $e->getMessage()]; // +2: header + 1-index
+                    $errors[] = ['row' => $i + 2, 'message' => $this->safeError($e)]; // +2: header + 1-index
                 }
             }
         } finally {
@@ -153,7 +164,7 @@ class MasterDataImportService
                     ]);
                     $created[] = $model;
                 } catch (Throwable $e) {
-                    $errors[] = ['row' => $i + 2, 'message' => $e->getMessage()];
+                    $errors[] = ['row' => $i + 2, 'message' => $this->safeError($e)];
                 }
             }
 

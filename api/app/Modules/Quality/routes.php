@@ -79,8 +79,12 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.manage');
     Route::patch('/inspections/{inspection}/measurements',      [InspectionController::class, 'recordMeasurements'])
         ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/lot-result',         [InspectionController::class, 'recordLotResult'])
+        ->middleware('permission:quality.inspections.manage');
     Route::post('/inspections/{inspection}/complete',           [InspectionController::class, 'complete'])
         ->middleware('permission:quality.inspections.manage');
+    Route::patch('/inspections/{inspection}/review',            [InspectionController::class, 'review'])
+        ->middleware('permission:quality.inspections.review');
     Route::post('/inspections/{inspection}/cancel',             [InspectionController::class, 'cancel'])
         ->middleware('permission:quality.inspections.manage');
     Route::get('/inspections/{inspection}/coc',                 [InspectionController::class, 'coc'])

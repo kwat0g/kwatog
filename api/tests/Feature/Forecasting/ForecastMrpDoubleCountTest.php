@@ -168,4 +168,24 @@ class ForecastMrpDoubleCountTest extends TestCase
         $this->assertContains($withBoth->hash_id, $ids);
         $this->assertContains($onlyTotal->hash_id, $ids);
     }
+
+    public function test_bom_failures_are_not_reported_as_missing_boms(): void
+    {
+        $product = Product::factory()->create(['include_forecast_in_mrp' => true]);
+        DemandForecast::factory()->create([
+            'product_id' => $product->id,
+            'forecast_year' => 2026,
+            'forecast_month' => 9,
+            'forecasted_quantity' => 10,
+        ]);
+
+        $bom = Mockery::mock(BomService::class);
+        $bom->shouldReceive('explode')
+            ->once()
+            ->andThrow(new \RuntimeException('BOM storage unavailable'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('BOM storage unavailable');
+        (new ForecastMrpService($bom))->project(2026, 9);
+    }
 }

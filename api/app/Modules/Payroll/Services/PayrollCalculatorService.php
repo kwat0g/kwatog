@@ -999,7 +999,7 @@ class PayrollCalculatorService
             // already locked above, so manual payments and this deduction
             // cannot race or leave the denormalized summary drifting.
             app(\App\Modules\Loans\Services\LoanService::class)
-                ->reconcileAggregates($loan, $period->payroll_date->toDateString());
+                ->reconcileAggregates($loan);
         }
 
         return $total;

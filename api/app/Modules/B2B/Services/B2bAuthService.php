@@ -6,6 +6,8 @@ namespace App\Modules\B2B\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Admin\Services\LoginHistoryService;
+use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Auth\Services\AuthAuditLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -73,7 +75,7 @@ class B2bAuthService
                 return ['status' => 'unknown', 'user' => null];
             }
 
-            if (! $user->is_active) {
+            if (! $user->is_active || ! $this->parentIsActive($user)) {
                 return ['status' => 'inactive', 'user' => $user];
             }
 
@@ -176,5 +178,14 @@ class B2bAuthService
     private function logAuthEvent(string $event, Model $user, Request $request): void
     {
         $this->audit->portal($event, $user, $request);
+    }
+
+    private function parentIsActive(Model $user): bool
+    {
+        return match (true) {
+            $user instanceof CustomerPortalUser => $user->customer()->lockForUpdate()->where('is_active', true)->exists(),
+            $user instanceof SupplierPortalUser => $user->vendor()->lockForUpdate()->where('is_active', true)->exists(),
+            default => false,
+        };
     }
 }

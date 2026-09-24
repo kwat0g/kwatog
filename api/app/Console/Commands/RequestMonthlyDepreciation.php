@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Common\Models\OutboxMessage;
 use App\Common\Services\OutboxService;
 use App\Modules\Assets\Events\MonthlyDepreciationRequested;
+use App\Modules\Assets\Models\AssetDepreciationRun;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -62,10 +63,32 @@ class RequestMonthlyDepreciation extends Command
         }
 
         /** @var OutboxMessage $message */
-        $message = DB::transaction(fn (): OutboxMessage => $outbox->record(
-            new MonthlyDepreciationRequested($year, $month, $requestId),
-            dedupeKey: $dedupeKey,
-        ));
+        $message = DB::transaction(function () use ($outbox, $year, $month, $requestId, $dedupeKey): OutboxMessage {
+            AssetDepreciationRun::query()->insertOrIgnore([
+                'period_year' => $year,
+                'period_month' => $month,
+                'posted_count' => 0,
+                'total_amount' => '0.00',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $run = AssetDepreciationRun::query()
+                ->where('period_year', $year)
+                ->where('period_month', $month)
+                ->firstOrFail();
+
+            return $outbox->record(
+                new MonthlyDepreciationRequested($year, $month, $requestId),
+                dedupeKey: $dedupeKey,
+                chain: [
+                    'chain' => 'assets',
+                    'entity_type' => 'asset_depreciation_run',
+                    'entity_id' => (int) $run->getKey(),
+                    'entity_hash_id' => $run->hash_id,
+                    'step' => 'monthly_depreciation',
+                ],
+            );
+        });
 
         $this->info("Staged durable asset depreciation request for {$period} (outbox {$message->getKey()}).");
 

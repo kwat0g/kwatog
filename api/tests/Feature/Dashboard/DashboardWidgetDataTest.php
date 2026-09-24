@@ -13,6 +13,7 @@ use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use App\Modules\Dashboard\Services\WidgetAnalyticsService;
 use App\Modules\HR\Models\Employee;
 use Database\Seeders\DashboardWidgetSeeder;
+use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -146,5 +147,18 @@ class DashboardWidgetDataTest extends TestCase
         $available = collect(app(DashboardLayoutService::class)->listAvailableWidgets($head))
             ->pluck('key');
         $this->assertFalse($available->contains('hr.on_leave_today'));
+    }
+
+    public function test_production_manager_default_includes_due_maintenance_schedules(): void
+    {
+        $this->seed(DashboardRoleLayoutSeeder::class);
+        $manager = User::factory()->create([
+            'role_id' => Role::where('slug', 'production_manager')->firstOrFail()->id,
+        ]);
+
+        $keys = collect(app(DashboardLayoutService::class)->getEffectiveLayout($manager))
+            ->pluck('key');
+
+        $this->assertTrue($keys->contains('maintenance.due_schedules'));
     }
 }

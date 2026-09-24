@@ -29,7 +29,7 @@ class LeaveRequest extends Model
     protected $fillable = [
         'leave_request_no', 'employee_id', 'leave_type_id',
         'start_date', 'end_date', 'days', 'half_day_period',
-        'reason', 'document_path', 'attendance_snapshot',
+        'reason', 'document_path', 'attendance_snapshot', 'balance_allocations',
         'cancelled_by', 'cancelled_at',
     ];
 
@@ -42,6 +42,7 @@ class LeaveRequest extends Model
         'dept_approved_at'  => 'datetime',
         'hr_approved_at'    => 'datetime',
         'attendance_snapshot' => 'array',
+        'balance_allocations' => 'array',
         'cancelled_at'      => 'datetime',
     ];
 
@@ -52,7 +53,7 @@ class LeaveRequest extends Model
 
     public function leaveType(): BelongsTo
     {
-        return $this->belongsTo(LeaveType::class);
+        return $this->belongsTo(LeaveType::class)->withTrashed();
     }
 
     public function deptApprover(): BelongsTo

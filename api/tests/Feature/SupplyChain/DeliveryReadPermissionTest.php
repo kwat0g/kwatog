@@ -164,4 +164,11 @@ class DeliveryReadPermissionTest extends TestCase
                 ->contains('supply.delivery_schedule'),
         );
     }
+
+    public function test_warehouse_staff_can_access_delivery_proof_options_without_403(): void
+    {
+        $user = $this->userWithRole('warehouse_staff');
+
+        $this->actingAs($user)->getJson('/api/v1/supply-chain/deliveries/proofs/options')->assertOk();
+    }
 }

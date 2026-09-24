@@ -140,6 +140,8 @@ class DeliveryService
         $inspections = Inspection::query()
             ->where('stage', InspectionStage::Outgoing->value)
             ->where('status', InspectionStatus::Passed->value)
+            ->whereNotNull('reviewed_by')
+            ->whereNotNull('reviewed_at')
             ->whereNotNull('work_order_output_id')
             ->whereHas('workOrderOutput.workOrder', fn (Builder $q) => $q
                 ->where('sales_order_id', $salesOrderId)
@@ -572,6 +574,9 @@ class DeliveryService
 
         if (! $inspection || $stage !== InspectionStage::Outgoing || $status !== InspectionStatus::Passed) {
             throw new BusinessRuleException('The selected inspection is not a passed outgoing inspection.');
+        }
+        if (! $inspection->isMakerChecked()) {
+            throw new BusinessRuleException('The selected outgoing inspection has not been checked.');
         }
         if (! $inspection->work_order_output_id) {
             throw new BusinessRuleException('Legacy product/WO-only inspections cannot authorize a new delivery.');

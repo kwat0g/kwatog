@@ -14,6 +14,8 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
 use App\Modules\Loans\Requests\ApproveLoanRequest;
 use App\Modules\Loans\Requests\RecordLoanPaymentRequest;
+use App\Modules\Loans\Requests\RequestLoanWriteOffRequest;
+use App\Modules\Loans\Requests\ApproveLoanWriteOffRequest;
 use App\Modules\Loans\Requests\RejectLoanRequest;
 use App\Modules\Loans\Requests\StoreLoanRequest;
 use App\Modules\Loans\Resources\EmployeeLoanResource;
@@ -116,6 +118,33 @@ class LoanController
         return new EmployeeLoanResource($loan);
     }
 
+    public function requestWriteOff(RequestLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    {
+        try {
+            $loan = $this->service->requestWriteOff(
+                $loan,
+                $request->user(),
+                $request->validated('reason'),
+                $request->validated('evidence'),
+            );
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return new EmployeeLoanResource($loan);
+    }
+
+    public function approveWriteOff(ApproveLoanWriteOffRequest $request, EmployeeLoan $loan): EmployeeLoanResource
+    {
+        try {
+            $loan = $this->service->approveWriteOff($loan, $request->user(), $request->validated('remarks'));
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return new EmployeeLoanResource($loan);
+    }
+
     /** POST /loans/{loan}/payments — manual settlement outside payroll. */
     public function recordPayment(RecordLoanPaymentRequest $request, EmployeeLoan $loan): JsonResponse
     {
@@ -134,6 +163,7 @@ class LoanController
                 remarks: $request->validated('remarks'),
                 paymentDate: $request->validated('payment_date'),
                 idempotencyKey: $request->validated('idempotency_key'),
+                actor: $user,
             );
         } catch (BusinessRuleException $e) {
             abort(422, $e->getMessage());

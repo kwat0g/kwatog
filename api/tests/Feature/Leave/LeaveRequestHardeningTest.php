@@ -6,6 +6,9 @@ namespace Tests\Feature\Leave;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Enums\HolidayType;
+use App\Modules\Attendance\Models\Holiday;
+use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -273,6 +276,65 @@ class LeaveRequestHardeningTest extends TestCase
         $this->assertSame('original DTR', $restored->remarks);
     }
 
+    public function test_cancellation_uses_the_approval_snapshot_after_a_holiday_change(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $head = $this->user('department_head', $this->employee($department->id));
+        $hr = $this->user('hr_officer');
+        $owner = $this->user('employee', $employee);
+        $date = $this->workDate();
+        $request = $this->submit($employee, $this->vacation, ['start_date' => $date]);
+        $request = app(LeaveRequestService::class)->approveDept($request, $head);
+        $request = app(LeaveRequestService::class)->approveHR($request, $hr);
+
+        app(HolidayService::class)->create([
+            'name' => 'Added after leave approval',
+            'date' => $date,
+            'type' => 'regular',
+            'is_recurring' => false,
+        ]);
+        $marker = Attendance::query()->where('employee_id', $employee->id)->where('date', $date)->firstOrFail();
+        $this->assertSame('leave:'.$request->leave_request_no, $marker->remarks);
+        $this->assertTrue((bool) $request->fresh()->attendance_snapshot[$date]['mutated']);
+        app(LeaveRequestService::class)->cancel($request, $owner);
+
+        $this->assertSoftDeleted('attendances', [
+            'employee_id' => $employee->id,
+            'date' => $date,
+        ]);
+    }
+
+    public function test_holiday_excluded_from_leave_days_is_not_marked_as_leave_attendance(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $head = $this->user('department_head', $this->employee($department->id));
+        $hr = $this->user('hr_officer');
+        $start = \Illuminate\Support\Carbon::parse($this->workDate());
+        $holiday = $start->copy()->addDay();
+        while ($holiday->isSunday()) {
+            $holiday->addDay();
+        }
+        Holiday::create([
+            'name' => 'Leave accounting holiday',
+            'date' => $holiday->toDateString(),
+            'type' => HolidayType::Regular->value,
+        ]);
+
+        $request = $this->submit($employee, $this->vacation, [
+            'start_date' => $start->toDateString(),
+            'end_date' => $holiday->toDateString(),
+        ]);
+        $request = app(LeaveRequestService::class)->approveDept($request, $head);
+        app(LeaveRequestService::class)->approveHR($request, $hr);
+
+        $this->assertDatabaseMissing('attendances', [
+            'employee_id' => $employee->id,
+            'date' => $holiday->toDateString(),
+        ]);
+    }
+
     public function test_required_documents_are_server_owned(): void
     {
         Storage::fake('local');
@@ -303,6 +365,36 @@ class LeaveRequestHardeningTest extends TestCase
 
         $this->assertNotNull($request->document_path);
         Storage::disk('local')->assertExists($request->document_path);
+    }
+
+    public function test_supporting_document_download_is_private_to_the_request_row_scope(): void
+    {
+        Storage::fake('local');
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $otherEmployee = $this->employee($department->id);
+        $owner = $this->user('employee', $employee);
+        $sick = LeaveType::query()->where('code', 'SL')->firstOrFail();
+        $date = $this->workDate();
+        $this->balance($employee, $sick);
+        $request = app(LeaveRequestService::class)->submit($employee->id, [
+            'leave_type_id' => $sick->id,
+            'start_date' => $date,
+            'end_date' => $date,
+            'document' => UploadedFile::fake()->create('medical-proof.pdf', 20, 'application/pdf'),
+        ]);
+
+        $url = "/api/v1/leaves/requests/{$request->hash_id}/document";
+        $download = $this->actingAs($owner)->get($url);
+        $download->assertOk();
+        $this->assertStringContainsString(
+            basename($request->document_path),
+            (string) $download->headers->get('content-disposition'),
+        );
+
+        $this->actingAs($this->user('employee', $otherEmployee))
+            ->getJson($url)
+            ->assertForbidden();
     }
 
     public function test_missing_balance_is_rejected_at_submission(): void
@@ -350,21 +442,67 @@ class LeaveRequestHardeningTest extends TestCase
         }
     }
 
-    public function test_cross_year_request_is_rejected_before_balance_allocation(): void
+    public function test_maternity_leave_spanning_years_consumes_and_restores_both_balances(): void
+    {
+        Storage::fake('local');
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $departmentHead = $this->user('department_head', $this->employee($department->id));
+        $hr = $this->user('hr_officer');
+        $owner = $this->user('employee', $employee);
+        $maternity = LeaveType::query()->where('code', 'ML')->firstOrFail();
+        foreach ([2026, 2027] as $year) {
+            EmployeeLeaveBalance::create([
+                'employee_id' => $employee->id,
+                'leave_type_id' => $maternity->id,
+                'year' => $year,
+                'total_credits' => '105.0',
+                'used' => '0.0',
+                'remaining' => '105.0',
+            ]);
+        }
+
+        $request = app(LeaveRequestService::class)->submit($employee->id, [
+            'leave_type_id' => $maternity->id,
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-01-13',
+            'document' => UploadedFile::fake()->create('maternity-proof.pdf', 20, 'application/pdf'),
+        ]);
+
+        $this->assertSame('90.0', (string) $request->days);
+        $this->assertSame([2026 => 79, 2027 => 11], $request->balance_allocations);
+        $request = app(LeaveRequestService::class)->approveDept($request, $departmentHead);
+        $request = app(LeaveRequestService::class)->approveHR($request, $hr);
+
+        $this->assertSame('79.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)->where('leave_type_id', $maternity->id)->where('year', 2026)->value('used'));
+        $this->assertSame('11.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)->where('leave_type_id', $maternity->id)->where('year', 2027)->value('used'));
+
+        app(LeaveRequestService::class)->cancel($request, $owner);
+        $this->assertSame('0.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)->where('leave_type_id', $maternity->id)->where('year', 2026)->value('used'));
+        $this->assertSame('0.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)->where('leave_type_id', $maternity->id)->where('year', 2027)->value('used'));
+    }
+
+    public function test_cross_year_request_requires_balance_for_each_year(): void
     {
         $department = Department::query()->firstOrFail();
         $employee = $this->employee($department->id);
+        $this->balance($employee, $this->vacation);
+        $year = (int) now()->year;
         $service = app(LeaveRequestService::class);
 
         try {
             $service->submit($employee->id, [
                 'leave_type_id' => $this->vacation->id,
-                'start_date' => '2026-12-31',
-                'end_date' => '2027-01-02',
+                'start_date' => sprintf('%d-12-31', $year),
+                'end_date' => sprintf('%d-01-02', $year + 1),
             ]);
-            $this->fail('A leave request must not span two balance years.');
+            $this->fail('A multi-year request requires an initialized balance in every leave year.');
         } catch (BusinessRuleException $exception) {
-            $this->assertStringContainsString('cannot span calendar years', $exception->getMessage());
+            $this->assertStringContainsString('balance is not initialized for '.($year + 1), $exception->getMessage());
         }
     }
 

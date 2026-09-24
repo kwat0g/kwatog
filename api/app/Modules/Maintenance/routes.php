@@ -67,7 +67,7 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
      * restore the SPA routes (maintenanceRoutes.tsx, maintenanceMobileRoutes.tsx)
      * + the sidebar/layout entries. The controller/service/model are intact;
      * also restore tests/Feature/Maintenance/ConditionReadingHashIdTest.php
-     * (the hash-id contract regression, removed with this surface).
+     * (the retained hash-id/service contract regression).
      *
      * Route::get('/condition-readings/options', [MachineConditionReadingController::class, 'options'])
      *     ->middleware('permission:maintenance.view');

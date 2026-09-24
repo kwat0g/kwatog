@@ -290,7 +290,7 @@ class InvoiceService
                 ];
             }
 
-            $invoiceNumber = $this->sequences->generate('invoice');
+            $invoiceNumber = $this->sequences->generate('invoice', $lockedInvoice->date);
 
             $je = $this->journals->create([
                 'date'           => $lockedInvoice->date->toDateString(),
@@ -679,6 +679,18 @@ class InvoiceService
         if (count($seen) !== $deliveryLines->count()) {
             throw new BusinessRuleException('A standard invoice must include every confirmed delivery line exactly once.');
         }
+
+        // The delivery is a one-shot billing source. Nothing stopped a second
+        // draft invoice from naming the same delivery lines and posting a
+        // second revenue/VAT entry for goods billed once.
+        $consumedByAnother = InvoiceItem::query()
+            ->whereIn('source_delivery_item_id', $deliveryLines->keys()->all())
+            ->where('invoice_id', '!=', $invoice->id)
+            ->whereHas('invoice', fn ($q) => $q->where('status', '!=', InvoiceStatus::Cancelled->value))
+            ->exists();
+        if ($consumedByAnother) {
+            throw new BusinessRuleException('A confirmed delivery line can only be invoiced once; cancel the existing invoice before re-billing it.');
+        }
     }
 
     /**
@@ -730,7 +742,7 @@ class InvoiceService
      * Re-lock the persisted source chain during finalization so a stale draft
      * cannot be finalized after its customer/order relationship changes.
      *
-     * @return array{sales_order:?SalesOrder, delivery:?Delivery}
+     * @return array{delivery:?Delivery}
      */
     private function lockSourceChain(Invoice $invoice): array
     {
@@ -749,7 +761,7 @@ class InvoiceService
             }
         }
 
-        return ['sales_order' => $salesOrder, 'delivery' => $delivery];
+        return ['delivery' => $delivery];
     }
 
     private function decodeSourceId(mixed $value, string $modelClass): ?int

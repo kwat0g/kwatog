@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { ListParams } from '@/types';
 import type { RequestForQuote } from '@/types/purchasing';
+import { formatDateTime } from '@/lib/formatDate';
 
 type Filters = ListParams & { status?: string };
 
@@ -26,7 +27,7 @@ export default function RequestForQuotesPage() {
     { key: 'number', header: 'RFQ #', cell: (row) => <span className="font-mono">{row.rfq_number}</span> },
     { key: 'title', header: 'Sourcing event', cell: (row) => <span className="font-medium">{row.title}</span> },
     { key: 'pr', header: 'Source PR', cell: (row) => <span className="font-mono">{row.purchase_request?.pr_number ?? '—'}</span> },
-    { key: 'deadline', header: 'Deadline', cell: (row) => <span className="font-mono">{new Date(row.closes_at).toLocaleString()}</span> },
+    { key: 'deadline', header: 'Deadline', cell: (row) => <span className="font-mono">{formatDateTime(row.closes_at)}</span> },
     { key: 'status', header: 'Status', cell: (row) => <Chip variant={chipVariantForStatus(row.status)}>{row.status_label ?? row.status.replace(/_/g, ' ')}</Chip> },
   ];
   return <div>

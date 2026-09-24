@@ -38,6 +38,7 @@ class GrnQcGateTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    private User $checker;
     private GrnService $grnSvc;
 
     protected function setUp(): void
@@ -51,6 +52,7 @@ class GrnQcGateTest extends TestCase
         );
         $role->permissions()->syncWithoutDetaching([$qualityPermission->id]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $this->checker = User::factory()->create(['is_active' => true]);
         $this->grnSvc = app(GrnService::class);
     }
 
@@ -120,7 +122,7 @@ class GrnQcGateTest extends TestCase
         Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()]);
 
         $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
 
@@ -135,7 +137,7 @@ class GrnQcGateTest extends TestCase
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->firstOrFail();
-        $inspection->update(['status' => 'passed']);
+        $inspection->update(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()]);
 
         app(AcceptGrnOnIncomingQcPass::class)->handle(new InspectionPassed($inspection->fresh()));
 
@@ -155,7 +157,11 @@ class GrnQcGateTest extends TestCase
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->firstOrFail();
-        $inspection->update(['status' => InspectionStatus::Passed->value]);
+        $inspection->update([
+            'status' => InspectionStatus::Passed->value,
+            'reviewed_by' => $this->checker->id,
+            'reviewed_at' => now(),
+        ]);
 
         // Model a second line-level decision on the same multi-line receipt:
         // it was explicitly cancelled for logistics reasons, so it is not an
@@ -170,6 +176,25 @@ class GrnQcGateTest extends TestCase
         app(AcceptGrnOnIncomingQcPass::class)->handle(new InspectionPassed($inspection->fresh()));
 
         $this->assertSame(GrnStatus::Accepted, $grn->fresh()->status);
+    }
+
+    public function test_legacy_whole_grn_inspection_cannot_cover_a_missing_line_inspection(): void
+    {
+        $item = Item::factory()->create(['is_active' => true]);
+        $grn = $this->createGrnFor($item);
+        $inspection = Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->firstOrFail();
+        $inspection->forceFill([
+            'status' => InspectionStatus::Passed,
+            'grn_item_id' => null,
+        ])->save();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('has no incoming inspection for line');
+
+        $this->grnSvc->accept($grn->fresh(), $this->user);
     }
 
     public function test_cancelled_inspection_does_not_block_acceptance(): void
@@ -227,22 +252,27 @@ class GrnQcGateTest extends TestCase
         [$po, $poItem] = $this->makePoAndLine($item);
         $location = WarehouseLocation::factory()->create();
 
-        $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('no incoming inspection');
+        try {
+            $this->grnSvc->receiveWithQc(
+                $po,
+                [[
+                    'purchase_order_item_id' => $poItem->id,
+                    'item_id' => $item->id,
+                    'location_id' => $location->id,
+                    'quantity_received' => '0.500',
+                    'unit_cost' => '10.00',
+                ]],
+                ['received_date' => now()->toDateString()],
+                ['result' => 'passed'],
+                $this->user,
+            );
+            $this->fail('A fractional line cannot receive a terminal single-screen QC verdict.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('require line-level Quality inspection', $e->getMessage());
+        }
 
-        $this->grnSvc->receiveWithQc(
-            $po,
-            [[
-                'purchase_order_item_id' => $poItem->id,
-                'item_id' => $item->id,
-                'location_id' => $location->id,
-                'quantity_received' => '0.500',
-                'unit_cost' => '10.00',
-            ]],
-            ['received_date' => now()->toDateString()],
-            ['result' => 'passed'],
-            $this->user,
-        );
+        $this->assertSame(0, GoodsReceiptNote::query()->count());
+        $this->assertSame(0, \App\Modules\Inventory\Models\StockMovement::query()->count());
     }
 
     public function test_create_rejects_an_item_that_does_not_match_the_po_line(): void

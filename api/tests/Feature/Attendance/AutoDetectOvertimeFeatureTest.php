@@ -199,6 +199,74 @@ class AutoDetectOvertimeFeatureTest extends TestCase
         $this->assertNull($reopened->cancelled_at);
     }
 
+    public function test_pending_auto_ot_tracks_changed_punch_duration(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+
+        app(AttendanceService::class)->update($attendance, ['time_out' => '2026-06-15 19:00:00']);
+
+        $this->assertSame('2.0', (string) OvertimeRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', '2026-06-15')
+            ->where('is_auto_detected', true)
+            ->value('hours_requested'));
+    }
+
+    public function test_pending_auto_ot_is_retired_when_corrected_punch_falls_below_threshold(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift();
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 17:45:00',
+            'shift_id' => $shift->id,
+        ]);
+
+        app(AttendanceService::class)->update($attendance, ['time_out' => '2026-06-15 17:15:00']);
+
+        $this->assertSame(OvertimeStatus::Rejected, OvertimeRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', '2026-06-15')
+            ->where('is_auto_detected', true)
+            ->sole()->status);
+    }
+
+    public function test_overnight_punch_detects_overtime_after_next_morning_shift_end(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->makeShift([
+            'name' => 'Night Shift '.fake()->unique()->numberBetween(1, 999999),
+            'start_time' => '18:00:00',
+            'end_time' => '06:00:00',
+            'break_minutes' => 30,
+            'is_night_shift' => true,
+        ]);
+
+        app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 18:00:00',
+            'time_out' => '2026-06-15 07:00:00',
+            'shift_id' => $shift->id,
+        ]);
+
+        $this->assertSame('1.0', (string) OvertimeRequest::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('date', '2026-06-15')
+            ->where('is_auto_detected', true)
+            ->sole()->hours_requested);
+    }
+
     public function test_distinct_employee_sources_on_same_date_each_create_auto_ot(): void
     {
         $shift = $this->makeShift();

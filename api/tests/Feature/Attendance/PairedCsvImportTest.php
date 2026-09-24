@@ -61,7 +61,6 @@ class PairedCsvImportTest extends TestCase
             'pay_type' => 'semi_monthly',
             'date_hired' => '2025-01-01',
             'semi_monthly_rate' => '6600.00',
-            'status' => 'active',
         ]);
     }
 

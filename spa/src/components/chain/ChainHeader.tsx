@@ -3,6 +3,7 @@ import { type ChainStep } from '@/types/chain';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { formatDate } from '@/lib/formatDate';
 
 interface ChainHeaderProps {
  steps: ChainStep[];
@@ -17,6 +18,10 @@ const dotClass = (step: ChainStep) => {
  if (step.state === 'active') return 'bg-accent border-accent';
  return 'bg-canvas border-strong';
 };
+
+// Callers pass either a display string or a raw ISO date/timestamp; an ISO
+// value printed verbatim read "2026-09-23T21:23:21.000000Z" (UTC, not Manila).
+const stepDate = (date: string) => (/^\d{4}-\d{2}-\d{2}/.test(date) ? formatDate(date, date) : date);
 
 const lineClass = (left: ChainStep) =>
  left.state === 'done' ? 'bg-success-bg' : left.state === 'rejected' ? 'bg-danger' : 'bg-strong';
@@ -69,7 +74,7 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
  </div>
  )}
  {step.date && !step.sla_label && (
- <div className="text-2xs font-mono tabular-nums text-muted mt-0.5">{step.date}</div>
+ <div className="text-2xs font-mono tabular-nums text-muted mt-0.5">{stepDate(step.date)}</div>
  )}
  </div>
  </div>

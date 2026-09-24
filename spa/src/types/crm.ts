@@ -9,6 +9,7 @@ export interface Product {
  description: string | null;
  unit_of_measure: string;
  standard_cost: string;
+ revenue_account_id: string | null;
  is_active: boolean;
  include_forecast_in_mrp: boolean;
  has_bom: boolean;
@@ -45,6 +46,7 @@ export interface CreateProductData {
  description?: string | null;
  unit_of_measure: string;
  standard_cost: string;
+ revenue_account_id?: string | null;
  is_active?: boolean;
 }
 
@@ -233,7 +235,8 @@ export interface SoChainResultWo {
 
 export interface SoChainResult {
  so_number: string;
- planning_status: 'queued' | 'completed';
+ planning_status: 'queued' | 'completed' | 'failed';
+ planning_error?: { message: string; recovery_action: string | null } | null;
  work_orders_created: number;
  auto_scheduled: number;
  needs_manual: number;

@@ -109,11 +109,13 @@ class SupplierQuoteService
                 ->first();
             if ($existingDraft) {
                 $vatInclusive = (bool) ($data['vat_inclusive'] ?? $existingDraft->vat_inclusive);
+                $freightAmount = $data['freight_amount'] ?? $existingDraft->freight_amount;
+                $otherCharges = $data['other_charges'] ?? $existingDraft->other_charges;
                 $existingDraft->update([
                     'vat_inclusive' => $vatInclusive,
-                    'vat_amount' => $this->resolveHeaderVat((array) ($data['items'] ?? []), $vatInclusive, $data['vat_amount'] ?? null),
-                    'freight_amount' => $data['freight_amount'] ?? $existingDraft->freight_amount,
-                    'other_charges' => $data['other_charges'] ?? $existingDraft->other_charges,
+                    'vat_amount' => $this->resolveHeaderVat((array) ($data['items'] ?? []), $vatInclusive, $data['vat_amount'] ?? null, null, (string) $freightAmount, (string) $otherCharges),
+                    'freight_amount' => $freightAmount,
+                    'other_charges' => $otherCharges,
                     'quote_valid_until' => $data['quote_valid_until'] ?? $existingDraft->quote_valid_until,
                     'payment_terms' => $data['payment_terms'] ?? $existingDraft->payment_terms,
                     'notes' => array_key_exists('notes', $data) ? $data['notes'] : $existingDraft->notes,
@@ -124,12 +126,14 @@ class SupplierQuoteService
             }
             $version = ((int) SupplierQuote::where('request_for_quote_id', $locked->id)->where('vendor_id', $vendorId)->max('version')) + 1;
             $vatInclusive = (bool) ($data['vat_inclusive'] ?? false);
+            $freightAmount = $data['freight_amount'] ?? '0.00';
+            $otherCharges = $data['other_charges'] ?? '0.00';
             $quote = SupplierQuote::create([
                 'request_for_quote_id' => $locked->id, 'vendor_id' => $vendorId,
                 'invitation_id' => $invitation->id, 'portal_user_id' => $portalUser?->id,
                 'version' => $version, 'is_current' => true, 'vat_inclusive' => $vatInclusive,
-                'vat_amount' => $this->resolveHeaderVat((array) ($data['items'] ?? []), $vatInclusive, $data['vat_amount'] ?? null),
-                'freight_amount' => $data['freight_amount'] ?? '0.00', 'other_charges' => $data['other_charges'] ?? '0.00',
+                'vat_amount' => $this->resolveHeaderVat((array) ($data['items'] ?? []), $vatInclusive, $data['vat_amount'] ?? null, null, (string) $freightAmount, (string) $otherCharges),
+                'freight_amount' => $freightAmount, 'other_charges' => $otherCharges,
                 'quote_valid_until' => $data['quote_valid_until'] ?? null, 'payment_terms' => $data['payment_terms'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
@@ -161,6 +165,8 @@ class SupplierQuoteService
             }
             $version = ((int) SupplierQuote::query()->where('request_for_quote_id', $lockedRfq->id)->where('vendor_id', (int) $data['vendor_id'])->max('version')) + 1;
             $vatInclusive = (bool) ($data['vat_inclusive'] ?? false);
+            $freightAmount = $data['freight_amount'] ?? '0.00';
+            $otherCharges = $data['other_charges'] ?? '0.00';
             $quote = SupplierQuote::create([
                 'request_for_quote_id' => $lockedRfq->id,
                 'vendor_id' => (int) $data['vendor_id'],
@@ -169,9 +175,9 @@ class SupplierQuoteService
                 'version' => $version,
                 'is_current' => true,
                 'vat_inclusive' => $vatInclusive,
-                'vat_amount' => $this->resolveHeaderVat((array) $data['items'], $vatInclusive, $data['vat_amount'] ?? null),
-                'freight_amount' => $data['freight_amount'] ?? '0.00',
-                'other_charges' => $data['other_charges'] ?? '0.00',
+                'vat_amount' => $this->resolveHeaderVat((array) $data['items'], $vatInclusive, $data['vat_amount'] ?? null, null, (string) $freightAmount, (string) $otherCharges),
+                'freight_amount' => $freightAmount,
+                'other_charges' => $otherCharges,
                 'quote_valid_until' => $data['quote_valid_until'] ?? null,
                 'payment_terms' => $data['payment_terms'] ?? null,
                 'notes' => $data['notes'] ?? null,
@@ -180,8 +186,11 @@ class SupplierQuoteService
             ]);
             $quote->forceFill(['status' => SupplierQuoteStatus::Draft])->save();
             $this->replaceItems($quote, $lockedRfq, (array) $data['items']);
-            $quote->forceFill(['status' => SupplierQuoteStatus::Submitted, 'submitted_at' => now()])->save();
+            // Supersede the prior version first: the partial unique index allows
+            // one current submitted quote per supplier, so flipping the new one
+            // before this update made every revision a unique violation.
             SupplierQuote::query()->where('request_for_quote_id', $lockedRfq->id)->where('vendor_id', (int) $data['vendor_id'])->where('id', '!=', $quote->id)->where('status', SupplierQuoteStatus::Submitted->value)->update(['is_current' => false, 'status' => SupplierQuoteStatus::Superseded->value]);
+            $quote->forceFill(['status' => SupplierQuoteStatus::Submitted, 'submitted_at' => now()])->save();
             $invitation->forceFill(['status' => RfqInvitationStatus::Submitted])->save();
             $document->forceFill(['supplier_quote_id' => $quote->id])->save();
             $this->outbox->record(new RfqLifecycleEvent((int) $lockedRfq->id, (string) $lockedRfq->hash_id, 'quote_submitted'), 'rfq:'.$lockedRfq->id.':manual-quote-submitted:'.$quote->id);
@@ -212,6 +221,8 @@ class SupplierQuoteService
                 throw new BusinessRuleException('Only draft quotations can be edited.');
             }
             $vatInclusive = array_key_exists('vat_inclusive', $data) ? (bool) $data['vat_inclusive'] : $locked->vat_inclusive;
+            $freightAmount = $data['freight_amount'] ?? $locked->freight_amount;
+            $otherCharges = $data['other_charges'] ?? $locked->other_charges;
             $locked->update([
                 'vat_inclusive' => $vatInclusive,
                 'vat_amount' => $this->resolveHeaderVat(
@@ -219,9 +230,11 @@ class SupplierQuoteService
                     $vatInclusive,
                     $data['vat_amount'] ?? null,
                     $locked,
+                    (string) $freightAmount,
+                    (string) $otherCharges,
                 ),
-                'freight_amount' => $data['freight_amount'] ?? $locked->freight_amount,
-                'other_charges' => $data['other_charges'] ?? $locked->other_charges,
+                'freight_amount' => $freightAmount,
+                'other_charges' => $otherCharges,
                 'quote_valid_until' => $data['quote_valid_until'] ?? $locked->quote_valid_until,
                 'payment_terms' => $data['payment_terms'] ?? $locked->payment_terms,
                 'notes' => array_key_exists('notes', $data) ? $data['notes'] : $locked->notes,
@@ -269,8 +282,9 @@ class SupplierQuoteService
                     }
                 }
             }
-            $locked->forceFill(['status' => SupplierQuoteStatus::Submitted, 'submitted_at' => now(), 'is_current' => true])->save();
+            // Supersede before flipping — see captureManual().
             SupplierQuote::query()->where('request_for_quote_id', $locked->request_for_quote_id)->where('vendor_id', $vendorId)->where('id', '!=', $locked->id)->where('status', SupplierQuoteStatus::Submitted->value)->update(['is_current' => false, 'status' => SupplierQuoteStatus::Superseded->value]);
+            $locked->forceFill(['status' => SupplierQuoteStatus::Submitted, 'submitted_at' => now(), 'is_current' => true])->save();
             $locked->invitation()->update(['status' => RfqInvitationStatus::Submitted->value]);
             $this->outbox->record(
                 new RfqLifecycleEvent((int) $rfq->id, (string) $rfq->hash_id, 'quote_submitted'),
@@ -364,6 +378,26 @@ class SupplierQuoteService
         });
     }
 
+    public function documentForSupplier(int $vendorId, RequestForQuote $rfq, RfqDocument $document): RfqDocument
+    {
+        if ((int) $document->request_for_quote_id !== (int) $rfq->id
+            || ! RequestForQuoteInvitation::query()
+                ->where('request_for_quote_id', $rfq->id)
+                ->where('vendor_id', $vendorId)
+                ->exists()) {
+            throw new BusinessRuleException('RFQ document is not available to this supplier.');
+        }
+
+        $isSharedRequirement = $document->vendor_id === null
+            && $document->document_type === 'requirement_document';
+        $isSupplierDocument = (int) $document->vendor_id === $vendorId;
+        if (! $isSharedRequirement && ! $isSupplierDocument) {
+            throw new BusinessRuleException('RFQ document is not available to this supplier.');
+        }
+
+        return $document;
+    }
+
     public function confirmReconfirmation(RfqQuoteReconfirmation $reconfirmation, int $vendorId, SupplierPortalUser $portalUser): RfqQuoteReconfirmation
     {
         return DB::transaction(function () use ($reconfirmation, $vendorId, $portalUser): RfqQuoteReconfirmation {
@@ -391,11 +425,13 @@ class SupplierQuoteService
      *
      * - If any line carries its own VAT, the header is the sum of those lines
      *   (the supplier's breakdown wins; a contradicting header is refused).
-     * - Otherwise the header VAT is DERIVED from the quoted lines' base
-     *   (Σ quantity × unit price) and the declared treatment:
-     *   VAT-inclusive → back-extracted base × rate / (1 + rate) (the 12/112
-     *   rule); VAT-exclusive → base × rate; explicit zero → the supplier's
-     *   no-VAT declaration (non-VAT-registered).
+     * - Otherwise the header VAT is DERIVED from the taxable base and the declared treatment.
+     *   Taxable base = Σ(quantity × unit price) + Σ(line freight + line other charges)
+     *   + header freight + header other charges (PH VAT is levied on gross selling price
+     *   including seller-billed delivery and charges).
+     *   VAT-inclusive → back-extracted base × rate / (1 + rate) (the 12/112 rule);
+     *   VAT-exclusive → base × rate; explicit zero → the supplier's no-VAT declaration
+     *   (non-VAT-registered).
      * - An explicit non-zero header figure is accepted only within a few
      *   centavos of its treatment's derived value — enough slack for per-line
      *   rounding, not enough to misstate the tax.
@@ -406,8 +442,10 @@ class SupplierQuoteService
      *
      * @param  array<int, array<string, mixed>>|null  $rows  null = derive from the quote's persisted items
      * @param  SupplierQuote|null  $existing  set when updating a draft without new items
+     * @param  string  $freightAmount  header-level freight charge (default '0')
+     * @param  string  $otherCharges  header-level other charges (default '0')
      */
-    public function resolveHeaderVat(?array $rows, bool $vatInclusive, ?string $declaredVat, ?SupplierQuote $existing = null): string
+    public function resolveHeaderVat(?array $rows, bool $vatInclusive, ?string $declaredVat, ?SupplierQuote $existing = null, string $freightAmount = '0', string $otherCharges = '0'): string
     {
         $vatRate = $this->taxPolicy->requiredVatRate();
         $lines = $rows !== null ? $rows : ($existing?->items ?? collect())->map(fn (SupplierQuoteItem $item): array => [
@@ -415,6 +453,8 @@ class SupplierQuoteService
             'offered_quantity' => (string) $item->offered_quantity,
             'unit_price' => (string) $item->unit_price,
             'line_vat_amount' => (string) $item->line_vat_amount,
+            'line_freight_amount' => (string) $item->line_freight_amount,
+            'line_other_charges' => (string) $item->line_other_charges,
         ])->all();
 
         $lineVatSum = Money::zero();
@@ -424,8 +464,15 @@ class SupplierQuoteService
                 continue;
             }
             $lineVatSum = Money::add($lineVatSum, (string) ($row['line_vat_amount'] ?? '0'));
-            $taxableBase = Money::add($taxableBase, Money::mul((string) ($row['offered_quantity'] ?? '0'), (string) ($row['unit_price'] ?? '0')));
+            $taxableBase = Money::add(
+                $taxableBase,
+                Money::mul((string) ($row['offered_quantity'] ?? '0'), (string) ($row['unit_price'] ?? '0')),
+                (string) ($row['line_freight_amount'] ?? '0'),
+                (string) ($row['line_other_charges'] ?? '0'),
+            );
         }
+        // Add header-level freight and other charges to the taxable base
+        $taxableBase = Money::add($taxableBase, $freightAmount, $otherCharges);
 
         if (Money::gt($lineVatSum, Money::zero())) {
             // The supplier's line breakdown is the source of truth; the header
@@ -451,7 +498,7 @@ class SupplierQuoteService
                 // Back-extract: gross VAT on the base, then remove it from the
                 // gross — the 12/112 rule when the rate is 12%. Composed so the
                 // intermediate stays exact to the centavo (Money scale rules).
-                ? Money::round2(Money::div(Money::mul($taxableBase, $vatRate), Money::add('1', $vatRate)))
+                ? Money::round2(Money::div(bcmul($taxableBase, $vatRate, 8), Money::add('1', $vatRate), 8))
                 : Money::mul($taxableBase, $vatRate);
             $declared = $declaredVat !== null && trim($declaredVat) !== '' ? Money::round2($declaredVat) : $expected;
 
@@ -528,20 +575,23 @@ class SupplierQuoteService
                 'compliance_notes' => $row['compliance_notes'] ?? null,
             ]);
         }
-        $amounts = $quote->items()->pluck('line_total_delivered_cost')->map(static fn ($v): string => (string) $v)->all();
-        $amounts[] = (string) $quote->vat_amount;
-        $amounts[] = (string) $quote->freight_amount;
-        $amounts[] = (string) $quote->other_charges;
-        $total = Money::add(...$amounts);
-        $quote->forceFill(['total_delivered_cost' => $total])->save();
+        $this->recalculateTotal($quote);
     }
 
     private function recalculateTotal(SupplierQuote $quote): void
     {
-        $amounts = $quote->items()->pluck('line_total_delivered_cost')->map(static fn ($v): string => (string) $v)->all();
-        $amounts[] = (string) $quote->vat_amount;
+        $lines = $quote->items()->get(['line_total_delivered_cost', 'line_vat_amount']);
+        $amounts = $lines->map(static fn ($line): string => (string) $line->line_total_delivered_cost)->all();
         $amounts[] = (string) $quote->freight_amount;
         $amounts[] = (string) $quote->other_charges;
+        // Header VAT is only added when it is not already inside the lines: a
+        // VAT-inclusive quote's prices carry it, and line VAT is already in each
+        // line's delivered cost (the header then just sums it). Adding it again
+        // overstated an inclusive supplier by 12/112 in the sealed comparison.
+        $lineVat = Money::add('0', ...$lines->map(static fn ($line): string => (string) $line->line_vat_amount)->all());
+        if (! $quote->vat_inclusive && Money::isZero($lineVat)) {
+            $amounts[] = (string) $quote->vat_amount;
+        }
         $quote->forceFill(['total_delivered_cost' => Money::add(...$amounts)])->save();
     }
 }

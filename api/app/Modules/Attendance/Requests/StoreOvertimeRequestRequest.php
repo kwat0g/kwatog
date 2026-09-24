@@ -28,7 +28,10 @@ class StoreOvertimeRequestRequest extends FormRequest
         $pastDays = $settings->requiredInt('attendance.ot.request_past_days', 0);
         $futureDays = $settings->requiredInt('attendance.ot.request_future_days', 0);
         $minHours = $settings->requiredFloat('attendance.ot.request_min_hours', 0.01);
-        $maxHours = $settings->requiredFloat('attendance.ot.admin_max_hours', $minHours);
+        $maxHours = min(
+            $settings->requiredFloat('attendance.ot.admin_max_hours', $minHours),
+            $settings->requiredInt('attendance.ot.maximum_minutes', 1) / 60,
+        );
         $today = now()->startOfDay();
         return [
             'employee_id'      => ['required', 'string'],

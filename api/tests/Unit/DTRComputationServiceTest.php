@@ -238,6 +238,18 @@ class DTRComputationServiceTest extends TestCase
         $this->assertEquals(4.0, $r['overtime_hours']);
     }
 
+    public function test_approved_overtime_is_capped_at_the_approved_request_hours(): void
+    {
+        $r = $this->svc->compute($this->input([
+            'time_in' => '2026-04-15 06:00:00',
+            'time_out' => '2026-04-15 19:00:00',
+            'has_approved_ot' => true,
+            'approved_ot_hours' => 1.0,
+        ]));
+
+        $this->assertEquals(1.0, $r['overtime_hours']);
+    }
+
     public function test_short_excess_below_30min_is_not_paid_as_ot(): void
     {
         $r = $this->svc->compute($this->input([

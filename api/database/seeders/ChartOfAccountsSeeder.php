@@ -44,7 +44,8 @@ class ChartOfAccountsSeeder extends Seeder
             ['1010', 'Cash on Hand',                 'asset', 'debit', '1000'],
             ['1020', 'Cash in Bank',                 'asset', 'debit', '1000'],
             ['1030', 'Petty Cash',                   'asset', 'debit', '1000'],
-            ['1100', 'Accounts Receivable',          'asset', 'debit', '1000'],
+             ['1100', 'Accounts Receivable',          'asset', 'debit', '1000'],
+             ['1110', 'Employee Loans Receivable',    'asset', 'debit', '1000'],
             ['1200', 'Inventory - Raw Materials',    'asset', 'debit', '1000'],
             ['1210', 'Inventory - Finished Goods',   'asset', 'debit', '1000'],
             ['1220', 'Inventory - Packaging',        'asset', 'debit', '1000'],
@@ -62,6 +63,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['2030', 'PhilHealth Payable',           'liability', 'credit', '2000'],
             ['2040', 'Pag-IBIG Payable',             'liability', 'credit', '2000'],
             ['2050', 'Withholding Tax Payable',      'liability', 'credit', '2000'],
+            ['2051', 'Expanded Withholding Tax Payable', 'liability', 'credit', '2000'],
             ['2060', 'VAT Output',                   'liability', 'credit', '2000'],
             ['2070', 'Accrued Expenses',             'liability', 'credit', '2000'],
             ['2080', '13th Month Pay Payable',       'liability', 'credit', '2000'],
@@ -80,6 +82,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['5010', 'Direct Materials',             'expense', 'debit', '5000'],
             ['5020', 'Direct Labor',                 'expense', 'debit', '5000'],
             ['5030', 'Manufacturing Overhead',       'expense', 'debit', '5000'],
+            ['5040', 'Purchase Price Variance',      'expense', 'debit', '5000'],
             // Legacy payroll codes — preserved so PayrollGlPostingService
             // (Sprint 3) keeps working. Slated for reconciliation in Sprint 8.
             ['5050', 'Salaries Expense (legacy)',         'expense', 'debit', '5000'],
@@ -99,7 +102,8 @@ class ChartOfAccountsSeeder extends Seeder
             ['6090', 'Office Supplies Expense',      'expense', 'debit', '6000'],
             ['6100', 'Repairs & Maintenance Expense','expense', 'debit', '6000'],
             ['6110', 'Transportation Expense',       'expense', 'debit', '6000'],
-            ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
+             ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
+             ['6130', 'Employee Loan Write-off Expense', 'expense', 'debit', '6000'],
             ['4030', 'Gain on Disposal of Asset',    'revenue', 'credit','4000'],
         ];
 

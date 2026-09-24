@@ -33,18 +33,23 @@ final class BudgetFiscalYearResolver
             return $fiscalYear;
         }
 
-        $fiscalYear = FiscalYear::query()
+        $years = FiscalYear::query()
             ->active()
             ->current()
             ->orderByDesc('year')
-            ->first();
+            ->get();
 
-        if (! $fiscalYear) {
+        if ($years->isEmpty()) {
             throw ValidationException::withMessages([
                 'fiscal_year_id' => 'No active fiscal year contains today\'s date.',
             ]);
         }
+        if ($years->count() > 1) {
+            throw ValidationException::withMessages([
+                'fiscal_year_id' => 'More than one active fiscal year contains today\'s date. Resolve the overlap before continuing.',
+            ]);
+        }
 
-        return $fiscalYear;
+        return $years->first();
     }
 }

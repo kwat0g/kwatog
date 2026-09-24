@@ -7,8 +7,6 @@ namespace App\Modules\Maintenance\Resources;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
-use App\Modules\MRP\Models\Machine;
-use App\Modules\MRP\Models\Mold;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,8 +22,8 @@ class MaintenanceWorkOrderResource extends JsonResource
             : MaintenanceWorkOrderStatus::tryFrom((string) $this->status);
 
         $target = $this->maintainable_type === MaintainableType::Machine
-            ? Machine::find($this->maintainable_id)
-            : Mold::find($this->maintainable_id);
+            ? ($this->relationLoaded('machineTarget') ? $this->machineTarget : null)
+            : ($this->relationLoaded('moldTarget') ? $this->moldTarget : null);
 
         return [
             'id'                => $this->hash_id,

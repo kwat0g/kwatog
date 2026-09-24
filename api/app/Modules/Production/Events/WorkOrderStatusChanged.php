@@ -31,7 +31,7 @@ class WorkOrderStatusChanged implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('production.wo.' . $this->workOrder->hash_id),
+            new PrivateChannel('production.wo.'.$this->workOrder->hash_id),
             new PrivateChannel('production.dashboard'),
         ];
     }
@@ -44,11 +44,11 @@ class WorkOrderStatusChanged implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'wo_id'     => $this->workOrder->hash_id,
+            'wo_id' => $this->workOrder->hash_id,
             'wo_number' => $this->workOrder->wo_number,
-            'from'      => $this->from,
-            'to'        => $this->to,
-            'reason'    => $this->reason,
+            'from' => $this->from,
+            'to' => $this->to,
+            'reason' => $this->reason,
         ];
     }
 }

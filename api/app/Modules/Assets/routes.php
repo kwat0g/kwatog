@@ -17,6 +17,7 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(f
     Route::post('/', [AssetController::class, 'store'])->middleware('permission:assets.create');
     Route::get('/{asset}', [AssetController::class, 'show'])->middleware('permission:assets.view');
     Route::put('/{asset}', [AssetController::class, 'update'])->middleware('permission:assets.update');
+    Route::patch('/{asset}/association', [AssetController::class, 'associate'])->middleware('permission:assets.update');
     Route::delete('/{asset}', [AssetController::class, 'destroy'])->middleware('permission:assets.delete');
     Route::patch('/{asset}/restore', [AssetController::class, 'restore'])
         ->middleware('permission:assets.delete')
@@ -25,7 +26,7 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(f
     // (opens the seeded asset_disposal approval chain); the JE posts from
     // the approve arm once every step has approved. Approve/reject sit
     // behind their own permission because the seeded chain routes them to
-    // finance_officer and system_admin.
+    // finance_officer and vice_president.
     Route::post('/{asset}/dispose', [AssetController::class, 'dispose'])->middleware('permission:assets.dispose');
     Route::post('/{asset}/dispose/approve', [AssetController::class, 'approveDisposal'])->middleware('permission:assets.dispose.approve');
     Route::post('/{asset}/dispose/reject', [AssetController::class, 'rejectDisposal'])->middleware('permission:assets.dispose.approve');
@@ -39,17 +40,7 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-depreciatio
 });
 
 /*
- * Asset Transfers — HIDDEN 2026-08-08 (scope cut).
- * Weakest Assets piece — 0 live rows, unreachable from asset detail. The
- * custody-tracking story is kept in AssetTransferService/model (per hide-access
- * policy). Re-enable: restore the import above + this route group.
- *
- * Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-transfers')->group(function () {
- *     Route::get('/options',                [AssetTransferController::class, 'options'])->middleware('permission:assets.view');
- *     Route::get('/',                    [AssetTransferController::class, 'index'])->middleware('permission:assets.view');
- *     Route::post('/',                   [AssetTransferController::class, 'store'])->middleware('permission:assets.transfer');
- *     Route::get('/{assetTransfer}',     [AssetTransferController::class, 'show'])->middleware('permission:assets.view');
- *     Route::post('/{assetTransfer}/approve', [AssetTransferController::class, 'approve'])->middleware('permission:assets.transfer.approve');
- *     Route::post('/{assetTransfer}/reject',  [AssetTransferController::class, 'reject'])->middleware('permission:assets.transfer.approve');
- * });
+ * Asset Transfers — intentionally not routed (scope cut).
+ * The persistence model remains for historical custody checks; no API surface
+ * is shipped until a replacement custody policy is approved.
  */

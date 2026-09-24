@@ -27,6 +27,9 @@ use Throwable;
  */
 final class WidgetAnalyticsService
 {
+    /** Rich providers that failed during the current layout build. */
+    private array $failedKeys = [];
+
     public function __construct(
         private readonly CoreWidgetAnalytics $core,
         private readonly CrmWidgetAnalytics $crm,
@@ -60,6 +63,7 @@ final class WidgetAnalyticsService
             try {
                 return $provider->payload($key, $user);
             } catch (Throwable $e) {
+                $this->failedKeys[$key] = true;
                 Log::warning('dashboard widget analytics failed', [
                     'widget' => $key,
                     'kind' => $kind->value,
@@ -71,6 +75,16 @@ final class WidgetAnalyticsService
         }
 
         return [];
+    }
+
+    public function resetFailures(): void
+    {
+        $this->failedKeys = [];
+    }
+
+    public function failed(string $key): bool
+    {
+        return isset($this->failedKeys[$key]);
     }
 
     /**

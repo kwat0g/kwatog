@@ -10,7 +10,7 @@ return new class extends Migration {
     {
         DB::table('settings')->insertOrIgnore([
             'key' => 'quality.ncr.escalation_roles',
-            'value' => json_encode(['qc_inspector', 'production_manager', 'system_admin']),
+            'value' => json_encode(['qc_inspector', 'production_manager', 'vice_president']),
             'group' => 'quality', 'label' => 'NCR Escalation Roles',
             'description' => 'Role slug per NCR escalation tier, in ascending order.',
             'created_at' => now(), 'updated_at' => now(),

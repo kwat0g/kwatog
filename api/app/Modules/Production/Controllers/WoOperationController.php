@@ -165,8 +165,8 @@ class WoOperationController
     public function recordOutput(WoOperation $operation, Request $request): WoOperationResource|JsonResponse
     {
         $request->validate([
-            'qty'          => ['required', 'numeric', 'decimal:0,4', 'min:0.0001', 'max:99999999999'],
-            'scrap'        => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:99999999999', 'lte:qty'],
+            'qty' => ['required', 'numeric', 'decimal:0,4', 'min:0.0001', 'max:99999999999'],
+            'scrap' => ['nullable', 'numeric', 'decimal:0,4', 'min:0', 'max:99999999999', 'lte:qty'],
             'scrap_reason' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -228,7 +228,7 @@ class WoOperationController
     {
         $request->validate([
             'from' => ['required', 'date'],
-            'to'   => ['required', 'date', 'after_or_equal:from'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
         ]);
 
         $grouped = $this->service->getScheduleByMachine(
@@ -239,11 +239,12 @@ class WoOperationController
         // Transform: machine_id keys → array with machine info + operations
         $result = $grouped->map(function ($operations, $machineId) {
             $machine = $operations->first()->machine;
+
             return [
                 'machine' => $machine ? [
-                    'id'           => $machine->hash_id,
+                    'id' => $machine->hash_id,
                     'machine_code' => $machine->machine_code,
-                    'name'         => $machine->name,
+                    'name' => $machine->name,
                 ] : null,
                 'operations' => WoOperationResource::collection($operations),
             ];

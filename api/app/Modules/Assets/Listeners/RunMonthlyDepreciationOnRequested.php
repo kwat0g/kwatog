@@ -34,10 +34,19 @@ class RunMonthlyDepreciationOnRequested implements ShouldQueue
 
     public function handle(MonthlyDepreciationRequested $event): void
     {
-        app()->call([
-            new RunMonthlyDepreciationJob($event->year, $event->month),
-            'handle',
-        ]);
+        try {
+            app()->call([
+                new RunMonthlyDepreciationJob($event->year, $event->month),
+                'handle',
+            ]);
+        } catch (Throwable $exception) {
+            app(ChainListenerRunService::class)->recordOutcome(
+                'failed',
+                'monthly_depreciation_failed',
+                $exception->getMessage(),
+            );
+            throw $exception;
+        }
 
         app(ChainListenerRunService::class)->recordOutcome(
             'completed',

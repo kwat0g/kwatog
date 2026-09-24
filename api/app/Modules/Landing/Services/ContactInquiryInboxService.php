@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Landing\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The ERP-side reader for public contact submissions.
@@ -48,8 +50,27 @@ class ContactInquiryInboxService
 
     public function updateStatus(ContactInquiry $inquiry, ContactInquiryStatus $status): ContactInquiry
     {
-        $inquiry->forceFill(['status' => $status->value])->save();
+        return DB::transaction(function () use ($inquiry, $status): ContactInquiry {
+            $locked = ContactInquiry::query()->lockForUpdate()->findOrFail($inquiry->id);
+            $current = $locked->status;
+            if ($current === $status) {
+                return $locked;
+            }
 
-        return $this->show($inquiry);
+            $allowed = match ($current) {
+                ContactInquiryStatus::New => [ContactInquiryStatus::InProgress, ContactInquiryStatus::Closed],
+                ContactInquiryStatus::InProgress => [ContactInquiryStatus::Closed],
+                ContactInquiryStatus::Closed => [],
+            };
+            if (! in_array($status, $allowed, true)) {
+                throw new BusinessRuleException(
+                    "A {$current->value} contact inquiry cannot transition to {$status->value}.",
+                );
+            }
+
+            $locked->forceFill(['status' => $status])->save();
+
+            return $this->show($locked->fresh());
+        });
     }
 }

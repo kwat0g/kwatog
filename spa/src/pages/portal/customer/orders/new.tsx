@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LuPlus, LuX, LuSend, LuSearch } from '@/lib/icons';
@@ -16,6 +16,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type { PortalCatalogItem } from '@/types/b2b';
+import { localIsoDate } from '@/lib/formatDate';
 
 interface OrderLine {
   product: PortalCatalogItem;
@@ -23,7 +24,7 @@ interface OrderLine {
   delivery_date: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localIsoDate();
 
 export default function CustomerPlaceOrderPage() {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ export default function CustomerPlaceOrderPage() {
   const [orderDate, setOrderDate] = useState(today());
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<OrderLine[]>([]);
+  const orderRequestRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const { data: catalog, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'catalog', debouncedSearch],
@@ -75,8 +77,8 @@ export default function CustomerPlaceOrderPage() {
   );
 
   const createMut = useMutation({
-    mutationFn: () =>
-      customerPortalApi.createOrder({
+    mutationFn: () => {
+      const payload = {
         date: orderDate,
         notes: notes.trim() || undefined,
         items: lines.map((line) => ({
@@ -84,7 +86,13 @@ export default function CustomerPlaceOrderPage() {
           quantity: line.quantity,
           delivery_date: line.delivery_date,
         })),
-      }),
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (orderRequestRef.current?.fingerprint !== fingerprint) {
+        orderRequestRef.current = { fingerprint, key: window.crypto.randomUUID() };
+      }
+      return customerPortalApi.createOrder(payload, orderRequestRef.current.key);
+    },
     onSuccess: (res) => {
       toast.success(res.message ?? 'Order submitted.');
       navigate(`/portal/customer/orders/${res.data.id}`);

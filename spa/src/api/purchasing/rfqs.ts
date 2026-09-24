@@ -3,7 +3,7 @@ import { createPortalClient } from '../b2b/client';
 import type { PaginatedResponse } from '@/types';
 import type { PurchaseOrder, RequestForQuote, SupplierQuote } from '@/types/purchasing';
 
-const { client: portalClient } = createPortalClient();
+const { client: portalClient } = createPortalClient('supplier');
 
 export interface CreateRfqData {
   title: string; instructions?: string; closes_at: string;

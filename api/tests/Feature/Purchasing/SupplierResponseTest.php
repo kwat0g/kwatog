@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Purchasing\Services\SupplierResponseService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
+use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -32,7 +33,8 @@ use Tests\TestCase;
  * Covers respond() transitions (accept/propose/decline), the supersede rule
  * for re-submissions, and resolve() — the internal decision that either
  * applies a counter-offer with exact decimal money math or returns the PO to
- * `sent` — plus the A3 cancel guard and B1 is_billable audit fixes.
+ * `sent` — plus the A3 cancel guard, B1 is_billable audit fixes, and the
+ * price-increase re-approval flow.
  */
 class SupplierResponseTest extends TestCase
 {
@@ -44,7 +46,7 @@ class SupplierResponseTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+        $this->seed([RolePermissionSeeder::class, SettingsSeeder::class, WorkflowSeeder::class]);
         $this->svc = app(SupplierResponseService::class);
         $this->poService = app(PurchaseOrderService::class);
     }
@@ -233,7 +235,7 @@ class SupplierResponseTest extends TestCase
 
     /* ─── resolve(): purchasing side ─────────────────────────────── */
 
-    public function test_accept_of_propose_applies_counter_offer_and_recomputes_totals_exactly(): void
+    public function test_price_decrease_proposal_applies_immediately_and_acknowledged(): void
     {
         $vendor = Vendor::factory()->create();
         $po = PurchaseOrder::factory()->create([
@@ -253,12 +255,12 @@ class SupplierResponseTest extends TestCase
             'items'                  => [
                 [
                     'purchase_order_item_id' => $itemA->hash_id,
-                    'proposed_quantity'      => '120.00',
-                    'proposed_unit_price'    => '9.50',
+                    'proposed_quantity'      => '80.00',  // reduce from 100
+                    'proposed_unit_price'    => '9.50',   // slightly lower
                 ],
                 [
                     'purchase_order_item_id' => $itemB->hash_id,
-                    'proposed_unit_price'    => '25.00',
+                    'proposed_unit_price'    => '15.00',  // reduce from 20
                 ],
             ],
         ]);
@@ -268,34 +270,35 @@ class SupplierResponseTest extends TestCase
 
         $resolved = $this->svc->resolve($response, $approver, 'accept', 'Agreed.');
 
+        // Price decrease applies immediately
         $this->assertSame(PurchaseOrderResponseStatus::Accepted, $resolved->status);
         $this->assertSame($approver->id, $resolved->resolved_by);
         $this->assertNotNull($resolved->resolved_at);
         $this->assertSame('Agreed.', $resolved->resolution_notes);
 
         // Counter-offer applied line-by-line, exact decimals:
-        // A: 120 × 9.50 = 1140.00 ; B: 50 × 25.00 = 1250.00
+        // A: 80 × 9.50 = 760.00 ; B: 50 × 15.00 = 750.00
         $itemA->refresh();
         $itemB->refresh();
-        $this->assertSame('120.00', (string) $itemA->quantity);
+        $this->assertSame('80.00', (string) $itemA->quantity);
         $this->assertSame('9.50', (string) $itemA->unit_price);
-        $this->assertSame('1140.00', (string) $itemA->total);
+        $this->assertSame('760.00', (string) $itemA->total);
         $this->assertSame('50.00', (string) $itemB->quantity);
-        $this->assertSame('25.00', (string) $itemB->unit_price);
-        $this->assertSame('1250.00', (string) $itemB->total);
+        $this->assertSame('15.00', (string) $itemB->unit_price);
+        $this->assertSame('750.00', (string) $itemB->total);
 
-        // subtotal 2390.00 → vat 12% = 286.80 → total 2676.80
+        // subtotal 1510.00 → vat 12% = 181.20 → total 1691.20
         $fresh = $po->fresh();
-        $this->assertSame('2390.00', (string) $fresh->subtotal);
-        $this->assertSame('286.80', (string) $fresh->vat_amount);
-        $this->assertSame('2676.80', (string) $fresh->total_amount);
+        $this->assertSame('1510.00', (string) $fresh->subtotal);
+        $this->assertSame('181.20', (string) $fresh->vat_amount);
+        $this->assertSame('1691.20', (string) $fresh->total_amount);
         $this->assertSame('2026-11-10', $fresh->confirmed_delivery_date->toDateString());
         $this->assertSame(PurchaseOrderStatus::Acknowledged, $fresh->status);
-        // Below the 50k VP threshold → no new approval required.
+        // Still below the 50k VP threshold.
         $this->assertFalse((bool) $fresh->requires_vp_approval);
     }
 
-    public function test_accept_of_propose_crossing_vp_threshold_refreshes_requires_vp_approval(): void
+    public function test_accept_of_propose_crossing_vp_threshold_triggers_re_approval(): void
     {
         $vendor = Vendor::factory()->create();
         $po = PurchaseOrder::factory()->create([
@@ -320,8 +323,12 @@ class SupplierResponseTest extends TestCase
         $this->svc->resolve($response, $approver, 'accept');
 
         $fresh = $po->fresh();
-        $this->assertSame('60000.00', (string) $fresh->total_amount);
+        // Proposal NOT applied yet - PO stays at sent total
+        $this->assertSame('1000.00', (string) $fresh->total_amount);
+        // But status is pending_approval with requires_vp_approval set
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
         $this->assertTrue((bool) $fresh->requires_vp_approval);
+        $this->assertNotNull($fresh->pending_change_response_id);
     }
 
     public function test_accept_of_decline_records_the_decision_but_leaves_po_supplier_declined(): void
@@ -525,19 +532,20 @@ class SupplierResponseTest extends TestCase
     {
         $approver = $this->userWithRole('vice_president');
         $vendor = Vendor::factory()->create();
+        // Use a price decrease so the proposal applies immediately
         $po = PurchaseOrder::factory()->create([
             'vendor_id'  => $vendor->id,
             'is_vatable' => false,
-            'subtotal'   => '1000.00', 'vat_amount' => '0.00', 'total_amount' => '1000.00',
+            'subtotal'   => '2000.00', 'vat_amount' => '0.00', 'total_amount' => '2000.00',
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
-        $item = $this->makePoItem($po, '10.00', '100.00');
+        $item = $this->makePoItem($po, '20.00', '100.00');
 
         $response = $this->svc->respond($po, (int) $vendor->id, null, [
             'type'  => 'propose',
             'items' => [[
                 'purchase_order_item_id' => $item->hash_id,
-                'proposed_unit_price'    => '120.00',
+                'proposed_unit_price'    => '80.00',  // decrease from 100
             ]],
         ]);
         Mail::fake();
@@ -550,8 +558,8 @@ class SupplierResponseTest extends TestCase
 
         $this->assertSame('acknowledged', $po->fresh()->status->value);
         $item->refresh();
-        $this->assertSame('120.00', (string) $item->unit_price);
-        $this->assertSame('1200.00', (string) $item->total);
+        $this->assertSame('80.00', (string) $item->unit_price);
+        $this->assertSame('1600.00', (string) $item->total);
 
         Mail::assertQueued(\App\Modules\Purchasing\Mail\SupplierPoDecisionMail::class, function ($mail) use ($po) {
             return $mail->decision === 'accept' && (int) $mail->purchaseOrder->id === (int) $po->id;
@@ -628,5 +636,358 @@ class SupplierResponseTest extends TestCase
         foreach ($pos as $po) {
             $this->assertSame('2026-12-01', $po->fresh()->expected_delivery_date->toDateString());
         }
+    }
+
+    /* ─── Price-increase proposals require re-approval ───────────── */
+
+    public function test_accept_proposal_with_price_increase_crosses_threshold_enters_pending_approval(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $vp = $this->userWithRole('vice_president');
+
+        // PO ₱30k (no VP needed): 100 × ₱300
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '30000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '30000.00',
+            'requires_vp_approval'  => false,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '300.00');
+
+        // Supplier proposes price increase: 100 × ₱600 = ₱60k (crosses VP threshold)
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '600.00',
+            ]],
+        ]);
+
+        Mail::fake();
+
+        // Accepting the proposal should send it to re-approval, not apply it
+        $resolved = $this->svc->resolve($response, $vp, 'accept', 'For review by Finance.');
+
+        // Response moves to pending_approval (not accepted yet)
+        $this->assertSame(PurchaseOrderResponseStatus::PendingApproval, $resolved->status);
+
+        // PO goes to pending_approval, NOT acknowledged
+        $fresh = $po->fresh();
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+
+        // Original terms preserved
+        $item->refresh();
+        $this->assertSame('100.00', (string) $item->quantity);
+        $this->assertSame('300.00', (string) $item->unit_price);
+        $this->assertSame('30000.00', (string) $fresh->total_amount);
+
+        // pending_change_response_id is set
+        $this->assertNotNull($fresh->pending_change_response_id);
+        $this->assertSame((int) $response->id, (int) $fresh->pending_change_response_id);
+
+        // requires_vp_approval is set
+        $this->assertTrue((bool) $fresh->requires_vp_approval);
+
+        // Response is marked pending_approval (not accepted yet)
+        $resolved->refresh();
+        $this->assertSame(PurchaseOrderResponseStatus::PendingApproval, $resolved->status);
+    }
+
+    public function test_vp_approves_price_increase_applies_proposal_and_moves_to_acknowledged(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $finance = $this->userWithRole('finance_officer');
+        $vp = $this->userWithRole('vice_president');
+
+        // PO ₱30k: already approved and sent
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '30000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '30000.00',
+            'requires_vp_approval'  => false,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '300.00');
+
+        // Supplier proposes ₱60k
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '600.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $vp, 'accept');
+
+        // PO now in pending_approval with pending_change_response_id
+        $fresh = $po->fresh();
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+        $this->assertNotNull($fresh->pending_change_response_id);
+
+        // Finance approves first step
+        $afterFinance = $this->poService->approve($fresh, $finance);
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $afterFinance->status);
+
+        // Then VP approves and applies the proposal
+        $approved = $this->poService->approve($afterFinance, $vp);
+
+        // Now it's acknowledged, proposal applied
+        $this->assertSame(PurchaseOrderStatus::Acknowledged, $approved->status);
+        $this->assertNull($approved->pending_change_response_id);
+
+        $item->refresh();
+        $this->assertSame('600.00', (string) $item->unit_price);
+        $this->assertSame('60000.00', (string) $approved->total_amount);
+
+        // Response is now accepted
+        $response->refresh();
+        $this->assertSame(PurchaseOrderResponseStatus::Accepted, $response->status);
+    }
+
+    public function test_finance_rejects_price_increase_returns_po_to_sent_without_applying(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $finance = $this->userWithRole('finance_officer');
+        $vp = $this->userWithRole('vice_president');
+
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '30000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '30000.00',
+            'requires_vp_approval'  => false,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '300.00');
+
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '600.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $vp, 'accept');
+
+        $fresh = $po->fresh();
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+
+        // Finance rejects the proposed change (before it goes to VP)
+        $rejected = $this->poService->reject($fresh, $finance, 'Price increase not approved by management.');
+
+        // PO returns to sent, original terms untouched
+        $this->assertSame(PurchaseOrderStatus::Sent, $rejected->status);
+        $this->assertNull($rejected->pending_change_response_id);
+
+        $item->refresh();
+        $this->assertSame('300.00', (string) $item->unit_price);
+        $this->assertSame('30000.00', (string) $rejected->total_amount);
+
+        // Response is rejected
+        $response->refresh();
+        $this->assertSame(PurchaseOrderResponseStatus::Rejected, $response->status);
+    }
+
+    public function test_price_decrease_proposal_accept_applies_immediately_no_re_approval(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '60000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '60000.00',
+            'requires_vp_approval'  => true,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '600.00');
+
+        // Supplier proposes price decrease: 100 × ₱300 = ₱30k
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '300.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $this->userWithRole('vice_president'), 'accept');
+
+        $fresh = $po->fresh();
+        // Immediately acknowledged (no re-approval needed)
+        $this->assertSame(PurchaseOrderStatus::Acknowledged, $fresh->status);
+        $this->assertNull($fresh->pending_change_response_id);
+
+        $item->refresh();
+        $this->assertSame('300.00', (string) $item->unit_price);
+        $this->assertSame('30000.00', (string) $fresh->total_amount);
+    }
+
+    public function test_cancel_po_with_pending_change_response_marks_response_rejected(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'  => $vendor->id,
+            'is_vatable' => false,
+            'subtotal'   => '30000.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '30000.00',
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '300.00');
+
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '600.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $this->userWithRole('vice_president'), 'accept');
+
+        $fresh = $po->fresh();
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+        $this->assertNotNull($fresh->pending_change_response_id);
+
+        // Cancel the PO
+        $cancelled = $this->poService->cancel($fresh, 'Budget frozen.');
+
+        $this->assertSame(PurchaseOrderStatus::Cancelled, $cancelled->status);
+        $this->assertNull($cancelled->pending_change_response_id);
+
+        $response->refresh();
+        $this->assertSame(PurchaseOrderResponseStatus::Rejected, $response->status);
+    }
+
+    /* ─── Quantity validation (quantity_received guard) ─────────────── */
+
+    public function test_proposal_below_quantity_received_is_rejected_immediately(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'  => $vendor->id,
+            'is_vatable' => false,
+            'subtotal'   => '3000.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '3000.00',
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::SupplierProposed])->save();
+        $item = $this->makePoItem($po, '100.00', '30.00');
+
+        // Simulate goods receipt: 95 out of 100 received
+        $item->forceFill(['quantity_received' => '95.00'])->save();
+
+        // Supplier proposes to cut quantity to 80, but 95 already received
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_quantity'      => '80.00',
+            ]],
+        ]);
+
+        $approver = $this->userWithRole('vice_president');
+        Mail::fake();
+
+        // Accepting the proposal must throw BusinessRuleException
+        try {
+            $this->svc->resolve($response, $approver, 'accept');
+            $this->fail('Expected BusinessRuleException for proposed quantity below quantity_received.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+            $this->assertStringContainsString('already been received', $e->getMessage());
+        }
+
+        // Original line quantities are unchanged
+        $item->refresh();
+        $this->assertSame('100.00', (string) $item->quantity);
+        $this->assertSame('95.00', (string) $item->quantity_received);
+    }
+
+    /* ─── Any price increase triggers re-approval ───────────────────── */
+
+    public function test_price_increase_from_above_to_above_threshold_triggers_re_approval(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $vp = $this->userWithRole('vice_president');
+
+        // PO ₱60k (already above VP threshold): 10 × ₱6000
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '60000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '60000.00',
+            'requires_vp_approval'  => true,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '10.00', '6000.00');
+
+        // Supplier proposes price increase: 10 × ₱7000 = ₱70k
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '7000.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $vp, 'accept');
+
+        $fresh = $po->fresh();
+        // Enters pending_approval even though both below/above threshold
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+        $this->assertNotNull($fresh->pending_change_response_id);
+        // Original terms still in place
+        $this->assertSame('60000.00', (string) $fresh->total_amount);
+    }
+
+    public function test_small_price_increase_still_triggers_re_approval(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $vp = $this->userWithRole('vice_president');
+
+        // PO ₱10k (no VP needed): 100 × ₱100
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'             => $vendor->id,
+            'is_vatable'            => false,
+            'subtotal'              => '10000.00',
+            'vat_amount'            => '0.00',
+            'total_amount'          => '10000.00',
+            'requires_vp_approval'  => false,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent])->save();
+        $item = $this->makePoItem($po, '100.00', '100.00');
+
+        // Supplier proposes small increase: 100 × ₱120 = ₱12k (still no VP needed)
+        $response = $this->svc->respond($po, (int) $vendor->id, null, [
+            'type'  => 'propose',
+            'items' => [[
+                'purchase_order_item_id' => $item->hash_id,
+                'proposed_unit_price'    => '120.00',
+            ]],
+        ]);
+
+        Mail::fake();
+        $this->svc->resolve($response, $vp, 'accept');
+
+        $fresh = $po->fresh();
+        // Still enters pending_approval even for small increase
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $fresh->status);
+        $this->assertNotNull($fresh->pending_change_response_id);
+        $this->assertFalse((bool) $fresh->requires_vp_approval);
     }
 }

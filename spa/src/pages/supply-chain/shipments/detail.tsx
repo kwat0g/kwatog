@@ -2,7 +2,15 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LuArrowRight, LuDownload, LuFileText, LuTrash2, LuUpload, LuArchiveRestore, LuCheck} from '@/lib/icons';
+import {
+  LuArrowRight,
+  LuDownload,
+  LuFileText,
+  LuTrash2,
+  LuUpload,
+  LuArchiveRestore,
+  LuCheck,
+} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -21,6 +29,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
 import type { ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
+import { formatDateIso } from '@/lib/formatDate';
 
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   ordered: 'neutral',
@@ -309,7 +318,7 @@ export default function ShipmentDetailPage() {
                       <div className="text-2xs text-muted mt-0.5">
                         {formatBytes(doc.file_size_bytes)}
                         {doc.uploader && ` · ${doc.uploader.name}`}
-                        {doc.uploaded_at && ` · ${doc.uploaded_at.slice(0, 10)}`}
+                        {doc.uploaded_at && ` · ${formatDateIso(doc.uploaded_at, '')}`}
                       </div>
                       {doc.notes && <div className="text-xs text-muted mt-0.5">{doc.notes}</div>}
                     </div>
@@ -457,15 +466,11 @@ export default function ShipmentDetailPage() {
             <dl className="text-sm space-y-2">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">Created</dt>
-                <dd className="font-mono tabular-nums text-xs">
-                  {data.created_at?.slice(0, 10) ?? '—'}
-                </dd>
+                <dd className="font-mono tabular-nums text-xs">{formatDateIso(data.created_at)}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted">Updated</dt>
-                <dd className="font-mono tabular-nums text-xs">
-                  {data.updated_at?.slice(0, 10) ?? '—'}
-                </dd>
+                <dd className="font-mono tabular-nums text-xs">{formatDateIso(data.updated_at)}</dd>
               </div>
             </dl>
           </Panel>

@@ -61,13 +61,13 @@ class DTRComputationService
 
         $isRestDay = (bool) $a->is_rest_day || $date->dayOfWeek === Carbon::SUNDAY;
 
-        $hasApprovedOt = $a->time_out
-            ? OvertimeRequest::query()
+        $approvedOtHours = $a->time_out
+            ? (float) OvertimeRequest::query()
                 ->where('employee_id', $a->employee_id)
                 ->where('date', $date->toDateString())
                 ->where('status', OvertimeStatus::Approved->value)
-                ->exists()
-            : false;
+                ->sum('hours_requested')
+            : 0.0;
 
         $result = $this->compute([
             'date'           => $date->toDateString(),
@@ -84,7 +84,8 @@ class DTRComputationService
             ],
             'holiday'        => $holiday ? ['type' => $holiday->type->value] : null,
             'is_rest_day'    => $isRestDay,
-            'has_approved_ot'=> $hasApprovedOt,
+            'has_approved_ot'=> $approvedOtHours > 0,
+            'approved_ot_hours' => $approvedOtHours,
         ]);
 
         // Apply result back onto the model.
@@ -112,6 +113,7 @@ class DTRComputationService
      *   holiday: ?array{type:string},
      *   is_rest_day: bool,
      *   has_approved_ot: bool,
+     *   approved_ot_hours?: float,
      * } $input
      *
      * @return array{
@@ -133,6 +135,7 @@ class DTRComputationService
         $holiday = $input['holiday'];
         $isRestDay = (bool) $input['is_rest_day'];
         $hasApprovedOt = (bool) $input['has_approved_ot'];
+        $maximumOt = $this->settings->requiredInt('attendance.ot.maximum_minutes', 1);
 
         $shiftStart = $this->shiftAnchor($date, $shift['start_time']);
         $shiftEnd   = $this->shiftAnchor($date, $shift['end_time']);
@@ -210,12 +213,17 @@ class DTRComputationService
         if ($shift['is_extended']) {
             $autoOtHours = $shift['auto_ot_hours'] ?? 0.0;
             $autoOtMin   = (int) round($autoOtHours * 60);
-            $otMin = min($excess, $autoOtMin);
+            $otMin = min($excess, $autoOtMin, $maximumOt);
         } elseif ($hasApprovedOt) {
             $minimumOt = $this->settings->requiredInt('attendance.ot.minimum_minutes', 0);
-            $maximumOt = $this->settings->requiredInt('attendance.ot.maximum_minutes', 1);
             if ($excess >= $minimumOt) {
-                $otMin = min($excess, $maximumOt);
+                // Older pure-compute callers provide only the approval flag;
+                // persisted attendance passes the approved request's actual
+                // duration so a larger punch cannot exceed checker approval.
+                $approvedOtMin = array_key_exists('approved_ot_hours', $input)
+                    ? (int) round((float) $input['approved_ot_hours'] * 60)
+                    : $maximumOt;
+                $otMin = min($excess, $maximumOt, $approvedOtMin);
             }
         }
 

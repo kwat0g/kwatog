@@ -40,6 +40,23 @@ class PurchaseOrderResource extends JsonResource
             // Deriving this from status alone advertised an enabled Bill
             // button on POs whose receipt was still pending QC.
             'is_billable' => (bool) ($this->has_accepted_receipt ?? false),
+            'pending_change' => $this->whenLoaded('pendingChangeResponse', function (): ?array {
+                if ($this->pending_change_response_id === null) {
+                    return null;
+                }
+                $response = $this->pendingChangeResponse;
+                if (! $response) {
+                    return null;
+                }
+                // Compute proposed totals to show approvers what they are reviewing
+                $proposed = app(\App\Modules\Purchasing\Services\SupplierResponseService::class)
+                    ->computeProposalTotals($response, $this->resource);
+                return [
+                    'response_id' => $response->hash_id,
+                    'current_total' => (string) $this->total_amount,
+                    'proposed_total' => $proposed['total_amount'],
+                ];
+            }),
             'latest_response' => $this->latestResponseBlock(),
             'requires_vp_approval' => (bool) $this->requires_vp_approval,
             'is_auto_generated' => (bool) $this->is_auto_generated,
@@ -80,6 +97,13 @@ class PurchaseOrderResource extends JsonResource
             'budget_acknowledged_at' => optional($this->budget_acknowledged_at)->toIso8601String(),
             'remarks' => $this->remarks,
             'incoterm' => $this->incoterm?->value,
+            'short_closed_at' => optional($this->short_closed_at)->toIso8601String(),
+            'short_close_reason' => $this->short_close_reason,
+            'short_closed_by' => $this->whenLoaded('shortClosedBy', fn () => $this->shortClosedBy ? [
+                'id' => $this->shortClosedBy->hash_id,
+                'name' => $this->shortClosedBy->name,
+            ] : null),
+            'can_short_close' => $this->whenLoaded('goodsReceiptNotes', fn (): bool => $this->resource->isShortClosable()),
             'quantity_received_pct' => $this->quantity_received_percent,
             'quantity_accepted_pct' => $this->quantity_accepted_percent,
             'vendor' => $this->whenLoaded('vendor', fn () => [
@@ -96,7 +120,9 @@ class PurchaseOrderResource extends JsonResource
                 'id' => $this->rfq->hash_id, 'rfq_number' => $this->rfq->rfq_number,
                 'status' => $this->rfq->status?->value ?? (string) $this->rfq->status,
             ] : null),
-            'items' => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
+            'items' => PurchaseOrderItemResource::collection($this->whenLoaded('items', fn () => $this->items->each(
+                fn ($item) => $item->setRelation('purchaseOrder', $this->resource),
+            ))),
             'goods_receipt_notes' => $this->whenLoaded('goodsReceiptNotes', fn () => $this->goodsReceiptNotes->map(fn ($g) => [
                 'id' => $g->hash_id,
                 'grn_number' => $g->grn_number,

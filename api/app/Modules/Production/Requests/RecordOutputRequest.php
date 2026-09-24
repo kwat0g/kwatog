@@ -7,6 +7,7 @@ namespace App\Modules\Production\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Production\Models\DefectType;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class RecordOutputRequest extends FormRequest
 {
@@ -25,22 +26,22 @@ class RecordOutputRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'good_count'              => ['required', 'integer', 'min:0'],
-            'reject_count'            => ['required', 'integer', 'min:0'],
-            'shift'                   => ['nullable', 'string', 'max:20'],
-            'remarks'                 => ['nullable', 'string', 'max:500'],
-            'defects'                 => ['nullable', 'array'],
+            'good_count' => ['required', 'integer', 'min:0'],
+            'reject_count' => ['required', 'integer', 'min:0'],
+            'shift' => ['nullable', 'string', 'max:20'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+            'defects' => ['nullable', 'array'],
             'defects.*.defect_type_id' => ['required_with:defects', 'integer', 'exists:defect_types,id'],
-            'defects.*.count'         => ['required_with:defects', 'integer', 'min:1'],
+            'defects.*.count' => ['required_with:defects', 'integer', 'min:1'],
         ];
     }
 
-    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    public function withValidator(Validator $validator): void
     {
         $validator->after(function ($v) {
-            $good   = (int) $this->input('good_count');
+            $good = (int) $this->input('good_count');
             $reject = (int) $this->input('reject_count');
-            
+
             if ($good + $reject <= 0) {
                 $v->errors()->add('good_count', 'At least one of Good count or Reject count must be greater than zero.');
             }

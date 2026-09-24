@@ -16,6 +16,8 @@ final class AuditDiffBuilder
      */
     public static function build(string $modelType, array $old, array $new): array
     {
+        $old = self::publicValues($old);
+        $new = self::publicValues($new);
         $keys = array_unique(array_merge(array_keys($old), array_keys($new)));
         $rows = [];
 
@@ -49,6 +51,36 @@ final class AuditDiffBuilder
         }
 
         return $rows;
+    }
+
+    /** Convert raw integer IDs nested in audit JSON to public HashIDs. */
+    public static function publicValues(array $values): array
+    {
+        return self::transform($values);
+    }
+
+    private static function transform(mixed $value, ?string $parentKey = null): mixed
+    {
+        if (is_array($value)) {
+            $mapped = [];
+            foreach ($value as $key => $child) {
+                $publicKey = is_string($parentKey) && self::isIdKey($parentKey) && is_numeric((string) $key)
+                    ? app('hashids')->encode((int) $key)
+                    : $key;
+                $mapped[$publicKey] = self::transform($child, is_string($parentKey) ? $parentKey : (is_string($key) ? $key : null));
+            }
+
+            return $mapped;
+        }
+
+        return is_string($parentKey) && self::isIdKey($parentKey) && is_numeric((string) $value)
+            ? app('hashids')->encode((int) $value)
+            : $value;
+    }
+
+    private static function isIdKey(string $key): bool
+    {
+        return $key === 'id' || str_ends_with($key, '_id') || str_ends_with($key, '_ids');
     }
 
     private static function humanize(string $key): string

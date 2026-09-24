@@ -173,6 +173,50 @@ final class SupplierQuoteVatDerivationTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_vat_is_computed_from_lines_plus_freight_and_other_charges(): void
+    {
+        [$rfq, $rfqItem, $vendor] = $this->openRfq();
+        $this->actAsSupplier($vendor->id);
+
+        // VAT base = (100 × 240) + 1200 + 150 = 25,350 → 12% = 3,042.00
+        $quote = $this->postJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/quotes", [
+            'vat_inclusive' => false,
+            'freight_amount' => '1200.00',
+            'other_charges' => '150.00',
+            'items' => [[
+                'request_for_quote_item_id' => $rfqItem->hash_id,
+                'response_status' => 'quoted',
+                'offered_quantity' => '100.0000',
+                'unit_price' => '240.0000',
+            ]],
+        ])->assertCreated()->json('data');
+
+        $this->assertSame('3042.00', $quote['vat_amount']);
+        $this->assertSame('1200.00', $quote['freight_amount']);
+        $this->assertSame('150.00', $quote['other_charges']);
+        $this->assertSame('28392.00', $quote['total_delivered_cost']);
+    }
+
+    public function test_declared_vat_mismatching_the_corrected_base_is_refused(): void
+    {
+        [$rfq, $rfqItem, $vendor] = $this->openRfq();
+        $this->actAsSupplier($vendor->id);
+
+        // Lines-only VAT (2880) contradicts the correct base of lines + charges.
+        $this->postJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/quotes", [
+            'vat_inclusive' => false,
+            'vat_amount' => '2880.00',
+            'freight_amount' => '1200.00',
+            'other_charges' => '150.00',
+            'items' => [[
+                'request_for_quote_item_id' => $rfqItem->hash_id,
+                'response_status' => 'quoted',
+                'offered_quantity' => '100.0000',
+                'unit_price' => '240.0000',
+            ]],
+        ])->assertUnprocessable();
+    }
+
     public function test_supplier_rfq_list_searches_filters_and_sorts(): void
     {
         [$rfq, , $vendor] = $this->openRfq();

@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Requests\StoreCollectionRequest;
 use App\Modules\Accounting\Requests\StoreInvoiceRequest;
+use App\Modules\Accounting\Requests\UpdateInvoiceRequest;
 use App\Modules\Accounting\Resources\CollectionResource;
 use App\Modules\Accounting\Resources\InvoiceResource;
 use App\Modules\Accounting\Services\InvoiceService;
@@ -51,7 +52,7 @@ class InvoiceController
         return (new InvoiceResource($inv))->response()->setStatusCode(201);
     }
 
-    public function update(StoreInvoiceRequest $request, Invoice $invoice): InvoiceResource|JsonResponse
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice): InvoiceResource|JsonResponse
     {
         try {
             $inv = $this->service->update($invoice, $request->validated(), $request->user());

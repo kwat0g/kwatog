@@ -41,6 +41,11 @@ class DemandForecast extends Model
         self::METHOD_MANUAL,
     ];
 
+    public const COMPUTED_METHODS = [
+        self::METHOD_MOVING_AVG,
+        self::METHOD_WEIGHTED_AVG,
+    ];
+
     protected $fillable = [
         'product_id',
         'customer_id',

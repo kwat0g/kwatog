@@ -7,12 +7,14 @@ namespace App\Modules\Inventory\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Models\AccountingPeriod;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -67,7 +69,7 @@ class GrnGlPostingService
             throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
         }
 
-        $accountingEnabled = $this->settings->requiredBool('modules.accounting');
+        $accountingEnabled = $this->settings->get('modules.accounting', false) === true;
         if (! $accountingEnabled) {
             Log::info('GrnGlPostingService: accounting module disabled; skipping GL post', [
                 'grn_id' => $grn->id,
@@ -258,15 +260,22 @@ class GrnGlPostingService
         }
 
         return DB::transaction(function () use ($grn, $lines) {
+            $postingDate = $this->postingDate($grn);
+            $descriptionNote = '';
+
+            // Determine if posting date differs from received date due to closed period
+            if ($grn->received_date !== null && $postingDate !== $this->formatReceivedDate($grn->received_date)) {
+                $receivedDateStr = $this->formatReceivedDate($grn->received_date);
+                $descriptionNote = " (posted in open period; received {$receivedDateStr})";
+            }
+
             $je = $this->journals->create([
-                'date'           => $grn->received_date instanceof \DateTimeInterface
-                    ? $grn->received_date->format('Y-m-d')
-                    : (string) $grn->received_date,
+                'date'           => $postingDate,
                 'description'    => sprintf(
                     'GRN %s — %s',
                     $grn->grn_number,
                     $grn->journal_entry_id ? 'incremental inventory acceptance' : 'inventory receipt',
-                ),
+                ) . $descriptionNote,
                 'reference_type' => 'goods_receipt_note',
                 'reference_id'   => $grn->id,
                 'lines'          => $lines,
@@ -307,5 +316,41 @@ class GrnGlPostingService
             ItemType::SparePart->value    => 'accounting.accounts.inventory_spare_parts_code',
             default => throw new BusinessRuleException("No inventory account configured for item type {$type}"),
         };
+    }
+
+    /**
+     * Determine the JE posting date. If received_date is null or empty, use today.
+     * If received_date's accounting period is closed, roll forward to today.
+     * Otherwise, use the received_date as-is.
+     */
+    private function postingDate(GoodsReceiptNote $grn): string
+    {
+        $receivedDate = $this->formatReceivedDate($grn->received_date);
+        if (! $receivedDate) {
+            return now()->toDateString();
+        }
+
+        // Check if the received_date's accounting period is closed
+        $period = AccountingPeriod::forDate($receivedDate);
+        if ($period && $period->isClosed()) {
+            return now()->toDateString();
+        }
+
+        return $receivedDate;
+    }
+
+    /** Format received_date to Y-m-d string, handling null and DateTimeInterface. */
+    private function formatReceivedDate($receivedDate): ?string
+    {
+        if ($receivedDate === null) {
+            return null;
+        }
+
+        if ($receivedDate instanceof \DateTimeInterface) {
+            return $receivedDate->format('Y-m-d');
+        }
+
+        $str = (string) $receivedDate;
+        return $str !== '' ? $str : null;
     }
 }

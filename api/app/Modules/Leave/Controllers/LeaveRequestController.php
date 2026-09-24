@@ -6,10 +6,12 @@ namespace App\Modules\Leave\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Leave\Requests\ApproveLeaveRequest;
 use App\Modules\Leave\Requests\RejectLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveRequestRequest;
@@ -18,20 +20,38 @@ use App\Modules\Leave\Services\LeaveRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Carbon\CarbonImmutable;
 
 class LeaveRequestController
 {
-    public function __construct(private readonly LeaveRequestService $service) {}
+    public function __construct(
+        private readonly LeaveRequestService $service,
+        private readonly HolidayService $holidays,
+    ) {}
 
-    public function options(): JsonResponse
+    public function options(Request $request): JsonResponse
     {
+        $range = Validator::make($request->query(), [
+            'from' => ['nullable', 'date_format:Y-m-d', 'required_with:to'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'required_with:from'],
+        ])->validate();
+        $holidayDates = [];
+        if (isset($range['from'], $range['to'])) {
+            $start = CarbonImmutable::parse($range['from']);
+            $end = CarbonImmutable::parse($range['to']);
+            abort_if($end->lt($start) || $start->diffInDays($end, true) > 731, 422, 'Leave options range must be within 731 days.');
+            $holidayDates = array_keys($this->holidays->datesBetween($start, $end));
+        }
+
         return response()->json(['data' => [
             'statuses' => array_map(static fn (LeaveRequestStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))], LeaveRequestStatus::cases()),
             'half_day_periods' => array_map(
                 static fn (LeaveHalfDayPeriod $period): array => ['value' => $period->value, 'label' => $period->label()],
                 LeaveHalfDayPeriod::cases(),
             ),
+            'holiday_dates' => $holidayDates,
         ]]);
     }
 
@@ -64,22 +84,7 @@ class LeaveRequestController
 
     public function show(LeaveRequest $leaveRequest, Request $request): LeaveRequestResource
     {
-        $user = $request->user();
-        $isHr = $user?->hasPermission('leave.approve_hr') ?? false;
-
-        if (! $isHr) {
-            $isDeptHead = $user?->hasPermission('leave.approve_dept') ?? false;
-            $isOwn = (int) $leaveRequest->employee_id === (int) $user?->employee_id;
-            $isDeptMember = false;
-            if ($isDeptHead && $user?->employee_id) {
-                $deptId = Employee::query()
-                    ->whereKey($user->employee_id)->value('department_id');
-                $isDeptMember = (int) $leaveRequest->employee?->department_id === (int) $deptId;
-            }
-            if (! $isOwn && ! $isDeptMember) {
-                abort(403, 'You do not have permission to view this leave request.');
-            }
-        }
+        $this->authorizeView($leaveRequest, $request->user());
 
         return new LeaveRequestResource($leaveRequest->load([
             'employee',
@@ -88,6 +93,34 @@ class LeaveRequestController
             'hrApprover',
             'canceller',
         ]));
+    }
+
+    public function downloadDocument(LeaveRequest $leaveRequest, Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorizeView($leaveRequest, $request->user());
+        $path = $leaveRequest->document_path;
+        abort_if(! $path || ! Storage::disk('local')->exists($path), 404, 'Supporting document not found.');
+
+        return Storage::disk('local')->download($path, basename($path));
+    }
+
+    private function authorizeView(LeaveRequest $leaveRequest, ?User $user): void
+    {
+        $isHr = $user?->hasPermission('leave.approve_hr') ?? false;
+        if ($isHr) {
+            return;
+        }
+
+        $isDeptHead = $user?->hasPermission('leave.approve_dept') ?? false;
+        $isOwn = (int) $leaveRequest->employee_id === (int) $user?->employee_id;
+        $isDeptMember = false;
+        if ($isDeptHead && $user?->employee_id) {
+            $deptId = Employee::query()->whereKey($user->employee_id)->value('department_id');
+            $isDeptMember = (int) $leaveRequest->employee?->department_id === (int) $deptId;
+        }
+        if (! $isOwn && ! $isDeptMember) {
+            abort(403, 'You do not have permission to view this leave request.');
+        }
     }
 
     public function approveDept(ApproveLeaveRequest $request, LeaveRequest $leaveRequest): LeaveRequestResource

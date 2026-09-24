@@ -99,11 +99,11 @@ class ApprovedSupplierImportTest extends TestCase
         $dry = $this->service->dryRun('approved_suppliers', $this->csv('RM-999,Gamma,5,10,false,approved'));
         $this->assertSame(0, $dry['valid']);
         $this->assertCount(1, $dry['errors']);
-        $this->assertStringContainsString('RM-999', $dry['errors'][0]['message']);
+        $this->assertSame('This row could not be imported due to a data error.', $dry['errors'][0]['message']);
 
         $dry2 = $this->service->dryRun('approved_suppliers', $this->csv('RM-003,No Such Vendor,5,10,false,approved'));
         $this->assertSame(0, $dry2['valid']);
-        $this->assertStringContainsString('No Such Vendor', $dry2['errors'][0]['message']);
+        $this->assertSame('This row could not be imported due to a data error.', $dry2['errors'][0]['message']);
     }
 
     public function test_rollback_deletes_only_the_imported_rows(): void

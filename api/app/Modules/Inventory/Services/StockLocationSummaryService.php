@@ -114,4 +114,31 @@ class StockLocationSummaryService
             'expiry_date' => $available[0]['expiry_date'],
         ];
     }
+
+    /** Current ledger-backed quantity for one lot at one location. */
+    public function lotQuantity(int $itemId, int $locationId, string $lotNumber): string
+    {
+        $quantity = '0.000';
+        $movements = StockMovement::query()
+            ->where('item_id', $itemId)
+            ->where('lot_number', $lotNumber)
+            ->where(function ($query) use ($locationId): void {
+                $query->where('from_location_id', $locationId)
+                    ->orWhere('to_location_id', $locationId);
+            })
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['quantity', 'from_location_id', 'to_location_id']);
+
+        foreach ($movements as $movement) {
+            if ((int) $movement->to_location_id === $locationId) {
+                $quantity = bcadd($quantity, (string) $movement->quantity, 3);
+            }
+            if ((int) $movement->from_location_id === $locationId) {
+                $quantity = bcsub($quantity, (string) $movement->quantity, 3);
+            }
+        }
+
+        return $quantity;
+    }
 }

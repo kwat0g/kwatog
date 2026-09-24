@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Policies;
 
 use App\Common\Models\ApprovalDelegation;
+use App\Common\Services\ApprovalService;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Services\PurchaseOrderService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Server-side ROW visibility for purchase orders — the single source of truth.
@@ -196,9 +200,10 @@ final class PurchaseOrderAccessPolicy
      * PurchaseRequestAccessPolicy::actionsFor. The SPA renders buttons from
      * this map instead of guessing from status + permission, so a hidden
      * button and a refused request can never disagree. Approve/reject mirror
-     * ApprovalService's own guards (step-role match via approvalRoleSlugs,
-     * self-approval via created_by); the service re-checks under lock — this
-     * is UX truth, not the security boundary.
+     * ApprovalService's own guards: current step role via nextStep(),
+     * self-approval via created_by, and vendor SoD via vendor.created_by;
+     * the service re-checks under lock — this is UX truth, not the security
+     * boundary.
      *
      * @return array<string, bool>
      */
@@ -213,31 +218,74 @@ final class PurchaseOrderAccessPolicy
         $isPendingApproval = $po->status === PurchaseOrderStatus::PendingApproval;
         $selfSubmitted = (int) $po->created_by === (int) $user->id;
         $stepRoles = $this->approvalRoleSlugs($user);
+
         // The approve/reject routes are gated by `purchasing.po.approve`.
         // Matching the step role alone would advertise the button to a
         // delegate who holds the role but not the route permission.
-        $holdsCurrentStep = $user->hasPermission('purchasing.po.approve')
+        // The current step is obtained via ApprovalService::nextStep(), not
+        // an any-pending query, so we never expose a button for a later step.
+        $canActOnCurrentStep = false;
+        if ($user->hasPermission('purchasing.po.approve')
             && $isPendingApproval
             && ! $selfSubmitted
-            && $stepRoles !== []
-            && $po->approvalRecords()
-                ->where('action', 'pending')
-                ->whereIn('role_slug', $stepRoles)
-                ->exists();
+            && $stepRoles !== []) {
+            $nextStep = app(ApprovalService::class)->nextStep($po);
+            if ($nextStep !== null && in_array($nextStep->role_slug, $stepRoles, true)) {
+                $canActOnCurrentStep = true;
+            }
+        }
+
+        // Approve mirrors PurchaseOrderService::approve() guards, which include
+        // vendor SoD check. Reject mirrors reject() which does NOT include SoD.
+        $vendorSodBlocked = $canActOnCurrentStep && $this->vendorSodBlocks($po, $user);
+        $canApprove = $canActOnCurrentStep && ! $vendorSodBlocked;
+        $canReject = $canActOnCurrentStep;
 
         return [
             'can_view' => $canView,
             'can_update' => $canManageDraft,
             'can_delete' => $canManageDraft,
             'can_submit' => $canManageDraft && ! $reconfirmationRequired,
-            'can_approve' => $holdsCurrentStep,
-            'can_reject' => $holdsCurrentStep,
+            'can_approve' => $canApprove,
+            'can_reject' => $canReject,
             'can_send' => $this->canSend($user, $po),
             'can_cancel' => $this->canCancel($user, $po),
             'can_close' => $this->canClose($user, $po),
             'can_acknowledge_budget' => $this->canAcknowledgeBudget($user, $po),
             'can_print' => $canView,
             'reconfirmation_required' => $reconfirmationRequired,
+            // Lets the SPA say why Approve is missing instead of showing Reject alone.
+            'approve_blocked_by_vendor_sod' => $vendorSodBlocked,
         ];
+    }
+
+    /**
+     * OGAMI-002 — true when this user created the PO's vendor and holds no
+     * override, so may not approve spend to it. The one implementation:
+     * PurchaseOrderService::assertVendorSod() throws on it and the action
+     * map hides Approve on it.
+     */
+    public function vendorSodBlocks(PurchaseOrder $po, User $user): bool
+    {
+        // Gracefully skip when the schema does not record who created a vendor.
+        if (! Schema::hasColumn('vendors', 'created_by')) {
+            return false;
+        }
+
+        $vendorCreatorId = Vendor::query()
+            ->whereKey($po->vendor_id)
+            ->value('created_by');
+
+        if ($vendorCreatorId === null) {
+            return false; // unknown maker — guard cannot fire.
+        }
+        if ((int) $vendorCreatorId !== (int) $user->id) {
+            return false; // different user — allowed.
+        }
+        if ($user->hasPermission(PurchaseOrderService::VENDOR_SOD_OVERRIDE_PERMISSION)) {
+            return false; // explicit override.
+        }
+
+        return true; // SoD blocks this user.
     }
 }

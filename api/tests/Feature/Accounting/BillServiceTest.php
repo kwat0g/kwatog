@@ -290,6 +290,40 @@ class BillServiceTest extends TestCase
         $this->assertSame('40.00', (string) $bill->refresh()->amount_paid);
     }
 
+    public function test_bill_payment_replay_with_a_changed_payload_is_rejected(): void
+    {
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Replay Payload Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-REPLAY-2', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+
+        $service->recordPayment($bill, [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-11',
+            'amount' => '40.00',
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => 'bill-payment-test-2',
+        ], $user);
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('different payment payload');
+
+        $service->recordPayment($bill->fresh(), [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-11',
+            'amount' => '25.00',
+            'payment_method' => PaymentMethod::Cash->value,
+            'idempotency_key' => 'bill-payment-test-2',
+        ], $user);
+    }
+
     public function test_cannot_bill_against_cancelled_po(): void
     {
         $user = $this->newUser();

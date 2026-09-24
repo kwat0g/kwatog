@@ -81,13 +81,18 @@ class BomService
      */
     public function create(int $productId, array $itemRows, string|int|float $costBatchSize = '1'): Bom
     {
-        if (! is_numeric($costBatchSize) || bccomp((string) $costBatchSize, '1', 3) < 0) {
-            throw new BusinessRuleException('Cost batch size must be at least 1.');
+        $costBatchSize = (string) $costBatchSize;
+        if (
+            ! preg_match('/^\d+(?:\.\d{1,3})?$/D', $costBatchSize)
+            || bccomp($costBatchSize, '1', 3) < 0
+            || bccomp($costBatchSize, '1000000', 3) > 0
+        ) {
+            throw new BusinessRuleException('Cost batch size must be between 1 and 1,000,000, with at most three decimal places.');
         }
 
         return DB::transaction(function () use ($productId, $itemRows, $costBatchSize) {
             $this->validateDefinition($productId, $itemRows);
-            $previous = Bom::where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
+            $previous = Bom::withTrashed()->where('product_id', $productId)->lockForUpdate()->orderByDesc('version')->first();
 
             if ($previous && $previous->is_active) {
                 $previous->forceFill(['is_active' => false])->save();
@@ -199,6 +204,39 @@ class BomService
         $product = Product::query()->active()->find($productId);
         if ($product === null) {
             throw new BusinessRuleException('The finished-good product is missing or inactive.');
+        }
+
+        if ($itemRows === []) {
+            throw new BusinessRuleException('A BOM must contain at least one component.');
+        }
+
+        foreach ($itemRows as $row) {
+            if (! is_array($row)) {
+                throw new BusinessRuleException('Each BOM component must be an object of validated fields.');
+            }
+
+            $itemId = $row['item_id'] ?? null;
+            if (! is_int($itemId) && (! is_string($itemId) || ! ctype_digit($itemId))) {
+                throw new BusinessRuleException('Each BOM component must reference a valid inventory item.');
+            }
+            if ((int) $itemId < 1) {
+                throw new BusinessRuleException('Each BOM component must reference a valid inventory item.');
+            }
+
+            $quantity = (string) ($row['quantity_per_unit'] ?? '');
+            if (! preg_match('/^\d+(?:\.\d{1,4})?$/D', $quantity) || bccomp($quantity, '0.0001', 4) < 0) {
+                throw new BusinessRuleException('BOM component quantities must be positive decimal values with at most four decimal places.');
+            }
+
+            $waste = (string) ($row['waste_factor'] ?? '0');
+            if (! preg_match('/^\d+(?:\.\d{1,2})?$/D', $waste) || bccomp($waste, '50', 2) > 0) {
+                throw new BusinessRuleException('BOM waste factors must be between 0 and 50 with at most two decimal places.');
+            }
+
+            $sortOrder = $row['sort_order'] ?? null;
+            if ($sortOrder !== null && ((! is_int($sortOrder) && (! is_string($sortOrder) || ! ctype_digit($sortOrder))) || (int) $sortOrder < 0)) {
+                throw new BusinessRuleException('BOM component sort order must be a non-negative integer.');
+            }
         }
 
         $itemIds = array_map(static fn (array $row): int => (int) ($row['item_id'] ?? 0), $itemRows);

@@ -6,7 +6,6 @@ namespace Database\Seeders;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -126,7 +125,6 @@ class DemoAccountSeeder extends Seeder
                 'basic_monthly_salary' => 30000 + ($index * 1500),
                 'bank_name'            => 'BDO Unibank',
                 'bank_account_no'      => '00123456' . str_pad((string) $index, 4, '0', STR_PAD_LEFT),
-                'status'               => EmployeeStatus::Active->value,
             ],
         );
     }

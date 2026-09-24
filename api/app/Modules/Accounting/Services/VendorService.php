@@ -11,6 +11,8 @@ use App\Common\Support\TrashedFilter;
 
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +87,19 @@ class VendorService
     {
         if ($vendor->bills()->exists()) {
             throw new BusinessRuleException('Cannot delete a vendor with bills. Deactivate instead.');
+        }
+        // An archived vendor cannot be billed, so any PO still in flight would
+        // strand its receipts with no way to reach AP.
+        $hasOpenPurchaseOrders = PurchaseOrder::query()
+            ->where('vendor_id', $vendor->id)
+            ->whereNotIn('status', [
+                PurchaseOrderStatus::Received->value,
+                PurchaseOrderStatus::Closed->value,
+                PurchaseOrderStatus::Cancelled->value,
+            ])
+            ->exists();
+        if ($hasOpenPurchaseOrders) {
+            throw new BusinessRuleException('Cannot delete a vendor with open purchase orders. Close or cancel them first, or deactivate the vendor.');
         }
         $vendor->delete();
     }

@@ -252,9 +252,10 @@ class OnboardingService
     private function reminderAudience(): Collection
     {
         $roles = array_values(array_unique(array_filter(
-            (array) $this->settings->get('hr.onboarding.notification_roles', ['hr_officer', 'system_admin']),
+            (array) $this->settings->get('hr.onboarding.notification_roles', ['hr_officer']),
             static fn ($role): bool => is_string($role) && trim($role) !== '',
         )));
+        $roles = array_values(array_diff($roles, ['system_admin']));
 
         if ($roles === []) {
             return User::query()->whereRaw('1 = 0')->get();

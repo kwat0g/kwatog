@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Support\BudgetConsumptionLevel;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class BudgetEnforcementService
 {
@@ -187,7 +188,9 @@ class BudgetEnforcementService
             return;
         }
 
-        [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fiscalYearId);
+        $fyId = $fiscalYearId ?? app(BudgetService::class)->getCurrentFiscalYear()?->id;
+        $this->lockBudgetScope($departmentId, $fyId);
+        [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fyId);
 
         // Only the 100%+ levels are hard limits; warning/critical are advisory.
         $isOverCeiling = in_array($level, ['exhausted', 'overdrawn'], true);
@@ -217,5 +220,17 @@ class BudgetEnforcementService
             throw new BusinessRuleException('Invalid budgeting enforcement mode.');
         }
         return $mode;
+    }
+
+    private function lockBudgetScope(int $departmentId, ?int $fiscalYearId): void
+    {
+        if ($fiscalYearId === null || DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        // The caller's transaction holds this FY/department lock through the
+        // subsequent spend mutation, serializing all wired budget gates.
+        $key = sprintf('%u', crc32("{$fiscalYearId}:{$departmentId}"));
+        DB::select('SELECT pg_advisory_xact_lock(?)', [$key]);
     }
 }

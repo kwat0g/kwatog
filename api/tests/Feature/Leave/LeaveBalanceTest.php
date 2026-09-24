@@ -166,6 +166,29 @@ class LeaveBalanceTest extends TestCase
         $this->svc->consume($this->employee->id, $this->leaveType->id, 2026, 3.0);
     }
 
+    public function test_negative_day_mutations_are_rejected_without_changing_balance(): void
+    {
+        $this->seedBalance(5.0, 1.0);
+
+        try {
+            $this->svc->consume($this->employee->id, $this->leaveType->id, 2026, -1.0);
+            $this->fail('Negative leave days increased the available balance.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('greater than zero', $exception->getMessage());
+        }
+
+        try {
+            $this->svc->restore($this->employee->id, $this->leaveType->id, 2026, -1.0);
+            $this->fail('Negative restored days changed the consumed balance.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('greater than zero', $exception->getMessage());
+        }
+
+        $balance = EmployeeLeaveBalance::query()->firstOrFail();
+        $this->assertSame('1.0', (string) $balance->used);
+        $this->assertSame('4.0', (string) $balance->remaining);
+    }
+
     public function test_remaining_is_zero_when_all_credits_consumed(): void
     {
         $this->seedBalance(2.0);
@@ -199,6 +222,16 @@ class LeaveBalanceTest extends TestCase
             'remaining must never exceed total_credits even if restore is called on a zero-used balance');
         $this->assertSame('0.0', (string) $fresh->used,
             'used must clamp at 0, not go negative');
+    }
+
+    public function test_archived_leave_type_remains_visible_on_historical_balance(): void
+    {
+        $this->seedBalance(5.0, 1.0);
+        $this->leaveType->delete();
+
+        $balance = EmployeeLeaveBalance::query()->with('leaveType')->firstOrFail();
+
+        $this->assertSame($this->leaveType->id, $balance->leaveType?->id);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

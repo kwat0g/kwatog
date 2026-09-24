@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockAdjustmentService;
 use App\Common\Services\SettingsService;
+use App\Common\Models\AuditLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
@@ -72,6 +73,10 @@ class StockAdjustmentReasonTest extends TestCase
         $this->assertSame(StockAdjustmentReason::FoundStock, $adj->reason_code);
         $this->assertNotNull($adj->stock_movement_id);
         $this->assertSame('100.00', (string) $adj->value);
+        $this->assertSame(1, AuditLog::query()
+            ->where('model_type', $adj->getMorphClass())
+            ->where('model_id', $adj->id)
+            ->count());
     }
 
     public function test_above_threshold_adjustment_is_held_pending_with_no_movement(): void

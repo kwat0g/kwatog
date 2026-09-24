@@ -42,28 +42,33 @@ class DowntimeAnalyticsService
         $from = $from ?? now()->subDays($this->settings->requiredInt('maintenance.downtime.default_history_days', 1));
         $to = $to ?? now();
         $rows = $this->overlappingRows($machineId, $from, $to, $search);
-
-        $totalMinutes = 0;
-        $breakdownCount = 0;
-        $breakdownMinutes = 0;
-        $categories = [];
-
-        foreach ($rows as $row) {
-            $minutes = $this->clippedMinutes($row, $from, $to);
-            if ($minutes <= 0) {
-                continue;
-            }
-
-            $category = $this->categoryValue($row);
-            $totalMinutes += $minutes;
-            $categories[$category]['minutes'] = ($categories[$category]['minutes'] ?? 0) + $minutes;
-            $categories[$category]['count'] = ($categories[$category]['count'] ?? 0) + 1;
-
-            if ($category === MachineDowntimeCategory::Breakdown->value) {
-                $breakdownCount++;
-                $breakdownMinutes += $minutes;
-            }
+        $segments = $this->effectiveSegments($rows, $from, $to);
+        $totalSeconds = 0;
+        $categorySeconds = [];
+        foreach ($segments as $segment) {
+            $seconds = $segment['end'] - $segment['start'];
+            $totalSeconds += $seconds;
+            $categorySeconds[$segment['category']] = ($categorySeconds[$segment['category']] ?? 0) + $seconds;
         }
+        $totalMinutes = intdiv($totalSeconds, 60);
+        $breakdownCount = $this->eventCount($rows, MachineDowntimeCategory::Breakdown->value, $from, $to);
+        $breakdownRows = $rows->filter(fn (MachineDowntime $row): bool =>
+            $this->categoryValue($row) === MachineDowntimeCategory::Breakdown->value
+            && $this->startsInWindow($row, $from, $to));
+        $breakdownSeconds = array_sum(array_map(
+            static fn (array $segment): int => $segment['end'] - $segment['start'],
+            $this->effectiveSegments($breakdownRows, $from, $to),
+        ));
+        $breakdownMinutes = intdiv($breakdownSeconds, 60);
+        $categories = [];
+        foreach ($rows as $row) {
+            $category = $this->categoryValue($row);
+            $categories[$category]['count'] = $this->eventCount($rows, $category, $from, $to);
+        }
+        foreach ($categories as $category => &$values) {
+            $values['minutes'] = intdiv($categorySeconds[$category] ?? 0, 60);
+        }
+        unset($values);
 
         // MTBF = total uptime / number of breakdowns.
         $mtbf = null;
@@ -112,14 +117,20 @@ class DowntimeAnalyticsService
         $to = now()->endOfDay();
         $trend = [];
 
-        foreach ($this->overlappingRows($machineId, $from, $to, $search) as $row) {
-            $category = $this->categoryValue($row);
-            $this->forEachDaySegment($row, $from, $to, function (string $date, int $minutes) use (&$trend, $category): void {
-                $trend[$date]['total_minutes'] = ($trend[$date]['total_minutes'] ?? 0) + $minutes;
-                if ($category === MachineDowntimeCategory::Breakdown->value) {
-                    $trend[$date]['breakdown_minutes'] = ($trend[$date]['breakdown_minutes'] ?? 0) + $minutes;
+        foreach ($this->effectiveSegments($this->overlappingRows($machineId, $from, $to, $search), $from, $to) as $segment) {
+            $start = Carbon::createFromTimestamp($segment['start']);
+            $end = Carbon::createFromTimestamp($segment['end']);
+            while ($start->lessThan($end)) {
+                $dayEnd = $start->copy()->startOfDay()->addDay();
+                $segmentEnd = $end->lessThan($dayEnd) ? $end->copy() : $dayEnd;
+                $seconds = $start->diffInSeconds($segmentEnd, true);
+                $date = $start->toDateString();
+                $trend[$date]['total_seconds'] = ($trend[$date]['total_seconds'] ?? 0) + $seconds;
+                if ($segment['category'] === MachineDowntimeCategory::Breakdown->value) {
+                    $trend[$date]['breakdown_seconds'] = ($trend[$date]['breakdown_seconds'] ?? 0) + $seconds;
                 }
-            });
+                $start = $segmentEnd;
+            }
         }
 
         ksort($trend);
@@ -127,8 +138,8 @@ class DowntimeAnalyticsService
         foreach ($trend as $date => $values) {
             $result[] = [
                 'date' => $date,
-                'total_minutes' => (int) ($values['total_minutes'] ?? 0),
-                'breakdown_minutes' => (int) ($values['breakdown_minutes'] ?? 0),
+                'total_minutes' => intdiv((int) ($values['total_seconds'] ?? 0), 60),
+                'breakdown_minutes' => intdiv((int) ($values['breakdown_seconds'] ?? 0), 60),
             ];
         }
 
@@ -146,11 +157,11 @@ class DowntimeAnalyticsService
         $from = now()->subDays($days)->startOfDay();
         $to = now()->endOfDay();
         $grouped = [];
+        $rows = $this->overlappingRows(null, $from, $to, $search);
 
-        foreach ($this->overlappingRows(null, $from, $to, $search) as $row) {
-            $minutes = $this->clippedMinutes($row, $from, $to);
+        foreach ($rows as $row) {
             $machine = $row->machine;
-            if ($minutes <= 0 || ! $machine) {
+            if (! $machine) {
                 continue;
             }
 
@@ -158,12 +169,24 @@ class DowntimeAnalyticsService
             $grouped[$key]['machine_id'] = $machine->hash_id;
             $grouped[$key]['machine_code'] = $machine->machine_code;
             $grouped[$key]['name'] = $machine->name;
-            $grouped[$key]['downtime_minutes'] = ($grouped[$key]['downtime_minutes'] ?? 0) + $minutes;
-            $grouped[$key]['breakdown_count'] ??= 0;
-            if ($this->categoryValue($row) === MachineDowntimeCategory::Breakdown->value) {
-                $grouped[$key]['breakdown_count'] = ($grouped[$key]['breakdown_count'] ?? 0) + 1;
-            }
+            $grouped[$key]['breakdown_count'] = $this->eventCount(
+                $rows->where('machine_id', $machine->id),
+                MachineDowntimeCategory::Breakdown->value,
+                $from,
+                $to,
+            );
         }
+
+        foreach ($this->effectiveSegments($rows, $from, $to) as $segment) {
+            $key = (string) $segment['machine_id'];
+            $grouped[$key]['downtime_seconds'] = ($grouped[$key]['downtime_seconds'] ?? 0)
+                + $segment['end'] - $segment['start'];
+        }
+        foreach ($grouped as &$machine) {
+            $machine['downtime_minutes'] = intdiv($machine['downtime_seconds'] ?? 0, 60);
+            unset($machine['downtime_seconds']);
+        }
+        unset($machine);
 
         usort($grouped, static fn (array $left, array $right): int => $right['downtime_minutes'] <=> $left['downtime_minutes']);
         return array_slice(array_values($grouped), 0, max(1, $limit));
@@ -220,17 +243,21 @@ class DowntimeAnalyticsService
         $from = now()->subDays($days)->startOfDay();
         $to = now()->endOfDay();
         $categories = [];
+        $rows = $this->overlappingRows($machineId, $from, $to, $search);
 
-        foreach ($this->overlappingRows($machineId, $from, $to, $search) as $row) {
-            $minutes = $this->clippedMinutes($row, $from, $to);
-            if ($minutes <= 0) {
-                continue;
-            }
-
+        foreach ($rows as $row) {
             $category = $this->categoryValue($row);
-            $categories[$category]['minutes'] = ($categories[$category]['minutes'] ?? 0) + $minutes;
-            $categories[$category]['count'] = ($categories[$category]['count'] ?? 0) + 1;
+            $categories[$category]['count'] = $this->eventCount($rows, $category, $from, $to);
         }
+        foreach ($this->effectiveSegments($rows, $from, $to) as $segment) {
+            $categories[$segment['category']]['seconds'] = ($categories[$segment['category']]['seconds'] ?? 0)
+                + $segment['end'] - $segment['start'];
+        }
+        foreach ($categories as &$category) {
+            $category['minutes'] = intdiv($category['seconds'] ?? 0, 60);
+            unset($category['seconds']);
+        }
+        unset($category);
 
         if ($categories === []) {
             return [];
@@ -277,35 +304,86 @@ class DowntimeAnalyticsService
             ->get();
     }
 
-    private function clippedMinutes(MachineDowntime $row, Carbon $from, Carbon $to): int
+    /**
+     * Return disjoint intervals per machine; overlapping causes are attributed
+     * to the most severe active category so totals never count the same minute twice.
+     *
+     * @return list<array{machine_id:int,category:string,start:int,end:int}>
+     */
+    private function effectiveSegments(Collection $rows, Carbon $from, Carbon $to): array
     {
-        $start = $row->start_time instanceof Carbon ? $row->start_time->copy() : Carbon::parse($row->start_time);
-        $end = $row->end_time instanceof Carbon ? $row->end_time->copy() : ($row->end_time ? Carbon::parse($row->end_time) : $to->copy());
-        $start = $start->greaterThan($from) ? $start : $from->copy();
-        $end = $end->lessThan($to) ? $end : $to->copy();
+        $byMachine = [];
+        foreach ($rows as $row) {
+            $start = max($from->getTimestamp(), Carbon::parse($row->start_time)->getTimestamp());
+            $end = min(
+                $to->getTimestamp(),
+                $row->end_time ? Carbon::parse($row->end_time)->getTimestamp() : $to->getTimestamp(),
+            );
+            if ($end > $start) {
+                $byMachine[(int) $row->machine_id][] = [
+                    'start' => $start,
+                    'end' => $end,
+                    'category' => $this->categoryValue($row),
+                ];
+            }
+        }
 
-        return $end->greaterThan($start)
-            ? max(0, (int) floor($start->diffInSeconds($end, true) / 60))
-            : 0;
+        $priority = [
+            MachineDowntimeCategory::Breakdown->value => 5,
+            MachineDowntimeCategory::PlannedMaintenance->value => 4,
+            MachineDowntimeCategory::Changeover->value => 3,
+            MachineDowntimeCategory::MaterialShortage->value => 2,
+            MachineDowntimeCategory::NoOrder->value => 1,
+        ];
+        $segments = [];
+
+        // ponytail: O(n²) sweep over rows clipped to the report window; use an
+        // interval tree only if measured downtime volume makes this slow.
+        foreach ($byMachine as $machineId => $intervals) {
+            $boundaries = array_values(array_unique(array_merge(
+                array_column($intervals, 'start'),
+                array_column($intervals, 'end'),
+            )));
+            sort($boundaries, SORT_NUMERIC);
+
+            for ($index = 0, $last = count($boundaries) - 1; $index < $last; $index++) {
+                $start = $boundaries[$index];
+                $end = $boundaries[$index + 1];
+                $active = array_filter($intervals, static fn (array $interval): bool =>
+                    $interval['start'] < $end && $interval['end'] > $start);
+                if ($active === []) {
+                    continue;
+                }
+
+                usort($active, static fn (array $left, array $right): int =>
+                    ($priority[$right['category']] ?? 0) <=> ($priority[$left['category']] ?? 0));
+                $segments[] = [
+                    'machine_id' => $machineId,
+                    'category' => $active[0]['category'],
+                    'start' => $start,
+                    'end' => $end,
+                ];
+            }
+        }
+
+        return $segments;
     }
 
-    /** @param callable(string, int): void $consumer */
-    private function forEachDaySegment(MachineDowntime $row, Carbon $from, Carbon $to, callable $consumer): void
+    private function eventCount(Collection $rows, string $category, Carbon $from, Carbon $to): int
     {
-        $start = $row->start_time instanceof Carbon ? $row->start_time->copy() : Carbon::parse($row->start_time);
-        $end = $row->end_time instanceof Carbon ? $row->end_time->copy() : ($row->end_time ? Carbon::parse($row->end_time) : $to->copy());
-        $start = $start->greaterThan($from) ? $start : $from->copy();
-        $end = $end->lessThan($to) ? $end : $to->copy();
-
-        while ($start->lessThan($end)) {
-            $dayEnd = $start->copy()->startOfDay()->addDay();
-            $segmentEnd = $end->lessThan($dayEnd) ? $end->copy() : $dayEnd;
-            $minutes = max(0, (int) floor($start->diffInSeconds($segmentEnd, true) / 60));
-            if ($minutes > 0) {
-                $consumer($start->toDateString(), $minutes);
+        $events = [];
+        foreach ($rows as $row) {
+            if ($this->categoryValue($row) === $category && $this->startsInWindow($row, $from, $to)) {
+                $events[(int) $row->machine_id.'|'.$row->start_time->toISOString()] = true;
             }
-            $start = $segmentEnd;
         }
+
+        return count($events);
+    }
+
+    private function startsInWindow(MachineDowntime $row, Carbon $from, Carbon $to): bool
+    {
+        return $row->start_time->greaterThanOrEqualTo($from) && $row->start_time->lessThan($to);
     }
 
     private function categoryValue(MachineDowntime $row): string

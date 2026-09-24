@@ -122,6 +122,23 @@ class PurchaseOrderMutationOwnershipTest extends TestCase
         $this->assertTrue($po->fresh()->trashed());
     }
 
+    public function test_buyer_cannot_submit_another_buyers_draft_po(): void
+    {
+        $owner = $this->buyer();
+        $otherBuyer = $this->buyer();
+        $po = $this->poFor($owner);
+
+        $this->actingAs($otherBuyer, 'sanctum')
+            ->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/submit")
+            ->assertForbidden();
+
+        $this->assertSame(PurchaseOrderStatus::Draft, $po->fresh()->status);
+        $this->assertDatabaseMissing('approval_records', [
+            'approvable_type' => $po->getMorphClass(),
+            'approvable_id' => $po->id,
+        ]);
+    }
+
     public function test_buyer_cannot_cancel_or_send_another_buyers_po_but_can_own(): void
     {
         $victim = $this->buyer();

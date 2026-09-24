@@ -35,7 +35,7 @@ class PurchaseRequest extends Model
 
     protected $fillable = [
         'pr_number', 'requested_by', 'department_id', 'mrp_plan_id',
-        'template_id', 'date', 'reason', 'priority',
+        'template_id', 'date', 'required_delivery_date', 'reason', 'priority',
         'is_auto_generated', 'auto_generated_reason',
         'is_urgent', 'urgency_reason',
         'budget_warning_level', 'budget_warning_message',
@@ -45,6 +45,7 @@ class PurchaseRequest extends Model
 
     protected $casts = [
         'date' => 'date',
+        'required_delivery_date' => 'date',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'budget_acknowledged_at' => 'datetime',

@@ -129,11 +129,13 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::post('/deliveries/{delivery}/receipt',           [DeliveryController::class, 'uploadReceipt'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::get('/deliveries/{delivery}/receipt-photo',      [DeliveryController::class, 'receiptPhoto'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries/{delivery}/confirm',           [DeliveryController::class, 'confirm'])
         ->middleware('permission:supply_chain.deliveries.confirm');
     Route::post('/deliveries/{delivery}/retry-coc',          [DeliveryController::class, 'retryCoc'])
         ->middleware('permission:supply_chain.deliveries.confirm');
+    Route::post('/deliveries/{delivery}/retry-invoice',      [DeliveryController::class, 'retryInvoice'])
+        ->middleware('permission_any:supply_chain.deliveries.confirm,accounting.invoices.create');
     Route::delete('/deliveries/{delivery}',                 [DeliveryController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/restore',          [DeliveryController::class, 'restore'])
@@ -141,13 +143,13 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
 
     /* ─── ADV7 — Proof of Delivery (multi-file) ─── */
     Route::get('/deliveries/proofs/options',                  [DeliveryProofController::class, 'options'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::get('/deliveries/{delivery}/proofs',                       [DeliveryProofController::class, 'index'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries/{delivery}/proofs',                      [DeliveryProofController::class, 'store'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::get('/deliveries/{delivery}/proofs/{proof}/view',          [DeliveryProofController::class, 'view'])
-        ->middleware('permission:supply_chain.view');
+        ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::delete('/deliveries/{delivery}/proofs/{proof}',            [DeliveryProofController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::patch('/deliveries/{delivery}/proofs/{proof}/restore',     [DeliveryProofController::class, 'restore'])

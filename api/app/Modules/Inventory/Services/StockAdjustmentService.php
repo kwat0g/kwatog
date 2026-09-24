@@ -139,14 +139,19 @@ class StockAdjustmentService
                 'requested_by' => $by->id,
             ]);
 
-            // Persist the source before writing the stock ledger so the
-            // movement reference is resolvable at its canonical boundary.
-            $adj->forceFill(['status' => StockAdjustmentStatus::Pending->value])->save();
-
             if ($gated) {
                 // Above threshold — hold for approval; no ledger movement yet.
+                $adj->status = StockAdjustmentStatus::Pending;
+                $adj->save();
+
                 return $adj;
             }
+
+            // The source must exist before its stock-movement reference is
+            // written. Insert it quietly inside this transaction, then let the
+            // final save below emit one audit row with the committed outcome.
+            $adj->status = StockAdjustmentStatus::Approved;
+            $adj->saveQuietly();
 
             // Sub-threshold — apply immediately and link the movement.
             $mvmt = $this->applyMovement(
@@ -161,11 +166,13 @@ class StockAdjustmentService
                 'stock_adjustment',
                 (int) $adj->id,
             );
-            $adj->unit_cost = (string) $mvmt->unit_cost;
-            $adj->stock_movement_id = $mvmt->id;
-            $adj->approved_by = $by->id;
-            $adj->approved_at = now();
-            $adj->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
+            $adj->fill([
+                'unit_cost' => (string) $mvmt->unit_cost,
+                'stock_movement_id' => $mvmt->id,
+                'approved_by' => $by->id,
+                'approved_at' => now(),
+            ]);
+            $adj->status = StockAdjustmentStatus::Approved;
             $adj->save();
 
             return $adj;

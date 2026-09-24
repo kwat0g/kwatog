@@ -28,6 +28,11 @@ class GrnItemResource extends JsonResource
             ]),
             'quantity_received' => (string) $this->quantity_received,
             'quantity_accepted' => (string) $this->quantity_accepted,
+            'quantity_remaining' => (string) bcsub((string) $this->quantity_received, (string) $this->quantity_accepted, 3),
+            // Still due on the PO line, so a draft receipt shows what to expect.
+            'quantity_outstanding' => $this->whenLoaded('purchaseOrderItem', fn () => $this->purchaseOrderItem
+                ? bcsub((string) $this->purchaseOrderItem->quantity, (string) $this->purchaseOrderItem->quantity_received, 3)
+                : null),
             'unit_cost' => (string) $this->unit_cost,
             'landed_cost_unit' => $this->landed_cost_unit !== null ? (string) $this->landed_cost_unit : null,
             'landed_cost_total' => $this->landed_cost_total !== null ? (string) $this->landed_cost_total : null,
@@ -39,6 +44,13 @@ class GrnItemResource extends JsonResource
             'coa_document_path' => $this->coa_document_path,
             'coa_verified' => (bool) $this->coa_verified,
             'remarks' => $this->remarks,
+            // Incoming QC runs per line; the GRN header only anchors the first.
+            'inspection' => $this->whenLoaded('inspection', fn () => $this->inspection ? [
+                'id' => $this->inspection->hash_id,
+                'inspection_number' => $this->inspection->inspection_number,
+                'status' => $this->inspection->status?->value,
+                'status_label' => $this->inspection->status?->label(),
+            ] : null),
         ];
     }
 }

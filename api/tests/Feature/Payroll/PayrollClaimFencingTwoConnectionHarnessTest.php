@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -15,6 +16,16 @@ use Tests\TestCase;
 class PayrollClaimFencingTwoConnectionHarnessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public static function tearDownAfterClass(): void
+    {
+        // The forked worker requires committed fixtures outside the test
+        // transaction. Force the next class to rebuild the schema so those
+        // rows cannot contaminate later payroll tests.
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
+    }
 
     public function test_stale_worker_is_fenced_after_a_blocked_takeover_commits(): void
     {

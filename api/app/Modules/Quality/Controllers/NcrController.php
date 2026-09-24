@@ -92,15 +92,18 @@ class NcrController
     public function setDisposition(Request $request, NonConformanceReport $ncr): NcrResource
     {
         $data = $request->validate([
-            'disposition'       => ['required', Rule::in(NcrDisposition::values())],
-            'root_cause'        => ['nullable', 'string', 'max:5000'],
-            'corrective_action' => ['nullable', 'string', 'max:5000'],
+            'disposition'            => ['required', Rule::in(NcrDisposition::values())],
+            'root_cause'             => ['nullable', 'string', 'max:5000'],
+            'corrective_action'      => ['nullable', 'string', 'max:5000'],
+            'mrb_accepted_quantity'  => ['nullable', 'decimal:0,3', 'min:0'],
         ]);
         $ncr = $this->service->setDisposition(
             $ncr,
             (string) $data['disposition'],
             $data['root_cause']        ?? null,
             $data['corrective_action'] ?? null,
+            $request->user(),
+            isset($data['mrb_accepted_quantity']) ? (string) $data['mrb_accepted_quantity'] : null,
         );
         return new NcrResource($ncr);
     }
@@ -160,12 +163,20 @@ class NcrController
 
             try {
                 DB::transaction(function () use ($ncr, $user, $note) {
+                    // A default disposition must never become an MRB decision
+                    // that accepts or returns a supplier lot.
+                    if ($ncr->disposition === null && $this->service->awaitsMrbDecision($ncr)) {
+                        throw new BusinessRuleException(
+                            'This NCR holds a receipt awaiting the MRB decision; disposition it individually.'
+                        );
+                    }
                     if (is_string($note) && $note !== '' && $ncr->corrective_action === null) {
                         $this->service->setDisposition(
                             $ncr,
                             $ncr->disposition?->value ?? (string) $this->settings->get('quality.ncr.default_disposition', ''),
                             $ncr->root_cause,
                             $note,
+                            $user,
                         );
                     }
                     $this->service->close($ncr->fresh(), $user);

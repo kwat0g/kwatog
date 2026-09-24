@@ -28,6 +28,8 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
     public function test_breakdown_pauses_work_order_and_keeps_machine_in_breakdown(): void
     {
         Queue::fake();
+        User::factory()->withRole('system_admin')->create();
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
 
         $machine = Machine::factory()->create(['status' => MachineStatus::Running->value]);
         $workOrder = WorkOrder::factory()->create([
@@ -135,6 +137,35 @@ class MachineBreakdownLifecycleConcurrencyTest extends TestCase
             'maintainable_id' => $machine->id,
             'type' => 'corrective',
         ]);
+    }
+
+    public function test_breakdown_does_not_commit_without_an_automation_actor(): void
+    {
+        Queue::fake();
+        app(SettingsService::class)->set('system.automation.actor_roles', []);
+        $machine = Machine::factory()->create([
+            'status' => MachineStatus::Breakdown->value,
+            'current_work_order_id' => null,
+        ]);
+
+        try {
+            app(HandleMachineBreakdown::class)->handle(new MachineStatusChanged(
+                $machine->fresh(),
+                MachineStatus::Running->value,
+                MachineStatus::Breakdown->value,
+                'No automation actor configured',
+            ));
+            $this->fail('A breakdown must not commit without its corrective maintenance order.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('configured automation actor', strtolower($exception->getMessage()));
+        }
+
+        $this->assertSame(0, MaintenanceWorkOrder::query()
+            ->where('maintainable_type', 'machine')
+            ->where('maintainable_id', $machine->id)
+            ->count());
+        $this->assertSame(0, MachineDowntime::query()->where('machine_id', $machine->id)->count());
+        $this->assertDatabaseMissing('event_outbox', ['event_type' => MachineBreakdownDetected::class]);
     }
 
     public function test_stale_breakdown_event_does_not_pause_after_machine_restoration(): void

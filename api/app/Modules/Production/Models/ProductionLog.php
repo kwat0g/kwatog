@@ -27,8 +27,8 @@ class ProductionLog extends Model
     ];
 
     protected $casts = [
-        'event_type'  => ProductionLogEvent::class,
-        'qty_value'   => 'decimal:4',
+        'event_type' => ProductionLogEvent::class,
+        'qty_value' => 'decimal:4',
         'recorded_at' => 'datetime',
     ];
 

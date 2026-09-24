@@ -71,6 +71,16 @@ class MaintenanceWorkOrder extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function machineTarget(): BelongsTo
+    {
+        return $this->belongsTo(Machine::class, 'maintainable_id')->withTrashed();
+    }
+
+    public function moldTarget(): BelongsTo
+    {
+        return $this->belongsTo(Mold::class, 'maintainable_id')->withTrashed();
+    }
+
     public function logs(): HasMany
     {
         return $this->hasMany(MaintenanceLog::class, 'work_order_id')->orderBy('created_at');
@@ -84,8 +94,8 @@ class MaintenanceWorkOrder extends Model
     public function maintainable(): Machine|Mold|null
     {
         return match ($this->maintainable_type) {
-            MaintainableType::Machine => Machine::find($this->maintainable_id),
-            MaintainableType::Mold    => Mold::find($this->maintainable_id),
+            MaintainableType::Machine => $this->machineTarget()->first(),
+            MaintainableType::Mold    => $this->moldTarget()->first(),
             default                   => null,
         };
     }

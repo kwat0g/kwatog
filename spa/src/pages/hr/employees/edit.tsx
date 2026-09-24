@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import type { ApiValidationError } from '@/types';
 import { usePermission } from '@/hooks/usePermission';
+import { localIsoDate } from '@/lib/formatDate';
 
 const cleanup = (d: EmployeeFormValues): UpdateEmployeeData => {
  const out: Record<string, unknown> = { ...d };
@@ -46,7 +47,7 @@ export default function EditEmployeePage() {
  if (shiftId) {
  await shiftsApi.assignEmployee(id, {
  shift_id: shiftId,
- effective_date: new Date().toISOString().slice(0, 10),
+ effective_date: localIsoDate(),
  });
  }
  return employee;

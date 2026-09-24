@@ -75,7 +75,7 @@ final class NcrCapaReauditRegressionTest extends TestCase
         {
             public function __construct() {}
 
-            public function send($recipients, string $type, array $data): void
+            public function send($recipients, string $type, array $data, ?string $dedupeKey = null): void
             {
                 throw new \RuntimeException('notification transport is down');
             }

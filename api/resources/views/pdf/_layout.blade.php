@@ -20,7 +20,11 @@
   }
   * { box-sizing: border-box; }
   html, body {
-    font-family: 'Helvetica Neue', 'Helvetica', Arial, sans-serif;
+    /* Core Helvetica/Courier are WinAnsi and have no ₱ glyph; dompdf falls
+       back per glyph to the DejaVu faces, so ₱ stops printing as "?".
+       Weights must be the keywords bold/normal: dompdf only maps 400/700,
+       so 600 or 800 finds no face, drops to Times and loses the fallback. */
+    font-family: 'Helvetica Neue', 'Helvetica', Arial, 'DejaVu Sans', sans-serif;
     font-size: 9pt;
     line-height: 1.5;
     color: #334155; /* Slate 700 */
@@ -28,7 +32,7 @@
     padding: 0;
     background: #FFFFFF;
   }
-  .mono { font-family: 'Courier New', Courier, monospace; }
+  .mono { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; }
   
   /* Brand Header & Letterhead */
   .brand-bar {
@@ -50,7 +54,7 @@
   
   .company-title {
     font-size: 16pt;
-    font-weight: 800;
+    font-weight: bold;
     color: #0f172a; /* Slate 900 */
     letter-spacing: -0.5px;
     margin: 0 0 4px;
@@ -69,7 +73,7 @@
   
   .doc-title {
     font-size: 20pt;
-    font-weight: 800;
+    font-weight: bold;
     color: #0f172a; /* Slate 900 */
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -82,7 +86,7 @@
     line-height: 1.4;
   }
   .doc-meta .val {
-    font-weight: 600;
+    font-weight: bold;
     color: #334155;
   }
 
@@ -105,7 +109,7 @@
   .meta-grid .label {
     display: block;
     font-size: 7.5pt;
-    font-weight: 700;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #94a3b8; /* Slate 400 */
@@ -113,7 +117,7 @@
   }
   .meta-grid .v {
     font-size: 9.5pt;
-    font-weight: 600;
+    font-weight: bold;
     color: #0f172a; /* Slate 900 */
     margin-bottom: 6px;
   }
@@ -142,7 +146,7 @@
   }
   .info-card-title {
     font-size: 7.5pt;
-    font-weight: 800;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.8px;
     color: #64748b; /* Slate 500 */
@@ -162,7 +166,7 @@
   }
   .info-row .val {
     color: #0f172a;
-    font-weight: 600;
+    font-weight: bold;
   }
 
   /* Line Items Table */
@@ -176,7 +180,7 @@
     background: #0f172a; /* Slate 900 */
     color: #ffffff;
     font-size: 8pt;
-    font-weight: 600;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     padding: 8px 10px;
@@ -223,7 +227,7 @@
   table.totals td.val,
   .totals-box td.val {
     text-align: right;
-    font-weight: 600;
+    font-weight: bold;
     color: #0f172a;
   }
   table.totals tr.grand td,
@@ -231,7 +235,7 @@
     border-top: 2px solid #0f172a;
     background: #f8fafc;
     font-size: 11pt;
-    font-weight: 800;
+    font-weight: bold;
     color: #0f172a;
     padding: 10px;
   }
@@ -252,7 +256,7 @@
     padding: 3px 8px;
     border-radius: 4px;
     font-size: 7.5pt;
-    font-weight: 800;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     background: #f1f5f9;
@@ -286,7 +290,7 @@
   }
   .sig-title {
     font-size: 7.5pt;
-    font-weight: 700;
+    font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: #64748b;
@@ -297,7 +301,7 @@
     border-top: 1px solid #0f172a;
     padding-top: 6px;
     font-size: 8.5pt;
-    font-weight: 700;
+    font-weight: bold;
     color: #0f172a;
   }
   .sig-meta {
@@ -309,7 +313,7 @@
   /* Utilities */
   .text-right { text-align: right; }
   .text-center { text-align: center; }
-  .font-bold { font-weight: 700; }
+  .font-bold { font-weight: bold; }
   .text-muted { color: #64748b; }
 
 </style>

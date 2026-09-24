@@ -27,7 +27,7 @@ class PortalAccessService
     public function suppliers(array $filters): LengthAwarePaginator
     {
         $query = SupplierPortalUser::withTrashed()
-            ->with('vendor:id,name')
+            ->with('vendor:id,name,is_active')
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $term = '%'.strtolower(trim($search)).'%';
                 $query->where(function (Builder $nested) use ($term): void {
@@ -57,7 +57,7 @@ class PortalAccessService
     public function customers(array $filters): LengthAwarePaginator
     {
         $query = CustomerPortalUser::withTrashed()
-            ->with('customer:id,name')
+            ->with('customer:id,name,is_active')
             ->when($filters['search'] ?? null, function (Builder $query, string $search): void {
                 $term = '%'.strtolower(trim($search)).'%';
                 $query->where(function (Builder $nested) use ($term): void {
@@ -86,10 +86,29 @@ class PortalAccessService
         Request $request,
     ): SupplierPortalUser {
         $result = $this->invitations->inviteSupplier($vendor, $name, $email);
-        $user = $result['user']->load('vendor:id,name');
+        $user = $result['user']->load('vendor:id,name,is_active');
 
         $this->record($user, 'portal_user.invited', null, [
             'vendor_id' => $user->vendor_id,
+            'email' => $user->email,
+            'is_active' => true,
+        ], $actor, $request);
+
+        return $user;
+    }
+
+    public function inviteCustomer(
+        Customer $customer,
+        string $name,
+        string $email,
+        User $actor,
+        Request $request,
+    ): CustomerPortalUser {
+        $result = $this->invitations->inviteCustomer($customer, $name, $email);
+        $user = $result['user']->load('customer:id,name,is_active');
+
+        $this->record($user, 'portal_user.invited', null, [
+            'customer_id' => $user->customer_id,
             'email' => $user->email,
             'is_active' => true,
         ], $actor, $request);
@@ -106,9 +125,9 @@ class PortalAccessService
             throw new BusinessRuleException('Reactivate the supplier account before sending a new invitation.');
         }
 
-        $portalUser = $portalUser->load('vendor:id,name');
+        $portalUser = $portalUser->load('vendor:id,name,is_active');
         $result = $this->invitations->inviteSupplier($portalUser->vendor, $portalUser->name, $portalUser->email);
-        $user = $result['user']->load('vendor:id,name');
+        $user = $result['user']->load('vendor:id,name,is_active');
 
         $this->record($user, 'portal_user.resent', [
             'is_active' => (bool) $portalUser->is_active,
@@ -134,7 +153,7 @@ class PortalAccessService
             $user->tokens()->delete();
             $this->record($user, 'portal_user.disabled', $old, ['is_active' => false], $actor, $request);
 
-            return $user->load('vendor:id,name');
+            return $user->load('vendor:id,name,is_active');
         });
     }
 
@@ -151,7 +170,7 @@ class PortalAccessService
             $user->tokens()->delete();
             $this->record($user, 'portal_user.disabled', $old, ['is_active' => false], $actor, $request);
 
-            return $user->load('customer:id,name');
+        return $user->load('customer:id,name,is_active');
         });
     }
 
@@ -162,6 +181,9 @@ class PortalAccessService
     ): SupplierPortalUser {
         return DB::transaction(function () use ($portalUser, $actor, $request): SupplierPortalUser {
             $user = SupplierPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
+            if (! $user->vendor()->lockForUpdate()->where('is_active', true)->exists()) {
+                throw new BusinessRuleException('Reactivate the supplier before restoring portal access.');
+            }
             $old = [
                 'is_active' => (bool) $user->is_active,
                 'deleted_at' => $user->deleted_at?->toIso8601String(),
@@ -182,7 +204,7 @@ class PortalAccessService
                 'must_change_password' => true,
             ], $actor, $request);
 
-            return $user->load('vendor:id,name');
+            return $user->load('vendor:id,name,is_active');
         });
     }
 
@@ -193,6 +215,9 @@ class PortalAccessService
     ): CustomerPortalUser {
         return DB::transaction(function () use ($portalUser, $actor, $request): CustomerPortalUser {
             $user = CustomerPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
+            if (! $user->customer()->lockForUpdate()->where('is_active', true)->exists()) {
+                throw new BusinessRuleException('Reactivate the customer before restoring portal access.');
+            }
             $old = [
                 'is_active' => (bool) $user->is_active,
                 'deleted_at' => $user->deleted_at?->toIso8601String(),
@@ -213,7 +238,7 @@ class PortalAccessService
                 'must_change_password' => true,
             ], $actor, $request);
 
-            return $user->load('customer:id,name');
+            return $user->load('customer:id,name,is_active');
         });
     }
 
@@ -228,7 +253,22 @@ class PortalAccessService
             $user->tokens()->delete();
             $this->record($user, 'portal_tokens.revoke', ['token_count' => $count], ['token_count' => 0], $actor, $request);
 
-            return $user->load('vendor:id,name');
+            return $user->load('vendor:id,name,is_active');
+        });
+    }
+
+    public function revokeCustomerTokens(
+        CustomerPortalUser $portalUser,
+        User $actor,
+        Request $request,
+    ): CustomerPortalUser {
+        return DB::transaction(function () use ($portalUser, $actor, $request): CustomerPortalUser {
+            $user = CustomerPortalUser::withTrashed()->lockForUpdate()->findOrFail($portalUser->getKey());
+            $count = $user->tokens()->count();
+            $user->tokens()->delete();
+            $this->record($user, 'portal_tokens.revoke', ['token_count' => $count], ['token_count' => 0], $actor, $request);
+
+            return $user->load('customer:id,name,is_active');
         });
     }
 
@@ -250,7 +290,7 @@ class PortalAccessService
             $portalUser->name,
             $portalUser->email,
         );
-        $user = $result['user']->load('customer:id,name');
+        $user = $result['user']->load('customer:id,name,is_active');
 
         $this->record($user, 'portal_user.resent', [
             'is_active' => (bool) $portalUser->is_active,
@@ -267,8 +307,15 @@ class PortalAccessService
     private function applyStatusFilter(Builder $query, ?string $status): void
     {
         if ($status === 'inactive') {
-            $query->where(function (Builder $nested): void {
-                $nested->where('is_active', false)->orWhereNotNull('deleted_at');
+            $query->where(function (Builder $nested) use ($query): void {
+                $nested->where(fn (Builder $lifecycle) => $lifecycle
+                    ->where('is_active', false)
+                    ->orWhereNotNull('deleted_at'));
+                if ($query->getModel() instanceof CustomerPortalUser) {
+                    $nested->orWhereDoesntHave('customer', fn (Builder $customer): Builder => $customer->where('is_active', true));
+                } elseif ($query->getModel() instanceof SupplierPortalUser) {
+                    $nested->orWhereDoesntHave('vendor', fn (Builder $vendor): Builder => $vendor->where('is_active', true));
+                }
             });
         } elseif ($status === 'locked') {
             $query->where('is_active', true)->whereNull('deleted_at')->where('locked_until', '>', now());
@@ -282,6 +329,14 @@ class PortalAccessService
                 ->where(function (Builder $nested): void {
                     $nested->whereNull('locked_until')->orWhere('locked_until', '<=', now());
                 });
+        }
+
+        if (in_array($status, ['active', 'locked', 'pending'], true)) {
+            if ($query->getModel() instanceof CustomerPortalUser) {
+                $query->whereHas('customer', fn (Builder $customer): Builder => $customer->where('is_active', true));
+            } elseif ($query->getModel() instanceof SupplierPortalUser) {
+                $query->whereHas('vendor', fn (Builder $vendor): Builder => $vendor->where('is_active', true));
+            }
         }
     }
 

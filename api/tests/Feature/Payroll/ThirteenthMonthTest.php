@@ -84,7 +84,6 @@ class ThirteenthMonthTest extends TestCase
             'pay_type'                => 'monthly',
             'date_hired'              => '2025-01-01',
             'basic_monthly_salary'    => '24000.00',
-            'status'                  => EmployeeStatus::Active->value,
         ], $overrides));
     }
 
@@ -131,6 +130,37 @@ class ThirteenthMonthTest extends TestCase
         $this->assertSame('130000.00', (string) $payroll->withholding_tax);
         $this->assertSame('130000.00', (string) $payroll->thirteenth_month_correction_delta);
         $this->assertSame('870000.00', (string) $payroll->net_pay);
+    }
+
+    public function test_13th_month_refunds_prior_withholding_above_final_annual_tax(): void
+    {
+        $employee = $this->makeEmployee();
+        $this->seedAccrual($employee, 2025, '12000.00');
+        $regularPeriod = PayrollPeriod::factory()->create([
+            'period_start' => '2025-01-01',
+            'period_end' => '2025-01-15',
+            'payroll_date' => '2025-01-15',
+            'is_first_half' => true,
+            'status' => PayrollPeriodStatus::Finalized->value,
+        ]);
+        Payroll::factory()->create([
+            'payroll_period_id' => $regularPeriod->id,
+            'employee_id' => $employee->id,
+            'gross_pay' => '50000.00',
+            'withholding_tax' => '100.00',
+            'total_deductions' => '100.00',
+            'net_pay' => '49900.00',
+        ]);
+
+        $period = $this->svc->computeAndPay(2025, $this->adminUser);
+        $payroll = Payroll::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('employee_id', $employee->id)
+            ->firstOrFail();
+
+        $this->assertSame('-100.00', (string) $payroll->withholding_tax);
+        $this->assertSame('-100.00', (string) $payroll->total_deductions);
+        $this->assertSame('1100.00', (string) $payroll->net_pay);
     }
 
     public function test_2018_to_2022_annex_d_schedule_is_selected_by_pay_date(): void
@@ -459,7 +489,8 @@ class ThirteenthMonthTest extends TestCase
     public function test_inactive_employee_accrual_is_skipped(): void
     {
         $activeEmp   = $this->makeEmployee();
-        $resignedEmp = $this->makeEmployee(['status' => EmployeeStatus::Resigned->value]);
+        $resignedEmp = $this->makeEmployee();
+        $resignedEmp->forceFill(['status' => EmployeeStatus::Resigned])->save();
 
         $this->seedAccrual($activeEmp, 2025, '120000.00');
         $this->seedAccrual($resignedEmp, 2025, '60000.00');

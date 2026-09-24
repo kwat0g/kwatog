@@ -23,24 +23,24 @@ class StoreWorkOrderRequest extends FormRequest
     protected function hashIdFields(): array
     {
         return [
-            'product_id'     => Product::class,
+            'product_id' => Product::class,
             'sales_order_id' => SalesOrder::class,
-            'machine_id'     => Machine::class,
-            'mold_id'        => Mold::class,
+            'machine_id' => Machine::class,
+            'mold_id' => Mold::class,
         ];
     }
 
     public function rules(): array
     {
         return [
-            'product_id'      => ['required', 'integer', 'exists:products,id'],
-            'sales_order_id'  => ['nullable', 'integer', 'exists:sales_orders,id'],
-            'machine_id'      => ['nullable', 'integer', 'exists:machines,id'],
-            'mold_id'         => ['nullable', 'integer', 'exists:molds,id'],
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'sales_order_id' => ['nullable', 'integer', 'exists:sales_orders,id'],
+            'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+            'mold_id' => ['nullable', 'integer', 'exists:molds,id'],
             'quantity_target' => ['required', 'integer', 'min:1'],
-            'planned_start'   => ['required', 'date'],
-            'planned_end'     => ['required', 'date', 'after_or_equal:planned_start'],
-            'priority'        => ['nullable', 'integer', 'min:0', 'max:255'],
+            'planned_start' => ['required', 'date'],
+            'planned_end' => ['required', 'date', 'after_or_equal:planned_start'],
+            'priority' => ['nullable', 'integer', 'min:0', 'max:255'],
             'work_order_class' => ['nullable', 'string', 'in:standard,service,non_stock,prototype'],
             'exception_reason' => ['required_unless:work_order_class,standard', 'nullable', 'string', 'max:2000'],
         ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class ContactInquiry extends Model
 {
-    use HasFactory, HasHashId, SoftDeletes;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     /**
      * `status` and `inquiry_no` are omitted deliberately — both are assigned by

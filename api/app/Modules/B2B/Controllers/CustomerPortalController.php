@@ -97,12 +97,12 @@ class CustomerPortalController extends Controller
     public function storeOrder(StorePortalOrderRequest $request): JsonResponse
     {
         $user = $this->user($request);
-        $so = $this->service->placeOrder($user->customer_id, $request->validated(), $user);
+        $result = $this->service->placeOrder($user->customer_id, $request->validated(), $user);
 
         return response()->json([
-            'data'    => new SalesOrderResource($so),
+            'data'    => new SalesOrderResource($result['order']),
             'message' => 'Order submitted. It will be confirmed by our sales team.',
-        ], 201);
+        ], $result['replayed'] ? 200 : 201);
     }
 
     /**

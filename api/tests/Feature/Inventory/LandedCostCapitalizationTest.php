@@ -191,8 +191,16 @@ final class LandedCostCapitalizationTest extends TestCase
             'quantity_accepted' => '0.000',
             'unit_cost' => '10.0000',
         ]);
-        $inspection = app(InspectionService::class)->createIncomingForItem($item, (int) $quantity, $grn->id, $this->user);
-        $inspection->update(['status' => 'passed']);
+        $inspector = User::factory()->create();
+        $checker = User::factory()->create();
+        $inspection = app(InspectionService::class)->createIncomingForItem($item, (int) $quantity, $grn->id, $inspector, null, $line->id);
+        // Incoming GRN inspections require maker-checker review. Set both inspector_id and reviewed_by.
+        $inspection->update([
+            'status' => 'passed',
+            'inspector_id' => $inspector->id,
+            'reviewed_by' => $checker->id,
+            'reviewed_at' => now(),
+        ]);
 
         return [$shipment, $grn->fresh(['items']), $item, $location];
     }

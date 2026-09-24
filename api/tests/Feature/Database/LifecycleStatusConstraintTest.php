@@ -34,7 +34,7 @@ class LifecycleStatusConstraintTest extends TestCase
         'stock_adjustments' => ['status' => ['pending', 'approved']],
         'stock_count_sessions' => ['status' => ['draft', 'in_progress', 'completed', 'cancelled']],
         'stock_count_items' => ['status' => ['pending', 'counted', 'verified', 'adjusted']],
-        'inspections' => ['status' => ['draft', 'in_progress', 'passed', 'failed', 'cancelled']],
+        'inspections' => ['status' => ['draft', 'in_progress', 'awaiting_review', 'passed', 'failed', 'cancelled']],
         'deliveries' => ['status' => ['scheduled', 'loading', 'in_transit', 'delivered', 'confirmed', 'cancelled']],
         'payroll_periods' => [
             'status' => ['draft', 'processing', 'computed', 'approved', 'finalized', 'disbursed', 'voided'],

@@ -45,6 +45,8 @@ class GrnHttpContractTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    // Maker-checker: an incoming inspection counts only when a different user checks it.
+    private User $checker;
 
     private GrnService $svc;
 
@@ -62,6 +64,7 @@ class GrnHttpContractTest extends TestCase
             $role->permissions()->syncWithoutDetaching([$permission->id]);
         }
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $this->checker = User::factory()->create(['is_active' => true]);
         $this->svc = app(GrnService::class);
     }
 
@@ -122,6 +125,109 @@ class GrnHttpContractTest extends TestCase
             'purchase_order_item_id' => $poItem->id,
             'quantity_received' => '5.000',
         ]);
+    }
+
+    public function test_store_grn_replay_returns_the_original_receipt_without_receiving_twice(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+        $payload = $this->storePayload($po, $poItem, $item, $location);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $payload, ['Idempotency-Key' => 'GRN-RETRY-1'])
+            ->assertCreated();
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $payload, ['Idempotency-Key' => 'GRN-RETRY-1'])
+            ->assertCreated();
+
+        $this->assertSame(1, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame('5.00', (string) $poItem->fresh()->quantity_received);
+    }
+
+    public function test_grn_list_search_uses_the_shared_search_operator(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+        $this->svc->create($po, [[
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '5.000',
+            'unit_cost' => '10.00',
+        ]], ['received_date' => now()->toDateString()], $this->user);
+        $grn = GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->firstOrFail();
+
+        $this->actingAs($this->user)
+            ->getJson('/api/v1/inventory/grn?search='.urlencode(substr($grn->grn_number, -4)))
+            ->assertOk()
+            ->assertJsonPath('data.0.grn_number', $grn->grn_number);
+    }
+
+    public function test_store_grn_idempotency_key_cannot_replay_another_actors_receipt(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+        $other = User::factory()->create(['role_id' => $this->user->role_id, 'is_active' => true]);
+        $payload = $this->storePayload($po, $poItem, $item, $location);
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $payload, ['Idempotency-Key' => 'GRN-CROSS-ACTOR-1'])
+            ->assertCreated();
+        $this->actingAs($other)
+            ->postJson('/api/v1/inventory/grn', $payload, ['Idempotency-Key' => 'GRN-CROSS-ACTOR-1'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The idempotency key was already used for a different GRN payload.');
+
+        $this->assertSame(1, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_store_grn_rejects_an_idempotency_key_reused_with_a_changed_payload(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+        $key = ['Idempotency-Key' => 'GRN-PAYLOAD-1'];
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $this->storePayload($po, $poItem, $item, $location), $key)
+            ->assertCreated();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $this->storePayload(
+                $po,
+                $poItem,
+                $item,
+                $location,
+                ['quantity_received' => '4.000'],
+            ), $key)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The idempotency key was already used for a different GRN payload.');
+
+        $this->assertSame(1, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame('5.00', (string) $poItem->fresh()->quantity_received);
+    }
+
+    public function test_receive_with_qc_replay_returns_the_original_decision_without_duplicate_receipt(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+        $payload = [
+            'purchase_order_id' => $po->hash_id,
+            'items' => [[
+                'purchase_order_item_id' => $poItem->hash_id,
+                'item_id' => $item->hash_id,
+                'location_id' => $location->hash_id,
+                'quantity_received' => '5.000',
+                'unit_cost' => '10.00',
+            ]],
+            'qc' => ['result' => 'pending'],
+        ];
+
+        $first = $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/receive-goods', $payload, ['Idempotency-Key' => 'GRN-QC-RETRY-1'])
+            ->assertCreated();
+        $inspectionCount = Inspection::query()->where('entity_type', 'grn')->count();
+        $replay = $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/receive-goods', $payload, ['Idempotency-Key' => 'GRN-QC-RETRY-1'])
+            ->assertCreated();
+
+        $this->assertSame($first->json('data.id'), $replay->json('data.id'));
+        $this->assertSame($inspectionCount, Inspection::query()->where('entity_type', 'grn')->count());
+        $this->assertSame('5.00', (string) $poItem->fresh()->quantity_received);
+        $this->assertSame(1, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
     }
 
     public function test_store_grn_rejects_a_blocked_and_an_inactive_location_with_422(): void
@@ -385,7 +491,7 @@ class GrnHttpContractTest extends TestCase
         ]], ['received_date' => now()->toDateString()], $this->user);
         Inspection::query()
             ->where('entity_type', 'grn')->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()]);
         $item->delete();
 
         $accepted = $this->svc->accept($grn->fresh(), $this->user);
@@ -394,5 +500,53 @@ class GrnHttpContractTest extends TestCase
         $this->assertSame('10.000', (string) StockLevel::query()
             ->where('item_id', $item->id)->where('location_id', $location->id)
             ->firstOrFail()->quantity);
+    }
+
+    // ── Unit cost enforcement: receipt cost is always the PO price ────────────
+
+    public function test_store_grn_rejects_unit_cost_that_differs_from_po_price(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $this->storePayload($po, $poItem, $item, $location, [
+                'unit_cost' => '12.50', // Differs from PO price of 10.00
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'PO line '.$poItem->id.': receipt cost is fixed at the PO price (10.00). Price differences are settled on the supplier bill.');
+
+        $this->assertSame(0, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_store_grn_with_unit_cost_equal_to_po_price_succeeds(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $this->storePayload($po, $poItem, $item, $location, [
+                'unit_cost' => '10.00', // Equals PO price
+            ]))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('grn_items', [
+            'purchase_order_item_id' => $poItem->id,
+            'unit_cost' => '10.00',
+        ]);
+    }
+
+    public function test_store_grn_without_unit_cost_uses_po_price(): void
+    {
+        [$po, $poItem, $item, $location] = $this->fixture();
+
+        $this->actingAs($this->user)
+            ->postJson('/api/v1/inventory/grn', $this->storePayload($po, $poItem, $item, $location, [
+                'unit_cost' => null, // Omit the unit_cost (or send null)
+            ]))
+            ->assertCreated();
+
+        $this->assertDatabaseHas('grn_items', [
+            'purchase_order_item_id' => $poItem->id,
+            'unit_cost' => '10.00',
+        ]);
     }
 }

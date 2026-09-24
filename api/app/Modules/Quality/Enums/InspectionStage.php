@@ -10,8 +10,8 @@ namespace App\Modules\Quality\Enums;
  *   incoming           — raw material check at GRN (gates GRN acceptance)
  *   in_process         — inline check during a work order
  *   outgoing           — finished-good batch check (gates delivery, AQL 0.65 L-II)
- *   supplier_return    — returned goods from a customer (supplier return inspection)
- *   customer_return    — returned goods to a supplier (customer return inspection)
+ *   supplier_return    — returned goods to a supplier (supplier return inspection)
+ *   customer_return    — returned goods from a customer (customer return inspection)
  */
 enum InspectionStage: string
 {

@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\ThreeWayMatchResult;
@@ -33,16 +34,27 @@ class ThreeWayMatchService
 {
     public function __construct(private readonly SettingsService $settings) {}
 
-    public function matchForPo(PurchaseOrder $po, array $billLines): ThreeWayMatchResult
+    public function matchForPo(PurchaseOrder $po, array $billLines, ?int $grnId = null, ?int $excludeBillId = null): ThreeWayMatchResult
     {
-        $po->loadMissing('items');
+        // Load items with the parent PO relationship so deliveredUnitCost() can compute header allocation.
+        $po->loadMissing('items.item');
+        foreach ($po->items as $item) {
+            $item->setRelation('purchaseOrder', $po);
+        }
 
         $qtyTol = $this->nonNegativeTolerance('purchasing.three_way_tolerance_qty_pct');
         $priceTol = $this->nonNegativeTolerance('purchasing.three_way_tolerance_price_pct');
 
         // Aggregate accepted GRN qty per po_item.
-        $grnAccepted = GrnItem::query()
-            ->whereIn('purchase_order_item_id', $po->items->pluck('id'))
+        // When $grnId is given, restrict to that specific GRN only. A receipt's bill
+        // may only claim that receipt's unbilled accepted qty; PO-wide aggregate
+        // allowed a second bill to re-claim goods already billed via PPV.
+        $grnQuery = GrnItem::query()
+            ->whereIn('purchase_order_item_id', $po->items->pluck('id'));
+        if ($grnId !== null) {
+            $grnQuery->where('goods_receipt_note_id', $grnId);
+        }
+        $grnAccepted = $grnQuery
             ->select('purchase_order_item_id',
                 DB::raw('SUM(quantity_accepted) as qty_accepted'),
                 DB::raw('AVG(unit_cost) as avg_cost')
@@ -50,6 +62,25 @@ class ThreeWayMatchService
             ->groupBy('purchase_order_item_id')
             ->get()
             ->keyBy('purchase_order_item_id');
+
+        // Qty already billed on OTHER committed bills (drafts are re-matched when
+        // posted), in the same scope as the accepted qty above. Keyed by item_id
+        // like the bill lines below.
+        $alreadyBilledQuery = BillItem::query()
+            ->join('bills', 'bill_items.bill_id', '=', 'bills.id')
+            ->where('bills.purchase_order_id', $po->id)
+            ->whereNotIn('bills.status', ['draft', 'cancelled'])
+            ->select('bill_items.item_id', DB::raw('SUM(bill_items.quantity) as qty_billed'));
+        if ($excludeBillId !== null) {
+            $alreadyBilledQuery->where('bills.id', '!=', $excludeBillId);
+        }
+        if ($grnId !== null) {
+            $alreadyBilledQuery->where('bills.goods_receipt_note_id', $grnId);
+        }
+        $alreadyBilled = $alreadyBilledQuery
+            ->groupBy('bill_items.item_id')
+            ->get()
+            ->mapWithKeys(fn ($row) => [(string) $row->item_id => $row]);
 
         // Index bill lines by item_id (or by description fallback).
         $billByItem = [];
@@ -73,10 +104,20 @@ class ThreeWayMatchService
 
             $billQty = $bl ? (float) $bl['quantity'] : 0.0;
             $billPrice = $bl ? (float) $bl['unit_price'] : 0.0;
-            $grnQty = $grn ? (float) $grn->qty_accepted : 0.0;
+            $totalGrnQty = $grn ? (float) $grn->qty_accepted : 0.0;
+            // Look up already-billed qty by item_id (matching key used in bill line matching above).
+            // Key by string (same as billByItem matching logic).
+            $itemIdKey = (string) $poi->item_id;
+            $alreadyBilledQty = isset($alreadyBilled[$itemIdKey]) ? (float) $alreadyBilled[$itemIdKey]->qty_billed : 0.0;
+            // Effective available GRN qty is what was accepted minus what has already been billed
+            // on other bills. This ensures a second bill for the same GRN doesn't re-claim
+            // goods already billed, and a PO-wide bill doesn't exceed the received qty.
+            $grnQty = max(0.0, $totalGrnQty - $alreadyBilledQty);
             $grnCost = $grn ? (float) $grn->avg_cost : (float) $poi->unit_price;
             $poQty = (float) $poi->quantity;
-            $poPrice = (float) $poi->unit_price;
+            // For RFQ POs, the expected PO price includes distributed freight/charges (delivered cost).
+            // For non-RFQ POs, deliveredUnitCost() returns exactly unit_price.
+            $poPrice = (float) $poi->deliveredUnitCost();
             $billLinePresent = $bl !== null;
 
             // Under-billing is a normal partial-receipt state. Only an
@@ -92,17 +133,28 @@ class ThreeWayMatchService
                 : 0.0;
             $priceVar = max($poPriceVar, $grnPriceVar);
 
+            // Decimal-exact pass/fail decisions: float rounding caused bills
+            // priced exactly at the tolerance to block ~50% of the time
+            // (e.g. PO 1.00 vs bill 1.05 at 5% computed 5.000000000000004 > 5).
+            // Use bcmath on strings with cross-multiplication to avoid division.
             $qtyOk = $billLinePresent && ($poQty <= 0
                 ? $billQty <= 0
-                : $billQty <= $poQty * (1 + $qtyTol / 100));
-            $priceOk = $priceVar <= $priceTol;
+                : bccomp(bcmul($this->dec($billQty), '100', 6), bcmul($this->dec($poQty), $this->dec(100 + $qtyTol), 6), 6) <= 0);
+
+            $poPriceOk = $poPrice > 0
+                ? bccomp(bcmul($this->decAbs($billPrice - $poPrice), '100', 6), bcmul($this->dec($priceTol), $this->dec($poPrice), 6), 6) <= 0
+                : true;
+            $grnPriceOk = ($grn && $grnQty > 0 && $grnCost > 0)
+                ? bccomp(bcmul($this->decAbs($billPrice - $grnCost), '100', 6), bcmul($this->dec($priceTol), $this->dec($grnCost), 6), 6) <= 0
+                : true;
+            $priceOk = $poPriceOk && $grnPriceOk;
 
             // H-6 — Bill qty must not exceed accepted GRN qty beyond the qty
             // tolerance. If there is no GRN at all, any non-zero bill qty is
             // a hard block — you cannot pay for goods that were never received.
             if ($grnQty > 0) {
-                $grnOverPct = max(0.0, $billQty - $grnQty) / max($grnQty, 0.0001) * 100;
-                $grnOk = $grnOverPct <= $qtyTol;
+                $grnOver = max(0.0, $billQty - $grnQty);
+                $grnOk = bccomp(bcmul($this->dec($grnOver), '100', 6), bcmul($this->dec($qtyTol), $this->dec($grnQty), 6), 6) <= 0;
             } else {
                 $grnOk = $billQty <= 0;
             }
@@ -188,6 +240,39 @@ class ThreeWayMatchService
         );
     }
 
+    /**
+     * Convert a numeric value to a decimal string for bcmath operations.
+     *
+     * @param float|int|string $v
+     * @return string
+     */
+    private function dec(float|int|string $v): string
+    {
+        if (is_string($v)) {
+            return $v;
+        }
+        $formatted = number_format((float) $v, 6, '.', '');
+        $trimmed = rtrim(rtrim($formatted, '0'), '.');
+        return $trimmed === '' ? '0' : $trimmed;
+    }
+
+    /**
+     * Return the absolute value of (a - b) as a decimal string for bcmath.
+     *
+     * @param float|int|string $a
+     * @param float|int|string $b
+     * @return string
+     */
+    private function decAbs(float|int|string $a, float|int|string $b = 0): string
+    {
+        $decA = $this->dec($a);
+        $decB = $this->dec($b);
+        if (bccomp($decA, $decB, 6) < 0) {
+            return bcsub($decB, $decA, 6);
+        }
+        return bcsub($decA, $decB, 6);
+    }
+
     private function nonNegativeTolerance(string $key): float
     {
         $value = $this->settings->get($key);
@@ -228,7 +313,7 @@ class ThreeWayMatchService
         }
 
         if ($anyHasItemId) {
-            return $this->matchForPo($po, array_values($billLinesByItem));
+            return $this->matchForPo($po, array_values($billLinesByItem), $bill->goods_receipt_note_id, $bill->id);
         }
 
         // Legacy fallback: bill predates H-7 backfill (all item_ids NULL).
@@ -253,6 +338,6 @@ class ThreeWayMatchService
             }
         }
 
-        return $this->matchForPo($po, array_values($aligned));
+        return $this->matchForPo($po, array_values($aligned), $bill->goods_receipt_note_id, $bill->id);
     }
 }

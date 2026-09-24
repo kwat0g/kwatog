@@ -13,13 +13,13 @@ final class WorkOrderStateMachine
 {
     /** @var array<string, list<string>> */
     public const TRANSITIONS = [
-        'planned'     => ['confirmed', 'cancelled'],
-        'confirmed'   => ['in_progress', 'cancelled'],
+        'planned' => ['confirmed', 'cancelled'],
+        'confirmed' => ['in_progress', 'cancelled'],
         'in_progress' => ['paused', 'completed'],
-        'paused'      => ['in_progress', 'cancelled'],
-        'completed'   => ['closed'],
-        'closed'      => [],
-        'cancelled'   => [],
+        'paused' => ['in_progress', 'cancelled'],
+        'completed' => ['closed'],
+        'closed' => [],
+        'cancelled' => [],
     ];
 
     /**

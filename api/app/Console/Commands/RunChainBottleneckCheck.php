@@ -6,10 +6,8 @@ namespace App\Console\Commands;
 
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
-use App\Common\Models\Alert;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\ChainBottleneckService;
-use App\Common\Services\SettingsService;
 use Illuminate\Console\Command;
 
 /**
@@ -23,7 +21,7 @@ class RunChainBottleneckCheck extends Command
 
     protected $description = 'Scan for chain bottlenecks and raise alerts (Series C — Task C5)';
 
-    public function handle(ChainBottleneckService $detector, AlertEngineService $alerts, SettingsService $settings): int
+    public function handle(ChainBottleneckService $detector, AlertEngineService $alerts): int
     {
         $start = microtime(true);
         $all = $detector->detectAll();
@@ -43,43 +41,34 @@ class RunChainBottleneckCheck extends Command
                     continue;
                 }
 
-                // Use a fake-entity Alert pinned by metadata: we don't load
-                // the actual model here (avoids cross-module dependencies).
-                // AlertEngineService::raise() de-dups by (type, entity_type,
-                // entity_id) within the configured deduplication window.
-                $dedupWindowHours = $settings->requiredInt('alerts.dedup_window_hours', 1);
-                $alert = Alert::query()
-                    ->where('type', AlertType::ChainBottleneck->value)
-                    ->where('is_dismissed', false)
-                    ->where('created_at', '>=', now()->subHours($dedupWindowHours))
-                    ->where('entity_type', $row['entity_type'])
-                    ->where('entity_id', $entityId)
-                    ->first();
-                if ($alert) {
-                    continue;
-                }
-
-                Alert::create([
-                    'type' => AlertType::ChainBottleneck->value,
-                    'severity' => AlertSeverity::Warning->value,
-                    'title' => $row['label'],
-                    'message' => sprintf(
+                // The detector deliberately emits scalar entity references to
+                // avoid cross-module model dependencies. Keep the same alert
+                // engine used by every other alert source so its unique open
+                // condition and race recovery remain authoritative.
+                $alert = $alerts->raise(
+                    AlertType::ChainBottleneck,
+                    AlertSeverity::Warning,
+                    (string) $row['label'],
+                    sprintf(
                         '%s %s stuck at %s for %d hours.',
                         ucfirst(str_replace('_', ' ', $row['entity_type'])),
                         $row['doc_number'],
                         $row['status'],
                         (int) ($row['hours_stuck'] ?? 0),
                     ),
-                    'entity_type' => $row['entity_type'],
-                    'entity_id' => $entityId,
-                    'metadata' => [
+                    null,
+                    [
                         'bottleneck_key' => $row['key'],
                         'audience' => $row['audience'],
                         'doc_number' => $row['doc_number'],
                         'hours_stuck' => $row['hours_stuck'] ?? null,
                     ],
-                ]);
-                $raised++;
+                    (string) $row['entity_type'],
+                    $entityId,
+                );
+                if ($alert->wasRecentlyCreated) {
+                    $raised++;
+                }
             }
         }
 

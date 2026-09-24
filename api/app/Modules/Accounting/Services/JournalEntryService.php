@@ -121,7 +121,7 @@ class JournalEntryService
                 throw new BusinessRuleException('A journal entry must have at least two lines.');
             }
 
-            $entryNumber = $this->sequences->generate('journal_entry');
+            $entryNumber = $this->sequences->generate('journal_entry', Carbon::parse((string) $data['date']));
 
             $je = JournalEntry::create([
                 'entry_number'   => $entryNumber,
@@ -461,7 +461,12 @@ class JournalEntryService
                 // established service contracts.
                 $reason = "Automated reversal of {$lockedJe->entry_number}.";
             }
-            $entryNumber = $this->sequences->generate('journal_entry');
+            // Source-linked automated entries already have a system posting
+            // boundary. Manual entries still require a different checker.
+            if ($lockedJe->reference_type === null) {
+                $this->assertNotSelfPosting($lockedJe, $by, $sourceDebit);
+            }
+            $entryNumber = $this->sequences->generate('journal_entry', Carbon::parse($effectiveDate));
 
             $reversalDebit = $sourceCredit;
             $reversalCredit = $sourceDebit;

@@ -12,6 +12,7 @@ use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Resources\InspectionMeasurementResource;
 use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -130,6 +131,31 @@ class InspectionMeasurementContractTest extends TestCase
         } catch (InspectionCertificateException $exception) {
             $this->assertSame('COC_STAGE_INVALID', $exception->errorCode());
         }
+    }
+
+    public function test_inspection_measurement_resource_serializes_decimals_as_strings(): void
+    {
+        $inspection = $this->makeInspection();
+        $measurement = $this->makeMeasurement($inspection, [
+            'parameter_type' => 'dimensional',
+            'nominal_value' => '10.0000',
+            'tolerance_min' => '9.9000',
+            'tolerance_max' => '10.1000',
+            'measured_value' => '10.0500',
+            'is_pass' => true,
+        ]);
+
+        $payload = (new InspectionMeasurementResource($measurement))->resolve();
+
+        $this->assertSame('10.0000', $payload['nominal_value']);
+        $this->assertSame('9.9000', $payload['tolerance_min']);
+        $this->assertSame('10.1000', $payload['tolerance_max']);
+        $this->assertSame('10.0500', $payload['measured_value']);
+
+        $this->assertIsString($payload['nominal_value']);
+        $this->assertIsString($payload['tolerance_min']);
+        $this->assertIsString($payload['tolerance_max']);
+        $this->assertIsString($payload['measured_value']);
     }
 
     private function makeInspection(InspectionStatus $status = InspectionStatus::Draft): Inspection

@@ -181,7 +181,20 @@ class GrnRejectionTest extends TestCase
 
         $inspection = \App\Modules\Quality\Models\Inspection::where('stage', 'incoming')->first();
 
-        // An NCR must be auto-created from the failed quality inspection.
+        // Maker-checker: the failed verdict waits for a second user, and the
+        // receipt stays in pending_qc until then — no rejection, no NCR yet.
+        $this->assertSame('awaiting_review', $inspection->status->value);
+        $this->assertSame(0, NonConformanceReport::where('inspection_id', $inspection->id)->count());
+        $this->assertSame(
+            \App\Modules\Inventory\Enums\GrnStatus::PendingQc,
+            \App\Modules\Inventory\Models\GoodsReceiptNote::query()->firstOrFail()->status,
+        );
+
+        $checker = User::factory()->create(['is_active' => true]);
+        app(\App\Modules\Quality\Services\InspectionService::class)
+            ->review($inspection, 'failed', 'Confirmed out of tolerance', $checker);
+
+        // The review is what makes the failure count: the NCR opens now.
         $ncrCount = NonConformanceReport::where('inspection_id', $inspection->id)->count();
         $this->assertSame(
             1,

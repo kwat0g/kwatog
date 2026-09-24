@@ -21,10 +21,14 @@ use Illuminate\Support\Facades\DB;
 /**
  * Series C — P2P incoming-QC handoff.
  *
- * An incoming inspection pass is the approval to release the linked GRN. The
- * listener waits until every incoming inspection for a multi-line GRN has
- * passed, then delegates to GrnService so stock movement, GL posting, the
- * accepted event, and the draft-bill listener remain one idempotent chain.
+ * An incoming inspection pass is one signal that a GRN's QC is progressing.
+ * The listener waits until every incoming inspection for the GRN is terminal,
+ * then delegates to GrnService::settleIncomingQc() to decide: no failed lines
+ * → accept, all failed → reject, mixed → partial accept + reject remainder.
+ *
+ * This prevents the old behavior where each pass checked only its siblings
+ * without considering later failures. Now settlement is deterministic once
+ * every line's QC is terminal.
  *
  * The row lock and terminal-status guard make duplicate outbox publication,
  * queue retries, and a human acceptance racing the listener safe. Missing
@@ -44,6 +48,7 @@ class AcceptGrnOnIncomingQcPass implements ShouldQueue
         $inspection = $event->inspection->fresh();
         if (! $inspection
             || $inspection->status !== InspectionStatus::Passed
+            || ! $inspection->isMakerChecked()
             || $inspection->stage?->value !== InspectionStage::Incoming->value) {
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_incoming_pass');
             return;
@@ -81,39 +86,27 @@ class AcceptGrnOnIncomingQcPass implements ShouldQueue
                 return 'grn_already_terminal_or_missing';
             }
 
-            $incomingInspections = Inspection::query()
-                ->where('stage', InspectionStage::Incoming->value)
-                ->where('entity_type', 'grn')
-                ->where('entity_id', $lockedGrn->id)
-                ->get(['id', 'status']);
-
-            // A single-line GRN normally has one row; multi-line receipts can
-            // have several. Never release the whole receipt on the first pass.
-            // Keep this invariant aligned with GrnService::assertQcGate(): a
-            // cancelled inspection is an explicit completed logistics
-            // decision, not an unresolved QC verdict. A passed sibling may
-            // therefore release a multi-line GRN when the remaining sibling
-            // was cancelled rather than left draft/in-progress/failed.
-            if ($incomingInspections->isEmpty()
-                || $incomingInspections->contains(fn (Inspection $row): bool => ! in_array(
-                    $row->status,
-                    [InspectionStatus::Passed, InspectionStatus::Cancelled],
-                    true,
-                ))) {
-                return 'awaiting_sibling_qc';
-            }
-
-            $this->grns->accept($lockedGrn, $by);
-
-            return 'grn_accepted';
+            return $this->grns->settleIncomingQc($lockedGrn, $by);
         });
 
+        $isCompleted = in_array($outcomeCode, ['grn_accepted', 'grn_rejected', 'grn_partially_accepted'], true);
+        $message = null;
+        if ($isCompleted) {
+            $grn = $grn->fresh();
+            match ($outcomeCode) {
+                'grn_accepted' => $message = "Incoming QC released GRN {$grn->grn_number}.",
+                'grn_rejected' => $message = "Incoming QC rejected GRN {$grn->grn_number}.",
+                'grn_partially_accepted' => $message = "Incoming QC settled GRN {$grn->grn_number} with mixed results.",
+                default => null,
+            };
+        } elseif ($outcomeCode === 'awaiting_mrb') {
+            $message = "Incoming QC failure awaiting material review board disposition.";
+        }
+
         app(ChainListenerRunService::class)->recordOutcome(
-            $outcomeCode === 'grn_accepted' ? 'completed' : 'skipped',
+            $isCompleted ? 'completed' : 'skipped',
             $outcomeCode,
-            $outcomeCode === 'grn_accepted'
-                ? "Incoming QC released GRN {$grn->grn_number}."
-                : null,
+            $message,
         );
     }
 }

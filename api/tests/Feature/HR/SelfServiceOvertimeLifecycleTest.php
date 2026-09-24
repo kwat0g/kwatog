@@ -11,11 +11,19 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
 
 class SelfServiceOvertimeLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+
+    public static function tearDownAfterClass(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
+    }
 
     private function makePending(Employee $employee): OvertimeRequest
     {
@@ -55,11 +63,11 @@ class SelfServiceOvertimeLifecycleTest extends TestCase
         $approver = User::factory()->create();
         $ot = OvertimeRequest::factory()->create([
             'employee_id' => $employee->id,
-            'status' => OvertimeStatus::Rejected->value,
             'approved_by' => $approver->id,
             'approved_at' => now(),
             'rejection_reason' => 'Staffing coverage is not available.',
         ]);
+        $ot->forceFill(['status' => OvertimeStatus::Rejected->value])->save();
 
         $this->actingAs($user)
             ->patchJson("/api/v1/hr/self-service/overtime/{$ot->hash_id}/restore")

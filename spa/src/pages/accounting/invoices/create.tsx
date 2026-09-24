@@ -25,6 +25,7 @@ import { numberInputProps } from '@/lib/numberInput';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { localIsoDate } from '@/lib/formatDate';
 const itemSchema = z.object({
  revenue_account_id: z.string().min(1, 'Required'),
  description: z.string().min(1, 'Required').max(200),
@@ -68,7 +69,7 @@ export default function CreateInvoicePage() {
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
  defaultValues: {
- customer_id: presetCustomer, date: new Date().toISOString().slice(0, 10),
+ customer_id: presetCustomer, date: localIsoDate(),
  prebill_reason: '', due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
  items: [{ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
  },

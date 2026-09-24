@@ -12,6 +12,8 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionMode;
+use App\Modules\Quality\Enums\InspectionOutcome;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -46,27 +48,32 @@ class Inspection extends Model
     }
 
     protected $fillable = [
-        'inspection_number', 'stage', 'status',
+        'inspection_number', 'stage', 'status', 'inspection_mode',
+        'proposed_result', 'reviewed_by', 'reviewed_at', 'review_remarks',
         'product_id', 'item_id', 'inspection_spec_id',
         'inspection_spec_revision_id',
         'item_quality_plan_id', 'entity_type', 'entity_id', 'work_order_output_id', 'grn_item_id',
         'batch_quantity', 'accepted_quantity', 'sample_size',
         'aql_code', 'accept_count', 'reject_count', 'defect_count',
-        'inspector_id', 'started_at', 'completed_at', 'notes',
+        'inspector_id', 'calibration_record_id', 'started_at', 'completed_at', 'notes',
     ];
 
     protected $casts = [
         'stage' => InspectionStage::class,
         'status' => InspectionStatus::class,
+        'proposed_result' => InspectionOutcome::class,
         'entity_type' => InspectionEntityType::class,
+        'inspection_mode' => InspectionMode::class,
         'batch_quantity' => 'integer',
         'accepted_quantity' => 'integer',
         'sample_size' => 'integer',
         'accept_count' => 'integer',
         'reject_count' => 'integer',
         'defect_count' => 'integer',
+        'sample_defect_count' => 'integer',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     public function product(): BelongsTo
@@ -107,6 +114,35 @@ class Inspection extends Model
     public function inspector(): BelongsTo
     {
         return $this->belongsTo(User::class, 'inspector_id');
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function requiresMakerChecker(): bool
+    {
+        if ($this->stage === InspectionStage::Incoming) {
+            return $this->entity_type === InspectionEntityType::Grn;
+        }
+
+        return $this->stage === InspectionStage::Outgoing
+            && ($this->work_order_output_id !== null
+                || in_array($this->entity_type, [InspectionEntityType::WorkOrder, InspectionEntityType::Delivery], true));
+    }
+
+    public function isMakerChecked(): bool
+    {
+        return $this->inspector_id !== null
+            && $this->reviewed_by !== null
+            && $this->reviewed_at !== null
+            && (int) $this->inspector_id !== (int) $this->reviewed_by;
+    }
+
+    public function calibrationRecord(): BelongsTo
+    {
+        return $this->belongsTo(CalibrationRecord::class, 'calibration_record_id');
     }
 
     public function measurements(): HasMany

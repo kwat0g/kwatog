@@ -140,10 +140,10 @@ export default function StockOutProjectionPage() {
  <div className="text-2xs text-muted truncate max-w-[260px]">{r.name}</div>
  </Td>
  <Td align="right" mono>
- {r.available.toFixed(2)} <span className="text-2xs text-muted">{r.unit_of_measure}</span>
+ {Number(r.available).toFixed(2)} <span className="text-2xs text-muted">{r.unit_of_measure}</span>
  </Td>
- <Td align="right" mono className="text-muted">{r.safety_stock.toFixed(2)}</Td>
- <Td align="right" mono>{r.daily_demand.toFixed(2)}</Td>
+ <Td align="right" mono className="text-muted">{Number(r.safety_stock).toFixed(2)}</Td>
+ <Td align="right" mono>{Number(r.daily_demand).toFixed(2)}</Td>
  <Td className="text-2xs text-muted">{sourceLabels.get(r.demand_source) ?? r.demand_source}</Td>
  <Td align="right" mono>
  {r.days_until_stockout === null ? '—' : (
@@ -156,7 +156,7 @@ export default function StockOutProjectionPage() {
  {r.reorder_date ? formatDate(r.reorder_date) : '—'}
  </Td>
  <Td align="right" mono>
- {r.suggested_qty !== null ? r.suggested_qty.toFixed(2) : '—'}
+ {r.suggested_qty !== null ? Number(r.suggested_qty).toFixed(2) : '—'}
  </Td>
  <Td>
  <Chip variant={RISK_VARIANT[r.risk]}>{riskLabels.get(r.risk) ?? r.risk}</Chip>

@@ -22,6 +22,7 @@ class OeeController
     public function forMachine(Request $request, Machine $machine): JsonResponse
     {
         [$from, $to] = $this->window($request);
+
         return response()->json(['data' => $this->service->calculate($machine, $from, $to)]);
     }
 
@@ -29,6 +30,7 @@ class OeeController
     public function todayAll(): JsonResponse
     {
         $today = Carbon::today();
+
         return response()->json(['data' => $this->service->calculateForAllMachines($today, $today->copy()->endOfDay())]);
     }
 
@@ -70,7 +72,8 @@ class OeeController
     private function window(Request $request): array
     {
         $from = Carbon::parse($request->query('from', Carbon::today()->toDateString()));
-        $to   = Carbon::parse($request->query('to', Carbon::today()->toDateString()))->endOfDay();
+        $to = Carbon::parse($request->query('to', Carbon::today()->toDateString()))->endOfDay();
+
         return [$from, $to];
     }
 }

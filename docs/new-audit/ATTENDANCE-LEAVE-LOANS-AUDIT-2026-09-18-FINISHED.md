@@ -2,6 +2,18 @@
 
 Date: 2026-09-18
  
+## Current re-audit 2026-09-24
+
+Current verdict: **remediated for current engineering scope**.
+
+- Attendance and Leave controls are covered by the 2026-09-23 remediation and focused tests.
+- Loans now have Finance-controlled write-off requests and checker approval, terminal
+  `written_off` state, balanced write-off/disbursement/manual-repayment journals, explicit account
+  settings, idempotent payment/write-off effects, and finalized-payroll preservation.
+- Remaining boundaries are manual-OT duplicate prevention, break/rest and maternity policy,
+  and live provider/runtime proof. Finance write-offs use a controlled case/evidence reference
+  string by policy; a document-upload workflow is not required.
+
 ## Re-audit 2026-09-19
 
 Current verdict: **historical FINISHED label is not release closure**.

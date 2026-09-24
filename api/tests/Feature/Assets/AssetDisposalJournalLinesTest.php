@@ -61,7 +61,7 @@ class AssetDisposalJournalLinesTest extends TestCase
             SettingsSeeder::class,
             WorkflowSeeder::class,
         ]);
-        Carbon::setTestNow('2026-06-20 10:00:00');
+        Carbon::setTestNow('2026-07-20 10:00:00');
     }
 
     protected function tearDown(): void
@@ -73,13 +73,13 @@ class AssetDisposalJournalLinesTest extends TestCase
     private function user(): User
     {
         return User::factory()->create([
-            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+            'role_id' => Role::query()->where('slug', 'vice_president')->value('id'),
         ]);
     }
 
     /**
      * Dispose via the two-phase flow: request by a finance officer, then the
-     * seeded finance_officer → system_admin chain approves to execution.
+     * seeded finance_officer → vice_president chain approves to execution.
      *
      * @param array<string, mixed> $data
      */
@@ -102,7 +102,7 @@ class AssetDisposalJournalLinesTest extends TestCase
             'asset_code' => 'AST-DJ-'.substr(uniqid(), -6),
             'name' => 'Disposal journal asset',
             'category' => AssetCategory::Equipment->value,
-            'acquisition_date' => '2026-06-01',
+            'acquisition_date' => '2026-01-01',
             'acquisition_cost' => '12000.00',
             'useful_life_years' => 5,
             'salvage_value' => '0.00',
@@ -284,13 +284,13 @@ class AssetDisposalJournalLinesTest extends TestCase
             'accumulated_depreciation' => '0.00',
         ]);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '5000.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Disposed after the final operating month',
-        ], $this->user());
+        ]);
 
-        $this->assertDatabaseCount('asset_depreciations', 5);
+        $this->assertDatabaseCount('asset_depreciations', 6);
         $this->assertDatabaseHas('asset_depreciations', [
             'asset_id' => $asset->id,
             'period_year' => 2026,
@@ -298,12 +298,19 @@ class AssetDisposalJournalLinesTest extends TestCase
             'depreciation_amount' => '200.00',
             'accumulated_after' => '1000.00',
         ]);
+        $this->assertDatabaseHas('asset_depreciations', [
+            'asset_id' => $asset->id,
+            'period_year' => 2026,
+            'period_month' => 6,
+            'depreciation_amount' => '200.00',
+            'accumulated_after' => '1200.00',
+        ]);
 
         $disposed = $asset->fresh();
-        $this->assertSame('1000.00', $disposed->accumulated_depreciation);
+        $this->assertSame('1200.00', $disposed->accumulated_depreciation);
         $net = $this->netByCode($this->disposalEntry($asset));
         $accumulatedCode = $this->accountCode('accounting.accounts.asset_accumulated_depreciation_code');
-        $this->assertSame('1000.00', $net[$accumulatedCode]);
+        $this->assertSame('1200.00', $net[$accumulatedCode]);
     }
 
     public function test_disposal_month_run_excludes_the_disposed_asset(): void
@@ -314,22 +321,23 @@ class AssetDisposalJournalLinesTest extends TestCase
             'accumulated_depreciation' => '0.00',
         ]);
 
-        app(AssetService::class)->dispose($asset, [
+        $this->disposeViaApproval($asset, [
             'disposal_amount' => '5000.00',
             'disposed_date' => '2026-06-15',
             'remarks' => 'Disposed before month end',
-        ], $actor);
+        ]);
 
         $result = app(\App\Modules\Assets\Services\DepreciationService::class)
             ->runForMonth(2026, 6, $actor);
 
         $this->assertSame(0, $result['posted_count']);
         $this->assertNull($result['journal_entry_id']);
-        $this->assertDatabaseMissing('asset_depreciations', [
+        $this->assertDatabaseHas('asset_depreciations', [
             'asset_id' => $asset->id,
             'period_year' => 2026,
             'period_month' => 6,
+            'depreciation_amount' => '200.00',
         ]);
-        $this->assertSame('1000.00', $asset->fresh()->accumulated_depreciation);
+        $this->assertSame('1200.00', $asset->fresh()->accumulated_depreciation);
     }
 }

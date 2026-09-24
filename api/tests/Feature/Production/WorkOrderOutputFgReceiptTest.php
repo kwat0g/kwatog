@@ -288,7 +288,11 @@ class WorkOrderOutputFgReceiptTest extends TestCase
             ['slug' => 'production.wo.record'],
             ['name' => 'Record Production Output', 'module' => 'production'],
         );
-        $role->permissions()->sync([$permission->id]);
+        $modulePermission = Permission::firstOrCreate(
+            ['slug' => 'production.view'],
+            ['name' => 'View Production', 'module' => 'production'],
+        );
+        $role->permissions()->sync([$permission->id, $modulePermission->id]);
         $this->user->update(['role_id' => $role->id]);
 
         $response = $this->actingAs($this->user)->postJson(
@@ -458,7 +462,11 @@ class WorkOrderOutputFgReceiptTest extends TestCase
             ['slug' => 'production.wo.record'],
             ['name' => 'Record Production Output', 'module' => 'production'],
         );
-        $role->permissions()->sync([$permission->id]);
+        $modulePermission = Permission::firstOrCreate(
+            ['slug' => 'production.view'],
+            ['name' => 'View Production', 'module' => 'production'],
+        );
+        $role->permissions()->sync([$permission->id, $modulePermission->id]);
 
         return User::factory()->create(['role_id' => $role->id]);
     }

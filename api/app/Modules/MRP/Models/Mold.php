@@ -59,6 +59,11 @@ class Mold extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Assets\Models\Asset::class, 'asset_id');
+    }
+
     public function compatibleMachines(): BelongsToMany
     {
         return $this->belongsToMany(Machine::class, 'mold_machine_compatibility');

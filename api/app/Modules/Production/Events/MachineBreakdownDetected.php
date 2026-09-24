@@ -34,7 +34,7 @@ class MachineBreakdownDetected implements ShouldBroadcast
     {
         return [
             new PrivateChannel('production.dashboard'),
-            new PrivateChannel('production.machine.' . $this->machine->hash_id),
+            new PrivateChannel('production.machine.'.$this->machine->hash_id),
         ];
     }
 
@@ -46,14 +46,14 @@ class MachineBreakdownDetected implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'machine_id'   => $this->machine->hash_id,
+            'machine_id' => $this->machine->hash_id,
             'machine_code' => $this->machine->machine_code,
-            'paused_wo'    => $this->pausedWorkOrder ? [
-                'id'        => $this->pausedWorkOrder->hash_id,
+            'paused_wo' => $this->pausedWorkOrder ? [
+                'id' => $this->pausedWorkOrder->hash_id,
                 'wo_number' => $this->pausedWorkOrder->wo_number,
             ] : null,
-            'candidates'   => $this->candidates,
-            'reason'       => $this->reason,
+            'candidates' => $this->candidates,
+            'reason' => $this->reason,
         ];
     }
 }

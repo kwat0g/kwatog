@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Support\Money;
 use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -29,7 +30,7 @@ class InventoryDashboardService
 
     private function compute(): array
     {
-        $totalStockValue = (float) DB::table('stock_levels')
+        $totalStockValue = (string) DB::table('stock_levels')
             ->selectRaw('COALESCE(SUM(quantity * weighted_avg_cost), 0) AS v')
             ->value('v');
 
@@ -43,43 +44,43 @@ class InventoryDashboardService
             ->select('id', 'code', 'name', 'reorder_point', 'safety_stock', 'lead_time_days', 'is_critical')
             ->get();
 
+        $lowStockItemIds = $items
+            ->filter(function (Item $item) use ($availabilities): bool {
+                $available = (string) ($availabilities[$item->id] ?? '0.000');
+
+                return bccomp($available, (string) $item->reorder_point, 3) <= 0;
+            })
+            ->pluck('id')
+            ->all();
+        $openPrByItem = $this->latestOpenPurchaseRequests($lowStockItemIds);
+        $openPoByItem = $this->latestOpenPurchaseOrders($lowStockItemIds);
+
         $belowReorder = 0;
         $critical = 0;
         $lowStockAlerts = [];
         foreach ($items as $item) {
-            $available = (float) ($availabilities[$item->id] ?? 0);
-            $safety = (float) $item->safety_stock;
-            $reorder = (float) $item->reorder_point;
-            if ($available <= $safety) {
+            $available = (string) ($availabilities[$item->id] ?? '0.000');
+            $safety = (string) $item->safety_stock;
+            $reorder = (string) $item->reorder_point;
+            if (bccomp($available, $safety, 3) <= 0) {
                 $critical++;
-            } elseif ($available <= $reorder) {
+            } elseif (bccomp($available, $reorder, 3) <= 0) {
                 $belowReorder++;
             }
-            if ($available <= $reorder) {
-                $openPr = PurchaseRequest::query()
-                    ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))
-                    ->whereIn('status', [
-                        PurchaseRequestStatus::Draft,
-                        PurchaseRequestStatus::Pending,
-                        PurchaseRequestStatus::Approved,
-                    ])
-                    ->orderByDesc('id')->first(['id', 'pr_number', 'status']);
-
-                $openPo = PurchaseOrder::query()
-                    ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))
-                    ->whereIn('status', PurchaseOrderStatus::open())
-                    ->orderByDesc('id')->first(['id', 'po_number', 'status']);
+            if (bccomp($available, $reorder, 3) <= 0) {
+                $openPr = $openPrByItem[$item->id] ?? null;
+                $openPo = $openPoByItem[$item->id] ?? null;
 
                 $lowStockAlerts[] = [
                     'item_id' => $item->hash_id,
                     'code' => $item->code,
                     'name' => $item->name,
-                    'available' => number_format($available, 3, '.', ''),
+                    'available' => $available,
                     'reorder_point' => (string) $item->reorder_point,
                     'safety_stock' => (string) $item->safety_stock,
                     'lead_time_days' => (int) $item->lead_time_days,
                     'is_critical' => (bool) $item->is_critical,
-                    'severity' => $available <= $safety ? 'critical' : 'low',
+                    'severity' => bccomp($available, $safety, 3) <= 0 ? 'critical' : 'low',
                     'open_pr' => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value, 'status_label' => $openPr->status?->label()] : null,
                     'open_po' => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value, 'status_label' => $openPo->status?->label()] : null,
                 ];
@@ -88,10 +89,10 @@ class InventoryDashboardService
 
         // Top-10 by deficit ratio (smaller available - safety = more urgent).
         usort($lowStockAlerts, function ($a, $b) {
-            $da = (float) $a['available'] - (float) $a['safety_stock'];
-            $db = (float) $b['available'] - (float) $b['safety_stock'];
+            $da = bcsub((string) $a['available'], (string) $a['safety_stock'], 3);
+            $db = bcsub((string) $b['available'], (string) $b['safety_stock'], 3);
 
-            return $da <=> $db;
+            return bccomp($da, $db, 3);
         });
         $lowStockAlerts = array_slice($lowStockAlerts, 0, 10);
 
@@ -119,7 +120,7 @@ class InventoryDashboardService
 
         return [
             'consumption_history_days' => $historyDays,
-            'total_stock_value' => number_format($totalStockValue, 2, '.', ''),
+            'total_stock_value' => Money::round2($totalStockValue),
             'items_below_reorder' => $belowReorder,
             'items_critical' => $critical,
             'pending_grns' => $pendingGrns,
@@ -145,5 +146,69 @@ class InventoryDashboardService
                 'total_value' => (string) $item->total_value,
             ])->all(),
         ];
+    }
+
+    /** @param list<int|string> $itemIds
+     *  @return array<int, PurchaseRequest>
+     */
+    private function latestOpenPurchaseRequests(array $itemIds): array
+    {
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $byItem = [];
+        $rows = PurchaseRequest::query()
+            ->join('purchase_request_items', 'purchase_request_items.purchase_request_id', '=', 'purchase_requests.id')
+            ->whereIn('purchase_request_items.item_id', $itemIds)
+            ->whereNull('purchase_requests.deleted_at')
+            ->whereIn('purchase_requests.status', [
+                PurchaseRequestStatus::Draft,
+                PurchaseRequestStatus::Pending,
+                PurchaseRequestStatus::Approved,
+            ])
+            ->orderByDesc('purchase_requests.id')
+            ->get([
+                'purchase_requests.id',
+                'purchase_requests.pr_number',
+                'purchase_requests.status',
+                'purchase_request_items.item_id as source_item_id',
+            ]);
+
+        foreach ($rows as $row) {
+            $byItem[(int) $row->source_item_id] ??= $row;
+        }
+
+        return $byItem;
+    }
+
+    /** @param list<int|string> $itemIds
+     *  @return array<int, PurchaseOrder>
+     */
+    private function latestOpenPurchaseOrders(array $itemIds): array
+    {
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $byItem = [];
+        $rows = PurchaseOrder::query()
+            ->join('purchase_order_items', 'purchase_order_items.purchase_order_id', '=', 'purchase_orders.id')
+            ->whereIn('purchase_order_items.item_id', $itemIds)
+            ->whereNull('purchase_orders.deleted_at')
+            ->whereIn('purchase_orders.status', PurchaseOrderStatus::open())
+            ->orderByDesc('purchase_orders.id')
+            ->get([
+                'purchase_orders.id',
+                'purchase_orders.po_number',
+                'purchase_orders.status',
+                'purchase_order_items.item_id as source_item_id',
+            ]);
+
+        foreach ($rows as $row) {
+            $byItem[(int) $row->source_item_id] ??= $row;
+        }
+
+        return $byItem;
     }
 }

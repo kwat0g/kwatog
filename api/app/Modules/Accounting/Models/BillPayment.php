@@ -21,7 +21,7 @@ class BillPayment extends Model
 
     protected $fillable = [
         'bill_id', 'cash_account_id', 'payment_date',
-        'amount', 'payment_method', 'reference_number',
+        'amount', 'ewt_amount', 'cash_amount', 'payment_method', 'reference_number',
         'idempotency_key',
         'journal_entry_id', 'created_by', 'status', 'voided_at', 'voided_by',
         'void_reason', 'void_reversal_journal_entry_id', 'replacement_payment_id',
@@ -30,6 +30,8 @@ class BillPayment extends Model
     protected $casts = [
         'payment_date'   => 'date',
         'amount'         => 'decimal:2',
+        'ewt_amount'     => 'decimal:2',
+        'cash_amount'    => 'decimal:2',
         'payment_method' => PaymentMethod::class,
         'status'         => BillPaymentStatus::class,
         'voided_at'      => 'datetime',

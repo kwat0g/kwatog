@@ -29,6 +29,10 @@ class AssetResource extends JsonResource
                 'name' => $this->department->name,
                 'code' => $this->department->code,
             ] : null),
+            'association'              => $this->when(
+                $this->relationLoaded('machine') || $this->relationLoaded('mold') || $this->relationLoaded('vehicle'),
+                fn () => $this->association(),
+            ),
             'acquisition_date'         => optional($this->acquisition_date)?->toDateString(),
             'acquisition_cost'         => (string) $this->acquisition_cost,
             'useful_life_years'        => (int) $this->useful_life_years,
@@ -99,5 +103,20 @@ class AssetResource extends JsonResource
             && $user->can('assets.dispose.approve')
             && app(ApprovalService::class)->canUserActFor($user, (string) $next->role_slug)
             && (int) $this->disposal_requested_by !== (int) $user->id;
+    }
+
+    private function association(): ?array
+    {
+        if ($this->relationLoaded('machine') && $this->machine) {
+            return ['type' => 'machine', 'id' => $this->machine->hash_id, 'code' => $this->machine->machine_code, 'name' => $this->machine->name];
+        }
+        if ($this->relationLoaded('mold') && $this->mold) {
+            return ['type' => 'mold', 'id' => $this->mold->hash_id, 'code' => $this->mold->mold_code, 'name' => $this->mold->name];
+        }
+        if ($this->relationLoaded('vehicle') && $this->vehicle) {
+            return ['type' => 'vehicle', 'id' => $this->vehicle->hash_id, 'code' => $this->vehicle->plate_number, 'name' => $this->vehicle->name];
+        }
+
+        return null;
     }
 }

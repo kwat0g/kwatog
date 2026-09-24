@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Resources\BillPaymentResource;
 use App\Modules\Accounting\Resources\SupplierBillResource;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Services\VendorService;
@@ -161,6 +162,38 @@ class AccountsPayableHardeningTest extends TestCase
         $this->assertNotNull($voided->void_reversal_journal_entry_id);
         $this->assertSame('0.00', (string) $bill->fresh()->amount_paid);
         $this->assertSame(BillStatus::Unpaid, $bill->fresh()->status);
+    }
+
+    public function test_payment_decision_flag_follows_the_current_approval_step(): void
+    {
+        $maker = $this->user('finance_officer');
+        $checker = $this->user('finance_officer');
+        $vp = $this->user('vice_president');
+        $bill = $this->serviceBill($this->user(), 'AP-DECIDE-1');
+        $service = app(BillService::class);
+        $payment = $service->recordPayment($bill, [
+            'cash_account_id' => Account::query()->where('code', '1020')->firstOrFail()->hash_id,
+            'payment_date' => now()->toDateString(),
+            'amount' => '40.00',
+            'payment_method' => PaymentMethod::BankTransfer->value,
+        ], $maker);
+
+        $canDecide = function (BillPayment $payment, User $user): bool {
+            $request = Request::create('/');
+            $request->setUserResolver(fn () => $user);
+
+            return (new BillPaymentResource($payment->fresh()))->toArray($request)['can_decide'];
+        };
+
+        // The requester is refused by the self-approval guard; the VP's step
+        // has not opened yet. Only another finance officer may act.
+        $this->assertFalse($canDecide($payment, $maker));
+        $this->assertTrue($canDecide($payment, $checker));
+        $this->assertFalse($canDecide($payment, $vp));
+
+        $service->approvePayment($bill->fresh(), $payment->fresh(), $checker);
+        $this->assertFalse($canDecide($payment, $checker), 'Finance must not be offered the VP step.');
+        $this->assertTrue($canDecide($payment, $vp));
     }
 
     public function test_aging_is_reconstructed_at_the_requested_date(): void

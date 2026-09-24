@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Services\LeaveRequestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -15,6 +16,13 @@ use Tests\TestCase;
 class LeaveOverlapTwoConnectionHarnessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public static function tearDownAfterClass(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDownAfterClass();
+    }
 
     public function test_second_overlapping_submission_waits_on_employee_then_is_rejected(): void
     {

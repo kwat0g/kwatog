@@ -17,8 +17,8 @@ class SkillService
     {
         return Skill::query()
             ->when(
-                isset($filters['active']),
-                fn(Builder $q) => $q->where('is_active', (bool) $filters['active']),
+                array_key_exists('active', $filters) && $filters['active'] !== '',
+                fn(Builder $q) => $q->where('is_active', filter_var($filters['active'], FILTER_VALIDATE_BOOLEAN)),
                 fn(Builder $q) => $q->where('is_active', true),
             )
             ->when($filters['category'] ?? null, fn(Builder $q, $v) => $q->where('category', $v))

@@ -102,7 +102,6 @@ class MaintenanceWorkOrderController
 
     public function start(Request $request, MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource
     {
-        abort_unless($request->user()?->can('maintenance.wo.complete'), 403);
         return new MaintenanceWorkOrderResource($this->service->start($workOrder, $request->user()));
     }
 
@@ -115,7 +114,6 @@ class MaintenanceWorkOrderController
 
     public function cancel(Request $request, MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource
     {
-        abort_unless($request->user()?->can('maintenance.wo.complete'), 403);
         $reason = $request->input('reason');
         return new MaintenanceWorkOrderResource(
             $this->service->cancel($workOrder, is_string($reason) ? $reason : null, $request->user())
@@ -124,7 +122,6 @@ class MaintenanceWorkOrderController
 
     public function addLog(Request $request, MaintenanceWorkOrder $workOrder): JsonResponse
     {
-        abort_unless($request->user()?->can('maintenance.wo.complete'), 403);
         $data = $request->validate(['description' => ['required', 'string', 'max:5000']]);
         $log = $this->service->log($workOrder, (string) $data['description'], $request->user());
         return response()->json([

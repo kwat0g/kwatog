@@ -27,8 +27,8 @@ final class RoutingVersionConflictException extends RuntimeException
     {
         return response()->json([
             'message' => $this->getMessage(),
-            'errors'  => ['routing' => [$this->getMessage()]],
-            'code'    => 'ROUTING_VERSION_CONFLICT',
+            'errors' => ['routing' => [$this->getMessage()]],
+            'code' => 'ROUTING_VERSION_CONFLICT',
         ], 409);
     }
 }

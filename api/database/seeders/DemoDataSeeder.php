@@ -139,7 +139,6 @@ class DemoDataSeeder extends Seeder
                 'semi_monthly_rate'    => $isMonthly ? null : (680 + ($i % 6) * 45) * 11,
                 'bank_name'            => 'BDO Unibank',
                 'bank_account_no'      => '00123456' . str_pad((string) $i, 4, '0', STR_PAD_LEFT),
-                'status'               => EmployeeStatus::Active->value,
             ]);
             $created++;
         }

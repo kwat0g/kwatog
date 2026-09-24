@@ -21,6 +21,7 @@ class WarehouseLocationResource extends JsonResource
             'rack'      => $this->rack,
             'bin'       => $this->bin,
             'is_active' => (bool) $this->is_active,
+            'is_blocked' => (bool) $this->is_blocked,
             'full_code' => $this->full_code,
             'zone'      => $this->whenLoaded('zone', fn () => $this->zone ? [
                 'id'        => $this->zone->hash_id,

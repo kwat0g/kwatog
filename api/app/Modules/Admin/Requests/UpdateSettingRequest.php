@@ -43,6 +43,7 @@ class UpdateSettingRequest extends FormRequest
             'maintenance.predictive.sources' => ['value' => ['required', 'array', 'min:1']],
             'maintenance.predictive.default_source' => ['value' => ['required', 'string', 'max:30']],
             'maintenance.predictive.breach_window'   => ['value' => ['required', 'integer', 'min:1', 'max:20']],
+            'maintenance.predictive.max_reading_age_hours' => ['value' => ['required', 'integer', 'min:1', 'max:87600']],
         ];
 
         if (str_starts_with((string) $key, 'loans.') && str_ends_with((string) $key, '.annual_interest_rate')) {
@@ -386,8 +387,11 @@ class UpdateSettingRequest extends FormRequest
             'leave.request.future_window_days' => ['value' => ['required', 'integer', 'min:0', 'max:3650']],
             'inventory.safety_stock.issue_movement_types' => ['value' => ['required', 'array', 'min:1']],
             'quality.aql.sample_plan' => ['value' => ['required', 'array']],
+            'quality.incoming.default_checklist' => ['value' => ['required', 'array', 'min:1']],
+            'quality.incoming.measured_pieces' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],
             'mrp.bom.max_explode_depth' => ['value' => ['required', 'integer', 'min:1', 'max:100']],
             'landing.section_copy' => ['value' => ['required', 'array']],
+            'landing.pii_retention_months' => ['value' => ['required', 'integer', 'min:1']],
             'notifications.catalog' => ['value' => ['required', 'array', 'min:1']],
             'system_user.email' => ['value' => ['required', 'email', 'max:255']],
             'system_user.name' => ['value' => ['required', 'string', 'max:255']],

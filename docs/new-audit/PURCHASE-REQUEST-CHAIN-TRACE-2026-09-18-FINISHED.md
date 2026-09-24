@@ -2,13 +2,23 @@
 
 Date: 2026-09-18
  
-## Re-audit 2026-09-19
+## Re-audit 2026-09-23 — remediated (FINISHED)
 
-Current verdict: **historical FINISHED label is not release closure**.
+Current verdict: **FINISHED**.
 
 - The resolution log fixes remain visible: PR chain entity, `mrp_plan_id`, CoA verification, incoming-QC retry, and vendor-SoD exception handling.
-- Current critical P2P risks: cancelled PO/draft GRN resurrection, RFQ partial quantity converted as full line, duplicate manual PO coverage, posted partial-bill continuation, fractional/archived incoming QC, PO submission ownership, and missing GRN-GL recovery.
-- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
+- Gaps closed in current worktree:
+  - **G1 (Cancelled PO / draft GRN resurrection):** Purged staged draft GRNs on PO cancellation and fail-closed against cancelled PO receiving in `GrnService`.
+  - **G2 (Partial quantity conversion):** Sourcing conversion in `PurchaseOrderService` and `RfqAwardService` now tracks quantity coverage rather than line existence, preventing premature full PR conversion and preserving unfulfilled line quantities for subsequent conversion.
+  - **G4 (Posted partial-bill continuation):** `BillService` calculates unbilled accepted quantities and permits staging subsequent draft bills for newly accepted goods on a GRN (migration `2026_09_20_140000_drop_bills_goods_receipt_note_unique.php`).
+  - **G5 (Fractional & archived incoming QC):** Decimal-safe ceiling batch calculation and `withTrashed()` item resolution in `TriggerIncomingQC` and `InspectionService`.
+- Additional P2P findings closed: manual PO create/update locks and enforces aggregate remaining quantity per PR line; submit rechecks draft ownership under the PO lock; accepted GRNs skipped while Accounting is disabled can be retried at `POST /api/v1/inventory/grn/{grn}/retry-gl` by a journal-post permission holder.
+- Purchase quantities now retain 3-decimal precision through PR and PO lines, including received quantities; the migration refuses a destructive rollback when 3-decimal values exist.
+- Focused P2P/GRN coverage passed, including two-connection PO lifecycle races, manual coverage, submission ownership, and idempotent GL retry.
+- Residuals: `docs/SCHEMA.md` still documents two-decimal PR/PO quantities and needs a separate
+  repository-level documentation update; the read-only migration preflight and GRN GL retry UI
+  are now present. Production migration execution remains an operational release gate.
+- The cross-module register was left unchanged per task scope; this P2P summary supersedes its stale residual list.
 Scope: a Purchase Request raised for internal need (not derived from a Sales Order),
 followed all the way to the last process (payment / GL / closure). Discovered by reading
 `api/`. Claims are marked **[confirmed]** (file:line given) or **[assumption/unverified]**.

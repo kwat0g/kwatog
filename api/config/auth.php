@@ -49,4 +49,12 @@ return [
     ],
 
     'password_timeout' => (int) env('AUTH_PASSWORD_TIMEOUT', 10800),
+
+    // Fixed-cost comparison for unknown and inactive login identities. It is
+    // deliberately not generated per request; doing so would make the timing
+    // defense more expensive and less predictable.
+    'dummy_password_hash' => env(
+        'AUTH_DUMMY_PASSWORD_HASH',
+        '$2y$12$svReXrfzETOHwd5Loxt4pu2rTH.RDIPUviTjj0pl2cJXXDdEWqHO6',
+    ),
 ];

@@ -7,9 +7,11 @@ namespace App\Modules\Inventory\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class GrnItem extends Model
 {
@@ -58,5 +60,11 @@ class GrnItem extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(WarehouseLocation::class, 'location_id');
+    }
+
+    /** The incoming-QC inspection covering this line (the latest, if re-inspected). */
+    public function inspection(): HasOne
+    {
+        return $this->hasOne(Inspection::class, 'grn_item_id')->latestOfMany();
     }
 }

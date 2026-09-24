@@ -30,11 +30,13 @@ class DowntimeParetoTest extends TestCase
 
         $this->assertCount(3, $pareto);
         $this->assertSame('breakdown', $pareto[0]['category']);
-        $this->assertSame(60.0, $pareto[0]['percent']);
-        $this->assertSame(60.0, $pareto[0]['cumulative_percent']);
+        // Overlapping downtime is attributed to the highest-severity category
+        // so the same minute is never counted twice.
+        $this->assertSame(100.0, $pareto[0]['percent']);
+        $this->assertSame(100.0, $pareto[0]['cumulative_percent']);
 
         $this->assertSame('changeover', $pareto[1]['category']);
-        $this->assertSame(90.0, $pareto[1]['cumulative_percent']);
+        $this->assertSame(100.0, $pareto[1]['cumulative_percent']);
 
         $this->assertSame('material_shortage', $pareto[2]['category']);
         $this->assertSame(100.0, $pareto[2]['cumulative_percent']);

@@ -27,6 +27,8 @@ class VendorResource extends JsonResource
             'address'            => $this->address,
             'tin'                => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
             'payment_terms_days' => (int) $this->payment_terms_days,
+            'withholding_tax_type' => $this->withholding_tax_type?->value ?? 'none',
+            'withholding_tax_label' => $this->withholding_tax_type?->label() ?? 'None',
             'is_active'          => (bool) $this->is_active,
             'open_balance'       => $openBalance !== null ? (string) $openBalance : null,
             'bills_count'        => $this->whenCounted('bills'),

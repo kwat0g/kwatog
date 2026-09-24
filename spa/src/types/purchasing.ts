@@ -18,49 +18,149 @@ export type PurchaseRequestConversionStatus =
   | 'converted';
 export type PurchaseRequestSourcingMethod = 'direct_po' | 'rfq';
 
-export type RfqStatus = 'draft' | 'open' | 'closed' | 'under_evaluation' | 'awarded' | 'partially_awarded' | 'no_award' | 'cancelled';
-export type RfqInvitationStatus = 'invited' | 'viewed' | 'submitted' | 'withdrawn' | 'awarded' | 'not_awarded';
-export type SupplierQuoteStatus = 'draft' | 'submitted' | 'superseded' | 'withdrawn' | 'awarded' | 'not_awarded' | 'disqualified';
+export type RfqStatus =
+  | 'draft'
+  | 'open'
+  | 'closed'
+  | 'under_evaluation'
+  | 'awarded'
+  | 'partially_awarded'
+  | 'no_award'
+  | 'cancelled';
+export type RfqInvitationStatus =
+  | 'invited'
+  | 'viewed'
+  | 'submitted'
+  | 'withdrawn'
+  | 'awarded'
+  | 'not_awarded';
+export type SupplierQuoteStatus =
+  | 'draft'
+  | 'submitted'
+  | 'superseded'
+  | 'withdrawn'
+  | 'awarded'
+  | 'not_awarded'
+  | 'disqualified';
 
 export interface RfqItem {
-  id: string; description: string; specification: string | null; quantity: string; unit: string | null;
-  required_delivery_date: string | null; allow_partial_quantity: boolean; allow_substitute: boolean;
+  id: string;
+  description: string;
+  specification: string | null;
+  quantity: string;
+  unit: string | null;
+  required_delivery_date: string | null;
+  allow_partial_quantity: boolean;
+  allow_substitute: boolean;
   item: { id: string; code: string; name: string; unit_of_measure: string } | null;
 }
 export interface SupplierQuoteItem {
-  id: string; response_status: 'quoted' | 'no_quote'; offered_quantity: string | null; unit_price: string | null;
-  line_vat_amount: string | null; line_freight_amount: string | null; line_other_charges: string | null; line_total_delivered_cost: string | null;
-  lead_time_days: number | null; proposed_delivery_date: string | null; compliance_status: string; compliance_notes: string | null;
+  id: string;
+  response_status: 'quoted' | 'no_quote';
+  offered_quantity: string | null;
+  unit_price: string | null;
+  line_vat_amount: string | null;
+  line_freight_amount: string | null;
+  line_other_charges: string | null;
+  line_total_delivered_cost: string | null;
+  /** Comparison only: line cost plus its share of quote-level freight, charges and VAT. */
+  allocated_delivered_cost?: string | null;
+  lead_time_days: number | null;
+  proposed_delivery_date: string | null;
+  compliance_status: string;
+  compliance_notes: string | null;
   is_recommended?: boolean;
   rfq_item: { id: string; description: string; quantity: string; unit: string | null } | null;
 }
 export interface SupplierQuote {
-  id: string; version: number; status: SupplierQuoteStatus; submitted_at: string | null; withdrawn_at: string | null;
-  is_current: boolean; vat_inclusive: boolean; vat_amount: string | null; freight_amount: string | null; other_charges: string | null;
-  total_delivered_cost: string | null; quote_valid_until: string | null; payment_terms: string | null; notes: string | null;
-  quotation_original_filename: string | null; vendor: { id: string; name: string } | null; items: SupplierQuoteItem[];
-  supplier_performance?: { overall_score: string | null; tier: string | null; on_time_delivery_rate: string | null; quality_pass_rate: string | null; ncr_rate: string | null; period: string } | null;
+  id: string;
+  version: number;
+  status: SupplierQuoteStatus;
+  submitted_at: string | null;
+  withdrawn_at: string | null;
+  is_current: boolean;
+  vat_inclusive: boolean;
+  vat_amount: string | null;
+  freight_amount: string | null;
+  other_charges: string | null;
+  total_delivered_cost: string | null;
+  quote_valid_until: string | null;
+  payment_terms: string | null;
+  notes: string | null;
+  quotation_original_filename: string | null;
+  vendor: { id: string; name: string } | null;
+  items: SupplierQuoteItem[];
+  supplier_performance?: {
+    overall_score: string | null;
+    tier: string | null;
+    on_time_delivery_rate: string | null;
+    quality_pass_rate: string | null;
+    ncr_rate: string | null;
+    period: string;
+  } | null;
   documents?: Array<{ id: string; document_type: string; original_filename: string }>;
 }
 export interface RfqInvitation {
-  id: string; status: RfqInvitationStatus; invited_at: string; viewed_at: string | null; exception_reason: string | null;
+  id: string;
+  status: RfqInvitationStatus;
+  invited_at: string;
+  viewed_at: string | null;
+  exception_reason: string | null;
   vendor: { id: string; name: string; email?: string | null } | null;
 }
 export interface RfqAward {
-  id: string; awarded_quantity: string; awarded_unit_price: string; awarded_total_delivered_cost: string;
-  award_reason: string; single_response_justification: string | null; status: string; awarded_at: string;
-  vendor: { id: string; name: string } | null; rfq_item: { id: string; description: string } | null; quote: { id: string; version: number } | null;
+  id: string;
+  awarded_quantity: string;
+  awarded_unit_price: string;
+  awarded_total_delivered_cost: string;
+  award_reason: string;
+  single_response_justification: string | null;
+  status: string;
+  awarded_at: string;
+  vendor: { id: string; name: string } | null;
+  rfq_item: { id: string; description: string } | null;
+  quote: { id: string; version: number } | null;
 }
 export interface RequestForQuote {
-  id: string; rfq_number: string; status: RfqStatus; status_label?: string; title: string; instructions: string | null;
+  id: string;
+  rfq_number: string;
+  status: RfqStatus;
+  status_label?: string;
+  title: string;
+  instructions: string | null;
   invitation_status?: RfqInvitationStatus;
-  currency: string; issued_at: string | null; closes_at: string; closed_at: string | null; evaluation_started_at: string | null; resolved_at: string | null;
-  cancellation_reason: string | null; no_award_reason: string | null; budget_warning_level: string | null; budget_warning_message: string | null;
+  currency: string;
+  issued_at: string | null;
+  closes_at: string;
+  closed_at: string | null;
+  evaluation_started_at: string | null;
+  resolved_at: string | null;
+  cancellation_reason: string | null;
+  no_award_reason: string | null;
+  budget_warning_level: string | null;
+  budget_warning_message: string | null;
   budget_acknowledged_at?: string | null;
-  purchase_request: { id: string; pr_number: string } | null; creator: { id: string; name: string } | null;
-  items?: RfqItem[]; invitations?: RfqInvitation[]; quotes?: SupplierQuote[]; awards?: RfqAward[];
-  addenda?: Array<{ id: string; sequence: number; title: string; body: string; material_change: boolean; published_at: string }>;
-  documents?: Array<{ id: string; document_type: string; original_filename: string; mime_type: string; size_bytes: number }>;
+  purchase_request: { id: string; pr_number: string } | null;
+  creator: { id: string; name: string } | null;
+  items?: RfqItem[];
+  invitations?: RfqInvitation[];
+  quotes?: SupplierQuote[];
+  awards?: RfqAward[];
+  addenda?: Array<{
+    id: string;
+    sequence: number;
+    title: string;
+    body: string;
+    material_change: boolean;
+    published_at: string;
+  }>;
+  documents?: Array<{
+    id: string;
+    document_type: string;
+    original_filename: string;
+    mime_type: string;
+    size_bytes: number;
+  }>;
 }
 export type PurchaseRequestPriority = 'normal' | 'urgent' | 'critical';
 export type PurchaseOrderStatus =
@@ -85,7 +185,12 @@ export type SupplierDispatchStatus =
 
 /** How a supplier answered a purchase order: accept as-is, counter-propose, or decline. */
 export type PurchaseOrderResponseType = 'accept' | 'propose' | 'decline';
-export type PurchaseOrderResponseStatus = 'pending' | 'accepted' | 'rejected' | 'superseded';
+export type PurchaseOrderResponseStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'superseded'
+  | 'pending_approval';
 
 /** One line on a supplier counter-proposal. Decimals stay strings. */
 export interface PurchaseOrderResponseItem {
@@ -143,6 +248,7 @@ export interface PurchaseRequest {
   id: string;
   pr_number: string;
   date: string;
+  required_delivery_date: string | null;
   reason: string | null;
   priority: PurchaseRequestPriority;
   priority_label?: string;
@@ -202,7 +308,13 @@ export interface PurchaseRequest {
     } | null;
     grns?: Array<{ id: string; grn_number: string; status: string }>;
   }>;
-  rfqs?: Array<{ id: string; rfq_number: string; status: RfqStatus; closes_at: string; resolved_at: string | null }>;
+  rfqs?: Array<{
+    id: string;
+    rfq_number: string;
+    status: RfqStatus;
+    closes_at: string;
+    resolved_at: string | null;
+  }>;
 }
 
 export interface PurchaseRequestTemplate {
@@ -254,6 +366,7 @@ export interface SourcingLine {
 export interface CreatePurchaseRequestData {
   department_id?: string;
   date?: string;
+  required_delivery_date?: string | null;
   reason?: string;
   priority?: PurchaseRequestPriority;
   sourcing_method: PurchaseRequestSourcingMethod;
@@ -282,10 +395,23 @@ export interface PurchaseOrderItem {
   quantity_received: string;
   quantity_accepted: string;
   quantity_remaining: string;
+  quantity_open?: string;
+  /** Receipt valuation (4dp): unit price plus capitalized RFQ charges. */
+  delivered_unit_cost?: string | null;
+  /** Supplier-quoted charges carried from an RFQ award; null on non-RFQ lines. */
+  rfq_commercial?: RfqCommercialCharges | null;
+}
+
+export interface RfqCommercialCharges {
+  vat_amount: string | null;
+  freight_amount: string | null;
+  other_charges: string | null;
 }
 
 export interface PurchaseOrder {
   id: string;
+  /** Header-level supplier-quoted charges; included in subtotal, not in any line total. */
+  rfq_commercial?: RfqCommercialCharges | null;
   po_number: string;
   date: string;
   /** OGAMI's required delivery date. */
@@ -324,10 +450,20 @@ export interface PurchaseOrder {
   budget_warning_level?: string | null;
   budget_warning_message?: string | null;
   budget_acknowledged_at?: string | null;
-  rfq_reconfirmation?: { id: string; status: string; requested_at: string | null; quote_valid_until: string | null } | null;
+  rfq_reconfirmation?: {
+    id: string;
+    status: string;
+    requested_at: string | null;
+    quote_valid_until: string | null;
+  } | null;
   remarks: string | null;
   quantity_received_pct: number;
   quantity_accepted_pct: number;
+  short_closed_at?: string | null;
+  short_close_reason?: string | null;
+  short_closed_by?: { id: string; name: string } | null;
+  can_short_close?: boolean;
+  pending_change?: { response_id: string; current_total: string; proposed_total: string } | null;
   /** PU-13 — server-computed actions (detail responses only, null on lists). */
   actions?: {
     can_view: boolean;
@@ -341,6 +477,7 @@ export interface PurchaseOrder {
     can_close: boolean;
     can_print: boolean;
     reconfirmation_required?: boolean;
+    approve_blocked_by_vendor_sod?: boolean;
   } | null;
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
   purchase_request: { id: string; pr_number: string } | null;

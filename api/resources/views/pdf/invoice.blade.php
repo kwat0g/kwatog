@@ -114,12 +114,12 @@
     <tr>
       <td style="width:50%; vertical-align:bottom; padding:0 8px;">
         <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
-        <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $preparedBy ?? '—' }}</div>
+        <div style="margin-top:4px; text-align:center; font-weight:normal;">{{ $preparedBy ?? '—' }}</div>
         <div style="text-align:center; color:#777; font-size:8pt;">Prepared by · Accounting</div>
       </td>
       <td style="width:50%; vertical-align:bottom; padding:0 8px;">
         <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
-        <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $approvedBy ?? '—' }}</div>
+        <div style="margin-top:4px; text-align:center; font-weight:normal;">{{ $approvedBy ?? '—' }}</div>
         <div style="text-align:center; color:#777; font-size:8pt;">Approved by · Finance</div>
       </td>
     </tr>

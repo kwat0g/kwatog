@@ -13,9 +13,11 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
 use App\Modules\Payroll\Models\PayrollCycleClaim;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
 use App\Modules\Payroll\Services\PayrollPeriodService;
+use App\Modules\HR\Services\EmployeeService;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,6 +104,36 @@ class PayrollPeriodScopeTest extends TestCase
         $this->assertCount(2, $this->periods->availableEmployees($period));
     }
 
+    public function test_regular_period_creation_cannot_forge_a_thirteenth_month_run(): void
+    {
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('13th-month periods are created only by the 13th-month payroll run.');
+
+        $this->periods->create([
+            'period_start' => '2026-12-01',
+            'period_end' => '2026-12-31',
+            'payroll_date' => '2026-12-31',
+            'is_thirteenth_month' => true,
+        ], $this->hrUser());
+    }
+
+    public function test_approval_requires_a_payroll_row_for_every_currently_eligible_employee(): void
+    {
+        $this->employee($this->production, 'regular');
+        $this->employee($this->admin, 'regular');
+        $period = $this->makePeriod();
+        $period->forceFill(['status' => 'computed'])->save();
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => Employee::query()->firstOrFail()->id,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('payroll rows do not match the eligible employee set');
+
+        $this->periods->approve($period, $this->hrUser());
+    }
+
     public function test_future_dated_on_leave_employee_remains_payroll_eligible(): void
     {
         $futureLeaver = $this->employee($this->production, 'regular');
@@ -132,6 +164,27 @@ class PayrollPeriodScopeTest extends TestCase
         $period = $this->makePeriod([], '2026-04-01', '2026-04-15');
 
         $this->assertSame([$futureLeaver->id], $this->periods->availableEmployees($period)->pluck('id')->all());
+    }
+
+    public function test_department_transfer_cannot_change_a_computed_period_eligibility_set(): void
+    {
+        $employee = $this->employee($this->production, 'regular');
+        $period = $this->makePeriod(['scope_department_ids' => [$this->production->hash_id]]);
+        $period->forceFill(['status' => 'computed'])->save();
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $destination = Department::create(['name' => 'Transfer destination', 'code' => 'TRN']);
+        $position = Position::create(['title' => 'Transfer role', 'department_id' => $destination->id]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('cannot change while payroll period');
+
+        app(EmployeeService::class)->update($employee, [
+            'department_id' => $destination->id,
+            'position_id' => $position->id,
+        ]);
     }
 
     public function test_employment_type_scope_narrows_the_batch(): void

@@ -69,10 +69,13 @@ class DashboardLayoutService
      */
     public function getRichLayout(User $user): array
     {
+        $this->analytics->resetFailures();
+
         return array_map(function (array $row) use ($user): array {
             $kind = RenderKind::fromNullable($row['render_kind']);
             $payload = $this->analytics->payload($row['key'], $kind, $user);
             $row['data'] = $payload === [] ? null : $payload;
+            $row['data_unavailable'] = $this->analytics->failed($row['key']);
 
             return $row;
         }, $this->getEffectiveLayout($user));

@@ -68,10 +68,10 @@ class ConfiguredControlAccountTypeTest extends TestCase
 
     public function test_configured_account_resolution_rejects_a_wrongly_typed_payroll_mapping(): void
     {
-        app(SettingsService::class)->set('accounting.accounts.salary_expense_code', '1010', 'accounting');
+        app(SettingsService::class)->set('accounting.accounts.salary_expense_code', '3010', 'accounting');
 
         $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('Account 1010 must be of type expense.');
+        $this->expectExceptionMessage('Account 3010 must be of type expense.');
 
         app(AccountingAccountPolicyService::class)
             ->controlAccountIdForSetting('accounting.accounts.salary_expense_code');
@@ -107,13 +107,14 @@ class ConfiguredControlAccountTypeTest extends TestCase
 
     public function test_an_active_but_wrongly_typed_ap_code_is_refused(): void
     {
-        // 1010 Cash on Hand is active, and an asset. AP must be a liability.
-        app(SettingsService::class)->set('accounting.accounts.ap_code', '1010', 'accounting');
+        // 3010 Capital Stock is active, and equity. AP must be a liability.
+        $policy = app(AccountingAccountPolicyService::class);
+        app(SettingsService::class)->set('accounting.accounts.ap_code', '3010', 'accounting');
 
         $this->expectException(BusinessRuleException::class);
-        $this->expectExceptionMessage('Account 1010 must be of type liability.');
+        $this->expectExceptionMessage('Account 3010 must be of type liability.');
 
-        app(AccountingAccountPolicyService::class)->controlAccountId('1010');
+        app(AccountingAccountPolicyService::class)->controlAccountId($policy->ap());
     }
 
     public function test_an_active_but_wrongly_typed_vat_input_code_is_refused(): void
@@ -133,17 +134,16 @@ class ConfiguredControlAccountTypeTest extends TestCase
      * is the one way a "wrong type" check can silently pass: AP and VAT Input
      * disagree about the required type, and here AP is checked first.
      */
-    public function test_two_roles_sharing_one_code_resolve_against_the_first_rule(): void
+    public function test_two_roles_with_incompatible_types_sharing_one_code_are_rejected(): void
     {
         $policy = app(AccountingAccountPolicyService::class);
         $ap = $policy->ap();
         app(SettingsService::class)->set('accounting.accounts.vat_input_code', $ap, 'accounting');
 
-        $this->assertSame(AccountType::Liability, app(AccountingAccountPolicyService::class)->typeFor($ap));
-        $this->assertSame(
-            Account::query()->where('code', $ap)->value('id'),
-            app(AccountingAccountPolicyService::class)->controlAccountId($ap),
-        );
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('incompatible control-account types');
+
+        app(AccountingAccountPolicyService::class)->controlAccountId($ap);
     }
 
     public function test_an_inactive_control_account_is_still_refused(): void
@@ -171,7 +171,7 @@ class ConfiguredControlAccountTypeTest extends TestCase
         $expense = Account::query()->where('code', '5010')->firstOrFail();
 
         // Point AP at an active asset account.
-        app(SettingsService::class)->set('accounting.accounts.ap_code', '1010', 'accounting');
+        app(SettingsService::class)->set('accounting.accounts.ap_code', '3010', 'accounting');
 
         $billsBefore = Bill::query()->count();
         $journalsBefore = JournalEntry::query()->count();

@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionEntityType;
@@ -105,7 +106,83 @@ class SalesOrderChainStageTest extends TestCase
         $this->assertSame($completedAt->toDateString(), $step['date']);
     }
 
+    // ─── Delivery stage: coverage, not status ──────────────────────────────────
+
+    public function test_delivery_stage_stays_active_for_partially_delivered_invoiced_order(): void
+    {
+        // finalize() promotes the SO on the FIRST finalized invoice, so a
+        // partly shipped order reads `invoiced`. Keyed off status alone, the
+        // Delivered tile flipped to done and hid the goods still owed.
+        $so = $this->makeSo(SalesOrderStatus::Invoiced);
+        $this->makeLine($so, quantity: 100, delivered: 40);
+        $so->forceFill([
+            'partially_delivered_at' => now()->subDay(),
+            'invoiced_at' => now(),
+        ])->save();
+
+        $step = $this->deliveryStep($so);
+
+        $this->assertSame('active', $step['state']);
+        $this->assertSame(now()->subDay()->toDateString(), $step['date']);
+    }
+
+    public function test_delivery_stage_done_when_fully_delivered(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Invoiced);
+        $this->makeLine($so, quantity: 100, delivered: 100);
+        $so->forceFill(['delivered_at' => now()->subDay()])->save();
+
+        $this->assertSame('done', $this->deliveryStep($so)['state']);
+    }
+
+    public function test_delivery_stage_pending_for_advance_invoiced_order_with_no_delivery(): void
+    {
+        $so = $this->makeSo(SalesOrderStatus::Invoiced);
+        $this->makeLine($so, quantity: 100, delivered: 0);
+
+        $step = $this->deliveryStep($so);
+
+        $this->assertSame('pending', $step['state']);
+        $this->assertNull($step['date']);
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Pluck the delivered step out of the chain payload.
+     *
+     * @return array{key: string, label: string, date: ?string, state: string}
+     */
+    private function deliveryStep(SalesOrder $so): array
+    {
+        foreach ($this->service->chain($so) as $step) {
+            if ($step['key'] === 'delivered') {
+                return $step;
+            }
+        }
+        $this->fail('delivered step not found in chain payload.');
+    }
+
+    private function makeLine(SalesOrder $so, int $quantity, int $delivered): void
+    {
+        $product = Product::create([
+            'part_number'     => strtoupper(substr(uniqid('PT-'), 0, 12)),
+            'name'            => 'Line Product '.uniqid(),
+            'unit_of_measure' => 'pcs',
+            'standard_cost'   => '10.00',
+            'is_active'       => true,
+        ]);
+
+        SalesOrderItem::create([
+            'sales_order_id'     => $so->id,
+            'product_id'         => $product->id,
+            'quantity'           => $quantity,
+            'unit_price'         => '10.00',
+            'total'              => number_format($quantity * 10, 2, '.', ''),
+            'quantity_delivered' => $delivered,
+            'delivery_date'      => now()->addDays(7)->toDateString(),
+        ]);
+    }
 
     /**
      * Pluck the qc_outgoing step out of the chain payload.

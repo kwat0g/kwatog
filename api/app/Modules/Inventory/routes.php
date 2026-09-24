@@ -41,11 +41,14 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     // inventory.view).
     Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission_any:inventory.view,purchasing.pr.create');
     Route::get('/items', [ItemController::class, 'index'])->middleware('permission_any:inventory.view,purchasing.pr.create');
+    Route::post('/items/recompute-abc', [ItemController::class, 'recomputeAbc'])->middleware('permission:inventory.items.manage');
     Route::get('/items/{item}', [ItemController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/items', [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/items/{item}', [ItemController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/items/{item}', [ItemController::class, 'destroy'])->middleware('permission:inventory.items.manage');
-    Route::patch('/items/{item}/restore', [ItemController::class, 'restore'])->middleware('permission:inventory.items.manage');
+    Route::patch('/items/{item}/restore', [ItemController::class, 'restore'])
+        ->withTrashed()
+        ->middleware('permission:inventory.items.manage');
     Route::get('/items/{item}/quality-plans', [ItemQualityPlanController::class, 'index'])
         ->middleware('permission:inventory.view');
     Route::get('/quality-plans/options', [ItemQualityPlanController::class, 'options'])
@@ -113,15 +116,6 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
         ->middleware('permission_any:inventory.adjust,inventory.adjust.approve');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
     Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
-    /*
-     * POST /inventory/stock-transfers — HIDDEN 2026-08-08 (scope cut).
-     * Duplicate of Transfer Orders; the page surface was removed. The service
-     * remains load-bearing (TransferOrderService executes through it).
-     * Re-enable: uncomment below.
-     *
-     * Route::post('/stock-transfers', [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');
-     */
-
     /* ─── ADV8 — WMS: Warehouse Map ─── */
     Route::get('/warehouse-map', [WarehouseMapController::class, 'index'])->middleware('permission:inventory.warehouse.manage');
     Route::get('/warehouse-map/bins/{location}', [WarehouseMapController::class, 'binDetail'])->middleware('permission:inventory.warehouse.manage');
@@ -149,14 +143,19 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
 
     /* ─── GRN ─── */
     Route::get('/grn/options', [GoodsReceiptNoteController::class, 'options'])->middleware('permission:inventory.view');
+    Route::get('/grn/receivable-purchase-orders', [GoodsReceiptNoteController::class, 'receivablePurchaseOrders'])->middleware('permission:inventory.grn.create');
+    Route::get('/grn/receivable-purchase-orders/{purchaseOrder}', [GoodsReceiptNoteController::class, 'receivablePurchaseOrder'])->middleware('permission:inventory.grn.create');
     Route::get('/grn', [GoodsReceiptNoteController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/grn/{grn}', [GoodsReceiptNoteController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/grn/{grn}/retry-incoming-qc', [GoodsReceiptNoteController::class, 'retryIncomingQc'])
         ->middleware('permission:quality.inspections.manage');
+    Route::post('/grn/{grn}/retry-gl', [GoodsReceiptNoteController::class, 'retryGl'])
+        ->middleware('permission:accounting.journal.post');
     Route::post('/grn', [GoodsReceiptNoteController::class, 'store'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/finalize', [GoodsReceiptNoteController::class, 'finalize'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/accept', [GoodsReceiptNoteController::class, 'accept'])->middleware('permission:inventory.grn.create');
     Route::patch('/grn/{grn}/reject', [GoodsReceiptNoteController::class, 'reject'])->middleware('permission:inventory.grn.create');
+    Route::patch('/grn/{grn}/reject-remainder', [GoodsReceiptNoteController::class, 'rejectRemainder'])->middleware('permission:inventory.grn.create');
 
     /* ─── CA2 — Single-screen receiving (GRN + QC + inventory in one call) ─── */
     Route::post('/receive-goods', [GoodsReceiptNoteController::class, 'receiveWithQc'])->middleware('permission:inventory.grn.create');

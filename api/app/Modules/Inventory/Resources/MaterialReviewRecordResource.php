@@ -40,6 +40,9 @@ class MaterialReviewRecordResource extends JsonResource
                 'status' => $this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status,
                 'status_label' => Str::headline((string) ($this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status)),
                 'affected_quantity' => (int) $this->ncr->affected_quantity,
+                // The MRB decision; the release form starts from it.
+                'disposition' => $this->ncr->disposition instanceof \BackedEnum ? $this->ncr->disposition->value : $this->ncr->disposition,
+                'disposition_label' => NcrDisposition::tryFrom((string) ($this->ncr->disposition instanceof \BackedEnum ? $this->ncr->disposition->value : $this->ncr->disposition))?->label(),
                 'inspection' => $this->ncr->relationLoaded('inspection') && $this->ncr->inspection ? [
                     'id' => $this->ncr->inspection->hash_id,
                     'inspection_number' => $this->ncr->inspection->inspection_number,

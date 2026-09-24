@@ -17,6 +17,9 @@ class BillResource extends JsonResource
             'date'           => optional($this->date)->toDateString(),
             'due_date'       => optional($this->due_date)->toDateString(),
             'is_vatable'     => (bool) $this->is_vatable,
+            'withholding_tax_type' => $this->withholding_tax_type?->value,
+            'ewt_rate'       => (string) ($this->ewt_rate ?? '0.0000'),
+            'ewt_amount'     => (string) ($this->ewt_amount ?? '0.00'),
             'subtotal'       => (string) $this->subtotal,
             'vat_amount'     => (string) $this->vat_amount,
             'total_amount'   => (string) $this->total_amount,
@@ -79,7 +82,10 @@ class BillResource extends JsonResource
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),
             'items'          => BillItemResource::collection($this->whenLoaded('items')),
-            'payments'       => BillPaymentResource::collection($this->whenLoaded('payments')),
+            // Each payment needs its bill to project a pending payment's EWT.
+            'payments'       => BillPaymentResource::collection($this->whenLoaded('payments', fn () => $this->payments->each(
+                fn ($payment) => $payment->setRelation('bill', $this->resource),
+            ))),
             'journal_entry'  => $this->whenLoaded('journalEntry', fn () => $this->journalEntry ? [
                 'id'           => $this->journalEntry->hash_id,
                 'entry_number' => $this->journalEntry->entry_number,

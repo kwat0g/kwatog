@@ -150,6 +150,15 @@ class DeliveryController
         }
     }
 
+    public function retryInvoice(Request $request, Delivery $delivery): DeliveryResource
+    {
+        try {
+            return new DeliveryResource($this->service->retryInvoiceHandoff($delivery, $request->user()));
+        } catch (\App\Common\Exceptions\BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+    }
+
     /**
      * Stream the receipt photo for a delivery.
      * The photo lives on the local disk and is NEVER accessible via a public

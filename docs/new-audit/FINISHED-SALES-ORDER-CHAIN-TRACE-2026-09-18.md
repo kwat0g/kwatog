@@ -1,14 +1,23 @@
 # Sales Order → Downstream Chain Trace
 
 Date: 2026-09-18
- 
-## Re-audit 2026-09-19
+Status: **FINISHED (2026-09-23)** — every current-risk item this trace surfaced is fixed
+or dispositioned; the body remains the 2026-09-18 snapshot.
 
-Current verdict: **historical FINISHED label is not release closure**.
+## Re-audit 2026-09-19, closed 2026-09-23
 
-- Paid/closed lifecycle, PR provenance, chain broadcasts, CoA verification, and incoming-QC retry are current.
-- Remaining risks: cancelled SO draft auto-PRs, invoiced-partial MRP exclusion, MRP failure reported as queued, no-spec outgoing QC dead-end, CoC failure without durable recovery, and stale partial-delivery chain/timestamp projections.
-- Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
+Verdict: the historical FINISHED label was not release closure. The gaps this report
+surfaced are now closed in code or explicitly dispositioned (see the §7 table).
+
+- Fixed 2026-09-23 (regression tests included):
+  - cancelled SO now retires its linked draft/pending MRP auto-PRs (`SalesOrderService::cancel` → `retireAutoPurchaseRequests`; `SalesOrderChainBridgeTest::test_cancel_retires_mrp_auto_purchase_requests`);
+  - MRP replan scope is *undelivered quantity*, not status (`SalesOrder::scopePlanningRelevant`), so an SO invoiced after a partial shipment keeps planning its remaining demand (`MrpDemandIntegrityTest::test_invoiced_partially_delivered_sales_order_still_plans_remaining_quantity`, `MrpAutomationTest::test_stock_change_scope_keeps_partially_delivered_invoiced_orders`);
+  - the confirm response reports `planning_status = failed` with the recorded run error instead of reporting a failed run as `queued` (`SalesOrderChainBridgeTest::test_confirm_reports_mrp_failure_instead_of_queued`);
+  - the Delivered chain tile derives from delivered coverage, so a partially shipped order stays `active` instead of flipping to `done` at first invoice (`SalesOrderChainStageTest::test_delivery_stage_stays_active_for_partially_delivered_invoiced_order`);
+  - step 6's terminal stage: invoice finalize now refuses a second invoice consuming an already-invoiced delivery (`InvoiceService::assertInvoiceMatchesConfirmedDelivery`; `AutoInvoiceOnDeliveryConfirmTest::test_finalize_rejects_an_invoice_that_reuses_an_already_invoiced_delivery`).
+- Related hardening in the same pass: decimal-safe forecast aggregation on the MRP-adjacent projection (`ForecastMrpService`, `bcadd` instead of float sums), and the Accounting A-01..A-04 pass (credit-note source state, payment-replay payload, bill budget at post) recorded in `ACCOUNTING-CORE-AUDIT-2026-09-18-FINISHED.md`.
+- Verified current before that pass (previously listed here as risks): paid/closed lifecycle, PR provenance, chain broadcasts, CoA verification, incoming-QC retry, CoC durable recovery (`coc_handoff_status` + `POST /supply-chain/deliveries/{id}/retry-coc`), and no-spec outgoing QC failing closed before an inspection row exists.
+- The body below is the 2026-09-18 snapshot. Diagram node `UU` and every item in §7 are historical. Treat `RE-AUDIT-REGISTER-2026-09-19.md` as the canonical register.
 Scope: what an OGAMI ERP Sales Order actually sets in motion, discovered by reading
 `api/`. Every claim below is marked **[confirmed]** (read in source, file:line given) or
 **[assumption/unverified]** (inferred, or could not be traced to code).
@@ -100,11 +109,15 @@ flowchart TD
     QQ --> RR["DeliveryService::confirm()<br/>requires DeliveryProof; syncs SO qty_delivered;<br/>SO -> partially_delivered/delivered;<br/>auto-creates draft Invoice; attaches CoC"]
     RR --> SS["InvoiceService::finalize()<br/>JE Dr AR / Cr Revenue / Cr VAT; SO -> invoiced"]
     SS --> TT["InvoiceService::recordCollection()<br/>JE Dr Cash / Cr AR; OfficialReceipt"]
-    TT --> UU["SO stays 'invoiced' (no paid/closed transition exists)"]
+    TT --> UU["SO -> paid -> closed on collection<br/>SalesOrderService::synchronizeCompletionState"]
 
     classDef dead fill:#fdd,stroke:#c33,color:#600
-    class UU,OO2,J1 dead
+    class OO2,J1 dead
 ```
+
+> Diagram is the 2026-09-18 snapshot. `UU` was accurate then; `paid`/`closed`
+> now exist (`SalesOrderStatus`, `markPaid`/`markClosed`, and
+> `synchronizeCompletionState` called from invoice collection).
 
 ---
 
@@ -435,7 +448,26 @@ Triggered only if Step 3 created a PR.
 
 ## 7. Incomplete, inconsistent, or dead-end areas
 
-All **[confirmed]** from source.
+> **Historical snapshot (2026-09-18).** Closed 2026-09-23; dispositions below.
+
+| § | Item | Disposition |
+|---|---|---|
+| 7.1 | SO chain has unreachable `paid`/`closed` steps | Stale — `SalesOrderStatus::Paid/Closed` exist, `markPaid`/`markClosed` are called from `synchronizeCompletionState` (invoice collection / credit-note application / delivery confirm) |
+| 7.2 | No active Work Order approval chain | By design — deliberately absent from `$wiredTypes`; WO confirm is an operational action, not an approval |
+| 7.3 | MRP auto-PRs are unsubmittable as created (`sourcing_method = null`) | By design — the draft is the staging state; the buyer chooses DirectPo vs RFQ at submit |
+| 7.4 | `PurchaseRequestService::create()` ignores `mrp_plan_id` | Fixed — it persists the link (`PurchaseRequestService.php:154`) |
+| 7.5 | Stale `PurchaseRequestAccessPolicy` contract docblock | Fixed — the docblock now describes the money-only chain and the list-scope role |
+| 7.6 | `markPoConversionConverted()` never called | Superseded — PO conversion writes `status`/`po_conversion_status` in `PurchaseOrderService`; the helper is dead code |
+| 7.7 | `coa_verified` never set true | Fixed — `VerifyCoaOnIncomingQcPass` and `GrnService::verifyCoaOnIncomingPass()` set it |
+| 7.8 | `requires_vp_approval` on PO is display-only | By design — the workflow step threshold is the real gate |
+| 7.9 | Single-screen receiving refuses concession/partial QC | Tracked in `INVENTORY-RETURNS-AUDIT-2026-09-18-FINISHED.md` (GRN module, not SO chain) |
+| 7.10 | PO lines have no purchase-UOM column | Tracked in `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md` (Purchasing/UOM follow-up) |
+| 7.11 | Outgoing inspection chain derivation is join-based | By design — outgoing inspections are created WO-linked by `TriggerOutgoingQC`, so no other entity type exists on this path |
+| 7.12 | Async planning can leave a confirmed SO unplanned | Closed — the confirm response reports `failed` + error + recovery action; queue outages are recovered by the outbox |
+| 7.13 | `CreateDeliveryDraftOnQcPass` throws if the WO has no `sales_order_item_id` | By design — pinned by `CreateDeliveryDraftOnQcPassTest::test_invalid_work_order_line_does_not_commit_an_empty_delivery`; a silent skip would drop QC-passed output, the failure is recorded in `chain_listener_runs` |
+
+Nothing in this section is an open SO-chain defect.
+
 
 1. **SO chain has unreachable `paid` and `closed` steps.** `ChainDefinitions` lists SO
    steps `paid` and `closed` (`Common/Support/ChainDefinitions.php:33,34`) but

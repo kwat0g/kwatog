@@ -42,6 +42,7 @@ class StorePurchaseRequestRequest extends FormRequest
             // request (trace §7.4). Resolved from a HashID by hashIdFields().
             'mrp_plan_id' => ['nullable', 'integer', 'exists:mrp_plans,id'],
             'date' => ['nullable', 'date'],
+            'required_delivery_date' => ['nullable', 'date', 'after_or_equal:today'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'priority' => ['nullable', Rule::in(PurchaseRequestPriority::values())],
             // Manual/internal PRs use the direct procurement path. RFQ is
@@ -50,7 +51,7 @@ class StorePurchaseRequestRequest extends FormRequest
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['nullable', 'integer', 'exists:items,id'],
             'items.*.description' => ['required', 'string', 'min:2', 'max:200'],
-            'items.*.quantity' => ['required', 'decimal:0,2', 'min:0.01'],
+            'items.*.quantity' => ['required', 'decimal:0,3', 'min:0.001', 'max:999999999.999'],
             'items.*.unit' => ['nullable', 'string', 'max:20'],
             'items.*.estimated_unit_price' => ['nullable', 'decimal:0,2', 'min:0'],
             'items.*.purpose' => ['nullable', 'string', 'max:200'],

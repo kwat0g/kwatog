@@ -52,6 +52,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Textarea } from '@/components/ui/Textarea';
 import { FileInput } from '@/components/ui/FileInput';
 import { Tabs } from '@/components/ui/Tabs';
+import { localIsoDate } from '@/lib/formatDate';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
   switch (status) {
@@ -1390,7 +1391,7 @@ function UploadProofModal({
   const [transactionReference, setTransactionReference] = useState('');
   const [disbursedAmount, setDisbursedAmount] = useState('');
   const [disbursementDate, setDisbursementDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    localIsoDate(),
   );
   const [notes, setNotes] = useState('');
   const { data: proofOptions } = useQuery({

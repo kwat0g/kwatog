@@ -38,6 +38,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { localIsoDate } from '@/lib/formatDate';
 
 const INCOTERM_OPTIONS: Array<{ value: Incoterm; label: string }> = [
  { value: 'EXW', label: 'Ex Works' },
@@ -95,7 +96,7 @@ export default function CreateSalesOrderPage() {
  });
  const policies = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const today = new Date().toISOString().slice(0, 10);
+ const today = localIsoDate();
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),

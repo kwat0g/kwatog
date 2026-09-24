@@ -15,6 +15,9 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Models\RequestForQuote;
+use App\Modules\Purchasing\Models\RequestForQuoteInvitation;
+use App\Modules\Purchasing\Models\RfqDocument;
 use App\Modules\Quality\Enums\PpapElementStatus;
 use App\Modules\Quality\Enums\PpapElementType;
 use App\Modules\Quality\Enums\PpapLevel;
@@ -402,6 +405,53 @@ class SupplierPortalCrossTenantTest extends TestCase
         $this->assertContains($response->status(), [403, 404]);
         $this->assertStringNotContainsString('tenant-b-secret', $response->getContent() ?: '');
         $this->assertStringNotContainsString('tenant-b-packing-list', $response->getContent() ?: '');
+    }
+
+    public function test_supplier_can_download_own_rfq_uploads_and_shared_requirements_only(): void
+    {
+        ['a' => $a, 'b' => $b] = $this->twoTenants();
+        Storage::fake('local');
+        $rfq = \Database\Factories\RequestForQuoteFactory::new()->create();
+        $rfq->forceFill(['status' => 'open'])->save();
+        $inviter = User::factory()->create();
+        foreach ([$a['vendor'], $b['vendor']] as $vendor) {
+            RequestForQuoteInvitation::create([
+                'request_for_quote_id' => $rfq->id,
+                'vendor_id' => $vendor->id,
+                'invited_by' => $inviter->id,
+                'invited_at' => now(),
+            ]);
+        }
+
+        $documents = [];
+        foreach ([
+            ['vendor' => $a['vendor'], 'type' => 'quotation_pdf', 'name' => 'own-quote.pdf'],
+            ['vendor' => $b['vendor'], 'type' => 'quotation_pdf', 'name' => 'other-quote.pdf'],
+            ['vendor' => null, 'type' => 'requirement_document', 'name' => 'shared-requirement.pdf'],
+        ] as $index => $fixture) {
+            $path = "rfqs/{$rfq->hash_id}/{$index}.pdf";
+            Storage::disk('local')->put($path, 'private file '.$fixture['name']);
+            $documents[] = RfqDocument::create([
+                'request_for_quote_id' => $rfq->id,
+                'vendor_id' => $fixture['vendor']?->id,
+                'uploaded_by_portal_user' => $index === 0 ? $a['user']->id : null,
+                'document_type' => $fixture['type'],
+                'original_filename' => $fixture['name'],
+                'mime_type' => 'application/pdf',
+                'size_bytes' => strlen('private file '.$fixture['name']),
+                'file_path' => $path,
+            ]);
+        }
+
+        $this->actAs($a['user']);
+        $this->get("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/documents/{$documents[0]->hash_id}/download")
+            ->assertOk()
+            ->assertDownload('own-quote.pdf');
+        $this->get("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/documents/{$documents[2]->hash_id}/download")
+            ->assertOk()
+            ->assertDownload('shared-requirement.pdf');
+        $this->getJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/documents/{$documents[1]->hash_id}/download")
+            ->assertNotFound();
     }
 
     public function test_supplier_cannot_schedule_against_another_tenants_purchase_order_or_line(): void

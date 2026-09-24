@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Models;
 
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Model;
 
 class AssetDepreciationRun extends Model
 {
+    use HasHashId;
+
     protected $table = 'asset_depreciation_runs';
 
     protected $fillable = [

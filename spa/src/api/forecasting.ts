@@ -5,6 +5,7 @@ import { client } from './client';
 import type {
  DemandForecast,
  ForecastMethod,
+ ComputedForecastMethod,
  ForecastAccuracy,
  HistoricalDemandPoint,
  ProductAccuracy,
@@ -14,7 +15,7 @@ import type {
 import type { Product } from '@/types/crm';
 
 export const forecastingApi = {
- options: () => client.get<{ data: { methods: Array<{ value: 'moving_avg' | 'weighted_avg'; label: string }>; demand_sources: Array<{ value: string; label: string }>; accuracy_policy: { excellent_mape: number; acceptable_mape: number } } }>('/forecasting/demand-forecasts/options').then((r) => r.data.data),
+ options: () => client.get<{ data: { methods: Array<{ value: ComputedForecastMethod; label: string }>; demand_sources: Array<{ value: string; label: string }>; accuracy_policy: { excellent_mape: number; acceptable_mape: number } } }>('/forecasting/demand-forecasts/options').then((r) => r.data.data),
  settings: () => client.get<{ data: ForecastingSettings }>('/forecasting/settings').then((r) => r.data.data),
  list: (params?: {
  product_id?: string;
@@ -38,7 +39,7 @@ export const forecastingApi = {
   recompute: (payload: {
   product_id: string;
   customer_id?: string;
-  method: 'moving_avg' | 'weighted_avg';
+   method: ComputedForecastMethod;
   horizon_months?: number;
   lookback_months?: number;
   overwrite_manual?: boolean;
@@ -76,7 +77,7 @@ export const forecastingApi = {
 
  accuracy: (year: number) =>
  client
- .get<{ data: ForecastAccuracy }>(`/forecasting/accuracy?year=${year}`)
+  .get<{ data: ForecastAccuracy }>('/forecasting/accuracy/summary', { params: { year } })
  .then((r) => r.data),
 
  accuracySummary: (year?: number) =>

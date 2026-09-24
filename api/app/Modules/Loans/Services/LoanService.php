@@ -14,6 +14,8 @@ use App\Common\Models\WorkflowDefinition;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Services\AccountingAccountPolicyService;
+use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
 use App\Modules\Loans\Enums\LoanStatus;
@@ -25,6 +27,7 @@ use App\Modules\Loans\Events\LoanDecided;
 use App\Modules\Loans\Events\LoanSubmitted;
 use App\Modules\Loans\Support\LoanRate;
 use App\Modules\Loans\Support\LoanStateMachine;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -37,6 +40,9 @@ class LoanService
         private readonly SettingsService $settings,
         private readonly LoanAccessPolicy $access,
         private readonly LoanStateMachine $stateMachine,
+        private readonly PayrollPeriodService $payrollPeriods,
+        private readonly AccountingAccountPolicyService $accountPolicies,
+        private readonly JournalEntryService $journals,
     ) {}
 
     /** @return array<int, array{value:string,label:string,interest_rate:string,interest_rate_percent:string,approval_steps:int}> */
@@ -224,6 +230,7 @@ class LoanService
                 $authoritative->fill(['start_date' => now()->toDateString()]);
                 $this->stateMachine->transition($authoritative, LoanStatus::Active);
                 $authoritative->save();
+                $this->postDisbursement($authoritative, $user);
             }
 
             $loan = $authoritative->fresh(['employee', 'payments']);
@@ -312,6 +319,105 @@ class LoanService
         });
     }
 
+    public function requestWriteOff(EmployeeLoan $loan, User $maker, string $reason, string $evidence): EmployeeLoan
+    {
+        return DB::transaction(function () use ($loan, $maker, $reason, $evidence) {
+            if (! $maker->hasPermission('loans.write_off.request') || ! $this->access->canDecide($maker, $loan)) {
+                throw new BusinessRuleException('You do not have Finance permission to request this loan write-off within your row scope.');
+            }
+
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if (! $this->access->canDecide($maker, $authoritative)) {
+                throw new BusinessRuleException('You do not have permission to request this loan write-off within your row scope.');
+            }
+            if ($authoritative->status === LoanStatus::WriteOffPending) {
+                return $authoritative->fresh(['employee']);
+            }
+            if ($authoritative->status !== LoanStatus::Active) {
+                throw new BusinessRuleException('Only active loans can be submitted for write-off.');
+            }
+
+            $balance = $this->outstandingBalance($authoritative);
+            if (Money::lte($balance, Money::zero())) {
+                throw new BusinessRuleException('A loan with no outstanding balance cannot be written off.');
+            }
+
+            $reason = trim($reason);
+            $evidence = trim($evidence);
+            if ($reason === '' || $evidence === '') {
+                throw new BusinessRuleException('A write-off reason and evidence reference are required.');
+            }
+
+            $this->stateMachine->transition($authoritative, LoanStatus::WriteOffPending);
+            $authoritative->fill([
+                'write_off_reason' => $reason,
+                'write_off_evidence' => $evidence,
+                'write_off_requested_by' => $maker->id,
+                'write_off_requested_at' => now(),
+            ]);
+            $authoritative->save();
+
+            return $authoritative->fresh(['employee']);
+        });
+    }
+
+    public function approveWriteOff(EmployeeLoan $loan, User $checker, ?string $remarks = null): EmployeeLoan
+    {
+        return DB::transaction(function () use ($loan, $checker, $remarks) {
+            if (! $checker->hasPermission('loans.write_off.approve') || ! $this->access->canDecide($checker, $loan)) {
+                throw new BusinessRuleException('You do not have Finance permission to approve this loan write-off within your row scope.');
+            }
+
+            $authoritative = EmployeeLoan::query()->lockForUpdate()->findOrFail($loan->id);
+            if ($authoritative->status === LoanStatus::WrittenOff) {
+                return $authoritative->fresh(['employee']);
+            }
+            if ($authoritative->status !== LoanStatus::WriteOffPending) {
+                throw new BusinessRuleException('Only pending loan write-offs can be approved.');
+            }
+            if ((int) $authoritative->write_off_requested_by === (int) $checker->id) {
+                throw new BusinessRuleException('The write-off maker cannot approve the same write-off.');
+            }
+            if (! $authoritative->write_off_reason || ! $authoritative->write_off_evidence) {
+                throw new BusinessRuleException('A write-off reason and evidence reference are required before approval.');
+            }
+
+            $amount = $this->outstandingBalance($authoritative);
+            if (Money::lte($amount, Money::zero())) {
+                throw new BusinessRuleException('A loan with no outstanding balance cannot be written off.');
+            }
+
+            $expense = $this->loanAccount('accounting.accounts.loan_write_off_expense_code');
+            $receivable = $this->loanAccount('accounting.accounts.loan_write_off_receivable_code');
+            $je = $this->journals->create([
+                'date' => now()->toDateString(),
+                'description' => 'Employee loan write-off — '.$authoritative->loan_no,
+                'reference_type' => 'loan_write_off',
+                'reference_id' => $authoritative->id,
+                'lines' => [
+                    ['account_id' => $expense, 'debit' => $amount, 'credit' => Money::zero(), 'description' => 'Employee loan write-off expense'],
+                    ['account_id' => $receivable, 'debit' => Money::zero(), 'credit' => $amount, 'description' => 'Remove written-off employee loan receivable'],
+                ],
+            ], $checker);
+            $posted = $this->journals->postSystem($je, $checker->id);
+
+            $this->stateMachine->transition($authoritative, LoanStatus::WrittenOff);
+            $authoritative->fill([
+                'write_off_amount' => $amount,
+                'write_off_approved_by' => $checker->id,
+                'write_off_approved_at' => now(),
+                'write_off_journal_entry_id' => $posted->id,
+                'balance' => Money::zero(),
+                'pay_periods_remaining' => 0,
+                'end_date' => now()->toDateString(),
+                'write_off_approval_remarks' => $remarks,
+            ]);
+            $authoritative->save();
+
+            return $authoritative->fresh(['employee']);
+        });
+    }
+
     public function withdraw(EmployeeLoan $loan, Employee $employee): EmployeeLoan
     {
         return DB::transaction(function () use ($loan, $employee) {
@@ -350,8 +456,20 @@ class LoanService
         ?string $paymentDate = null,
         ?int $clearanceId = null,
         ?string $idempotencyKey = null,
+        ?User $actor = null,
     ): LoanPayment {
-        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId, $idempotencyKey) {
+        if ($type === LoanPaymentType::FinalPay && $clearanceId !== null) {
+            $idempotencyKey = 'final-pay-clearance-'.$clearanceId;
+        }
+
+        return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks, $paymentDate, $clearanceId, $idempotencyKey, $actor) {
+            if ($type === LoanPaymentType::Manual && $payrollId === null && $clearanceId === null) {
+                $this->payrollPeriods->assertLoanPaymentMutable(
+                    (int) $loan->employee_id,
+                    $paymentDate ?? now()->toDateString(),
+                );
+            }
+
             // Loan payment serialization invariant: every path that changes a
             // loan row must make its decisions from the current row while
             // holding that row lock, then commit the payment detail and loan
@@ -396,22 +514,24 @@ class LoanService
             // drifted aggregate instead of compounding it on the next write.
             $this->reconcileAggregates($authoritative);
 
+            if ($type === LoanPaymentType::Manual) {
+                $this->postManualRepayment($payment, $authoritative, $actor);
+            }
+
             return $payment;
         });
     }
 
     /** Reconcile the denormalized loan summary from its immutable payment rows. */
-    public function reconcileAggregates(EmployeeLoan $loan, ?string $asOf = null): EmployeeLoan
+    public function reconcileAggregates(EmployeeLoan $loan): EmployeeLoan
     {
         if (! in_array($loan->status, [LoanStatus::Active, LoanStatus::Paid], true)) {
             throw new BusinessRuleException('Only active or paid loans can be reconciled from payment history.');
         }
 
         $payments = $loan->payments()->reorder();
-        if ($asOf !== null) {
-            $payments->whereDate('payment_date', '<=', $asOf);
-        }
         $paid = (string) $payments->sum('amount');
+        $latestPaymentDate = $loan->payments()->reorder()->max('payment_date');
         $schedule = $this->scheduleFor($loan);
         $totalDue = $this->totalDueFor($loan, $schedule);
         $balance = Money::sub($totalDue, $paid);
@@ -424,7 +544,7 @@ class LoanService
             'total_paid' => Money::round2($paid),
             'balance' => Money::round2($balance),
             'pay_periods_remaining' => $remaining,
-            'end_date' => $paidOff ? ($asOf ?? now()->toDateString()) : null,
+            'end_date' => $paidOff ? ($latestPaymentDate ?? now()->toDateString()) : null,
         ]);
         $this->stateMachine->transition($loan, $paidOff ? LoanStatus::Paid : LoanStatus::Active);
         $loan->save();
@@ -488,6 +608,76 @@ class LoanService
         }
 
         return $normalized;
+    }
+
+    private function postDisbursement(EmployeeLoan $loan, User $actor): void
+    {
+        if ($this->settings->get('modules.accounting', false) !== true || $loan->disbursement_journal_entry_id !== null) {
+            return;
+        }
+
+        $receivable = $this->loanAccount('accounting.accounts.loan_disbursement_receivable_code');
+        $cash = $this->loanAccount('accounting.accounts.loan_disbursement_cash_code');
+        $interest = Money::sub((string) $loan->balance, (string) $loan->principal);
+        if (Money::lt($interest, Money::zero())) {
+            throw new BusinessRuleException('Loan balance cannot be below principal at disbursement.');
+        }
+
+        $lines = [
+            ['account_id' => $receivable, 'debit' => (string) $loan->balance, 'credit' => Money::zero(), 'description' => 'Employee loan receivable'],
+            ['account_id' => $cash, 'debit' => Money::zero(), 'credit' => (string) $loan->principal, 'description' => 'Employee loan cash disbursement'],
+        ];
+        if (Money::gt($interest, Money::zero())) {
+            $interestIncome = $this->loanAccount('accounting.accounts.loan_disbursement_interest_income_code');
+            $lines[] = ['account_id' => $interestIncome, 'debit' => Money::zero(), 'credit' => $interest, 'description' => 'Employee loan interest income'];
+        }
+
+        $je = $this->journals->create([
+            'date' => now()->toDateString(),
+            'description' => 'Employee loan disbursement — '.$loan->loan_no,
+            'reference_type' => 'loan_disbursement',
+            'reference_id' => $loan->id,
+            'lines' => $lines,
+        ], $actor);
+        $posted = $this->journals->postSystem($je, $actor->id);
+        $loan->forceFill(['disbursement_journal_entry_id' => $posted->id])->save();
+    }
+
+    private function postManualRepayment(LoanPayment $payment, EmployeeLoan $loan, ?User $actor): void
+    {
+        if ($this->settings->get('modules.accounting', false) !== true || $payment->journal_entry_id !== null) {
+            return;
+        }
+
+        $cash = $this->loanAccount('accounting.accounts.loan_repayment_cash_code');
+        $receivable = $this->loanAccount('accounting.accounts.loan_repayment_receivable_code');
+        $je = $this->journals->create([
+            'date' => $payment->payment_date->toDateString(),
+            'description' => 'Manual employee loan repayment — '.$loan->loan_no,
+            'reference_type' => 'loan_manual_repayment',
+            'reference_id' => $payment->id,
+            'lines' => [
+                ['account_id' => $cash, 'debit' => (string) $payment->amount, 'credit' => Money::zero(), 'description' => 'Manual loan repayment received'],
+                ['account_id' => $receivable, 'debit' => Money::zero(), 'credit' => (string) $payment->amount, 'description' => 'Reduce employee loan receivable'],
+            ],
+        ], $actor);
+        $posted = $this->journals->postSystem($je, $actor?->id);
+        $payment->forceFill(['journal_entry_id' => $posted->id])->save();
+    }
+
+    private function outstandingBalance(EmployeeLoan $loan): string
+    {
+        $paid = (string) $loan->payments()->reorder()->sum('amount');
+        return Money::clampMin(Money::sub($this->totalDueFor($loan), $paid), Money::zero());
+    }
+
+    private function loanAccount(string $setting): int
+    {
+        try {
+            return $this->accountPolicies->controlAccountIdForSetting($setting);
+        } catch (\Throwable $e) {
+            throw new BusinessRuleException("Loan accounting mapping {$setting} is not configured for an active leaf account.", 0, $e);
+        }
     }
 
     /** @return array<int, array{amount:string}> */

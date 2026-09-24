@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum', 'feature:forecasting'])->prefix('forecasting'
         ->middleware('permission:forecasting.manage');
 
     /* ─── Forecast accuracy (MAPE) ─── */
+    // Compatibility alias; new clients use /accuracy/summary.
     Route::get('/accuracy',
         [DemandForecastController::class, 'accuracy'])
         ->middleware('permission:forecasting.view');

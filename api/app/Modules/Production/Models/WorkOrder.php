@@ -13,6 +13,8 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Quality\Models\Inspection;
+use Database\Factories\WorkOrderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,11 +25,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WorkOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+    use HasAuditLog, HasFactory, HasHashId, SoftDeletes;
 
     protected static function newFactory(): Factory
     {
-        return \Database\Factories\WorkOrderFactory::new();
+        return WorkOrderFactory::new();
     }
 
     protected $fillable = [
@@ -43,17 +45,17 @@ class WorkOrder extends Model
     ];
 
     protected $casts = [
-        'status'            => WorkOrderStatus::class,
-        'planned_start'     => 'datetime',
-        'planned_end'       => 'datetime',
-        'actual_start'      => 'datetime',
-        'actual_end'        => 'datetime',
-        'quantity_target'   => 'decimal:0',
+        'status' => WorkOrderStatus::class,
+        'planned_start' => 'datetime',
+        'planned_end' => 'datetime',
+        'actual_start' => 'datetime',
+        'actual_end' => 'datetime',
+        'quantity_target' => 'decimal:0',
         'quantity_produced' => 'decimal:0',
-        'quantity_good'     => 'decimal:0',
+        'quantity_good' => 'decimal:0',
         'quantity_rejected' => 'decimal:0',
-        'scrap_rate'        => 'decimal:2',
-        'priority'          => 'integer',
+        'scrap_rate' => 'decimal:2',
+        'priority' => 'integer',
         'exception_authorized_by' => 'integer',
         // ADV3 — array of {item_id, item_code, item_name, grn_number, material_lot_number, supplier_lot_reference, quantity_used}.
         'material_lot_references' => 'array',
@@ -117,7 +119,7 @@ class WorkOrder extends Model
     /** Quality inspections whose polymorphic production entity is this work order. */
     public function inspections(): HasMany
     {
-        return $this->hasMany(\App\Modules\Quality\Models\Inspection::class, 'entity_id')
+        return $this->hasMany(Inspection::class, 'entity_id')
             ->where('entity_type', 'work_order')
             ->orderByDesc('id');
     }
@@ -145,7 +147,10 @@ class WorkOrder extends Model
     public function getProgressPercentageAttribute(): float
     {
         $target = (int) $this->quantity_target;
-        if ($target <= 0) return 0.0;
+        if ($target <= 0) {
+            return 0.0;
+        }
+
         return round(min(100.0, ((int) $this->quantity_produced / $target) * 100), 1);
     }
 }

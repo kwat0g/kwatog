@@ -31,7 +31,7 @@ class StatementOfAccountService
      *     opening_balance: string,
      *     transactions: list<array{date: string, type: string, reference: string, description: string, amount: string, running_balance: string}>,
      *     closing_balance: string,
-     *     aging: array{current: string, d30_days: string, d60_days: string, d90_plus: string},
+ *     aging: array{current: string, d1_30: string, d31_60: string, d61_90: string, d91_plus: string},
      *     total_outstanding: string,
      * }
      */
@@ -69,7 +69,7 @@ class StatementOfAccountService
 
         // Aging: compute from open (unpaid) invoices only.
         $aging = $this->computeAging($customer, $asOfDate);
-        $totalOutstanding = Money::add($aging['current'], $aging['d30_days'], $aging['d60_days'], $aging['d90_plus']);
+        $totalOutstanding = Money::add($aging['current'], $aging['d1_30'], $aging['d31_60'], $aging['d61_90'], $aging['d91_plus']);
 
         return [
             'customer' => [
@@ -206,16 +206,17 @@ class StatementOfAccountService
     }
 
     /**
-     * @return array{current: string, d30_days: string, d60_days: string, d90_plus: string}
+     * @return array{current: string, d1_30: string, d31_60: string, d61_90: string, d91_plus: string}
      */
     private function computeAging(Customer $customer, Carbon $asOfDate): array
     {
         $cutoff = $asOfDate->copy()->endOfDay();
         $buckets = [
             'current' => Money::zero(),
-            'd30_days' => Money::zero(),
-            'd60_days' => Money::zero(),
-            'd90_plus' => Money::zero(),
+            'd1_30' => Money::zero(),
+            'd31_60' => Money::zero(),
+            'd61_90' => Money::zero(),
+            'd91_plus' => Money::zero(),
         ];
 
         $invoices = Invoice::where('customer_id', $customer->id)
@@ -230,9 +231,13 @@ class StatementOfAccountService
                             ->where('cancelled_at', '>', $cutoff);
                     });
             })
-            ->get(['id', 'total_amount', 'due_date']);
+            ->get(['id', 'total_amount', 'amount_paid', 'due_date', 'status', 'updated_at']);
 
         $invoiceIds = $invoices->modelKeys();
+        $collectionHistory = Collection::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->get(['invoice_id', 'collection_date'])
+            ->groupBy('invoice_id');
         $collected = Collection::query()
             ->whereIn('invoice_id', $invoiceIds)
             ->whereDate('collection_date', '<=', $asOfDate->toDateString())
@@ -247,13 +252,20 @@ class StatementOfAccountService
             ->map(static fn ($items): string => Money::add(...$items->pluck('amount')->all()));
 
         foreach ($invoices as $inv) {
+            $settled = Money::add(
+                (string) ($collected[$inv->id] ?? Money::zero()),
+                (string) ($credited[$inv->id] ?? Money::zero()),
+            );
+            if (Money::isZero($settled)
+                && ! isset($collectionHistory[$inv->id])
+                && in_array($inv->status, [InvoiceStatus::Partial, InvoiceStatus::Paid], true)
+                && $inv->updated_at?->lte($cutoff)) {
+                $settled = (string) $inv->amount_paid;
+            }
             $balance = Money::clampMin(
                 Money::sub(
                     (string) $inv->total_amount,
-                    Money::add(
-                        (string) ($collected[$inv->id] ?? Money::zero()),
-                        (string) ($credited[$inv->id] ?? Money::zero()),
-                    ),
+                    $settled,
                 ),
                 Money::zero(),
             );
@@ -270,11 +282,13 @@ class StatementOfAccountService
             $daysOverdue = $dueDate->diffInDays($asOfDate->copy()->startOfDay(), true);
 
             if ($daysOverdue <= 30) {
-                $buckets['d30_days'] = Money::add($buckets['d30_days'], $balance);
+                $buckets['d1_30'] = Money::add($buckets['d1_30'], $balance);
             } elseif ($daysOverdue <= 60) {
-                $buckets['d60_days'] = Money::add($buckets['d60_days'], $balance);
+                $buckets['d31_60'] = Money::add($buckets['d31_60'], $balance);
+            } elseif ($daysOverdue <= 90) {
+                $buckets['d61_90'] = Money::add($buckets['d61_90'], $balance);
             } else {
-                $buckets['d90_plus'] = Money::add($buckets['d90_plus'], $balance);
+                $buckets['d91_plus'] = Money::add($buckets['d91_plus'], $balance);
             }
         }
 

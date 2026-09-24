@@ -233,7 +233,40 @@ class AuthSecurityTest extends TestCase
                 'new_password_confirmation' => $original,
             ])
             ->assertStatus(422)
+             ->assertJsonValidationErrorFor('new_password');
+    }
+
+    public function test_change_password_rejects_reusing_the_current_password(): void
+    {
+        $password = 'Current-1!';
+        $user = $this->makeUser($password);
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => $password,
+                'new_password' => $password,
+                'new_password_confirmation' => $password,
+            ])
+            ->assertStatus(422)
             ->assertJsonValidationErrorFor('new_password');
+
+        $this->assertSame(0, PasswordHistory::where('user_id', $user->id)->count());
+    }
+
+    public function test_zero_password_history_depth_does_not_accumulate_rows(): void
+    {
+        app(SettingsService::class)->set('security.password_history_depth', 0, 'security');
+        $user = $this->makeUser('First-1!');
+
+        $this->actingAs($user)
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'First-1!',
+                'new_password' => 'Second-2!',
+                'new_password_confirmation' => 'Second-2!',
+            ])
+            ->assertOk();
+
+        $this->assertSame(0, PasswordHistory::where('user_id', $user->id)->count());
     }
 
     public function test_change_password_history_depth_is_three(): void

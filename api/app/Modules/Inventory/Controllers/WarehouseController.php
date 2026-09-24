@@ -63,7 +63,7 @@ class WarehouseController
 
     public function restoreWarehouse(Warehouse $warehouse): JsonResponse
     {
-        $warehouse->restore();
+        $this->service->restoreWarehouse($warehouse);
         return response()->json(['message' => 'Warehouse restored.']);
     }
 
@@ -87,7 +87,7 @@ class WarehouseController
 
     public function restoreZone(WarehouseZone $zone): JsonResponse
     {
-        $zone->restore();
+        $this->service->restoreZone($zone);
         return response()->json(['message' => 'Warehouse zone restored.']);
     }
 
@@ -113,7 +113,7 @@ class WarehouseController
 
     public function restoreLocation(WarehouseLocation $location): JsonResponse
     {
-        $location->restore();
+        $this->service->restoreLocation($location);
         return response()->json(['message' => 'Warehouse location restored.']);
     }
 }

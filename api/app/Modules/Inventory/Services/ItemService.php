@@ -84,7 +84,11 @@ class ItemService
 
     public function show(Item $item): Item
     {
+        // Same aggregates as list(): without them ItemResource falls back to
+        // 0.000 and every item detail read "no stock / critical".
         return $item->load(['category', 'approvedSuppliers.vendor:id,name'])
+            ->loadSum('stockLevels as on_hand_quantity', 'quantity')
+            ->loadSum('stockLevels as reserved_quantity', 'reserved_quantity')
             ->loadExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]);
     }
 

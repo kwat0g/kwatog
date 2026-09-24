@@ -14,6 +14,8 @@ import type {
  StatementOfAccount,
  DeliverySchedule,
  DeliveryScheduleLine,
+ PortalReturnRequest,
+ PortalReturnSourceOptions,
 } from '@/types/b2b';
 import type { ChainStep } from '@/types/chain';
 import type { PaginatedResponse } from '@/types';
@@ -22,7 +24,7 @@ import type { BusinessPolicies } from '@/api/businessPolicies';
 // Customer portal authentication is the same HTTP-only cookie session used by
 // the internal SPA. There is deliberately no storage key or bearer-token
 // setter on this client.
-const { client: portalClient } = createPortalClient();
+const { client: portalClient } = createPortalClient('customer');
 
 type CustomerLoginResponse = {
  user: CustomerPortalUser;
@@ -93,12 +95,14 @@ export const customerPortalApi = {
  return data;
  },
 
- createOrder: async (form: {
- date?: string;
- notes?: string;
- items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
- }) => {
- const { data } = await portalClient.post<{ data: PortalSoDetail; message: string }>('/b2b/customer/orders', form);
+  createOrder: async (form: {
+  date?: string;
+  notes?: string;
+  items: Array<{ product_id: string; quantity: string; delivery_date: string }>;
+  }, idempotencyKey: string) => {
+  const { data } = await portalClient.post<{ data: PortalSoDetail; message: string }>('/b2b/customer/orders', form, {
+   headers: { 'Idempotency-Key': idempotencyKey },
+  });
  return data;
  },
 
@@ -107,10 +111,20 @@ export const customerPortalApi = {
  return data.data;
  },
 
- getOrderChain: async (id: string) => {
+  getOrderChain: async (id: string) => {
  const { data } = await portalClient.get<{ data: ChainStep[] }>(`/b2b/customer/orders/${id}/chain`);
  return data.data;
- },
+  },
+
+  respondToOrder: async (id: string, form: {
+   type: 'accept' | 'propose' | 'decline';
+   proposed_delivery_date?: string;
+   notes?: string;
+   items?: Array<{ sales_order_item_id: string; proposed_quantity: string; proposed_unit_price: string; reason?: string }>;
+  }) => {
+   const { data } = await portalClient.post<{ data: unknown; message: string }>(`/b2b/customer/orders/${id}/respond`, form);
+   return data;
+  },
 
  // ── Invoices ───────────────────────────────────────
  listInvoices: async (params?: { status?: string; page?: number; per_page?: number }) => {
@@ -202,11 +216,44 @@ export const customerPortalApi = {
  return data;
  },
 
- createDeliverySchedule: async (form: {
+  createDeliverySchedule: async (form: {
  month: string;
  lines: DeliveryScheduleLine[];
- }) => {
+  }) => {
  const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>('/b2b/customer/delivery-schedules', form);
  return data;
- },
+  },
+
+  // ── Customer returns (RMA) ─────────────────────────
+  returnSourceOptions: async () => {
+   const { data } = await portalClient.get<{ data: PortalReturnSourceOptions }>('/b2b/customer/return-requests/source-options');
+   return data.data;
+  },
+
+  listReturnRequests: async (params?: { page?: number; per_page?: number }) => {
+   const { data } = await portalClient.get<PaginatedResponse<PortalReturnRequest>>('/b2b/customer/return-requests', { params });
+   return data;
+  },
+
+  getReturnRequest: async (id: string) => {
+   const { data } = await portalClient.get<{ data: PortalReturnRequest }>(`/b2b/customer/return-requests/${id}`);
+   return data.data;
+  },
+
+  createReturnRequest: async (form: {
+   reason_code?: string;
+   reason_description?: string;
+   customer_notes?: string;
+   items: Array<{
+    quantity: string;
+    reason?: string;
+    condition?: string;
+    source_invoice_item_id?: string;
+    source_sales_order_item_id?: string;
+    source_delivery_item_id?: string;
+   }>;
+  }) => {
+   const { data } = await portalClient.post<{ data: PortalReturnRequest; message: string }>('/b2b/customer/return-requests', form);
+   return data;
+  },
 };

@@ -27,8 +27,8 @@ enum NcrDisposition: string
     public function label(): string
     {
         return match ($this) {
-            self::Scrap => 'Scrap', self::Rework => 'Rework (back to good stock)',
-            self::UseAsIs => 'Use as-is (back to good stock)', self::ReturnToSupplier => 'Return to supplier',
+            self::Scrap => 'Scrap', self::Rework => 'Rework to spec',
+            self::UseAsIs => 'Use as-is (concession)', self::ReturnToSupplier => 'Return to supplier',
         };
     }
 }

@@ -251,7 +251,7 @@ class EmployeeController
 
     public function restore(Employee $employee): JsonResponse
     {
-        $employee->restore();
+        $this->service->restore($employee);
         return response()->json(['message' => 'Employee restored.']);
     }
 

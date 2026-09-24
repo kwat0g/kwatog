@@ -58,7 +58,6 @@ class LoanFinalPayReservationFlagTest extends TestCase
             'pay_type'             => 'monthly',
             'date_hired'           => '2025-01-01',
             'basic_monthly_salary' => '20000.00',
-            'status'               => 'active',
         ]);
     }
 

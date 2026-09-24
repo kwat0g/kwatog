@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\MRP;
 
 use App\Common\Services\SettingsService;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -13,8 +14,10 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Enums\MrpRunTrigger;
+use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
+use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Services\MrpEngineService;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -112,6 +115,54 @@ class MrpDemandIntegrityTest extends TestCase
             ->quantity);
     }
 
+    public function test_invoiced_partially_delivered_sales_order_still_plans_remaining_quantity(): void
+    {
+        // finalize() promotes the SO on the FIRST finalized invoice, so a
+        // partly shipped order reads `invoiced` with demand outstanding.
+        $so = $this->salesOrder(10, 6);
+        $so->forceFill(['status' => SalesOrderStatus::Invoiced->value])->save();
+
+        $this->engine->runForAllActiveSalesOrders(MrpRunTrigger::Manual);
+
+        $this->assertNotNull($so->fresh()->mrp_plan_id,
+            'The remaining 4 units must stay in scope after the first invoice is finalized.');
+        $this->assertSame('4.00', (string) PurchaseRequest::query()
+            ->where('is_auto_generated', true)
+            ->firstOrFail()
+            ->items()
+            ->firstOrFail()
+            ->quantity);
+    }
+
+    public function test_fully_delivered_invoiced_sales_order_is_out_of_scope(): void
+    {
+        $so = $this->salesOrder(10, 10);
+        $so->forceFill(['status' => SalesOrderStatus::Invoiced->value])->save();
+
+        $this->engine->runForAllActiveSalesOrders(MrpRunTrigger::Manual);
+
+        $this->assertNull($so->fresh()->mrp_plan_id);
+        $this->assertSame(0, MrpPlan::where('sales_order_id', $so->id)->count());
+    }
+
+    public function test_missing_bom_makes_the_run_partial_and_retains_diagnostic_status(): void
+    {
+        $so = $this->salesOrder(1);
+        Bom::query()->where('product_id', $this->product->id)->update(['is_active' => false]);
+
+        $run = $this->engine->runForAllActiveSalesOrders(MrpRunTrigger::Manual);
+
+        $this->assertSame(MrpRunStatus::Partial, $run->status, json_encode([
+            'error' => $run->error_message,
+            'summary' => $run->summary,
+            'failed' => $run->failed_sales_orders,
+        ]));
+        $this->assertSame(1, $run->summary['incomplete_sales_orders']);
+        $this->assertSame(0, $run->failed_sales_orders);
+        $plan = MrpPlan::query()->where('sales_order_id', $so->id)->firstOrFail();
+        $this->assertSame('missing_bom', collect($plan->diagnostics)->first()['type']);
+    }
+
     public function test_rerun_does_not_create_new_pr_for_open_progressed_request(): void
     {
         $so = $this->salesOrder(10);
@@ -129,7 +180,7 @@ class MrpDemandIntegrityTest extends TestCase
     public function test_fractional_shortage_rounds_purchase_quantity_up(): void
     {
         // MRP-01: the factory-default MOQ of 1 would round a fractional net
-        // up to whole units. Pin the 2dp ceil path in isolation; MOQ rounding
+        // up to whole units. Pin the 3dp ceil path in isolation; MOQ rounding
         // is pinned separately in MrpNettingTest.
         $this->material->update(['minimum_order_quantity' => '0.000']);
         BomItem::query()->where('bom_id', Bom::query()->where('product_id', $this->product->id)->value('id'))
@@ -138,7 +189,7 @@ class MrpDemandIntegrityTest extends TestCase
 
         $this->engine->runForSalesOrder(SalesOrder::query()->latest('id')->firstOrFail());
 
-        $this->assertSame('0.01', (string) PurchaseRequest::query()
+        $this->assertSame('0.001', (string) PurchaseRequest::query()
             ->where('is_auto_generated', true)
             ->firstOrFail()
             ->items()

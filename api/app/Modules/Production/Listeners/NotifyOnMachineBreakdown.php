@@ -35,11 +35,11 @@ class NotifyOnMachineBreakdown implements ShouldQueue
             $reason = $event->reason ? " Reason: {$event->reason}." : '';
 
             $this->notifications->send($audience, 'maintenance.breakdown', [
-                'title'       => "Machine Breakdown — {$machine->machine_code}",
-                'message'     => "{$machine->name} is down.{$woInfo}{$reason}",
-                'link_to'     => "/maintenance/machines/{$machine->hash_id}",
+                'title' => "Machine Breakdown — {$machine->machine_code}",
+                'message' => "{$machine->name} is down.{$woInfo}{$reason}",
+                'link_to' => "/mrp/machines/{$machine->hash_id}",
                 'entity_type' => 'machine',
-                'entity_id'   => $machine->hash_id,
+                'entity_id' => $machine->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnMachineBreakdown failed', ['error' => $e->getMessage()]);

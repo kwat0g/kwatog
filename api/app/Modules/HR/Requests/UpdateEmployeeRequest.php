@@ -95,8 +95,10 @@ class UpdateEmployeeRequest extends FormRequest
             'basic_monthly_salary' => ['prohibited'],
             'semi_monthly_rate'    => ['prohibited'],
 
-            'bank_name'       => $sensitive(['string', 'max:100']),
-            'bank_account_no' => $sensitive(['string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/']),
+            // Bank details are maker-checker controlled through the self-service
+            // profile-change workflow, never through generic employee editing.
+            'bank_name'       => ['prohibited'],
+            'bank_account_no' => ['prohibited'],
         ];
     }
 

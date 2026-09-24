@@ -52,7 +52,7 @@ class StatutoryExportsTest extends TestCase
         $this->assertSame('3000.00', $mapped[8]); // total EE+ER+EC
     }
 
-    public function test_sss_r3_export_excludes_non_filed_periods(): void
+    public function test_sss_r3_export_refuses_non_filed_periods(): void
     {
         $emp = Employee::factory()->create(['last_name' => 'Draft', 'sss_no' => '34-9999999-9']);
         $draft = PayrollPeriod::factory()->create([
@@ -65,8 +65,12 @@ class StatutoryExportsTest extends TestCase
             'gross_pay' => 20000.00, 'net_pay' => 19000.00, 'error_message' => null,
         ]);
 
-        // A draft period is not a filed period — the export must be empty.
-        $this->assertCount(0, (new SssR3Export($draft))->collection());
+        // An empty workbook is indistinguishable from a valid zero-contribution
+        // return, so an unfiled period must fail the export contract explicitly.
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('SSS R-3 is available only for finalized or disbursed payroll periods.');
+
+        (new SssR3Export($draft))->collection();
     }
 
     public function test_bir_1601c_aggregates_month_totals(): void

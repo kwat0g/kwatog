@@ -20,10 +20,10 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Services\ProductionDashboardService;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 6 — Task 56. Fires on machine status transitions.
@@ -161,6 +161,8 @@ class HandleMachineBreakdown implements ShouldQueue
             // the only artefact and the machine downtime carried no MWO link.
             $this->openCorrectiveWorkOrder($machine->fresh(), $pausedWo, $event->reason);
 
+            ProductionDashboardService::forgetCache();
+
             $outcomeCode .= '_and_alert_staged';
         });
 
@@ -207,11 +209,10 @@ class HandleMachineBreakdown implements ShouldQueue
         if (! $maintenanceWorkOrder) {
             $actor = app(SystemActorService::class)->resolve();
             if (! $actor) {
-                Log::warning('Machine breakdown: no automation actor to open a corrective MWO', [
-                    'machine_id' => $machine->id,
-                ]);
-
-                return;
+                throw new \RuntimeException(sprintf(
+                    'Machine breakdown on machine %d cannot commit without a configured automation actor.',
+                    $machine->id,
+                ));
             }
 
             $maintenanceWorkOrder = app(MaintenanceWorkOrderService::class)->create([
@@ -276,6 +277,10 @@ class HandleMachineBreakdown implements ShouldQueue
                     ]);
                     $closed++;
                 });
+
+            if ($closed > 0) {
+                ProductionDashboardService::forgetCache();
+            }
         });
 
         if (! $machine) {

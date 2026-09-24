@@ -103,4 +103,20 @@ class NotificationServiceTest extends TestCase
         $this->assertEquals(3, DB::table('notifications')->where('type', 'multi.type')->count());
         Event::assertDispatched(UserNotificationCreated::class, 3);
     }
+
+    public function test_dedupe_key_makes_replayed_send_idempotent(): void
+    {
+        $user = User::factory()->create();
+        Event::fake([UserNotificationCreated::class]);
+
+        $payload = ['title' => 'Replay safe', 'message' => 'Only once'];
+        $this->service->send($user, 'replay.safe', $payload, 'event:123');
+        $this->service->send($user, 'replay.safe', $payload, 'event:123');
+
+        $this->assertSame(1, DB::table('notifications')
+            ->where('notifiable_id', $user->id)
+            ->where('dedupe_key', 'event:123')
+            ->count());
+        Event::assertDispatched(UserNotificationCreated::class, 1);
+    }
 }

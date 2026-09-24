@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Forecasting\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Forecasting\Models\DemandForecast;
+use App\Modules\Forecasting\Support\ForecastConfidence;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
@@ -96,7 +99,7 @@ class ForecastingService
         ?User $user = null,
         bool $overwriteManual = false
     ): ?DemandForecast {
-        if (! in_array($method, [DemandForecast::METHOD_MOVING_AVG, DemandForecast::METHOD_WEIGHTED_AVG], true)) {
+        if (! in_array($method, DemandForecast::COMPUTED_METHODS, true)) {
             throw new InvalidArgumentException('compute() only supports moving_avg or weighted_avg; use storeManual() for manual.');
         }
 
@@ -246,7 +249,8 @@ class ForecastingService
 
     /**
      * Backfill `actual_quantity` and `variance` for any forecasts whose
-     * forecast period has fully elapsed. Idempotent.
+     * forecast period has fully elapsed. Idempotent: row locks serialize
+     * concurrent runs and a completed row is excluded from later reruns.
      *
      * @return int Number of rows updated.
      */
@@ -254,40 +258,43 @@ class ForecastingService
     {
         $now = Carbon::now();
 
-        // Only periods strictly before the current month qualify.
-        $candidates = DemandForecast::query()
-            ->whereNull('actual_quantity')
-            ->where(function ($q) use ($now) {
-                $q->where('forecast_year', '<', $now->year)
-                    ->orWhere(function ($qq) use ($now) {
-                        $qq->where('forecast_year', $now->year)
-                            ->where('forecast_month', '<', $now->month);
-                    });
-            })
-            ->get();
+        // Lock candidates for the whole run. A concurrent rerun waits for the
+        // first run, then rechecks whereNull and becomes a safe no-op.
+        return DB::transaction(function () use ($now): int {
+            $candidates = DemandForecast::query()
+                ->whereNull('actual_quantity')
+                ->where(function ($q) use ($now) {
+                    $q->where('forecast_year', '<', $now->year)
+                        ->orWhere(function ($qq) use ($now) {
+                            $qq->where('forecast_year', $now->year)
+                                ->where('forecast_month', '<', $now->month);
+                        });
+                })
+                ->lockForUpdate()
+                ->get();
 
-        $updated = 0;
+            $updated = 0;
 
-        foreach ($candidates as $f) {
-            $end = Carbon::create($f->forecast_year, $f->forecast_month, 1)->endOfMonth();
-            $series = $this->historicalDemand(
-                (int) $f->product_id,
-                $f->customer_id !== null ? (int) $f->customer_id : null,
-                $f->forecast_year,
-                $f->forecast_month,
-                1
-            );
-            $actual = isset($series[0]) ? (float) $series[0]['qty'] : 0.0;
-            $variance = $actual - (float) $f->forecasted_quantity;
+            foreach ($candidates as $f) {
+                $series = $this->historicalDemand(
+                    (int) $f->product_id,
+                    $f->customer_id !== null ? (int) $f->customer_id : null,
+                    $f->forecast_year,
+                    $f->forecast_month,
+                    1
+                );
+                $actual = isset($series[0]) ? (float) $series[0]['qty'] : 0.0;
+                $variance = $actual - (float) $f->forecasted_quantity;
 
-            $f->update([
-                'actual_quantity' => round($actual, 2),
-                'variance'        => round($variance, 2),
-            ]);
-            $updated++;
-        }
+                $f->update([
+                    'actual_quantity' => round($actual, 2),
+                    'variance'        => round($variance, 2),
+                ]);
+                $updated++;
+            }
 
-        return $updated;
+            return $updated;
+        });
     }
 
     /**
@@ -298,23 +305,104 @@ class ForecastingService
      */
     public function accuracy(int $year, ?int $productId = null): array
     {
-        $q = DemandForecast::query()
-            ->where('forecast_year', $year)
-            ->whereNotNull('actual_quantity')
-            ->where('actual_quantity', '>', 0);
+        $q = DemandForecast::query()->where('forecast_year', $year);
 
-        if ($productId) {
+        if ($productId !== null) {
             $q->where('product_id', $productId);
         }
 
-        $rows = $q->get();
+        return $this->accuracyMetrics($this->collapseScopeRows($q->get()));
+    }
+
+    /**
+     * Accuracy for active products using one forecast query instead of one
+     * query per product.
+     *
+     * @return array<int, array{product_id:string, part_number:string, name:string, mape:float, bias:float, periods_evaluated:int}>
+     */
+    public function accuracyByProduct(int $year): array
+    {
+        $products = Product::query()
+            ->where('is_active', true)
+            ->get(['id', 'part_number', 'name']);
+
+        if ($products->isEmpty()) {
+            return [];
+        }
+
+        $rows = DemandForecast::query()
+            ->where('forecast_year', $year)
+            ->whereIn('product_id', $products->modelKeys())
+            ->get();
+        $metrics = $this->collapseScopeRows($rows)
+            ->groupBy('product_id')
+            ->map(fn (Collection $productRows): array => $this->accuracyMetrics($productRows));
+
+        return $products->map(function (Product $product) use ($metrics): ?array {
+            $acc = $metrics->get($product->id);
+            if (! $acc || $acc['periods_evaluated'] === 0) {
+                return null;
+            }
+
+            return [
+                'product_id'        => $product->hash_id,
+                'part_number'       => $product->part_number,
+                'name'              => $product->name,
+                'mape'              => $acc['mape'],
+                'bias'              => $acc['bias'],
+                'periods_evaluated' => $acc['periods_evaluated'],
+            ];
+        })->filter()->values()->all();
+    }
+
+    /** Prefer a total row; otherwise aggregate all customer rows for a period. */
+    private function collapseScopeRows(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy(fn (DemandForecast $row): string => implode(':', [
+                $row->product_id,
+                $row->forecast_year,
+                $row->forecast_month,
+            ]))
+            ->map(function (Collection $period): ?DemandForecast {
+                $total = $period->first(fn (DemandForecast $row): bool => $row->customer_id === null);
+                if ($total !== null) {
+                    return $total->actual_quantity !== null
+                        && bccomp((string) $total->actual_quantity, '0', 2) > 0
+                        ? $total
+                        : null;
+                }
+
+                if ($period->contains(fn (DemandForecast $row): bool => $row->actual_quantity === null)) {
+                    return null;
+                }
+
+                $aggregate = clone $period->first();
+                $forecast = '0.00';
+                $actual = '0.00';
+                foreach ($period as $row) {
+                    $forecast = bcadd($forecast, (string) $row->forecasted_quantity, 2);
+                    $actual = bcadd($actual, (string) $row->actual_quantity, 2);
+                }
+                $aggregate->setAttribute('forecasted_quantity', $forecast);
+                $aggregate->setAttribute('actual_quantity', $actual);
+                $aggregate->setAttribute('customer_id', null);
+
+                return bccomp($actual, '0', 2) > 0 ? $aggregate : null;
+            })
+            ->filter()
+            ->values();
+    }
+
+    /** @return array{mape: float|null, bias: float|null, periods_evaluated: int, monthly: array} */
+    private function accuracyMetrics(Collection $rows): array
+    {
         if ($rows->isEmpty()) {
             return ['mape' => null, 'bias' => null, 'periods_evaluated' => 0, 'monthly' => []];
         }
 
         $apes    = [];
         $biases  = [];
-        $monthly = [];
 
         foreach ($rows as $r) {
             $actual   = (float) $r->actual_quantity;
@@ -323,13 +411,25 @@ class ForecastingService
             $bias = ($actual - $forecast) / $actual * 100;
             $apes[]   = $ape;
             $biases[] = $bias;
+        }
+
+        $monthly = [];
+        foreach ($rows->groupBy(fn (DemandForecast $row): string => $row->forecast_year.'-'.$row->forecast_month)->sortKeys() as $periodRows) {
+            $forecast = '0.00';
+            $actual = '0.00';
+            foreach ($periodRows as $row) {
+                $forecast = bcadd($forecast, (string) $row->forecasted_quantity, 2);
+                $actual = bcadd($actual, (string) $row->actual_quantity, 2);
+            }
+            $forecastFloat = (float) $forecast;
+            $actualFloat = (float) $actual;
             $monthly[] = [
-                'year'     => $r->forecast_year,
-                'month'    => $r->forecast_month,
-                'forecast' => round($forecast, 2),
-                'actual'   => round($actual, 2),
-                'variance' => round($actual - $forecast, 2),
-                'ape'      => round($ape, 2),
+                'year'     => $periodRows->first()->forecast_year,
+                'month'    => $periodRows->first()->forecast_month,
+                'forecast' => round($forecastFloat, 2),
+                'actual'   => round($actualFloat, 2),
+                'variance' => round($actualFloat - $forecastFloat, 2),
+                'ape'      => round(abs($actualFloat - $forecastFloat) / $actualFloat * 100, 2),
             ];
         }
 
@@ -354,7 +454,7 @@ class ForecastingService
 
         if ($method === DemandForecast::METHOD_MOVING_AVG) {
             $qty = array_sum($values) / count($values);
-            return [$qty, $this->confidenceFromSeries($values, $qty)];
+            return [$qty, ForecastConfidence::fromSeries($values)];
         }
 
         if ($method === DemandForecast::METHOD_WEIGHTED_AVG) {
@@ -365,7 +465,7 @@ class ForecastingService
             foreach ($values as $i => $v) {
                 $qty += $v * $weights[$i] / $sumW;
             }
-            return [$qty, $this->confidenceFromSeries($values, $qty)];
+            return [$qty, ForecastConfidence::fromSeries($values)];
         }
 
         // Unreachable from a request: the controller validates
@@ -374,28 +474,6 @@ class ForecastingService
         // a third method is ever added without a branch, it surfaces as the
         // programming error it is instead of a 422 blaming the user.
         throw new RuntimeException("Unsupported method: {$method}");
-    }
-
-    /**
-     * Confidence% = clamp(100 - 100 × CV, 0, 100), where CV = stddev / mean.
-     * If mean is 0 there is no signal, so confidence remains unknown.
-     */
-    private function confidenceFromSeries(array $values, float $forecastQty): ?float
-    {
-        $n = count($values);
-        if ($n < 2) return null;
-
-        $mean = array_sum($values) / $n;
-        if ($mean <= 0) return null;
-
-        $variance = 0.0;
-        foreach ($values as $v) {
-            $variance += ($v - $mean) ** 2;
-        }
-        $stddev = sqrt($variance / $n);
-        $cv     = $stddev / $mean;
-        $conf   = 100.0 - (100.0 * $cv);
-        return max(0.0, min(100.0, $conf));
     }
 
     /**

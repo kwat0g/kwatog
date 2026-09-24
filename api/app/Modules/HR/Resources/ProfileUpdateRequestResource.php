@@ -16,7 +16,7 @@ class ProfileUpdateRequestResource extends JsonResource
             'status'  => $this->status,
             'status_label' => ProfileUpdateStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
             'requires_finance' => (bool) $this->requires_finance,
-            'changes' => $this->changes,
+            'changes' => $this->redactedChanges($request),
             'note'    => $this->note,
             'employee' => $this->relationLoaded('employee') && $this->employee ? [
                 'id'          => $this->employee->hash_id,
@@ -45,5 +45,24 @@ class ProfileUpdateRequestResource extends JsonResource
             'finance_remarks'     => $this->finance_remarks,
             'created_at'     => optional($this->created_at)->toIso8601String(),
         ];
+    }
+
+    private function redactedChanges($request): array
+    {
+        $changes = (array) $this->changes;
+        $user = $request->user();
+        $employee = $this->relationLoaded('employee') ? $this->employee : null;
+        $canSeeFull = $user?->hasPermission('hr.employees.view_sensitive')
+            || $user?->hasPermission('hr.profile_updates.finance_review')
+            || ($employee && (int) $user?->employee_id === (int) $employee->id);
+
+        if (! $canSeeFull && isset($changes['bank_account_no']) && is_string($changes['bank_account_no'])) {
+            $value = $changes['bank_account_no'];
+            $changes['bank_account_no'] = strlen($value) <= 4
+                ? str_repeat('*', strlen($value))
+                : str_repeat('*', strlen($value) - 4).substr($value, -4);
+        }
+
+        return $changes;
     }
 }

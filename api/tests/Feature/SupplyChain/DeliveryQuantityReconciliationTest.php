@@ -363,10 +363,14 @@ class DeliveryQuantityReconciliationTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'QTY-BATCH-001',
         ]);
+        $reviewer = User::factory()->create(['role_id' => $role->id]);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-QTY-'.substr(uniqid(), -8),
             'stage' => InspectionStage::Outgoing->value,
             'status' => InspectionStatus::Passed->value,
+            'inspector_id' => $user->id,
+            'reviewed_by' => $reviewer->id,
+            'reviewed_at' => now(),
             'product_id' => $product->id,
             'entity_type' => InspectionEntityType::WorkOrder->value,
             'entity_id' => $wo->id,

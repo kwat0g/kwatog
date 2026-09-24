@@ -29,7 +29,7 @@ class AwardRfqRequest extends FormRequest
             'awards' => ['array'],
             'awards.*.request_for_quote_item_id' => ['required', 'integer'],
             'awards.*.supplier_quote_item_id' => ['required', 'integer'],
-            'awards.*.awarded_quantity' => ['required', 'decimal:0,4', 'gt:0'],
+            'awards.*.awarded_quantity' => ['required', 'decimal:0,3', 'gt:0'],
             'awards.*.award_reason' => ['required', 'string', 'max:4000'],
             'awards.*.single_response_justification' => ['nullable', 'string', 'max:4000'],
         ];

@@ -14,7 +14,8 @@ final class InspectionStateMachine
     /** @var array<string, list<string>> */
     public const TRANSITIONS = [
         'draft' => ['in_progress', 'cancelled'],
-        'in_progress' => ['passed', 'failed', 'cancelled'],
+        'in_progress' => ['awaiting_review', 'passed', 'failed', 'cancelled'],
+        'awaiting_review' => ['passed', 'failed'],
         'passed' => [],
         'failed' => [],
         'cancelled' => [],

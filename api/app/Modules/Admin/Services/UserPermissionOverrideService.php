@@ -11,6 +11,7 @@ use App\Common\Services\OutboxService;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\BadgeService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -142,6 +143,7 @@ class UserPermissionOverrideService
             );
 
             $lockedUser->flushPermissionsCache();
+            BadgeService::touch();
 
             app(OutboxService::class)->record(new PermissionOverrideChanged(
                 $lockedUser->id,
@@ -198,6 +200,7 @@ class UserPermissionOverrideService
             $locked->delete();
             $this->audit->record($locked, 'deleted', $oldValues, null, $actor);
             $lockedUser->flushPermissionsCache();
+            BadgeService::touch();
 
             app(OutboxService::class)->record(new PermissionOverrideChanged(
                 $lockedUser->id,
@@ -262,6 +265,7 @@ class UserPermissionOverrideService
                 $reason,
             );
             $lockedUser->flushPermissionsCache();
+            BadgeService::touch();
 
             app(OutboxService::class)->record(new PermissionOverrideChanged(
                 $lockedUser->id,

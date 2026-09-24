@@ -135,10 +135,9 @@ class WorkflowSeeder extends Seeder
             // AS-03 — wired via AssetService::requestDisposal(). Disposal is
             // finance-owned: gain/loss recognition is a finance decision, and
             // both step roles already hold the module's permissions
-            // (finance_officer via module('assets'), system_admin via the
-            // wildcard), so the chain is viable end-to-end. The former
-            // 4-step draft (department_head/production_manager first) routed
-            // steps to roles that hold no assets permissions at all.
+            // (finance_officer and vice_president), so the chain is viable
+             // end-to-end. The former 4-step draft routed steps to roles that
+             // held no assets permissions at all.
             // ApprovalService's self-action guard enforces maker ≠ checker;
             // a single-holder role uses delegation to cover its own step.
             [
@@ -178,6 +177,13 @@ class WorkflowSeeder extends Seeder
                     ['order' => 2, 'role' => 'production_manager', 'label' => 'Approved by'],
                 ],
             ],
+            [
+                'workflow_type' => 'finance_only_return_request',
+                'name'          => 'Finance-Only Return Approval',
+                'steps' => [
+                    ['order' => 1, 'role' => 'finance_officer', 'label' => 'Finance approval'],
+                ],
+            ],
         ];
 
         $wiredTypes = [
@@ -189,6 +195,7 @@ class WorkflowSeeder extends Seeder
             'bill_payment',
             'salary_adjustment',
             'return_request',
+            'finance_only_return_request',
             'asset_disposal',
         ];
 

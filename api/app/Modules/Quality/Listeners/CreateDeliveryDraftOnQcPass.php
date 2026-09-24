@@ -51,7 +51,8 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
             // terminal source row so a stale serialized payload cannot draft
             // a delivery for an inspection that is no longer passed.
             $inspection = Inspection::query()->find($event->inspection->id);
-            if (! $inspection || $inspection->status !== InspectionStatus::Passed) {
+            if (! $inspection || $inspection->status !== InspectionStatus::Passed
+                || ! $inspection->isMakerChecked()) {
                 app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_passed_inspection');
 
                 return;

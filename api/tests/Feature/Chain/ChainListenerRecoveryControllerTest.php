@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Listeners\ConsolidatePurchaseOrders;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -94,7 +95,6 @@ class ChainListenerRecoveryControllerTest extends TestCase
             ->postJson("/api/v1/chain/listener-runs/{$ids['run_id']}/resolve", [
                 'note' => 'Assigned purchasing owner and completed the manual conversion.',
             ]);
-
         $first
             ->assertOk()
             ->assertJsonPath('data.resolution_status', 'resolved')
@@ -129,7 +129,10 @@ class ChainListenerRecoveryControllerTest extends TestCase
     {
         Queue::fake();
         $user = $this->userWithPermissions(['dashboard.chain_recovery.manage']);
-        $pr = PurchaseRequest::factory()->create(['department_id' => null]);
+        $pr = PurchaseRequest::factory()->create([
+            'department_id' => null,
+            'sourcing_method' => PurchaseRequestSourcingMethod::DirectPo,
+        ]);
         $encoded = app(OutboxEventCodec::class)->encode(new PurchaseRequestApproved($pr));
         $ids = $this->insertRun(
             status: 'failed',
@@ -173,7 +176,10 @@ class ChainListenerRecoveryControllerTest extends TestCase
     public function test_sync_replay_creates_a_new_listener_run_with_source_lineage(): void
     {
         $user = $this->userWithPermissions(['dashboard.chain_recovery.manage']);
-        $pr = PurchaseRequest::factory()->create(['department_id' => null]);
+        $pr = PurchaseRequest::factory()->create([
+            'department_id' => null,
+            'sourcing_method' => PurchaseRequestSourcingMethod::DirectPo,
+        ]);
         $pr->forceFill(['status' => 'approved'])->save();
         $encoded = app(OutboxEventCodec::class)->encode(new PurchaseRequestApproved($pr));
         $ids = $this->insertRun(
@@ -195,8 +201,8 @@ class ChainListenerRecoveryControllerTest extends TestCase
         $this->assertNotNull($replay);
         $this->assertSame(ConsolidatePurchaseOrders::class, $replay->listener_class);
         $this->assertSame('completed', $replay->status);
-        $this->assertSame('skipped', $replay->outcome_status);
-        $this->assertSame('purchase_request_has_no_lines', $replay->outcome_code);
+        $this->assertSame('manual_required', $replay->outcome_status);
+        $this->assertSame('purchase_request_manual_conversion_required', $replay->outcome_code);
         $this->assertSame($ids['outbox_id'], $replay->outbox_id);
     }
 

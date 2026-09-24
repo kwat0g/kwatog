@@ -74,7 +74,7 @@ class ReapStaleMrpRuns extends Command
                         'error_code' => 'mrp_stale_run',
                         'recovery_action' => 'Review the run history and rerun the affected sales orders after confirming draft auto-PRs.',
                         'duration_ms' => $lockedRun->started_at
-                            ? max(0, (int) $lockedRun->started_at->diffInMilliseconds($now))
+                            ? max(0, (int) $lockedRun->started_at->diffInMilliseconds($now, true))
                             : null,
                         'heartbeat_at' => $now,
                     ])->save();

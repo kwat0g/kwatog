@@ -161,7 +161,7 @@ class MachineConditionReadingController
         $this->decodeMachineId($request);
         $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
-            'metric'     => ['required', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
+            'metric'     => ['required', Rule::in(array_column($this->predictive->metricOptions(), 'value'))],
             'limit'      => ['nullable', 'integer', 'min:1', 'max:500'],
         ]);
 

@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class MaterialIssueService
@@ -53,12 +54,35 @@ class MaterialIssueService
     }
 
     /**
-     * @param array{work_order_id?:int|null, issued_date:string, items:array<int,array>, reference_text?:string|null, remarks?:string|null} $data
+     * @param array{work_order_id?:int|null, issued_date:string, items:array<int,array>, reference_text?:string|null, remarks?:string|null, idempotency_key?:string|null} $data
      * Each item: { item_id, location_id, quantity_issued, material_reservation_id?, remarks? }
      */
     public function create(array $data, User $by): MaterialIssueSlip
     {
-        return DB::transaction(function () use ($data, $by) {
+        $idempotencyKey = trim((string) ($data['idempotency_key'] ?? ''));
+        unset($data['idempotency_key']);
+        if (strlen($idempotencyKey) > 128 || ($idempotencyKey !== '' && ! preg_match('/^[A-Za-z0-9._:-]+$/D', $idempotencyKey))) {
+            throw new BusinessRuleException('Idempotency-Key must contain only letters, numbers, dot, underscore, colon, or hyphen and be at most 128 characters.');
+        }
+        $idempotencyKey = $idempotencyKey !== '' ? $idempotencyKey : null;
+        $fingerprint = $idempotencyKey === null ? null : hash('sha256', json_encode([
+            'operation' => 'material_issue.create',
+            'actor_id' => $by->id,
+            'payload' => $data,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        try {
+            return DB::transaction(function () use ($data, $by, $idempotencyKey, $fingerprint) {
+            if ($idempotencyKey !== null) {
+                $existing = MaterialIssueSlip::query()
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    return $this->replayIdempotentSlip($existing, (string) $fingerprint);
+                }
+            }
+
             $slip = MaterialIssueSlip::create([
                 'slip_number'   => $this->sequences->generate('material_issue'),
                 'work_order_id' => $data['work_order_id'] ?? null,
@@ -69,6 +93,8 @@ class MaterialIssueService
                 'total_value'   => '0.00',
                 'reference_text'=> $data['reference_text'] ?? null,
                 'remarks'       => $data['remarks'] ?? null,
+                'idempotency_key' => $idempotencyKey,
+                'idempotency_fingerprint' => $fingerprint,
             ]);
 
             $totalValue = '0';
@@ -180,7 +206,9 @@ class MaterialIssueService
                     'unit_cost'               => $unitCost,
                     'total_cost'              => bcadd($lineTotal, '0', 2),
                     'issued_uom_code'         => $row['issued_uom_code'] ?? null,
-                    'lot_number'              => $row['lot_number'] ?? null,
+                    // Persist the ledger-resolved FEFO lot as well as explicit
+                    // operator selection; the stock movement is authoritative.
+                    'lot_number'              => $mvmt->lot_number,
                     'material_reservation_id' => $row['material_reservation_id'] ?? null,
                     'remarks'                 => $row['remarks'] ?? null,
                 ]);
@@ -191,7 +219,29 @@ class MaterialIssueService
             $slip->save();
 
             return $this->show($slip);
-        });
+            });
+        } catch (QueryException $e) {
+            if ($idempotencyKey === null
+                || $e->getCode() !== '23505'
+                || ! str_contains($e->getMessage(), 'material_issue_slips_idempotency_unique')) {
+                throw $e;
+            }
+
+            $existing = MaterialIssueSlip::query()
+                ->where('idempotency_key', $idempotencyKey)
+                ->firstOrFail();
+
+            return $this->replayIdempotentSlip($existing, (string) $fingerprint);
+        }
+    }
+
+    private function replayIdempotentSlip(MaterialIssueSlip $existing, string $fingerprint): MaterialIssueSlip
+    {
+        if (! hash_equals((string) $existing->idempotency_fingerprint, $fingerprint)) {
+            throw new BusinessRuleException('The idempotency key was already used for a different material-issue payload.');
+        }
+
+        return $this->show($existing);
     }
 
     /**

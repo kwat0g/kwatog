@@ -35,8 +35,14 @@ class VendorImporter implements EntityImporter
         if ($name === '') {
             throw new RuntimeException('name is required.');
         }
-        if (Vendor::query()->where('name', $name)->exists()) {
+        // Same duplicate rules as StoreVendorRequest: name case/space-insensitive,
+        // TIN by its blind index.
+        if (Vendor::query()->whereRaw('LOWER(TRIM(name)) = LOWER(?)', [$name])->exists()) {
             throw new RuntimeException("Vendor '{$name}' already exists.");
+        }
+        $tinHash = Vendor::tinHash(trim($row['tin'] ?? ''));
+        if ($tinHash !== null && Vendor::query()->where('tin_hash', $tinHash)->exists()) {
+            throw new RuntimeException('A vendor with this TIN already exists.');
         }
 
         $terms = trim($row['payment_terms_days'] ?? '');

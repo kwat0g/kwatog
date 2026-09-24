@@ -186,4 +186,59 @@ class BudgetEnforcementWiringTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('errors.budget.0', fn ($v) => str_contains($v, 'exhausted') || str_contains($v, 'Insufficient'));
     }
+
+    public function test_bill_posting_rechecks_the_budget_and_keeps_the_scope_for_drafts(): void
+    {
+        $dept = Department::factory()->create();
+        $fy   = FiscalYear::factory()->create(['status' => 'active', 'start_date' => today()->startOfYear()->toDateString(), 'end_date' => today()->endOfYear()->toDateString()]);
+        $budget = Budget::factory()->create([
+            'department_id'   => $dept->id,
+            'fiscal_year_id'  => $fy->id,
+            'total_allocated' => 10000.00,
+            'total_spent'     => 0.00,
+            'total_committed' => 0.00,
+            'status'          => 'approved',
+        ]);
+
+        $user   = $this->makeAdmin();
+        $vendor = \App\Modules\Accounting\Models\Vendor::factory()->create();
+        $expenseAccount = Account::create([
+            'code'           => 'TX-' . substr(uniqid(), -6),
+            'name'           => 'Draft Bill Expense',
+            'type'           => 'expense',
+            'normal_balance' => 'debit',
+            'is_active'      => true,
+        ]);
+
+        $svc = app(\App\Modules\Accounting\Services\BillService::class);
+        $bill = $svc->create([
+            'bill_number'   => 'BILL-DRAFT-' . uniqid(),
+            'vendor_id'     => $vendor->hash_id,
+            'date'          => now()->toDateString(),
+            'due_date'      => now()->addDays(30)->toDateString(),
+            'department_id' => $dept->hash_id,
+            'provenance_type' => 'service',
+            'exception_evidence' => 'Budget posting test fixture',
+            'exception_approved' => true,
+            'items'         => [[
+                'description'        => 'Office supplies',
+                'quantity'           => 1,
+                'unit_price'         => 500.00,
+                'expense_account_id' => $expenseAccount->hash_id,
+            ]],
+        ], $user, postToLedger: false);
+
+        // The department survives staging, so postDraft can re-check it.
+        $this->assertSame('draft', $bill->status->value);
+        $this->assertSame($dept->id, (int) $bill->department_id);
+
+        // Other documents consume the budget between staging and posting.
+        $budget->forceFill(['total_spent' => 10000.00])->save();
+        app(SettingsService::class)->set('budgeting.enforcement_mode', 'block');
+
+        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectExceptionMessage('Budget exhausted');
+
+        $svc->postDraft($bill, $user);
+    }
 }

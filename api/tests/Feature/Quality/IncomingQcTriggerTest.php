@@ -73,9 +73,14 @@ class IncomingQcTriggerTest extends TestCase
             'product_id' => null,
         ]);
         $this->assertNotNull($grn->fresh()->qc_inspection_id);
+        // No plan → lot checklist scaffold (ticked checks), not a per-unit sheet.
+        $this->assertDatabaseHas('inspections', [
+            'id' => $grn->fresh()->qc_inspection_id,
+            'inspection_mode' => 'lot_checklist',
+        ]);
         $this->assertDatabaseHas('inspection_measurements', [
             'inspection_id' => $grn->fresh()->qc_inspection_id,
-            'parameter_name' => 'Overall incoming material verdict',
+            'parameter_name' => 'Delivery documents (DR/invoice) match the PO item and quantity',
             'is_pass' => null,
         ]);
     }
@@ -118,5 +123,54 @@ class IncomingQcTriggerTest extends TestCase
         $inspectionId = $grn->fresh()->qc_inspection_id;
         $this->assertSame(2, InspectionMeasurement::where('inspection_id', $inspectionId)->count());
         $this->assertDatabaseHas('inspection_measurements', ['inspection_id' => $inspectionId, 'parameter_name' => 'Moisture']);
+    }
+
+    public function test_incoming_qc_scaffolds_inspection_for_fractional_and_archived_items(): void
+    {
+        $user = User::factory()->create();
+        $archivedItem = Item::factory()->create();
+        $archivedItem->delete(); // Soft-deleted/archived item
+
+        $location = WarehouseLocation::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value,
+            'created_by' => $user->id,
+        ]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id' => $archivedItem->id,
+            'description' => 'Archived chemical',
+            'quantity' => '1.500',
+            'unit' => 'kg',
+            'unit_price' => '20.00',
+            'total' => '30.00',
+            'quantity_received' => '1.500',
+        ]);
+        $grn = GoodsReceiptNote::create([
+            'grn_number' => 'GRN-FRAC-ARCH',
+            'purchase_order_id' => $po->id,
+            'vendor_id' => $po->vendor_id,
+            'received_date' => now()->toDateString(),
+            'received_by' => $user->id,
+            'status' => GrnStatus::PendingQc,
+        ]);
+        $line = GrnItem::create([
+            'goods_receipt_note_id' => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'item_id' => $archivedItem->id,
+            'location_id' => $location->id,
+            'quantity_received' => '1.500',
+            'quantity_accepted' => '0.000',
+            'unit_cost' => '20.00',
+        ]);
+
+        app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($grn));
+
+        $inspection = \App\Modules\Quality\Models\Inspection::query()
+            ->where('grn_item_id', $line->id)
+            ->first();
+
+        $this->assertNotNull($inspection, 'Archived item must still have an incoming inspection generated.');
+        $this->assertSame(2, (int) $inspection->batch_quantity, 'Fractional quantity 1.500 must round up to whole-unit ceiling 2.');
     }
 }

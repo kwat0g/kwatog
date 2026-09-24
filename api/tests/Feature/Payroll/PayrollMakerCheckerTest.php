@@ -12,6 +12,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
 
 /**
@@ -29,6 +30,13 @@ use Tests\TestCase;
 class PayrollMakerCheckerTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        RefreshDatabaseState::$migrated = false;
+
+        parent::tearDown();
+    }
 
     protected function setUp(): void
     {

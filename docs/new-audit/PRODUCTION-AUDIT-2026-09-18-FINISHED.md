@@ -2,12 +2,16 @@
 
 Date: 2026-09-18
  
-## Re-audit 2026-09-19
+## Re-audit 2026-09-19 — remediated 2026-09-23
 
-Current verdict: **historical FINISHED label is not release closure**.
+Current verdict: **FINISHED**. The 2026-09-19 re-audit flagged the historical label as not
+release closure; all five reopened findings (N-01 resume while the machine is down, N-02
+pause/complete clearing another WO's machine, N-03 false material-lot lineage, N-04 independent
+operation output ledger, N-05 downtime interval math) plus dashboard invalidation and missing
+audit coverage are source-remediated with regression tests — see §10.
 
-- Breakdown MWO creation, summary SQL, initial operation windows, machine/mold guards, and schedule constraints are present.
-- Remaining risks: resume while the machine is still down, pause/complete clearing another WO's machine, false material-lot lineage, independent operation output limits, downtime interval math, dashboard invalidation, dead notification routes, and missing audit coverage.
+- Remaining residuals are non-blocking and documented in §7/§10: dead/broadcast-only paths and
+  three Pareto implementations.
 - Full current classification: `RE-AUDIT-REGISTER-2026-09-19.md`.
 Scope: `api/app/Modules/Production/` plus the machine/mold/scheduling/maintenance machinery it
 depends on (`api/app/Modules/MRP/` machine+mold+capacity services, `api/app/Modules/Maintenance/`).
@@ -15,9 +19,10 @@ depends on (`api/app/Modules/MRP/` machine+mold+capacity services, `api/app/Modu
 `FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md`; summarized here, not re-traced.
 Claims are marked **[confirmed]** (file:line, grep, or code read) or **[assumption/unverified]**.
 
-**Audit status as of 2026-09-19:** **FINISHED** for the production audit scope. Source remediation
-listed in §9 passed the isolated PostgreSQL regression and migration checks. One unrelated
-PPAP self-approval failure remains in the broader Quality suite and is recorded below.
+**Audit status as of 2026-09-23:** **FINISHED**. §9 records the original remediation, §10 the
+re-audit remediation (95 Production / 51 Maintenance+MRP machine-mold-capacity / 208 Inventory /
+154 Quality / 406 SupplyChain+Return+CRM tests green; the former PPAP and incoming-QC failures
+are closed).
 
 ---
 
@@ -291,3 +296,47 @@ implementation state and its evidence boundary.
   is outside this production audit remediation and was not changed here.
 - This file is marked `FINISHED` because the production audit findings and their scoped runtime
   evidence are complete. The unrelated PPAP failure remains a separate Quality follow-up.
+
+## 10. Re-audit remediation (2026-09-23)
+
+The 2026-09-19 re-audit register reopened Production as "historical FINISHED label invalid as
+current closure" over five residual findings. All five are now source-remediated, and the
+supporting residuals (downtime interval math, dashboard invalidation on breakdown, missing
+audit coverage) are closed with them.
+
+| Re-audit finding | Remediation | Regression evidence |
+|---|---|---|
+| N-01 Resume while the machine is still down | `WorkOrderService::resume()` now refuses unless the locked machine status is `idle` or `running`, naming the blocking state in the error. | `ProductionAuditHardeningTest::test_resume_refused_when_machine_went_to_breakdown_during_pause`, `test_resume_refused_when_machine_went_to_maintenance_during_pause` |
+| N-02 Pause/complete clearing another WO's machine | `pause()` and `complete()` only clear `current_work_order_id` when it equals this WO, and only demote `running` → `idle`; a machine under `maintenance`/`breakdown` is never resurrected to `idle`. `cancel()` keeps its existing occupant guard. | `ProductionAuditHardeningTest::test_pause_does_not_clear_another_work_orders_machine_or_revert_maintenance`, `test_complete_does_not_revert_maintenance_or_clear_another_work_order` |
+| N-03 False material-lot lineage | `captureMaterialLotReferences()` now derives lot references from the actual `material_issue` stock movements recorded for the WO (grouped by item + lot, quantity summed). The newest-GRN heuristic survives only as a fallback when no issued movement carries a lot (legacy/unlotted stock). Material issues take their lot from the location's FEFO/FIFO preferred lot, and `StockMovementService` applies the same preferred-lot resolution to issues as it already did to transfers. | `ProductionAuditHardeningTest::test_material_lot_references_captures_actual_issued_stock_movement_lots` |
+| N-04 Independent operation output ledger | `WoOperationService::recordOutput()` refuses a cumulative operation quantity above the previous completed operation's `qty_completed`. `WorkOrderService::complete()` refuses to complete a WO while any non-skipped routing operation is still pending/paused/in progress, and `completeOperation()` keeps its final-operation reconciliation against the canonical `work_order_outputs` ledger. | `ProductionAuditHardeningTest::test_operation_output_cannot_exceed_previous_operation_completed_quantity`, `test_complete_refused_when_routing_operations_are_incomplete` |
+| N-05 Downtime interval math | OEE `calculate()`, `report()` and `trend()` now intersect each downtime interval with the requested window and each trend bucket instead of attributing the whole `duration_minutes` to the bucket its `start_time` falls in. Open intervals are clamped to the window end (or now). | `OeeServiceReportTest`, `ProductionDashboardServiceTest` |
+
+Supporting residuals closed in the same pass:
+
+- **Dashboard invalidation on breakdown/restoration** — `HandleMachineBreakdown` invalidates
+  `dashboard:production` when a breakdown pauses a WO or restoration closes downtime rows.
+- **Operation-level writes invalidate the dashboard** — `WoOperationService::recordOutput()`,
+  `completeOperation()` and `skipOperation()` now drop the cached dashboard payload.
+- **Audit coverage** — `HasAuditLog` added to `WoOperation`, `MachineDowntime`,
+  `WorkOrderDefect`, `DefectType`, and `ProductionSchedule`.
+  `ProductionAuditHardeningTest::test_production_models_use_has_audit_log_trait` is the drift guard.
+- **Collateral Quality/Inventory fix** — `InspectionService::createIncomingForItem()` scaffolded
+  one verdict row while declaring the AQL sample size, so the declared-sample enforcement added by
+  the Quality audit made every single-screen `receiveWithQc` receipt permanently uncompletable.
+  The no-plan incoming inspection now scaffolds one verdict row per declared sample unit, which is
+  what the declared size asserts. This closed two previously red Inventory tests
+  (`GrnRejectionTest::test_quality_rejection_still_auto_opens_ncr`,
+  `GrnGlPostingTest::test_receive_with_qc_posts_the_same_required_gl_entry`).
+
+### Verification boundary (2026-09-23)
+
+- Pint and PHPStan pass on all changed files.
+- Production feature suite: **95 tests, 320 assertions passed** (`tests/Feature/Production/`).
+- Maintenance + MRP machine/mold/capacity suites: **51 tests, 154 assertions passed**.
+- Inventory feature suite: **208 tests, 749 assertions passed**.
+- Quality feature suite: **154 tests, 497 assertions passed** — including
+  `TraceabilityPpapAuditRegressionTest`, whose formerly-red self-approval case is now green.
+- Residuals still open from §7 and not addressed here are dead/broadcast-only paths and duplicate
+  Pareto implementations. `production.view`, scratch probe cleanup, and downtime FK/nullability
+  were addressed or verified in the follow-up pass.

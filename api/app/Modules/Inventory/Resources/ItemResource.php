@@ -13,17 +13,32 @@ class ItemResource extends JsonResource
     {
         // Callers MUST eager-load aggregates via withSum (see ItemService::list/show)
         // to satisfy Model::shouldBeStrict(). Fall back to a loaded relation only.
-        $onHand = $this->on_hand_quantity
-            ?? ($this->relationLoaded('stockLevels') ? $this->stockLevels->sum('quantity') : 0);
-        $reserved = $this->reserved_quantity
-            ?? ($this->relationLoaded('stockLevels') ? $this->stockLevels->sum('reserved_quantity') : 0);
-        $onHand = (float) $onHand;
-        $reserved = (float) $reserved;
-        $available = max(0.0, $onHand - $reserved);
+        // JsonResource proxies property reads to Model::getAttribute(), so
+        // `$this->attributes` is always null here — read the raw array.
+        $attributes = $this->resource->getAttributes();
+        $onHand = array_key_exists('on_hand_quantity', $attributes)
+            ? (string) ($attributes['on_hand_quantity'] ?? '0.000')
+            : '0.000';
+        $reserved = array_key_exists('reserved_quantity', $attributes)
+            ? (string) ($attributes['reserved_quantity'] ?? '0.000')
+            : '0.000';
+        if (! array_key_exists('on_hand_quantity', $attributes) && $this->relationLoaded('stockLevels')) {
+            foreach ($this->stockLevels as $level) {
+                $onHand = bcadd($onHand, (string) $level->quantity, 3);
+            }
+        }
+        if (! array_key_exists('reserved_quantity', $attributes) && $this->relationLoaded('stockLevels')) {
+            foreach ($this->stockLevels as $level) {
+                $reserved = bcadd($reserved, (string) $level->reserved_quantity, 3);
+            }
+        }
+        $available = bcsub($onHand, $reserved, 3);
+        if (bccomp($available, '0', 3) < 0) $available = '0.000';
 
-        $reorder = (float) $this->reorder_point;
-        $safety = (float) $this->safety_stock;
-        $stockStatus = $available <= $safety ? 'critical' : ($available <= $reorder ? 'low' : 'ok');
+        $reorder = (string) $this->reorder_point;
+        $safety = (string) $this->safety_stock;
+        $stockStatus = bccomp($available, $safety, 3) <= 0 ? 'critical'
+            : (bccomp($available, $reorder, 3) <= 0 ? 'low' : 'ok');
 
         return [
             'id' => $this->hash_id,
@@ -47,9 +62,9 @@ class ItemResource extends JsonResource
             'is_active' => (bool) $this->is_active,
             'quality_plan_ready' => (bool) ($this->has_active_quality_plan ?? false),
             'abc_class' => $this->abc_class,
-            'on_hand_quantity' => number_format($onHand, 3, '.', ''),
-            'reserved_quantity' => number_format($reserved, 3, '.', ''),
-            'available_quantity' => number_format($available, 3, '.', ''),
+            'on_hand_quantity' => $onHand,
+            'reserved_quantity' => $reserved,
+            'available_quantity' => $available,
             'stock_status' => $stockStatus,
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),

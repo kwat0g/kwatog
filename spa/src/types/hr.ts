@@ -210,20 +210,6 @@ export interface TrainingMatrixData {
  };
 }
 
-// ─── Employee Property ────────────────────────────────────────────
-export interface EmployeeProperty {
- id: string;
- item_name: string;
- description: string | null;
- quantity: number;
- replacement_unit_cost: string | null;
- replacement_total: string | null;
- date_issued: string;
- date_returned: string | null;
- status: 'issued' | 'returned' | 'lost';
- status_label: string;
-}
-
 // ─── Employee Document ────────────────────────────────────────────
 export interface EmployeeDocument {
  id: string;

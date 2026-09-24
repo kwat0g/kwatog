@@ -31,7 +31,7 @@ class VehicleController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $q = Vehicle::query();
+        $q = Vehicle::query()->with('asset:id,asset_code,name');
         TrashedFilter::apply($q, $request->query());
         if ($request->filled('status')) $q->where('status', $request->query('status'));
         if ($request->filled('search')) {

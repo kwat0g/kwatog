@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\B2B;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\B2B\Mail\PortalPasswordResetMail;
@@ -14,6 +15,7 @@ use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Services\PortalInvitationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -30,6 +32,18 @@ class PortalPasswordResetTest extends TestCase
             'password' => Hash::make('OldPassword-1!'),
             'is_active' => true,
         ]);
+    }
+
+    public function test_supplier_portal_enforces_password_expiry(): void
+    {
+        app(SettingsService::class)->set('security.password_expiry_days', 90, 'security');
+        $supplier = $this->makeSupplier('supplier-expired@example.com');
+        $supplier->forceFill(['password_changed_at' => now()->subDays(91)])->save();
+
+        $this->actingAs($supplier, 'supplier_portal')
+            ->getJson('/api/v1/b2b/supplier/dashboard')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'password_expired');
     }
 
     public function test_customer_reset_email_is_queued_and_token_updates_password(): void
@@ -87,6 +101,24 @@ class PortalPasswordResetTest extends TestCase
 
         $response->assertOk()->assertJsonPath('message', 'If an active portal account exists for that email, a reset link will be sent shortly.');
         Mail::assertNothingQueued();
+    }
+
+    public function test_inactive_customer_parent_cannot_request_a_password_reset(): void
+    {
+        Mail::fake();
+        $customer = Customer::factory()->create(['is_active' => false]);
+        $user = CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Inactive Customer Contact',
+            'email' => 'inactive-reset@example.test',
+            'password' => Hash::make('OldPassword-1!'),
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/b2b/customer/forgot-password', ['email' => $user->email])->assertOk();
+
+        Mail::assertNothingQueued();
+        $this->assertDatabaseCount('portal_password_reset_tokens', 0);
     }
 
     public function test_supplier_reset_email_uses_supplier_portal_type(): void
@@ -239,5 +271,27 @@ class PortalPasswordResetTest extends TestCase
             'password' => 'weakpassword',
             'password_confirmation' => 'weakpassword',
         ])->assertStatus(422)->assertJsonValidationErrorFor('password');
+    }
+
+    public function test_expired_and_consumed_reset_tokens_are_pruned(): void
+    {
+        foreach ([
+            ['portal_type' => 'customer', 'email' => 'expired@example.test', 'expires_at' => now()->subMinute(), 'used_at' => null],
+            ['portal_type' => 'supplier', 'email' => 'used@example.test', 'expires_at' => now()->addHour(), 'used_at' => now()],
+            ['portal_type' => 'supplier', 'email' => 'live@example.test', 'expires_at' => now()->addHour(), 'used_at' => null],
+        ] as $index => $token) {
+            DB::table('portal_password_reset_tokens')->insert($token + [
+                'token_hash' => hash('sha256', 'token-'.$index),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->artisan('portal:prune-reset-tokens')
+            ->expectsOutputToContain('Pruned 2 portal password reset token')
+            ->assertSuccessful();
+
+        $this->assertDatabaseCount('portal_password_reset_tokens', 1);
+        $this->assertDatabaseHas('portal_password_reset_tokens', ['email' => 'live@example.test']);
     }
 }

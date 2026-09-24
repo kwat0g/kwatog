@@ -27,6 +27,7 @@ class CreditNote extends Model
         'invoice_id', 'bill_id', 'return_request_id',
         'date', 'is_vatable', 'subtotal', 'vat_amount', 'total_amount',
         'applied_amount', 'balance', 'reason', 'journal_entry_id', 'created_by',
+        'voided_by', 'void_reversal_journal_entry_id', 'voided_at', 'void_reason',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class CreditNote extends Model
         'total_amount'   => 'decimal:2',
         'applied_amount' => 'decimal:2',
         'balance'        => 'decimal:2',
+        'voided_at'      => 'datetime',
     ];
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
@@ -46,6 +48,8 @@ class CreditNote extends Model
     public function invoice(): BelongsTo { return $this->belongsTo(Invoice::class); }
     public function bill(): BelongsTo { return $this->belongsTo(Bill::class); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function voidedBy(): BelongsTo { return $this->belongsTo(User::class, 'voided_by'); }
+    public function voidReversalJournalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class, 'void_reversal_journal_entry_id'); }
     public function lines(): HasMany { return $this->hasMany(CreditNoteLine::class); }
     public function applications(): HasMany { return $this->hasMany(CreditNoteApplication::class); }
 }

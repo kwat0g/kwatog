@@ -23,7 +23,7 @@ import type { BusinessPolicies } from '@/api/businessPolicies';
 // Supplier portal authentication is the same HTTP-only cookie session used by
 // the internal SPA. There is deliberately no storage key or bearer-token
 // setter on this client.
-const { client: portalClient } = createPortalClient();
+const { client: portalClient } = createPortalClient('supplier');
 
 type SupplierLoginResponse = {
   user: SupplierPortalUser;

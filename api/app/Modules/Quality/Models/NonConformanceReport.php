@@ -45,6 +45,8 @@ class NonConformanceReport extends Model
         'rework_work_order_id',
         // CAPA effectiveness loop.
         'effectiveness_status', 'effectiveness_closed_at',
+        // MRB incoming failure disposition.
+        'mrb_accepted_quantity', 'mrb_decided_by', 'mrb_decided_at',
     ];
 
     protected $casts = [
@@ -59,6 +61,9 @@ class NonConformanceReport extends Model
         // CAPA effectiveness loop.
         'effectiveness_status'    => \App\Modules\Quality\Enums\EffectivenessStatus::class,
         'effectiveness_closed_at' => 'datetime',
+        // MRB incoming failure disposition.
+        'mrb_accepted_quantity' => 'string',
+        'mrb_decided_at'        => 'datetime',
     ];
 
     public function product(): BelongsTo
@@ -84,6 +89,11 @@ class NonConformanceReport extends Model
     public function closer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'closed_by');
+    }
+
+    public function mrbDecider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'mrb_decided_by');
     }
 
     public function actions(): HasMany

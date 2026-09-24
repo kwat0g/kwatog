@@ -6,17 +6,17 @@ namespace App\Modules\Production\Enums;
 
 enum ProductionLogEvent: string
 {
-    case StartSetup      = 'start_setup';
-    case EndSetup        = 'end_setup';
+    case StartSetup = 'start_setup';
+    case EndSetup = 'end_setup';
     case StartProduction = 'start_production';
-    case Pause           = 'pause';
-    case Resume          = 'resume';
-    case RecordOutput    = 'record_output';
-    case RecordScrap     = 'record_scrap';
-    case EndProduction   = 'end_production';
-    case Skip             = 'skip';
-    case DowntimeStart   = 'downtime_start';
-    case DowntimeEnd     = 'downtime_end';
+    case Pause = 'pause';
+    case Resume = 'resume';
+    case RecordOutput = 'record_output';
+    case RecordScrap = 'record_scrap';
+    case EndProduction = 'end_production';
+    case Skip = 'skip';
+    case DowntimeStart = 'downtime_start';
+    case DowntimeEnd = 'downtime_end';
 
     public static function values(): array
     {
@@ -26,17 +26,17 @@ enum ProductionLogEvent: string
     public function label(): string
     {
         return match ($this) {
-            self::StartSetup      => 'Start Setup',
-            self::EndSetup        => 'End Setup',
+            self::StartSetup => 'Start Setup',
+            self::EndSetup => 'End Setup',
             self::StartProduction => 'Start Production',
-            self::Pause           => 'Pause',
-            self::Resume          => 'Resume',
-            self::RecordOutput    => 'Record Output',
-            self::RecordScrap     => 'Record Scrap',
-            self::EndProduction   => 'End Production',
-            self::Skip             => 'Skip Operation',
-            self::DowntimeStart   => 'Downtime Start',
-            self::DowntimeEnd     => 'Downtime End',
+            self::Pause => 'Pause',
+            self::Resume => 'Resume',
+            self::RecordOutput => 'Record Output',
+            self::RecordScrap => 'Record Scrap',
+            self::EndProduction => 'End Production',
+            self::Skip => 'Skip Operation',
+            self::DowntimeStart => 'Downtime Start',
+            self::DowntimeEnd => 'Downtime End',
         };
     }
 }

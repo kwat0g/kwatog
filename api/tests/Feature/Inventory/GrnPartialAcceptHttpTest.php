@@ -92,7 +92,12 @@ class GrnPartialAcceptHttpTest extends TestCase
         Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
-            ->update(['status' => 'passed']);
+            ->update([
+                'status' => 'passed',
+                'inspector_id' => User::factory()->create()->id,
+                'reviewed_by' => User::factory()->create()->id,
+                'reviewed_at' => now(),
+            ]);
     }
 
     public function test_partial_accept_with_hash_id_keys_marks_grn_partial_accepted(): void

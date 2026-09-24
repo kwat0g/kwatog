@@ -54,8 +54,9 @@ class NotificationService
         User|Collection|array $recipients,
         string $type,
         array $data,
+        ?string $dedupeKey = null,
     ): void {
-        $this->dispatch($recipients, $type, $data, true);
+        $this->dispatch($recipients, $type, $data, true, $dedupeKey);
     }
 
     /**
@@ -72,8 +73,9 @@ class NotificationService
         User|Collection|array $recipients,
         string $type,
         array $data,
+        ?string $dedupeKey = null,
     ): void {
-        $this->dispatch($recipients, $type, $data, false);
+        $this->dispatch($recipients, $type, $data, false, $dedupeKey);
     }
 
     /**
@@ -85,6 +87,7 @@ class NotificationService
         string $type,
         array $data,
         bool $emailEnabled,
+        ?string $dedupeKey,
     ): void {
         $users = $this->normaliseRecipients($recipients);
 
@@ -111,6 +114,7 @@ class NotificationService
                     'type' => $type,
                     'notifiable_type' => $user::class,
                     'notifiable_id' => $userId,
+                    'dedupe_key' => $dedupeKey,
                     'data' => $encoded,
                     'read_at' => null,
                     'created_at' => $now,
@@ -139,10 +143,34 @@ class NotificationService
             return;
         }
 
+        $insertedIds = [];
         foreach (array_chunk($rows, self::INSERT_CHUNK) as $chunk) {
             if ($chunk !== []) {
-                DB::table('notifications')->insert($chunk);
+                if ($dedupeKey === null) {
+                    DB::table('notifications')->insert($chunk);
+                    foreach ($chunk as $row) {
+                        $insertedIds[$row['id']] = true;
+                    }
+
+                    continue;
+                }
+
+                // The unique key is the race-proof part. Insert one row at a
+                // time only for the opt-in path so a replay cannot broadcast
+                // an event for a notification row it did not create.
+                foreach ($chunk as $row) {
+                    if (DB::table('notifications')->insertOrIgnore([$row]) === 1) {
+                        $insertedIds[$row['id']] = true;
+                    }
+                }
             }
+        }
+
+        if ($dedupeKey !== null) {
+            $events = array_values(array_filter(
+                $events,
+                static fn (UserNotificationCreated $event): bool => isset($insertedIds[$event->notification['id']]),
+            ));
         }
 
         // Deferred: a rollback after this point must not leave a broadcast or

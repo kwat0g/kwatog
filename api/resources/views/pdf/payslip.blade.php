@@ -22,30 +22,30 @@ $periodLabel = $period->period_start?->format('M j') . ' – ' . $period->period
   <title>Payslip · {{ $employee->employee_no }} · {{ $period->period_start?->format('Y-m-d') }}</title>
   <style>
     @page { margin: 14mm 12mm; }
-    body  { font-family: 'Helvetica Neue', 'Helvetica', sans-serif; font-size: 10px; color: #334155; }
-    .mono { font-family: 'Courier New', Courier, monospace; }
-    h1 { font-size: 14px; font-weight: 800; margin: 0 0 6px; letter-spacing: 0.05em; text-transform: uppercase; color: #0f172a; }
-    h2 { font-size: 11px; font-weight: 700; margin: 14px 0 6px; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; }
+    body  { font-family: 'Helvetica Neue', 'Helvetica', 'DejaVu Sans', sans-serif; font-size: 10px; color: #334155; }
+    .mono { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; }
+    h1 { font-size: 14px; font-weight: bold; margin: 0 0 6px; letter-spacing: 0.05em; text-transform: uppercase; color: #0f172a; }
+    h2 { font-size: 11px; font-weight: bold; margin: 14px 0 6px; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; }
     .header { border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 14px; }
-    .header .company { font-weight: 800; font-size: 13px; color: #0f172a; text-transform: uppercase; }
+    .header .company { font-weight: bold; font-size: 13px; color: #0f172a; text-transform: uppercase; }
     .header .meta    { color: #64748b; font-size: 9.5px; margin-top: 3px; }
     .grid { width: 100%; border-collapse: collapse; }
     .grid td { padding: 3px 0; vertical-align: top; }
-    .grid .label   { color: #94a3b8; width: 35%; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
-    .grid .value   { font-weight: 600; color: #0f172a; }
+    .grid .label   { color: #94a3b8; width: 35%; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold; }
+    .grid .value   { font-weight: bold; color: #0f172a; }
 
     table.tab { width: 100%; border-collapse: collapse; margin-top: 6px; }
     table.tab th, table.tab td { padding: 5px 8px; font-size: 10px; }
-    table.tab th { text-align: left; color: #ffffff; background: #0f172a; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; border: none; }
+    table.tab th { text-align: left; color: #ffffff; background: #0f172a; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold; border: none; }
     table.tab td { border-bottom: 1px solid #e2e8f0; color: #334155; }
-    table.tab td.amt { text-align: right; font-weight: 600; }
+    table.tab td.amt { text-align: right; font-weight: bold; }
 
     .net { margin-top: 14px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; display: table; width: 100%; }
-    .net .lbl { display: table-cell; width: 60%; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: #0f172a; }
-    .net .amt { display: table-cell; text-align: right; font-size: 15px; font-weight: 800; font-family: 'Courier New', monospace; color: #0f172a; }
+    .net .lbl { display: table-cell; width: 60%; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: #0f172a; }
+    .net .amt { display: table-cell; text-align: right; font-size: 15px; font-weight: bold; font-family: 'Courier New', 'DejaVu Sans Mono', monospace; color: #0f172a; }
 
     .footer { position: fixed; bottom: 6mm; left: 12mm; right: 12mm; font-size: 8px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 6px; }
-    .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; transform: rotate(-30deg); font-size: 70px; color: rgba(15, 23, 42, 0.03); font-weight: 800; letter-spacing: 0.1em; z-index: 0; }
+    .watermark { position: fixed; top: 40%; left: 0; right: 0; text-align: center; transform: rotate(-30deg); font-size: 70px; color: rgba(15, 23, 42, 0.03); font-weight: bold; letter-spacing: 0.1em; z-index: 0; }
     .container { position: relative; z-index: 1; }
   </style>
 </head>
@@ -129,12 +129,12 @@ $periodLabel = $period->period_start?->format('M j') . ' – ' . $period->period
       <tr>
         <td style="width:50%; vertical-align:bottom; padding:0 8px;">
           <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
-          <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $preparedBy ?? '—' }}</div>
+          <div style="margin-top:4px; text-align:center; font-weight:normal;">{{ $preparedBy ?? '—' }}</div>
           <div style="text-align:center; color:#777; font-size:8pt;">Prepared by · HR</div>
         </td>
         <td style="width:50%; vertical-align:bottom; padding:0 8px;">
           <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
-          <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $verifiedBy ?? '—' }}</div>
+          <div style="margin-top:4px; text-align:center; font-weight:normal;">{{ $verifiedBy ?? '—' }}</div>
           <div style="text-align:center; color:#777; font-size:8pt;">Verified by · Finance</div>
         </td>
       </tr>
@@ -144,7 +144,7 @@ $periodLabel = $period->period_start?->format('M j') . ' – ' . $period->period
     {{-- ADV1 — Salary Disbursement Certification Footer --}}
     <table style="width:100%; margin-top:24px; border-collapse:collapse; border-top:0.5px solid #D4D4D8;">
       <tr>
-        <td colspan="2" style="padding-top:8px; font-size:9px; letter-spacing:0.04em; text-transform:uppercase; color:#52525B; font-weight:600;">
+        <td colspan="2" style="padding-top:8px; font-size:9px; letter-spacing:0.04em; text-transform:uppercase; color:#52525B; font-weight:bold;">
           Disbursement Certification
         </td>
       </tr>
@@ -158,12 +158,12 @@ $periodLabel = $period->period_start?->format('M j') . ' – ' . $period->period
       <tr>
         <td style="width:50%; vertical-align:bottom; padding:0 8px;">
           <div style="height:28px; border-bottom:0.5px solid #A1A1AA;">&nbsp;</div>
-          <div style="margin-top:4px; text-align:center; font-weight:500; color:#52525B;">Prepared by</div>
+          <div style="margin-top:4px; text-align:center; font-weight:normal; color:#52525B;">Prepared by</div>
           <div style="text-align:center; color:#A1A1AA; font-size:7pt;">Date: ___________</div>
         </td>
         <td style="width:50%; vertical-align:bottom; padding:0 8px;">
           <div style="height:28px; border-bottom:0.5px solid #A1A1AA;">&nbsp;</div>
-          <div style="margin-top:4px; text-align:center; font-weight:500; color:#52525B;">Finance Officer</div>
+          <div style="margin-top:4px; text-align:center; font-weight:normal; color:#52525B;">Finance Officer</div>
           <div style="text-align:center; color:#A1A1AA; font-size:7pt;">Date: ___________</div>
         </td>
       </tr>

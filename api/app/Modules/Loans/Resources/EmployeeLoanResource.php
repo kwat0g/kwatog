@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Resources;
 
 use App\Common\Services\ApprovalService;
+use App\Common\Support\HashId;
 use App\Modules\Loans\Support\LoanRate;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Policies\LoanAccessPolicy;
@@ -46,6 +47,16 @@ class EmployeeLoanResource extends JsonResource
             'status'                 => $this->status?->value,
             'status_label'           => $this->status?->label(),
             'is_final_pay_deduction' => (bool) $this->is_final_pay_deduction,
+            'write_off_amount'       => $this->write_off_amount !== null ? (string) $this->write_off_amount : null,
+            'write_off_reason'       => $this->write_off_reason,
+            'write_off_evidence'     => $this->write_off_evidence,
+            'write_off_approval_remarks' => $this->write_off_approval_remarks,
+            'write_off_requested_at' => optional($this->write_off_requested_at)->toIso8601String(),
+            'write_off_approved_at'  => optional($this->write_off_approved_at)->toIso8601String(),
+            'write_off_journal_entry_id' => $this->write_off_journal_entry_id
+                ? HashId::encode((int) $this->write_off_journal_entry_id) : null,
+            'disbursement_journal_entry_id' => $this->disbursement_journal_entry_id
+                ? HashId::encode((int) $this->disbursement_journal_entry_id) : null,
             'has_overdue_approval'   => $this->relationLoaded('approvalRecords')
                 ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
                 : false,
@@ -69,7 +80,7 @@ class EmployeeLoanResource extends JsonResource
         ];
     }
 
-    /** @return array{can_approve:bool,can_reject:bool,can_cancel:bool} */
+    /** @return array<string, bool> */
     private function actions(Request $request, EmployeeLoan $loan): array
     {
         $user = $request->user();
@@ -92,6 +103,15 @@ class EmployeeLoanResource extends JsonResource
             'can_cancel' => $user !== null
                 && $loan->status?->value === 'pending'
                 && $user->can('loans.write_off')
+                && app(LoanAccessPolicy::class)->canDecide($user, $loan),
+            'can_request_write_off' => $user !== null
+                && $loan->status?->value === 'active'
+                && $user->can('loans.write_off.request')
+                && app(LoanAccessPolicy::class)->canDecide($user, $loan),
+            'can_approve_write_off' => $user !== null
+                && $loan->status?->value === 'write_off_pending'
+                && $user->can('loans.write_off.approve')
+                && (int) $loan->write_off_requested_by !== (int) $user->id
                 && app(LoanAccessPolicy::class)->canDecide($user, $loan),
         ];
     }

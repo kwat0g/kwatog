@@ -185,11 +185,6 @@ class LeaveRequestService
                 if ($end->lt($start)) {
                     throw new \InvalidArgumentException('End date must be on or after start date.');
                 }
-                if ($start->year !== $end->year) {
-                    throw new BusinessRuleException(
-                        'Leave requests cannot span calendar years. Submit one request for each year.',
-                    );
-                }
 
                 // M-18 — half-day leave. Must be a single-date request.
                 $halfDayPeriod = $data['half_day_period'] ?? null;
@@ -203,16 +198,16 @@ class LeaveRequestService
                 }
 
                 $holidayDates = $this->holidays->datesBetween($start, $end);
-                $days = $halfDayPeriod !== null
-                    ? (isset($holidayDates[$start->toDateString()]) ? 0.0 : 0.5)
-                    : $this->businessDaysInclusive($start, $end, $holidayDates);
+                $daysByYear = $halfDayPeriod !== null
+                    ? (isset($holidayDates[$start->toDateString()]) ? [] : [$start->year => 0.5])
+                    : $this->businessDaysByYearInclusive($start, $end, $holidayDates);
+                ksort($daysByYear, SORT_NUMERIC);
+                $days = array_sum($daysByYear);
                 if ($days <= 0.0) {
                     throw new BusinessRuleException(
                         'A leave range must include at least one working day (excluding Sundays and public holidays).',
                     );
                 }
-                $year = $start->year;
-
                 $type = LeaveType::query()->whereKey($data['leave_type_id'])->first();
                 if (! $type || ! $type->is_active) {
                     throw new BusinessRuleException('This leave type is not available for new requests.');
@@ -231,21 +226,26 @@ class LeaveRequestService
                     $storedDocumentPath = $this->storeDocument($employeeId, $document);
                 }
 
-                // Balance check — locked inside the transaction so concurrent
-                // requests see the updated balance of whichever commits first.
-                $bal = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
-                    ->where('employee_id', $employeeId)
-                    ->where('leave_type_id', $type->id)
-                    ->where('year', $year)
-                    ->lockForUpdate()
-                    ->first();
-                if (! $bal) {
-                    throw new BusinessRuleException(
-                        'Leave balance is not initialized for this employee, leave type, and year. Contact HR before submitting.',
-                    );
-                }
-                if ((float) $bal->remaining < $days) {
-                    throw new BusinessRuleException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
+                // Lock every annual balance touched by a long request. This
+                // keeps a maternity leave spanning Dec/Jan from charging all
+                // days to its start-year ledger.
+                foreach ($daysByYear as $year => $yearDays) {
+                    $balance = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
+                        ->where('employee_id', $employeeId)
+                        ->where('leave_type_id', $type->id)
+                        ->where('year', $year)
+                        ->lockForUpdate()
+                        ->first();
+                    if (! $balance) {
+                        throw new BusinessRuleException(
+                            "Leave balance is not initialized for {$year}. Contact HR before submitting.",
+                        );
+                    }
+                    if ((float) $balance->remaining < $yearDays) {
+                        throw new BusinessRuleException(
+                            "Insufficient leave balance for {$year} ({$balance->remaining} remaining; {$yearDays} requested).",
+                        );
+                    }
                 }
 
                 // Overlap check remains the user-facing rule; the employee lock
@@ -287,6 +287,7 @@ class LeaveRequestService
                     'start_date'       => $start->toDateString(),
                     'end_date'         => $end->toDateString(),
                     'days'             => $days,
+                    'balance_allocations' => $daysByYear,
                     'half_day_period'  => $halfDayPeriod,
                     'reason'           => $data['reason'] ?? null,
                     'document_path'    => $storedDocumentPath,
@@ -349,9 +350,10 @@ class LeaveRequestService
                 'hr_approved_at' => now(),
             ])->save();
 
-            // Side effect 1: deduct leave balance.
-            $year = (int) $req->start_date->format('Y');
-            $this->balances->consume($req->employee_id, $req->leave_type_id, $year, (float) $req->days);
+            // Side effect 1: deduct each year's share from its own balance.
+            foreach ($this->balanceAllocations($req) as $year => $days) {
+                $this->balances->consume($req->employee_id, $req->leave_type_id, $year, $days);
+            }
 
             // Side effect 2: mark attendance days as on_leave.
             $req->forceFill(['attendance_snapshot' => $this->markAttendance($req)])->save();
@@ -479,8 +481,9 @@ class LeaveRequestService
             }
 
             if ($wasApproved) {
-                $year = (int) $req->start_date->format('Y');
-                $this->balances->restore($req->employee_id, $req->leave_type_id, $year, (float) $req->days);
+                foreach ($this->balanceAllocations($req) as $year => $days) {
+                    $this->balances->restore($req->employee_id, $req->leave_type_id, $year, $days);
+                }
                 $this->unmarkAttendance($req);
             }
 
@@ -489,16 +492,34 @@ class LeaveRequestService
     }
 
     /** @param array<string, true> $holidayDates */
-    private function businessDaysInclusive(CarbonImmutable $start, CarbonImmutable $end, array $holidayDates = []): float
+    private function businessDaysByYearInclusive(CarbonImmutable $start, CarbonImmutable $end, array $holidayDates = []): array
     {
-        $count = 0;
+        $counts = [];
         for ($d = $start; $d->lte($end); $d = $d->addDay()) {
             if ($d->dayOfWeek !== \Carbon\Carbon::SUNDAY
                 && ! isset($holidayDates[$d->toDateString()])) {
-                $count++;
+                $counts[$d->year] = ($counts[$d->year] ?? 0.0) + 1.0;
             }
         }
-        return (float) $count;
+
+        return $counts;
+    }
+
+    /** @return array<int, float> */
+    private function balanceAllocations(LeaveRequest $request): array
+    {
+        $allocations = $request->balance_allocations;
+        if (! is_array($allocations) || $allocations === []) {
+            return [(int) $request->start_date->format('Y') => (float) $request->days];
+        }
+
+        $normalized = [];
+        foreach ($allocations as $year => $days) {
+            $normalized[(int) $year] = (float) $days;
+        }
+        ksort($normalized, SORT_NUMERIC);
+
+        return $normalized;
     }
 
     private function storeDocument(int $employeeId, UploadedFile $document): string
@@ -517,10 +538,12 @@ class LeaveRequestService
         $snapshot = [];
         $start = CarbonImmutable::parse($req->start_date);
         $end = CarbonImmutable::parse($req->end_date);
+        $holidayDates = $this->holidays->datesBetween($start, $end);
 
         for ($d = $start; $d->lte($end); $d = $d->addDay()) {
             // Leave days use the same business-day contract as balance debit.
-            if ($d->dayOfWeek === CarbonImmutable::SUNDAY) {
+            if ($d->dayOfWeek === CarbonImmutable::SUNDAY
+                || isset($holidayDates[$d->toDateString()])) {
                 continue;
             }
 
@@ -607,48 +630,71 @@ class LeaveRequestService
     private function unmarkAttendance(LeaveRequest $req): void
     {
         $snapshot = is_array($req->attendance_snapshot) ? $req->attendance_snapshot : [];
-        $start = CarbonImmutable::parse($req->start_date);
-        $end = CarbonImmutable::parse($req->end_date);
         $token = "leave:{$req->leave_request_no}";
 
+        if ($snapshot !== []) {
+            // The approval-time snapshot is authoritative. Holiday calendars
+            // can change between approval and cancellation; re-evaluating them
+            // here would strand a leave-created DTR row on a newly-added holiday.
+            foreach ($snapshot as $date => $entry) {
+                if (is_array($entry) && ($entry['mutated'] ?? false)) {
+                    $this->restoreAttendanceDate($req, (string) $date, $entry, $token);
+                }
+            }
+
+            return;
+        }
+
+        // Legacy approved requests may predate attendance snapshots. Preserve
+        // the original date-window restoration contract for those records.
+        $start = CarbonImmutable::parse($req->start_date);
+        $end = CarbonImmutable::parse($req->end_date);
+        $holidayDates = $this->holidays->datesBetween($start, $end);
+
         for ($d = $start; $d->lte($end); $d = $d->addDay()) {
-            if ($d->dayOfWeek === CarbonImmutable::SUNDAY) {
+            if ($d->dayOfWeek === CarbonImmutable::SUNDAY
+                || isset($holidayDates[$d->toDateString()])) {
                 continue;
             }
 
             $date = $d->toDateString();
-            $this->attendanceMutability->assertMutable((int) $req->employee_id, $date);
             $entry = $snapshot[$date] ?? null;
-            if (is_array($entry) && ! ($entry['mutated'] ?? false)) {
-                continue;
+            if (is_array($entry) && ($entry['mutated'] ?? false)) {
+                $this->restoreAttendanceDate($req, $date, $entry, $token);
             }
+        }
+    }
 
-            $attendance = Attendance::withTrashed()
-                ->where('employee_id', $req->employee_id)
-                ->where('date', $date)
-                ->lockForUpdate()
-                ->first();
+    /** @param array<string, mixed> $entry */
+    private function restoreAttendanceDate(LeaveRequest $req, string $date, array $entry, string $token): void
+    {
+        $this->attendanceMutability->assertMutable((int) $req->employee_id, $date);
+        $attendance = Attendance::withTrashed()
+            ->where('employee_id', $req->employee_id)
+            ->where('date', $date)
+            ->lockForUpdate()
+            ->first();
 
-            if (is_array($entry) && $entry['attributes'] !== null) {
-                if (! $attendance || $attendance->trashed()) {
-                    throw new BusinessRuleException(
-                        "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
-                    );
-                }
-                if ((string) $attendance->remarks !== $token) {
-                    throw new BusinessRuleException(
-                        "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
-                    );
-                }
-                $attendance->forceFill($entry['attributes'])->save();
-                continue;
+        if (($entry['attributes'] ?? null) !== null) {
+            if (! $attendance || $attendance->trashed()) {
+                throw new BusinessRuleException(
+                    "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
+                );
             }
-
-            // No prior row: delete only the exact leave-created marker. A row
-            // created later by attendance staff is left untouched.
-            if ($attendance && ! $attendance->trashed() && (string) $attendance->remarks === $token) {
-                $attendance->delete();
+            if ((string) $attendance->remarks !== $token) {
+                throw new BusinessRuleException(
+                    "Attendance for {$date} changed after leave approval; contact HR for a manual correction.",
+                );
             }
+            $attendance->forceFill($entry['attributes'])->save();
+
+            return;
+        }
+
+        // No prior row: delete only the exact leave-created marker. A row
+        // created later by attendance staff is left untouched.
+        if ($attendance && ! $attendance->trashed() && (string) $attendance->remarks === $token) {
+            $attendance->delete();
         }
     }
 

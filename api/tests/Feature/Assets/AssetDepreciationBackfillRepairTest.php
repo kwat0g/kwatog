@@ -121,6 +121,11 @@ class AssetDepreciationBackfillRepairTest extends TestCase
         $result = $this->service()->runBackfillTo(2026, 3, $by);
 
         $this->assertSame(3, $result['processed_periods']);
+        $this->assertSame(
+            JournalEntry::query()->orderByDesc('id')->firstOrFail()->hash_id,
+            $result['journal_entry_id'],
+            'The run summary must publish the journal HashID, not its database integer.',
+        );
 
         // January and February were repaired with supplemental journals; March
         // itself was unposted and takes one consolidated run.

@@ -13,10 +13,12 @@ use App\Modules\Accounting\Enums\BudgetType;
 use App\Modules\Accounting\Enums\BudgetStatus;
 use App\Modules\Accounting\Resources\BudgetResource;
 use App\Modules\Accounting\Resources\FiscalYearResource;
+use App\Modules\Accounting\Requests\StoreFiscalYearRequest;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Accounting\Services\BudgetActualsSyncService;
 use App\Modules\Accounting\Services\BudgetConsumptionService;
 use App\Modules\Accounting\Services\BudgetService;
+use App\Modules\Accounting\Services\FiscalYearService;
 use App\Modules\HR\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,6 +34,7 @@ class BudgetController extends Controller
         private readonly BudgetActualsSyncService $actualsSync,
         private readonly BudgetConsumptionService $consumption,
         private readonly SettingsService $settings,
+        private readonly FiscalYearService $fiscalYearService,
     ) {}
 
     public function options(): JsonResponse
@@ -381,6 +384,26 @@ class BudgetController extends Controller
         ]);
     }
 
+    public function storeFiscalYear(StoreFiscalYearRequest $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => new FiscalYearResource($this->fiscalYearService->create($request->validated())),
+            'error' => null,
+            'meta' => null,
+        ], 201);
+    }
+
+    public function activateFiscalYear(FiscalYear $fiscalYear): JsonResponse
+    {
+        return response()->json(['success' => true, 'data' => new FiscalYearResource($this->fiscalYearService->activate($fiscalYear)), 'error' => null, 'meta' => null]);
+    }
+
+    public function closeFiscalYear(FiscalYear $fiscalYear): JsonResponse
+    {
+        return response()->json(['success' => true, 'data' => new FiscalYearResource($this->fiscalYearService->close($fiscalYear)), 'error' => null, 'meta' => null]);
+    }
+
     /**
      * Dispatch the SyncBudgetActuals job for a given fiscal year.
      *
@@ -401,9 +424,8 @@ class BudgetController extends Controller
             'success' => true,
             'data'    => [
                 'dispatched' => true,
-                'outbox_id' => (string) $outbox->getKey(),
+                'request_id' => $run?->request_id,
                 'status' => $outbox->status,
-                'run_id' => $run?->getKey(),
                 'fiscal_year_id' => $run?->fiscalYear?->hash_id,
                 'run_status' => $run?->status,
             ],
@@ -423,7 +445,7 @@ class BudgetController extends Controller
         return response()->json([
             'success' => true,
             'data' => $run ? [
-                'id' => (string) $run->getKey(),
+                'request_id' => (string) $run->request_id,
                 'fiscal_year_id' => $run->fiscalYear?->hash_id,
                 'status' => $run->status,
                 'processed_lines' => $run->processed_lines,

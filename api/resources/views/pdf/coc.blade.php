@@ -9,7 +9,7 @@
     <td>
       <div class="info-card">
         <div class="info-card-title">Certificate & Quality Spec</div>
-        <div class="info-row"><span class="lbl">Certificate No:</span> <span class="val mono" style="font-weight:700;">{{ $coc_number }}</span></div>
+        <div class="info-row"><span class="lbl">Certificate No:</span> <span class="val mono" style="font-weight:bold;">{{ $coc_number }}</span></div>
         <div class="info-row"><span class="lbl">Issued Date:</span> <span class="val mono">{{ $issued_at }}</span></div>
         <div class="info-row"><span class="lbl">Inspection No:</span> <span class="val mono">{{ $inspection_number }}</span></div>
         @if (!empty($quality_standard))
@@ -46,14 +46,14 @@
   <tbody>
     <tr>
       <td>
-        <div style="font-weight:700; color:#0F172A;">{{ ucfirst(str_replace('_', ' ', $stage)) }} Inspection</div>
+        <div style="font-weight:bold; color:#0F172A;">{{ ucfirst(str_replace('_', ' ', $stage)) }} Inspection</div>
         <div style="font-size:7.5pt; color:#64748B;">
           @if (!empty($aql_level)) Sampling per ANSI/ASQ Z1.4 General Level {{ $aql_level }} @endif
         </div>
       </td>
       <td class="r mono font-semibold">{{ number_format($batch_quantity) }}</td>
       <td class="r mono">{{ number_format($sample_size) }} @if ($aql_code)<span style="font-size:7.5pt; color:#64748B;">[{{ $aql_code }}]</span>@endif</td>
-      <td class="r mono" style="{{ $defect_count > 0 ? 'color:#DC2626; font-weight:700;' : '' }}">{{ $defect_count }}</td>
+      <td class="r mono" style="{{ $defect_count > 0 ? 'color:#DC2626; font-weight:bold;' : '' }}">{{ $defect_count }}</td>
       <td class="c">
         @php($__pass = !empty($inspection_passed))
         <span class="chip {{ $__pass ? 'chip-success' : 'chip-danger' }}">
@@ -72,7 +72,7 @@
     @if (!empty($material_lot_references) && is_array($material_lot_references))
       <tr>
         <td colspan="5">
-          <div style="font-weight:700; font-size:8pt; color:#475569; margin-bottom:4px; text-transform:uppercase;">
+          <div style="font-weight:bold; font-size:8pt; color:#475569; margin-bottom:4px; text-transform:uppercase;">
             Traceable Raw Material Lots (IATF 16949 Chain Genealogy)
           </div>
           @foreach ($material_lot_references as $ref)
@@ -90,7 +90,7 @@
 </table>
 
 @if (!empty($critical_measurements) && is_array($critical_measurements))
-  <div style="font-size:8.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#1E1B4B; margin: 14px 0 6px;">
+  <div style="font-size:8.5pt; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px; color:#1E1B4B; margin: 14px 0 6px;">
     Critical Dimension Inspection Results
   </div>
   <table class="lines">
@@ -107,7 +107,7 @@
     <tbody>
       @foreach ($critical_measurements as $m)
         <tr>
-          <td style="font-weight:600;">
+          <td style="font-weight:bold;">
             {{ $m['parameter'] }}
             @if (!empty($m['unit'])) <span style="font-size:7.5pt; color:#64748B;">({{ $m['unit'] }})</span>@endif
           </td>

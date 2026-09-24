@@ -230,7 +230,7 @@ id, name (string 100), code (string 20 unique), address (text nullable), created
 id, warehouse_id (FK warehouses), name (string 50), code (string 10), zone_type (string 30), created_at
 
 ### warehouse_locations
-id, zone_id (FK warehouse_zones), code (string 20 unique), rack (string 10 nullable), bin (string 10 nullable), created_at
+id, zone_id (FK warehouse_zones), code (string 20 unique), rack (string 10 nullable), bin (string 10 nullable), is_active (bool), is_blocked (bool), created_at, updated_at, deleted_at
 
 ### stock_levels
 id, item_id (FK items), location_id (FK warehouse_locations), quantity (decimal 15,3), reserved_quantity (decimal 15,3 default 0), weighted_avg_cost (decimal 15,4), last_counted_at (timestamp nullable), updated_at, UNIQUE (item_id, location_id)
@@ -239,10 +239,13 @@ id, item_id (FK items), location_id (FK warehouse_locations), quantity (decimal 
 id, item_id (FK items), from_location_id (FK warehouse_locations nullable), to_location_id (FK warehouse_locations nullable), movement_type (string 30), quantity (decimal 15,3), unit_cost (decimal 15,4), total_cost (decimal 15,2), reference_type (string 50 nullable), reference_id (bigint nullable), remarks (text nullable), created_by (FK users), created_at
 
 ### goods_receipt_notes
-id, grn_number (string 20 unique), purchase_order_id (FK purchase_orders), vendor_id (FK vendors), received_date (date), received_by (FK users), items (json), status (string 20: pending_qc/accepted/rejected), qc_inspection_id (FK inspections nullable), created_at, updated_at
+id, grn_number (string 20 unique), purchase_order_id (FK purchase_orders), vendor_id (FK vendors), received_date (date), received_by (FK users), status (string 20), qc_inspection_id (FK inspections nullable), idempotency_key/fingerprint (nullable; globally unique when present), idempotency_response (json nullable for single-screen receive replay), created_at, updated_at
 
 ### material_issue_slips
-id, slip_number (string 20), work_order_id (FK work_orders), issued_date (date), issued_by (FK users), items (json), status (string 20), created_at, updated_at
+id, slip_number (string 20), work_order_id (FK work_orders), issued_date (date), issued_by (FK users), status (string 20), idempotency_key/fingerprint (nullable; globally unique when present), created_at, updated_at
+
+### stock_count_items
+id, session_id (FK stock_count_sessions), location_id (FK warehouse_locations), item_id (FK items nullable), system_quantity/counted_quantity/variance (decimal 15,3), variance_percent (decimal 8,2), status, counted_by (FK users nullable), verified_by (FK users nullable; distinct checker), counted_at, notes
 
 ### material_reservations
 id, item_id (FK items), work_order_id (FK work_orders), quantity (decimal 15,3), status (string 20: reserved/issued/released), reserved_at (timestamp), released_at (timestamp nullable)
@@ -252,7 +255,7 @@ id, item_id (FK items), work_order_id (FK work_orders), quantity (decimal 15,3),
 ## PURCHASING (15 tables)
 
 ### purchase_requests
-id, pr_number (string 20), requested_by (FK users), department_id (FK departments), date (date), reason (text), status (string 20: draft/pending/approved/rejected/converted), sourcing_method (direct_po/rfq nullable until explicitly selected), is_auto_generated (bool default false), created_at, updated_at
+id, pr_number (string 20), requested_by (FK users), department_id (FK departments), date (date), required_delivery_date (date nullable — need-by; auto PRs derive it), reason (text), status (string 20: draft/pending/approved/rejected/converted), sourcing_method (direct_po/rfq nullable until explicitly selected), is_auto_generated (bool default false), created_at, updated_at
 
 ### purchase_request_items
 id, purchase_request_id (FK purchase_requests), item_id (FK items nullable), description (string 200), quantity (decimal 10,2), unit (string 20), estimated_unit_price (decimal 15,2 nullable)
@@ -373,7 +376,7 @@ id, mold_id (FK molds), event_type (string 30), description (text nullable), cos
 id, product_id (FK products), customer_id (FK customers), price (decimal 15,2), effective_from (date), effective_to (date), created_at, updated_at, INDEX (product_id, customer_id, effective_from)
 
 ### sales_orders
-id, so_number (string 20 unique), customer_id (FK customers), date (date), subtotal (decimal 15,2), vat_amount (decimal 15,2), total_amount (decimal 15,2), status (string 20: confirmed/in_production/partially_delivered/delivered/invoiced/cancelled), created_by (FK users), created_at, updated_at
+id, so_number (string 20 unique), customer_id (FK customers), date (date), subtotal (decimal 15,2), vat_amount (decimal 15,2), total_amount (decimal 15,2), status (draft/confirmed/in_production/partially_delivered/delivered/invoiced/paid/closed/cancelled), portal_idempotency_key (nullable; unique with customer_id), portal_idempotency_fingerprint (nullable SHA-256, paired with key), created_by (FK users), created_at, updated_at
 
 ### sales_order_items
 id, sales_order_id (FK sales_orders), product_id (FK products), quantity (decimal 10,2), unit_price (decimal 15,2), total (decimal 15,2), quantity_delivered (decimal 10,2 default 0), delivery_date (date)
@@ -386,6 +389,13 @@ id, complaint_id (FK customer_complaints unique), d1_team (json), d2_problem_des
 
 ---
 
+## RETURN MANAGEMENT
+
+### return_request_items
+id, return_request_id (FK return_requests), product_id (FK products nullable), item_id (FK items nullable), quantity/returned_quantity (decimal 12,3), source invoice/SO/delivery or PO/GRN/bill line IDs, stock_movement_quantity (decimal 12,3), stock_movement_id (FK stock_movements nullable), quarantine movement/location references, ncr_id (FK non_conformance_reports nullable), disposition, created_at, updated_at
+
+---
+
 ## QUALITY (5 tables)
 
 ### inspection_specs
@@ -395,7 +405,7 @@ id, product_id (FK products unique), version (int default 1), created_at, update
 id, spec_id (FK inspection_specs), parameter_name (string 100), parameter_type (string 20: dimensional/visual/functional), unit (string 20 nullable), nominal_value (decimal 10,4 nullable), tolerance_min (decimal 10,4 nullable), tolerance_max (decimal 10,4 nullable), is_critical (bool default false), sort_order (int)
 
 ### inspections
-id, inspection_number (string 20), stage (string 20: incoming/in_process/outgoing), inspected_entity_type (string 30), inspected_entity_id (bigint), product_id (FK products nullable), batch_quantity (int), sample_size (int), good_count (int default 0), reject_count (int default 0), result (string 10: pass/fail/pending), inspector_id (FK users), inspected_at (timestamp), remarks (text nullable), created_at, updated_at
+id, inspection_number (string 32), stage (string 20: incoming/in_process/outgoing/supplier_return/customer_return), status (string 20: draft/in_progress/awaiting_review/passed/failed/cancelled), proposed_result (string 10 nullable: passed/failed), entity_type/entity_id (polymorphic gated record), product_id/item_id, batch_quantity, accepted_quantity, sample_size, accept_count, reject_count, defect_count, inspector_id (maker FK users nullable), reviewed_by (checker FK users nullable), reviewed_at, review_remarks, started_at, completed_at, notes, created_at, updated_at. Incoming and outgoing terminal results require a different checker; in-process results remain single-actor.
 
 ### inspection_measurements
 id, inspection_id (FK inspections), spec_item_id (FK inspection_spec_items), measured_value (decimal 10,4 nullable), result (string 10: pass/fail), remarks (string nullable)
@@ -408,13 +418,16 @@ id, ncr_id (FK non_conformance_reports), action_type (string 30: corrective/prev
 
 ---
 
-## MAINTENANCE (4 tables)
+## MAINTENANCE (5 tables)
+
+### machine_condition_readings
+id, machine_id (FK machines), metric (string 30), value (decimal 12,3), unit (string 20), recorded_at (timestamp), source (string 50), notes (text nullable), recorded_by (FK users nullable), created_at, updated_at; HasAuditLog records measurement create/update/delete events
 
 ### maintenance_schedules
-id, maintainable_type (string 50: machine/mold), maintainable_id (bigint), schedule_type (string 20 default 'preventive'), description (string 200), interval_type (string 20: hours/days/shots), interval_value (int), last_performed_at (timestamp nullable), next_due_at (timestamp nullable), is_active (bool default true), created_at, updated_at
+id, maintainable_type (string 50: machine/mold), maintainable_id (bigint; PostgreSQL type/id check and target-existence trigger), schedule_type (string 20 default 'preventive'), description (string 200), interval_type (string 20: hours/days/shots), interval_value (int), last_performed_at (timestamp nullable), next_due_at (timestamp nullable), is_active (bool default true), created_at, updated_at
 
 ### maintenance_work_orders
-id, maintainable_type (string 50), maintainable_id (bigint), schedule_id (FK maintenance_schedules nullable), type (string 20: preventive/corrective), priority (string 20: critical/high/medium/low), description (text), assigned_to (FK employees nullable), status (string 20), started_at (timestamp nullable), completed_at (timestamp nullable), downtime_minutes (int default 0), cost (decimal 15,2 default 0), remarks (text nullable), created_at, updated_at
+id, maintainable_type (string 50: machine/mold), maintainable_id (bigint; PostgreSQL type/id check and target-existence trigger), schedule_id (FK maintenance_schedules nullable), type (string 20: preventive/corrective), priority (string 20: critical/high/medium/low), description (text), assigned_to (FK employees nullable), status (string 20), started_at (timestamp nullable), completed_at (timestamp nullable), downtime_minutes (ledger-derived int default 0), cost (decimal 15,2 default 0), remarks (text nullable), created_by (FK users), created_at, updated_at
 
 ### maintenance_logs
 id, work_order_id (FK maintenance_work_orders), description (text), logged_by (FK users), created_at
@@ -422,12 +435,14 @@ id, work_order_id (FK maintenance_work_orders), description (text), logged_by (F
 ### spare_part_usage
 id, work_order_id (FK maintenance_work_orders), item_id (FK items), quantity (decimal 10,2), unit_cost (decimal 15,2), total_cost (decimal 15,2), created_at
 
+Polymorphic target IDs are validated and locked in the service transaction. PostgreSQL triggers reject missing/deleted machine or mold targets and prevent hard deletion while maintenance history references them; soft deletes preserve readable history.
+
 ---
 
 ## ASSETS (2 tables)
 
 ### assets
-id, asset_code (string 20 unique), name (string 200), description (text nullable), category (string 50: machine/mold/vehicle/equipment/furniture/other), department_id (FK departments nullable), acquisition_date (date), acquisition_cost (decimal 15,2), useful_life_years (int), salvage_value (decimal 15,2 default 0), accumulated_depreciation (decimal 15,2 default 0), status (string 20: active/under_maintenance/disposed), disposed_date (date nullable), disposal_amount (decimal 15,2 nullable), location (string 100 nullable), linked_type (string 30 nullable), linked_id (bigint nullable), qr_code_data (string nullable), created_at, updated_at, deleted_at
+id, asset_code (string 20 unique), name (string 200), description (text nullable), category (string 50: machine/mold/vehicle/equipment/furniture/other), department_id (FK departments nullable), acquisition_date (date), acquisition_cost (decimal 15,2), useful_life_years (int), salvage_value (decimal 15,2 default 0), accumulated_depreciation (decimal 15,2 default 0), status (string 20: active/under_maintenance/disposed), disposed_date (date nullable), disposal_amount (decimal 15,2 nullable), location (string 100 nullable), created_at, updated_at, deleted_at. Machine, mold, and vehicle records point back through their canonical nullable asset_id FK; no polymorphic linked_type/linked_id column exists. The QR endpoint returns JSON metadata and a hashed detail URL, not image bytes.
 
 ### asset_depreciations
 id, asset_id (FK assets), period_year (int), period_month (int), depreciation_amount (decimal 15,2), accumulated_after (decimal 15,2), journal_entry_id (FK journal_entries nullable), created_at, UNIQUE (asset_id, period_year, period_month)

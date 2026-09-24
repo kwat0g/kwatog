@@ -231,8 +231,24 @@ class WoOperationService
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'record output');
             $this->assertParentInProgress($locked);
 
+            $previousOp = WoOperation::query()
+                ->where('work_order_id', $locked->work_order_id)
+                ->where('sequence', '<', $locked->sequence)
+                ->where('status', '!=', WoOperationStatus::Skipped->value)
+                ->orderByDesc('sequence')
+                ->first();
+
+            $newCompleted = bcadd((string) $locked->qty_completed, (string) $qty, 4);
+            if ($previousOp !== null && $previousOp->status === WoOperationStatus::Completed) {
+                if (bccomp($newCompleted, (string) $previousOp->qty_completed, 4) > 0) {
+                    throw new BusinessRuleException(
+                        "Cannot record output of {$qty} (total {$newCompleted}) exceeding previous operation {$previousOp->sequence} completed quantity of {$previousOp->qty_completed}."
+                    );
+                }
+            }
+
             $updates = [
-                'qty_completed' => bcadd((string) $locked->qty_completed, (string) $qty, 4),
+                'qty_completed' => $newCompleted,
                 'qty_scrapped' => bcadd((string) $locked->qty_scrapped, (string) $scrap, 4),
             ];
 
@@ -247,6 +263,8 @@ class WoOperationService
             if ($scrap > 0) {
                 $this->log($locked, null, ProductionLogEvent::RecordScrap, $scrap, $scrapReason);
             }
+
+            ProductionDashboardService::forgetCache();
         });
     }
 
@@ -294,6 +312,7 @@ class WoOperationService
 
             $this->log($locked, null, ProductionLogEvent::EndProduction);
 
+            ProductionDashboardService::forgetCache();
         });
     }
 
@@ -322,6 +341,8 @@ class WoOperationService
             ]);
 
             $this->log($locked, $operator, ProductionLogEvent::Skip, notes: $reason);
+
+            ProductionDashboardService::forgetCache();
         });
     }
 
@@ -459,7 +480,7 @@ class WoOperationService
         $end = $wo->planned_end instanceof Carbon
             ? $wo->planned_end->copy()
             : Carbon::parse($wo->planned_end);
-        $windowMinutes = max(0, $start->diffInMinutes($end));
+        $windowMinutes = max(0, $start->diffInMinutes($end, true));
         $weights = $operations->mapWithKeys(function ($operation): array {
             $weight = (float) $operation->setup_time_minutes + (float) $operation->cycle_time_minutes;
 
@@ -471,7 +492,7 @@ class WoOperationService
 
         foreach ($operations as $operation) {
             $duration = $operation === $operations->last()
-                ? $end->diffInMinutes($cursor)
+                ? $end->diffInMinutes($cursor, true)
                 : (int) round($windowMinutes * ((float) $weights[$operation->id] / $totalWeight));
             $operationEnd = $operation === $operations->last()
                 ? $end->copy()

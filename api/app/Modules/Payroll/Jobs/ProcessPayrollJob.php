@@ -184,55 +184,65 @@ class ProcessPayrollJob implements ShouldQueue
                 }
             }
         } finally {
-            // Land on Computed — the run produced rows and is awaiting a
-            // checker's approval. Parking back at Draft (the old behaviour)
-            // made a finished run indistinguishable from an untouched one.
-            // Draft is only correct when there is genuinely nothing to show.
-            // releaseClaim() is shared with force-unlock and the stale reaper
-            // so all three agree on what "finished" means.
             $released = false;
-            try {
-                $period = DB::transaction(function () use ($periods, $period): PayrollPeriod {
-                    $owned = $periods->assertComputeClaim($period, $this->claimToken);
-
-                    return $periods->releaseClaim($owned, [], $this->claimToken);
-                });
-                $released = true;
-            } catch (Throwable $claimLost) {
+            if (! $periods->claimIsOwned($period, $this->claimToken)) {
                 Log::warning('Payroll computation claim was lost before terminal release', [
                     'period_id' => $period->id,
-                    'error' => $claimLost->getMessage(),
+                    'claim_token' => $this->claimToken,
                 ]);
-            }
-
-            if ($released) {
-                // Final emit carries the terminal status, so a subscribed page
-                // flips out of the processing state without waiting for a poll.
-                $emit();
-
-                // Task A9 — detect anomalies on completed period.
+            } else {
                 try {
-                    app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($period);
-                    PayrollPeriod::query()
-                        ->whereKey($period->id)
-                        ->update(['anomaly_detection_failed' => false]);
-                } catch (\Throwable $e) {
-                    try {
-                        PayrollPeriod::query()
-                            ->whereKey($period->id)
-                            ->update(['anomaly_detection_failed' => true]);
-                    } catch (\Throwable $markingError) {
-                        Log::error('Payroll anomaly failure could not be recorded', [
-                            'period_id' => $period->id,
-                            'error' => $markingError->getMessage(),
-                        ]);
-                        throw $markingError;
-                    }
+                    // Keep the claim through anomaly detection and status
+                    // release. A recompute must not replace payroll rows while
+                    // the detector is creating flags for the previous rows.
+                    $period = DB::transaction(function () use ($periods, $period): PayrollPeriod {
+                        $owned = $periods->assertComputeClaim($period, $this->claimToken);
+                        app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($owned);
 
-                    Log::error('PayrollAnomalyService::detect failed after job', [
-                        'period_id' => $period->id,
-                        'error'     => $e->getMessage(),
-                    ]);
+                        return $periods->releaseClaim(
+                            $owned,
+                            ['anomaly_detection_failed' => false],
+                            $this->claimToken,
+                        );
+                    });
+                    $released = true;
+                } catch (\Throwable $e) {
+                    if (! $periods->claimIsOwned($period, $this->claimToken)) {
+                        Log::warning('Payroll computation claim was lost during anomaly detection', [
+                            'period_id' => $period->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    } else {
+                        Log::error('PayrollAnomalyService::detect failed before period release', [
+                            'period_id' => $period->id,
+                            'error' => $e->getMessage(),
+                        ]);
+
+                        try {
+                            $period = DB::transaction(function () use ($periods, $period): PayrollPeriod {
+                                $owned = $periods->assertComputeClaim($period, $this->claimToken);
+
+                                return $periods->releaseClaim(
+                                    $owned,
+                                    ['anomaly_detection_failed' => true],
+                                    $this->claimToken,
+                                );
+                            });
+                            $released = true;
+                        } catch (\Throwable $markingError) {
+                            Log::error('Payroll anomaly failure could not be recorded', [
+                                'period_id' => $period->id,
+                                'error' => $markingError->getMessage(),
+                            ]);
+                            throw $markingError;
+                        }
+                    }
+                }
+
+                if ($released) {
+                    // Final emit carries the terminal status, so a subscribed
+                    // page flips out of processing without waiting for a poll.
+                    $emit();
                 }
             }
         }

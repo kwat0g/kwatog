@@ -15,6 +15,7 @@ use App\Modules\Loans\Services\LoanService;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -38,6 +39,7 @@ class LoanApprovalChainTest extends TestCase
         parent::setUp();
         $this->seed([
             RolePermissionSeeder::class,
+            ChartOfAccountsSeeder::class,
             DepartmentSeeder::class,
             PositionSeeder::class,
         ]);

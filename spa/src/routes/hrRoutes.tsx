@@ -15,9 +15,6 @@ const EditEmployeePage = lazy(() => import('@/pages/hr/employees/edit'));
 const ProfileUpdateRequestsPage = lazy(() => import('@/pages/hr/profile-update-requests'));
 // /hr/salary-adjustments removed 2026-08-08 (scope cut — now a tab on /hr/employees)
 
-// Series F / Task F5 — Employee directory + org chart hidden 2026-08-08
-// (scope cut; the Employees list is the supported directory surface).
-
 // Attendance (Sprint 2 — Tasks 16/17/18/19)
 const ShiftsPage = lazy(() => import('@/pages/attendance/shifts'));
 const BulkAssignShiftPage = lazy(() => import('@/pages/attendance/shifts/assign'));

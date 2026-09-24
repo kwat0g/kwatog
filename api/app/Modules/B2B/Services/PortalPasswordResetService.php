@@ -45,7 +45,7 @@ class PortalPasswordResetService
         /** @var CustomerPortalUser|SupplierPortalUser|null $recipient */
         $recipient = DB::transaction(function () use ($model, $user, $type, $email, $rawToken): ?object {
             $lockedUser = $model::query()->lockForUpdate()->find($user->getKey());
-            if (! $lockedUser || ! $lockedUser->is_active) {
+            if (! $lockedUser || ! $lockedUser->is_active || ! $this->parentIsActive($lockedUser)) {
                 return null;
             }
 
@@ -106,7 +106,7 @@ class PortalPasswordResetService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $user) {
+            if (! $user || ! $this->parentIsActive($user)) {
                 throw ValidationException::withMessages([
                     'token' => 'This portal account is no longer active. Contact Ogami Philippines support.',
                 ]);
@@ -152,5 +152,13 @@ class PortalPasswordResetService
     private function fallbackPermission(string $type): string
     {
         return $type === 'supplier' ? 'accounting.vendors.view' : 'accounting.customers.view';
+    }
+
+    private function parentIsActive(CustomerPortalUser|SupplierPortalUser $user): bool
+    {
+        return match (true) {
+            $user instanceof CustomerPortalUser => $user->customer()->lockForUpdate()->where('is_active', true)->exists(),
+            $user instanceof SupplierPortalUser => $user->vendor()->lockForUpdate()->where('is_active', true)->exists(),
+        };
     }
 }

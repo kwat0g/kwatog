@@ -6,6 +6,9 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Services\PayrollPublicationPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -17,7 +20,10 @@ use Illuminate\Support\Facades\Schema;
  */
 class SelfServiceHomeService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly SettingsService $settings,
+        private readonly PayrollPublicationPolicy $publication,
+    ) {}
 
     /**
      * @return array{todays_shift: ?array, leave_balances: array, leave_balance_policy: array, pending_count: int, latest_payslip: ?array}
@@ -110,19 +116,19 @@ class SelfServiceHomeService
             return null;
         }
 
-        $row = DB::table('payrolls as p')
-            ->join('payroll_periods as pp', 'pp.id', '=', 'p.payroll_period_id')
-            ->where('p.employee_id', $employee->id)
-            ->where('pp.status', 'finalized')
-            ->orderByDesc('pp.period_end')
-            ->select('p.id', 'p.gross_pay', 'p.net_pay', 'pp.period_start', 'pp.period_end')
-            ->first();
+        $query = Payroll::query()
+            ->with('period:id,period_start,period_end')
+            ->where('employee_id', $employee->id)
+            ->orderByDesc(PayrollPeriod::select('period_end')
+                ->whereColumn('payroll_periods.id', 'payrolls.payroll_period_id'));
+        $this->publication->scopePublishable($query);
+        $row = $query->first();
 
         return $row
             ? [
-                'id'           => app('hashids')->encode((int) $row->id),
-                'period_start' => (string) $row->period_start,
-                'period_end'   => (string) $row->period_end,
+                'id'           => $row->hash_id,
+                'period_start' => (string) $row->period?->period_start,
+                'period_end'   => (string) $row->period?->period_end,
                 'gross_pay'    => (string) $row->gross_pay,
                 'net_pay'      => (string) $row->net_pay,
             ]

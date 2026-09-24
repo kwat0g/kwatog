@@ -1,7 +1,18 @@
 # MRP Audit Missing Tests
 
 Date: 2026-09-19
- 
+
+## Current re-audit 2026-09-23
+
+The source-level test gaps for deleted BOM versions, service numeric validation, base-UOM in-transit netting, 3-decimal MOQ rounding, missing-BOM status/alerting, and manual/daily overlap now have focused regression tests. The retained-plan test already proves prior plan rows remain in history.
+
+The Redis-backed cross-process lock smoke and read-only migration preflight now pass:
+`scripts/mrp-redis-overlap-smoke.sh` blocks the real contender and
+`mrp:preflight-release-migrations` reports clean data without modifying rows. Production data
+execution remains a deployment gate; this file remains a verification inventory rather than a
+full-suite claim. The cross-module register was left unchanged per task scope; this current
+section supersedes its MRP status row.
+
 ## Re-audit 2026-09-19
 
 Current verdict: **test-gap inventory remains valid**.

@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatPeso } from '@/lib/formatNumber';
+import { localIsoDate } from '@/lib/formatDate';
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -30,7 +31,7 @@ export default function AssetDetailPage() {
   const { can } = usePermission();
   const [disposeOpen, setDisposeOpen] = useState(false);
   const [disposalAmount, setDisposalAmount] = useState<string>('');
-  const [disposalDate, setDisposalDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [disposalDate, setDisposalDate] = useState(() => localIsoDate());
   const [disposalReason, setDisposalReason] = useState<string>('');
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
@@ -374,7 +375,7 @@ export default function AssetDetailPage() {
             label="Disposal date"
             type="date"
             min={data.acquisition_date.slice(0, 10)}
-            max={new Date().toISOString().slice(0, 10)}
+            max={localIsoDate()}
             value={disposalDate}
             onChange={(event) => setDisposalDate(event.target.value)}
             error={disposalDateError}

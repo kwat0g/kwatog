@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Common\Services\DocumentSequenceService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -28,6 +29,13 @@ class DocumentSequenceServiceTest extends TestCase
         $svc = app(DocumentSequenceService::class);
         $code = $svc->generate('employee');
         $this->assertMatchesRegularExpression('/^OGM-\d{4}-\d{4}$/', $code);
+    }
+
+    public function test_monthly_number_uses_the_document_date_not_wall_clock_month(): void
+    {
+        $code = app(DocumentSequenceService::class)->generate('journal_entry', Carbon::parse('2024-02-15'));
+
+        $this->assertMatchesRegularExpression('/^JE-202402-\d{4}$/', $code);
     }
 
     public function test_stock_count_has_registered_monthly_sequence(): void

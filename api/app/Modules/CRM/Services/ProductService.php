@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -75,13 +76,29 @@ class ProductService
 
     public function create(array $data): Product
     {
-        return DB::transaction(fn () => Product::create($data));
+        return DB::transaction(function () use ($data): Product {
+            $data = $this->normalisePartNumber($data);
+            $this->assertUniquePartNumber((string) $data['part_number']);
+
+            return Product::create($data);
+        });
     }
 
     public function update(Product $product, array $data): Product
     {
         return DB::transaction(function () use ($product, $data) {
             $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
+            $data = $this->normalisePartNumber($data);
+            if (isset($data['part_number'])) {
+                $this->assertUniquePartNumber((string) $data['part_number'], (int) $locked->id);
+            }
+            if (
+                $locked->is_active
+                && isset($data['is_active'])
+                && ! filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN)
+            ) {
+                $this->assertCanArchive($locked);
+            }
             $locked->update($data);
             return $locked->fresh();
         });
@@ -91,28 +108,7 @@ class ProductService
     {
         DB::transaction(function () use ($product): void {
             $locked = Product::query()->lockForUpdate()->findOrFail($product->id);
-            $dependencies = [];
-
-            if ($locked->salesOrderItems()->exists()) {
-                $dependencies[] = 'sales orders';
-            }
-            if ($this->hasBomSchema() && \App\Modules\MRP\Models\Bom::query()
-                ->where('product_id', $locked->id)
-                ->active()
-                ->exists()) {
-                $dependencies[] = 'an active BOM';
-            }
-            if ($locked->priceAgreements()->exists()) {
-                $dependencies[] = 'price agreements';
-            }
-
-            if ($dependencies !== []) {
-                throw new BusinessRuleException(sprintf(
-                    'Cannot archive this product while it has %s. Archive or retire the dependent records first.',
-                    $this->joinDependencies($dependencies),
-                ));
-            }
-
+            $this->assertCanArchive($locked);
             $locked->delete();
         });
     }
@@ -140,6 +136,53 @@ class ProductService
     {
         return class_exists(\App\Modules\Quality\Models\InspectionSpec::class)
             && Schema::hasTable('inspection_specs');
+    }
+
+    private function normalisePartNumber(array $data): array
+    {
+        if (isset($data['part_number'])) {
+            $data['part_number'] = strtoupper(trim((string) $data['part_number']));
+        }
+
+        return $data;
+    }
+
+    private function assertUniquePartNumber(string $partNumber, ?int $exceptId = null): void
+    {
+        $query = DB::table('products')->whereRaw('UPPER(part_number) = ?', [$partNumber]);
+        if ($exceptId !== null) {
+            $query->where('id', '!=', $exceptId);
+        }
+
+        if ($query->exists()) {
+            throw new BusinessRuleException('A product with this part number already exists.');
+        }
+    }
+
+    private function assertCanArchive(Product $product): void
+    {
+        $dependencies = [];
+        if ($product->salesOrderItems()->whereHas('salesOrder', fn ($query) => $query
+            ->whereNotIn('status', [SalesOrderStatus::Cancelled->value, SalesOrderStatus::Closed->value]))
+            ->exists()) {
+            $dependencies[] = 'open sales orders';
+        }
+        if ($this->hasBomSchema() && \App\Modules\MRP\Models\Bom::query()
+            ->where('product_id', $product->id)
+            ->active()
+            ->exists()) {
+            $dependencies[] = 'an active BOM';
+        }
+        if ($product->priceAgreements()->exists()) {
+            $dependencies[] = 'price agreements';
+        }
+
+        if ($dependencies !== []) {
+            throw new BusinessRuleException(sprintf(
+                'Cannot archive this product while it has %s. Archive or retire the dependent records first.',
+                $this->joinDependencies($dependencies),
+            ));
+        }
     }
 
     /** @param list<string> $dependencies */

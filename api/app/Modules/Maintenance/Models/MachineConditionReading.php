@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Models\Machine;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class MachineConditionReading extends Model
 {
-    use HasFactory, HasHashId;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $table = 'machine_condition_readings';
 

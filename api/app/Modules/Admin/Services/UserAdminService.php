@@ -14,6 +14,7 @@ use App\Modules\Admin\Support\CreatedUser;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\BadgeService;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Models\Department;
@@ -386,6 +387,7 @@ class UserAdminService
             $locked->update(['role_id' => $newRole->id]);
             Cache::forget("auth:role_perms:{$oldRoleId}");
             $locked->flushPermissionsCache();
+            BadgeService::touch();
 
             $updated = $locked->fresh(['role']);
             $this->audit->record(
@@ -501,28 +503,27 @@ class UserAdminService
                 }
             }
 
-            AuditLog::create([
-                'user_id' => $actor?->id,
-                'actor_type' => $actor instanceof User ? 'user' : 'system',
-                'action' => 'bulk_role_change',
-                'model_type' => 'App\\Modules\\Auth\\Models\\User',
-                'model_id' => null,
-                'old_values' => [
-                    'user_ids' => $writable,
-                    'old_role_ids' => $changedOldRoleIds,
-                ],
-                'new_values' => [
-                    'user_ids' => $writable,
-                    'new_role_id' => $newRole->id,
-                    'new_role_slug' => $newRole->slug,
-                    'reason' => $reason,
-                    'conflicts' => $conflicts,
-                    'missing' => $missing,
-                ],
-                'ip_address' => request()?->ip(),
-                'user_agent' => request()?->userAgent(),
-                'created_at' => now(),
-            ]);
+            foreach ($writable as $userId) {
+                AuditLog::create([
+                    'user_id' => $actor?->id,
+                    'actor_type' => $actor instanceof User ? 'user' : 'system',
+                    'action' => 'role_changed',
+                    'model_type' => User::class,
+                    'model_id' => $userId,
+                    'old_values' => [
+                        'role_id' => $changedOldRoleIds[$userId] ?? null,
+                    ],
+                    'new_values' => [
+                        'role_id' => $newRole->id,
+                        'role_slug' => $newRole->slug,
+                        'reason' => trim($reason) ?: 'Admin bulk role assignment',
+                    ],
+                    'ip_address' => request()?->ip(),
+                    'user_agent' => request()?->userAgent(),
+                    'created_at' => now(),
+                ]);
+            }
+            BadgeService::touch();
 
             return ['updated' => count($writable), 'conflicts' => $conflicts, 'missing' => $missing];
         });
@@ -650,6 +651,20 @@ class UserAdminService
     {
         if ($role->slug === 'system_admin' && ($actor === null || ! $this->isSystemAdmin($actor))) {
             throw new ForbiddenActionException('Only a system administrator may assign the system administrator role.');
+        }
+
+        if ($actor === null || $this->isSystemAdmin($actor)) {
+            return;
+        }
+
+        $actorPermissions = array_flip($actor->permission_slugs);
+        $granted = $role->permissions()->pluck('permissions.slug')->all();
+        $outsideAuthority = array_values(array_filter(
+            $granted,
+            static fn (string $slug): bool => ! isset($actorPermissions[$slug]),
+        ));
+        if ($outsideAuthority !== []) {
+            throw new ForbiddenActionException('You cannot assign a role with permissions outside your authority.');
         }
     }
 

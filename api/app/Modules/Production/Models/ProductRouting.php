@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class ProductRouting extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'product_id',
@@ -36,8 +36,8 @@ class ProductRouting extends Model
 
     protected $casts = [
         'total_cycle_time' => 'decimal:2',
-        'is_active'        => 'boolean',
-        'version'          => 'integer',
+        'is_active' => 'boolean',
+        'version' => 'integer',
     ];
 
     public function product(): BelongsTo

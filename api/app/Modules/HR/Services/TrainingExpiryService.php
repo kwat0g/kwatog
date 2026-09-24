@@ -44,6 +44,7 @@ class TrainingExpiryService
         $rows = EmployeeTraining::query()
             ->from('employee_trainings as et')
             ->where('et.status', EmployeeTrainingStatus::Completed->value)
+            ->whereNotNull('et.completed_at')
             ->whereNotNull('et.expires_at')
             ->where('et.expires_at', '<=', $horizon)
             ->whereNotExists(static function ($query): void {
@@ -52,7 +53,13 @@ class TrainingExpiryService
                     ->whereColumn('newer.employee_id', 'et.employee_id')
                     ->whereColumn('newer.training_id', 'et.training_id')
                     ->where('newer.status', EmployeeTrainingStatus::Completed->value)
-                    ->whereColumn('newer.id', '>', 'et.id');
+                    ->where(function ($newer): void {
+                        $newer->whereColumn('newer.completed_at', '>', 'et.completed_at')
+                            ->orWhere(function ($tie): void {
+                                $tie->whereColumn('newer.completed_at', 'et.completed_at')
+                                    ->whereColumn('newer.id', '>', 'et.id');
+                            });
+                    });
             })
             ->get(['et.id']);
 

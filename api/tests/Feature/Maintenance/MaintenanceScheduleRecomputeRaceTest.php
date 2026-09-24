@@ -31,9 +31,12 @@ class MaintenanceScheduleRecomputeRaceTest extends TestCase
 
     private function schedule(): MaintenanceSchedule
     {
+        $this->seed(MachineSeeder::class);
+        $machine = Machine::query()->firstOrFail();
+
         return MaintenanceSchedule::create([
             'maintainable_type' => MaintainableType::Machine->value,
-            'maintainable_id' => 1,
+            'maintainable_id' => $machine->id,
             'schedule_type' => 'preventive',
             'description' => 'Monthly PM',
             'interval_type' => MaintenanceScheduleInterval::Days->value,

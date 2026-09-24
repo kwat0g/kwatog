@@ -138,4 +138,146 @@ class PartialConversionTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         app(PurchaseOrderService::class)->convertFromPr($pr->fresh(), [$line->id => 999999], $user);
     }
+
+    public function test_partial_quantity_conversion_keeps_pr_partial_and_orders_remainder(): void
+    {
+        $user = User::factory()->create();
+        $pr = $this->approvedPr($user);
+        $item = Item::factory()->create();
+        $vendor = Vendor::factory()->create();
+        $line = PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
+            'description' => 'Bulk resin',
+            'quantity' => '10.000',
+            'unit' => 'kg',
+            'estimated_unit_price' => '100.00',
+        ]);
+
+        $svc = app(PurchaseOrderService::class);
+
+        // First PO orders partial quantity (4 of 10) directly
+        $po1 = $svc->create([
+            'vendor_id' => $vendor->id,
+            'purchase_request_id' => $pr->id,
+            'date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $item->id,
+                'purchase_request_item_id' => $line->id,
+                'description' => 'Bulk resin',
+                'quantity' => '4.000',
+                'unit' => 'kg',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+
+        $svc->syncConversionStatus($pr->fresh());
+        $this->assertSame(PurchaseRequestConversionStatus::Partial, $pr->fresh()->po_conversion_status);
+
+        // Next conversion from PR must order only the remaining 6.00 units
+        $second = $svc->convertFromPr($pr->fresh(), [$line->id => $vendor->id], $user);
+        $this->assertCount(1, $second);
+        $po2Item = $second[0]->items()->first();
+        $this->assertSame('6.00', (string) $po2Item->quantity);
+
+        $this->assertSame(PurchaseRequestStatus::Converted, $pr->fresh()->status);
+        $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
+    }
+
+    public function test_manual_po_cannot_order_more_than_the_remaining_pr_line_quantity(): void
+    {
+        $user = User::factory()->create();
+        $pr = $this->approvedPr($user);
+        $item = Item::factory()->create();
+        $vendor = Vendor::factory()->create();
+        $line = PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
+            'description' => 'Bulk resin',
+            'quantity' => '10.000',
+            'unit' => 'kg',
+            'estimated_unit_price' => '100.00',
+        ]);
+        $svc = app(PurchaseOrderService::class);
+
+        $svc->create([
+            'vendor_id' => $vendor->id,
+            'purchase_request_id' => $pr->id,
+            'date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $item->id,
+                'purchase_request_item_id' => $line->id,
+                'description' => 'Bulk resin',
+                'quantity' => '6.000',
+                'unit' => 'kg',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('would exceed the requested quantity');
+
+        $svc->create([
+            'vendor_id' => $vendor->id,
+            'purchase_request_id' => $pr->id,
+            'date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $item->id,
+                'purchase_request_item_id' => $line->id,
+                'description' => 'Bulk resin',
+                'quantity' => '5.000',
+                'unit' => 'kg',
+                'unit_price' => '100.00',
+            ]],
+        ], $user);
+    }
+
+    public function test_editing_a_manual_draft_po_reconciles_pr_quantity_coverage(): void
+    {
+        $user = User::factory()->create();
+        $pr = $this->approvedPr($user);
+        $item = Item::factory()->create();
+        $vendor = Vendor::factory()->create();
+        $line = PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'suggested_vendor_id' => $vendor->id,
+            'description' => 'Bulk resin',
+            'quantity' => '10.000',
+            'unit' => 'kg',
+            'estimated_unit_price' => '100.00',
+        ]);
+        $svc = app(PurchaseOrderService::class);
+        $po = $svc->create([
+            'vendor_id' => $vendor->id,
+            'purchase_request_id' => $pr->id,
+            'date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $item->id,
+                'purchase_request_item_id' => $line->id,
+                'description' => 'Bulk resin',
+                'quantity' => '10.000',
+                'unit' => 'kg',
+                'unit_price' => '100.00',
+            ]],
+        ], $user, completeConversion: true);
+        $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
+
+        $svc->update($po, [
+            'items' => [[
+                'item_id' => $item->id,
+                'purchase_request_item_id' => $line->id,
+                'description' => 'Bulk resin',
+                'quantity' => '4.000',
+                'unit' => 'kg',
+                'unit_price' => '100.00',
+            ]],
+        ]);
+
+        $this->assertSame(PurchaseRequestConversionStatus::Partial, $pr->fresh()->po_conversion_status);
+        $remainder = $svc->convertFromPr($pr->fresh(), [$line->id => $vendor->id], $user);
+        $this->assertSame('6.00', (string) $remainder[0]->items()->firstOrFail()->quantity);
+    }
 }

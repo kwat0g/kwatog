@@ -195,6 +195,9 @@ class PayrollPeriodService
             $start = CarbonImmutable::parse($data['period_start']);
             $end   = CarbonImmutable::parse($data['period_end']);
             $isThirteenth = (bool) ($data['is_thirteenth_month'] ?? false);
+            if ($isThirteenth) {
+                throw new BusinessRuleException('13th-month periods are created only by the 13th-month payroll run.');
+            }
 
             // The half is DERIVED from the dates, not taken from the operator.
             //
@@ -680,6 +683,88 @@ class PayrollPeriodService
             ->orderBy('id');
     }
 
+    /** Refuse department/pay-type eligibility changes while a computed run uses them. */
+    public function assertEmployeeScopeMutable(int $employeeId): void
+    {
+        $periods = PayrollPeriod::query()
+            ->where('is_thirteenth_month', false)
+            ->whereIn('status', [
+                PayrollPeriodStatus::Processing->value,
+                PayrollPeriodStatus::Computed->value,
+                PayrollPeriodStatus::Approved->value,
+            ])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($periods as $period) {
+            if ($period->payrolls()->where('employee_id', $employeeId)->exists()
+                || $this->availableEmployeeQuery($period)->whereKey($employeeId)->exists()) {
+                throw new BusinessRuleException(sprintf(
+                    'Employee assignment cannot change while payroll period %s is processing, computed, or approved. Return or void the period first.',
+                    $period->label(),
+                ));
+            }
+        }
+    }
+
+    /** Salary history is an input to every overlapping regular payroll cutoff. */
+    public function assertCompensationInputMutable(int $employeeId, CarbonInterface|string $effectiveDate): void
+    {
+        $date = CarbonImmutable::parse($effectiveDate)->toDateString();
+        $periods = PayrollPeriod::query()
+            ->where('is_thirteenth_month', false)
+            ->whereDate('period_start', '<=', $date)
+            ->whereDate('period_end', '>=', $date)
+            ->whereIn('status', [
+                PayrollPeriodStatus::Processing->value,
+                PayrollPeriodStatus::Computed->value,
+                PayrollPeriodStatus::Approved->value,
+            ])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($periods as $period) {
+            if ($period->payrolls()->where('employee_id', $employeeId)->exists()
+                || $this->availableEmployeeQuery($period)->whereKey($employeeId)->exists()) {
+                throw new BusinessRuleException(sprintf(
+                    'Compensation inputs cannot change inside computed payroll period %s. Correct or void the period first.',
+                    $period->label(),
+                ));
+            }
+        }
+    }
+
+    /** Manual loan payments must not change deductions in an already computed cutoff. */
+    public function assertLoanPaymentMutable(int $employeeId, CarbonInterface|string $paymentDate): void
+    {
+        $date = CarbonImmutable::parse($paymentDate)->toDateString();
+        $periods = PayrollPeriod::query()
+            ->where('is_thirteenth_month', false)
+            ->whereDate('period_start', '<=', $date)
+            ->whereDate('period_end', '>=', $date)
+            ->whereIn('status', [
+                PayrollPeriodStatus::Processing->value,
+                PayrollPeriodStatus::Computed->value,
+                PayrollPeriodStatus::Approved->value,
+                PayrollPeriodStatus::Finalized->value,
+                PayrollPeriodStatus::Disbursed->value,
+            ])
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($periods as $period) {
+            if ($period->payrolls()->where('employee_id', $employeeId)->exists()
+                || $this->availableEmployeeQuery($period)->whereKey($employeeId)->exists()) {
+                throw new BusinessRuleException(
+                    'A computed payroll period contains this loan payment date. Correct or void payroll before recording another payment.',
+                );
+            }
+        }
+    }
+
     /**
      * Materialized compatibility helper for previews and callers that need a
      * collection. Batch processing uses availableEmployeeQuery()->lazyById()
@@ -999,6 +1084,19 @@ class PayrollPeriodService
             $failed = $locked->payrolls()->whereNotNull('error_message')->count();
             if ($failed > 0) {
                 throw new BusinessRuleException("Cannot approve: {$failed} employee(s) failed computation. Resolve first.");
+            }
+
+            $eligibleEmployees = $this->availableEmployeeQuery($locked)
+                ->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+            $computedEmployees = $locked->payrolls()
+                ->whereNull('error_message')
+                ->pluck('employee_id')->map(static fn ($id): int => (int) $id)->all();
+            sort($eligibleEmployees);
+            sort($computedEmployees);
+            if ($eligibleEmployees !== $computedEmployees) {
+                throw new BusinessRuleException(
+                    'Cannot approve: payroll rows do not match the eligible employee set. Recompute after correcting period scope or employee eligibility.',
+                );
             }
 
             // REC-04 — maker-checker Segregation of Duties. The HR user who

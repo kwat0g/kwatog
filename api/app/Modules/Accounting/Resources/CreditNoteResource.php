@@ -29,6 +29,8 @@ class CreditNoteResource extends JsonResource
             'applied_amount'     => (string) $this->applied_amount,
             'balance'            => (string) $this->balance,
             'reason'             => $this->reason,
+            'void_reason'        => $this->void_reason,
+            'voided_at'          => optional($this->voided_at)->toIso8601String(),
             'customer'           => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id'   => $this->customer->hash_id,
                 'name' => $this->customer->name,

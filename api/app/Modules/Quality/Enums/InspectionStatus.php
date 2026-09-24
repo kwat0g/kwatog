@@ -9,6 +9,7 @@ namespace App\Modules\Quality\Enums;
  *
  *   draft       — created with measurement scaffold, no readings yet
  *   in_progress — at least one measurement recorded, not yet completed
+ *   awaiting_review — high-risk incoming/outgoing result is awaiting a checker
  *   passed      — all measurements pass and defect_count <= accept_count
  *   failed      — at least one critical fail OR defect_count > accept_count
  *   cancelled   — voided before completion (reason captured in notes)
@@ -17,6 +18,7 @@ enum InspectionStatus: string
 {
     case Draft      = 'draft';
     case InProgress = 'in_progress';
+    case AwaitingReview = 'awaiting_review';
     case Passed     = 'passed';
     case Failed     = 'failed';
     case Cancelled  = 'cancelled';
@@ -26,6 +28,7 @@ enum InspectionStatus: string
         return match ($this) {
             self::Draft      => 'Draft',
             self::InProgress => 'In progress',
+            self::AwaitingReview => 'Awaiting review',
             self::Passed     => 'Passed',
             self::Failed     => 'Failed',
             self::Cancelled  => 'Cancelled',

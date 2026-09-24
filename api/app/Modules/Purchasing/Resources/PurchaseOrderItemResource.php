@@ -32,9 +32,14 @@ class PurchaseOrderItemResource extends JsonResource
                 'freight_amount' => $this->rfq_line_freight_amount !== null ? (string) $this->rfq_line_freight_amount : null,
                 'other_charges' => $this->rfq_line_other_charges !== null ? (string) $this->rfq_line_other_charges : null,
             ] : null,
+            // What a receipt of this line is valued at: RFQ freight/charges
+            // capitalized, else the unit price. The header allocation needs the
+            // parent PO and its lines, so only when that relation is set.
+            'delivered_unit_cost' => $this->relationLoaded('purchaseOrder') ? $this->deliveredUnitCost() : null,
             'quantity_received' => (string) $this->quantity_received,
             'quantity_accepted' => (string) $this->quantity_accepted,
             'quantity_remaining' => $this->quantity_remaining,
+            'quantity_open' => $this->physical_quantity_remaining, // unreceived + unreceived_but_received (in QC)
         ];
     }
 }

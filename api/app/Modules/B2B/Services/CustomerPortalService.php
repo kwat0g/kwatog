@@ -185,8 +185,12 @@ class CustomerPortalService
      * audit-row integrity, and internal sales is notified to review + confirm
      * (confirmation is what triggers MRP).
      */
-    public function placeOrder(int $customerId, array $data, CustomerPortalUser $portalUser): SalesOrder
+    /** @return array{order: SalesOrder, replayed: bool} */
+    public function placeOrder(int $customerId, array $data, CustomerPortalUser $portalUser): array
     {
+        $idempotencyKey = (string) $data['idempotency_key'];
+        unset($data['idempotency_key']);
+
         $orderDate = ($data['date'] ?? null) !== null && ($data['date'] ?? '') !== ''
             ? Carbon::parse($data['date'])
             : now();
@@ -204,60 +208,106 @@ class CustomerPortalService
                 throw new BusinessRuleException("items.{$idx}.delivery_date must be on or after the order date.");
             }
 
-            try {
-                $this->prices->resolve($customerId, $productId, $deliveryDate);
-            } catch (NoPriceAgreementException) {
-                throw new BusinessRuleException(
-                    "items.{$idx}.product_id is not available for ordering on the requested delivery date.",
-                );
-            }
-
             $items[] = [
                 'product_id'    => $productId,
-                'quantity'      => (string) $item['quantity'],
+                'quantity'      => bcadd((string) $item['quantity'], '0', 2),
                 'delivery_date' => $deliveryDate->toDateString(),
             ];
         }
+
+        $fingerprint = hash('sha256', json_encode([
+            'customer_id' => $customerId,
+            'date' => $orderDateString,
+            'notes' => $data['notes'] ?? null,
+            'items' => $items,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
 
         // Portal users are not internal users — impersonate a system user so
         // HasAuditLog writes a valid users.id into audit_logs.user_id and the
         // SO's created_by FK points at a real user. Submission provenance is
         // carried on the SO itself via submission_source.
-        $so = $this->systemUser->impersonate(function () use ($customerId, $orderDateString, $items, $data): SalesOrder {
-            return $this->salesOrderService->create([
-                'customer_id'       => $customerId,
-                'date'              => $orderDateString,
-                'items'             => $items,
-                'notes'             => $data['notes'] ?? null,
-                'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
-            ], $this->systemUser->user()->id);
+        [$so, $replayed] = DB::transaction(function () use (
+            $customerId,
+            $orderDateString,
+            $items,
+            $data,
+            $idempotencyKey,
+            $fingerprint,
+            $portalUser,
+        ): array {
+            // Serialise first-order submissions per customer. The unique index
+            // below is still the final arbiter; this lock also makes retries
+            // return the original order rather than surfacing a unique-key 500.
+            $customer = Customer::query()->lockForUpdate()->find($customerId);
+            if (! $customer || ! $customer->is_active) {
+                throw new BusinessRuleException('This customer account is inactive. Contact Ogami support.');
+            }
+
+            $existing = SalesOrder::query()
+                ->where('customer_id', $customerId)
+                ->where('portal_idempotency_key', $idempotencyKey)
+                ->lockForUpdate()
+                ->first();
+            if ($existing) {
+                if (! hash_equals((string) $existing->portal_idempotency_fingerprint, $fingerprint)) {
+                    throw new BusinessRuleException('This idempotency key was already used for a different order payload.');
+                }
+
+                return [$this->salesOrderService->show($existing), true];
+            }
+
+            foreach ($items as $idx => $item) {
+                try {
+                    $this->prices->resolve($customerId, (int) $item['product_id'], Carbon::parse($item['delivery_date']));
+                } catch (NoPriceAgreementException) {
+                    throw new BusinessRuleException(
+                        "items.{$idx}.product_id is not available for ordering on the requested delivery date.",
+                    );
+                }
+            }
+
+            $so = $this->systemUser->impersonate(function () use ($customerId, $orderDateString, $items, $data, $idempotencyKey, $fingerprint): SalesOrder {
+                return $this->salesOrderService->create([
+                    'customer_id' => $customerId,
+                    'date' => $orderDateString,
+                    'items' => $items,
+                    'notes' => $data['notes'] ?? null,
+                    'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
+                    'portal_idempotency_key' => $idempotencyKey,
+                    'portal_idempotency_fingerprint' => $fingerprint,
+                ], $this->systemUser->user()->id);
+            });
+
+            // Keep external-actor attribution in the same transaction as the
+            // source order so a committed order cannot lose its portal audit.
+            AuditLog::create([
+                'user_id' => null,
+                'actor_type' => 'customer_portal',
+                'action' => 'customer.order.placed',
+                'model_type' => SalesOrder::class,
+                'model_id' => $so->getKey(),
+                'old_values' => null,
+                'new_values' => [
+                    'portal_user_id' => $portalUser->hash_id,
+                    'email' => $portalUser->email,
+                    'customer_id' => app('hashids')->encode($customerId),
+                    'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'source_command' => request()?->route()?->getName() ?? 'b2b.customer.orders.store',
+                'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
+                'created_at' => now(),
+            ]);
+
+            return [$so, false];
         });
 
-        // Append-only external-actor audit event — attributable without
-        // weakening the internal-user FK on sales_orders.created_by.
-        AuditLog::create([
-            'user_id' => null,
-            'actor_type' => 'customer_portal',
-            'action' => 'customer.order.placed',
-            'model_type' => SalesOrder::class,
-            'model_id' => $so->getKey(),
-            'old_values' => null,
-            'new_values' => [
-                'portal_user_id' => $portalUser->hash_id,
-                'email' => $portalUser->email,
-                'customer_id' => app('hashids')->encode($customerId),
-                'submission_source' => SalesOrderSubmissionSource::CustomerPortal->value,
-            ],
-            'ip_address' => request()?->ip(),
-            'user_agent' => request()?->userAgent(),
-            'source_command' => request()?->route()?->getName() ?? 'b2b.customer.orders.store',
-            'correlation_id' => request()?->attributes->get('request_id') ?? request()?->header('X-Request-ID'),
-            'created_at' => now(),
-        ]);
+        if (! $replayed) {
+            $this->notifySalesOrderReview($so, $portalUser);
+        }
 
-        $this->notifySalesOrderReview($so, $portalUser);
-
-        return $so;
+        return ['order' => $so, 'replayed' => $replayed];
     }
 
     /**

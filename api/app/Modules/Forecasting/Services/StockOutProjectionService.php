@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Forecasting\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Forecasting\Enums\DemandSource;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -62,8 +63,8 @@ class StockOutProjectionService
         //    `material_issue` is negative; take the absolute and derive a daily rate.
         $historyDays = $this->settings->requiredInt('inventory.stockout.demand_history_days', 1);
         $forecastDays = $this->settings->requiredInt('inventory.stockout.forecast_period_days', 1);
-        $coverageBuffer = $this->settings->requiredFloat('inventory.stockout.coverage_buffer_ratio', 1);
-        $zeroLeadRatio = $this->settings->requiredFloat('inventory.stockout.zero_lead_reorder_ratio', 0);
+        $coverageBuffer = number_format($this->settings->requiredFloat('inventory.stockout.coverage_buffer_ratio', 1), 6, '.', '');
+        $zeroLeadRatio = number_format($this->settings->requiredFloat('inventory.stockout.zero_lead_reorder_ratio', 0), 6, '.', '');
         $highRiskBuffer = $this->settings->requiredInt('inventory.stockout.high_risk_buffer_days', 0);
         $mediumRiskDays = $this->settings->requiredInt('inventory.stockout.medium_risk_days', 1);
         $historyStart = $now->copy()->subDays($historyDays)->toDateTimeString();
@@ -90,26 +91,29 @@ class StockOutProjectionService
 
         $rows = [];
         foreach ($items as $it) {
-            $available = (float) $it->available;
-            $safety = (float) $it->safety_stock;
-            $reorder = (float) $it->reorder_point;
+            $available = bcsub((string) $it->available, '0', 3);
+            $safety = bcadd((string) ($it->safety_stock ?? '0.000'), '0', 3);
+            $reorder = bcadd((string) ($it->reorder_point ?? '0.000'), '0', 3);
             $leadTime = (int) ($it->lead_time_days ?? 0);
 
             // Daily demand: forecast first, else configured moving average.
-            $dailyDemand = 0.0;
-            $source = 'none';
+            $dailyDemand = '0.000000';
+            $source = DemandSource::None->value;
             if (isset($forecastByPart[$it->code])) {
-                $dailyDemand = (float) $forecastByPart[$it->code] / $forecastDays;
-                $source = 'forecast';
-            } elseif (isset($consumption[$it->id]) && (float) $consumption[$it->id] > 0) {
-                $dailyDemand = (float) $consumption[$it->id] / $historyDays;
-                $source = 'historical';
+                $dailyDemand = bcdiv((string) $forecastByPart[$it->code], (string) $forecastDays, 6);
+                $source = DemandSource::Forecast->value;
+            } elseif (isset($consumption[$it->id]) && bccomp((string) $consumption[$it->id], '0', 3) > 0) {
+                $dailyDemand = bcdiv((string) $consumption[$it->id], (string) $historyDays, 6);
+                $source = DemandSource::Historical->value;
             }
 
             $daysUntilStockout = null;
-            if ($dailyDemand > 0) {
-                $headroom = max(0.0, $available - $safety);
-                $daysUntilStockout = (int) floor($headroom / $dailyDemand);
+            if (bccomp($dailyDemand, '0', 6) > 0) {
+                $headroom = bcsub($available, $safety, 6);
+                if (bccomp($headroom, '0', 6) < 0) {
+                    $headroom = '0.000000';
+                }
+                $daysUntilStockout = (int) bcdiv($headroom, $dailyDemand, 0);
             }
 
             $reorderDate = null;
@@ -118,11 +122,13 @@ class StockOutProjectionService
                 // Order in time for lead time + 1 buffer day before depletion.
                 $reorderDate = $now->copy()->addDays(max(0, $daysUntilStockout - $leadTime))->toDateString();
                 // Suggested qty = MAX(MOQ, lead_time × daily_demand × configured safety buffer).
-                $suggested = max(
-                    (float) $it->minimum_order_quantity,
-                    $leadTime > 0 ? ($leadTime * $dailyDemand * $coverageBuffer) : ($reorder * $zeroLeadRatio)
-                );
-                $suggestedQty = round($suggested, 3);
+                $leadTimeQuantity = $leadTime > 0
+                    ? bcmul(bcmul((string) $leadTime, $dailyDemand, 6), $coverageBuffer, 6)
+                    : bcmul($reorder, $zeroLeadRatio, 6);
+                $minimumOrderQuantity = bcadd((string) ($it->minimum_order_quantity ?? '0.000'), '0', 3);
+                $suggestedQty = bccomp($minimumOrderQuantity, $leadTimeQuantity, 6) >= 0
+                    ? $minimumOrderQuantity
+                    : bcadd($leadTimeQuantity, '0.0005', 3);
             }
 
             $risk = 'ok';
@@ -148,11 +154,11 @@ class StockOutProjectionService
                 'code' => $it->code,
                 'name' => $it->name,
                 'unit_of_measure' => $it->unit_of_measure,
-                'available' => round($available, 3),
-                'safety_stock' => round($safety, 3),
-                'reorder_point' => round($reorder, 3),
+                'available' => bcadd($available, '0', 3),
+                'safety_stock' => $safety,
+                'reorder_point' => $reorder,
                 'lead_time_days' => $leadTime,
-                'daily_demand' => round($dailyDemand, 3),
+                'daily_demand' => bcadd($dailyDemand, '0', 3),
                 'demand_source' => $source,
                 'days_until_stockout' => $daysUntilStockout,
                 'reorder_date' => $reorderDate,

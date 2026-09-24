@@ -19,6 +19,9 @@ class LoanPaymentResource extends JsonResource
             'payment_type' => $this->payment_type,
             'payment_type_label' => LoanPaymentType::tryFrom((string) $this->payment_type)?->label() ?? (string) $this->payment_type,
             'remarks'      => $this->remarks,
+            'journal_entry_id' => $this->journal_entry_id
+                ? \App\Common\Support\HashId::encode((int) $this->journal_entry_id)
+                : null,
         ];
     }
 }

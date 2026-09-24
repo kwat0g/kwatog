@@ -26,6 +26,7 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { localIsoDate } from '@/lib/formatDate';
 
 const optionalNumber = z.preprocess(
   (value) => (value === '' || value === null ? undefined : value),
@@ -164,7 +165,7 @@ export default function CreateReturnRequestPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       type: '',
-      return_date: new Date().toISOString().slice(0, 10),
+      return_date: localIsoDate(),
       customer_id: '',
       vendor_id: '',
       invoice_id: '',
@@ -201,7 +202,7 @@ export default function CreateReturnRequestPage() {
     if (!existing) return;
     reset({
       type: existing.type,
-      return_date: existing.return_date ?? new Date().toISOString().slice(0, 10),
+      return_date: existing.return_date ?? localIsoDate(),
       customer_id: existing.customer?.id ?? '',
       vendor_id: existing.vendor?.id ?? '',
       invoice_id: existing.invoice?.id ?? '',

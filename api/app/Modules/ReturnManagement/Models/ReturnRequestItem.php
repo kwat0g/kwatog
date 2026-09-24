@@ -8,6 +8,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -34,6 +35,7 @@ class ReturnRequestItem extends Model
         'disposition_notes',
         'ncr_id',
         'stock_movement_quantity',
+        'stock_movement_id',
         'source_sales_order_item_id',
         'source_invoice_item_id',
         'source_delivery_item_id',
@@ -102,6 +104,11 @@ class ReturnRequestItem extends Model
     public function quarantineReleaseMovement(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Inventory\Models\StockMovement::class, 'quarantine_release_movement_id');
+    }
+
+    public function stockMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class);
     }
 
     public function sourceAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany

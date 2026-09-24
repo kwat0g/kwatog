@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Notification;
  */
 class SendWeeklyProductionSummary extends Command
 {
-    protected $signature   = 'production:send-weekly-summary {--end=}';
+    protected $signature = 'production:send-weekly-summary {--end=}';
+
     protected $description = 'Email weekly production summary to plant managers (Task A10)';
 
     public function handle(ProductionSummaryService $svc, SettingsService $settings): int
@@ -37,10 +38,11 @@ class SendWeeklyProductionSummary extends Command
 
         if ($users->isEmpty()) {
             $this->warn('No production_manager/system_admin recipients found.');
+
             return self::SUCCESS;
         }
 
-        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL));
+        $emailUsers = $users->filter(static fn (User $user): bool => filter_var($user->email, FILTER_VALIDATE_EMAIL) !== false);
         if ($emailUsers->isEmpty()) {
             app(EmailDeliveryFailureNotifier::class)->notify(
                 $users,
@@ -48,6 +50,7 @@ class SendWeeklyProductionSummary extends Command
                 "The weekly production summary for {$summary['range_start']} to {$summary['range_end']} could not be emailed because no recipient has a usable email address. Review the production dashboard.",
                 ['link_to' => '/production/work-orders', 'entity_type' => 'production_summary'],
             );
+
             return self::SUCCESS;
         }
 
@@ -65,9 +68,11 @@ class SendWeeklyProductionSummary extends Command
                 ],
             );
             $this->error('Weekly production summary email failed; in-app fallback created.');
+
             return self::FAILURE;
         }
         $this->info("Weekly production summary sent to {$emailUsers->count()} recipient(s) for week ending {$summary['range_end']}.");
+
         return self::SUCCESS;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,13 +46,13 @@ class StockLevel extends Model
 
     public function getAvailableAttribute(): string
     {
-        $on = (float) $this->quantity;
-        $rs = (float) $this->reserved_quantity;
-        return number_format(max(0.0, $on - $rs), 3, '.', '');
+        $available = bcsub((string) $this->quantity, (string) $this->reserved_quantity, 3);
+
+        return bccomp($available, '0', 3) < 0 ? '0.000' : $available;
     }
 
     public function getTotalValueAttribute(): string
     {
-        return number_format((float) $this->quantity * (float) $this->weighted_avg_cost, 2, '.', '');
+        return Money::round2(bcmul((string) $this->quantity, (string) $this->weighted_avg_cost, 7));
     }
 }

@@ -2,6 +2,21 @@
 
 Date: 2026-09-18
  
+## Current re-audit 2026-09-23
+
+Current verdict: **remediated for current engineering scope**.
+
+- SSS R-3 now throws a business-rule error for draft/processing/approved periods instead of
+  producing an empty workbook; `StatutoryExportsTest::test_sss_r3_export_refuses_non_filed_periods`
+  covers the contract.
+- Payroll input freezing, eligibility completeness, anomaly failure persistence, effective
+  government-table lookup, 13th-month date bounds, negative tax correction posting, and statutory
+  export behavior are current-tested.
+- Attendance, Leave, and Loans fixes are recorded in the shared domain audit; remaining boundaries
+  are manual-OT duplicate prevention, break/rest policy, maternity policy, and live
+  provider/runtime proof. Loan write-off/disbursement accounting policy is now
+  implemented with Finance-controlled mappings and maker-checker approval.
+
 ## Re-audit 2026-09-19
 
 Current verdict: **historical FINISHED label is not release closure**.

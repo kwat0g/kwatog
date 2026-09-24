@@ -57,7 +57,6 @@ class PayrollGlPostingTest extends TestCase
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
             'date_hired' => '2025-01-01', 'basic_monthly_salary' => '20000.00',
-            'status' => 'active',
         ]);
 
         $period = PayrollPeriod::create([
@@ -239,7 +238,6 @@ class PayrollGlPostingTest extends TestCase
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
             'date_hired' => '2025-01-01', 'basic_monthly_salary' => '20000.00',
-            'status' => 'active',
         ]);
 
         $period = PayrollPeriod::create([
@@ -308,5 +306,32 @@ class PayrollGlPostingTest extends TestCase
         $this->assertSame('900.00', (string) $lines->firstWhere('code', '2080')->credit);
         $this->assertSame((string) DB::table('journal_entries')->where('id', $entryId)->value('total_debit'),
             (string) DB::table('journal_entries')->where('id', $entryId)->value('total_credit'));
+    }
+
+    public function test_negative_13th_month_tax_correction_debits_withholding_payable(): void
+    {
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+        [, $period] = $this->fullySetup();
+        $period->forceFill(['is_thirteenth_month' => true])->save();
+        $period->payrolls()->firstOrFail()->forceFill([
+            'basic_pay' => '0.00',
+            'gross_pay' => '1000.00',
+            'withholding_tax' => '-100.00',
+            'total_deductions' => '-100.00',
+            'net_pay' => '1100.00',
+        ])->save();
+
+        $entryId = app(PayrollGlPostingService::class)->post($period->fresh());
+        $lines = DB::table('journal_entry_lines as jel')
+            ->join('accounts as a', 'a.id', '=', 'jel.account_id')
+            ->where('jel.journal_entry_id', $entryId)
+            ->get(['a.code', 'jel.debit', 'jel.credit']);
+
+        $this->assertSame('100.00', (string) $lines->firstWhere('code', '2050')->debit);
+        $this->assertSame('1100.00', (string) $lines->firstWhere('code', '2080')->credit);
+        $this->assertSame(
+            (string) DB::table('journal_entries')->where('id', $entryId)->value('total_debit'),
+            (string) DB::table('journal_entries')->where('id', $entryId)->value('total_credit'),
+        );
     }
 }

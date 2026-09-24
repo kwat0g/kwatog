@@ -21,6 +21,11 @@ class VehicleResource extends JsonResource
             'status'        => $this->status,
             'status_label'  => Str::headline((string) $this->status),
             'notes'         => $this->notes,
+            'asset'         => $this->whenLoaded('asset', fn () => $this->asset ? [
+                'id' => $this->asset->hash_id,
+                'asset_code' => $this->asset->asset_code,
+                'name' => $this->asset->name,
+            ] : null),
             'deleted_at'    => optional($this->deleted_at)?->toIso8601String(),
         ];
     }

@@ -66,11 +66,30 @@ class OvertimeRequestOptionsAndCancelTest extends TestCase
                 'request_future_days', 'request_past_days', 'premium_multiplier',
             ]])
             ->assertJsonPath('data.minimum_hours', 0.5)
-            ->assertJsonPath('data.maximum_hours', 8)
+            ->assertJsonPath('data.maximum_hours', 4)
             ->assertJsonPath('data.request_min_hours', 0.5)
             ->assertJsonPath('data.request_future_days', 30)
             ->assertJsonPath('data.request_past_days', 0)
             ->assertJsonPath('data.premium_multiplier', 1.25);
+    }
+
+    public function test_request_cannot_exceed_the_daily_overtime_pay_ceiling(): void
+    {
+        $this->seedRoles();
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+        $employee = Employee::factory()->create();
+
+        $this->actingAs($admin)
+            ->postJson('/api/v1/attendance/overtime-requests', [
+                'employee_id' => $employee->hash_id,
+                'date' => now()->toDateString(),
+                'hours_requested' => 4.5,
+                'reason' => 'Overtime above the daily payroll cap',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['hours_requested']);
     }
 
     public function test_options_route_is_not_captured_by_model_binding(): void

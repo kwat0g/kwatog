@@ -14,6 +14,9 @@ use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Services\SeparationService;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -108,6 +111,29 @@ class SeparationContractRegressionTest extends TestCase
         ], $this->actor());
 
         $this->assertSame('2026-12-31', $clearance->separation_date->toDateString());
+    }
+
+    public function test_separation_cannot_rewrite_employed_days_in_a_computed_payroll_period(): void
+    {
+        $employee = Employee::factory()->create(['date_hired' => '2024-01-01']);
+        $period = PayrollPeriod::factory()->create([
+            'period_start' => '2026-05-01',
+            'period_end' => '2026-05-15',
+            'payroll_date' => '2026-05-15',
+            'status' => PayrollPeriodStatus::Computed->value,
+        ]);
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('computed payroll period');
+
+        $this->service()->initiate($employee, [
+            'separation_reason' => SeparationReason::Resigned->value,
+            'separation_date' => '2026-05-10',
+        ], $this->actor());
     }
 
     // ── M023-F018: duplicate/blank checklist keys ────────────────────────

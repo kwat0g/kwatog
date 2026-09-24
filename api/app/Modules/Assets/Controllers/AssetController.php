@@ -8,6 +8,7 @@ use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Enums\AssetCategory;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Requests\ApproveAssetDisposalRequest;
+use App\Modules\Assets\Requests\AssociateAssetRequest;
 use App\Modules\Assets\Requests\DisposeAssetRequest;
 use App\Modules\Assets\Requests\RejectAssetDisposalRequest;
 use App\Modules\Assets\Requests\StoreAssetRequest;
@@ -65,6 +66,11 @@ class AssetController
     public function update(UpdateAssetRequest $request, Asset $asset): AssetResource
     {
         return new AssetResource($this->service->update($asset, $request->validated()));
+    }
+
+    public function associate(AssociateAssetRequest $request, Asset $asset): AssetResource
+    {
+        return new AssetResource($this->service->associate($asset, $request->validated()));
     }
 
     public function destroy(Asset $asset): JsonResponse

@@ -108,6 +108,7 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  const hasConflicts = chainResult.scheduling_conflicts.length > 0;
  const hasManualWos = chainResult.needs_manual > 0;
  const planningQueued = chainResult.planning_status === 'queued';
+ const planningFailed = chainResult.planning_status === 'failed';
 
  return (
  <Modal
@@ -127,6 +128,20 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
  <div className="flex items-start gap-2 border border-info bg-info-bg rounded-md px-3 py-2.5 text-sm">
  <LuInfo size={16} className="text-info-fg mt-0.5 shrink-0" />
  <span className="text-muted">MRP material and work-order planning is queued and will update shortly.</span>
+ </div>
+ )}
+
+ {planningFailed && (
+ <div className="flex items-start gap-2 border border-danger/30 bg-danger-bg/5 rounded-md px-3 py-2.5 text-sm">
+ <LuTriangleAlert size={16} className="text-danger-fg mt-0.5 shrink-0" />
+ <div className="text-muted">
+ <span>
+ MRP planning failed: {chainResult.planning_error?.message ?? 'no material plan was generated.'}{' '}
+ </span>
+ {chainResult.planning_error?.recovery_action && (
+ <span>{chainResult.planning_error.recovery_action}</span>
+ )}
+ </div>
  </div>
  )}
 

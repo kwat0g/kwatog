@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Exports\Government;
 
 use App\Common\Exports\SpreadsheetExport;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -27,7 +28,7 @@ class SssR3Export implements SpreadsheetExport
         // with the 1601-C / RF-1 / MCRF / 1604-CF exporters. The injected
         // period may be any status, so guard here rather than trust the caller.
         if (! in_array((string) $this->period->status->value, ['finalized', 'disbursed'], true)) {
-            return new Collection;
+            throw new BusinessRuleException('SSS R-3 is available only for finalized or disbursed payroll periods.');
         }
 
         return Payroll::query()

@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Controllers;
 use App\Common\Rules\StrongPassword;
 
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Resources\SupplierPortalUserResource;
 use App\Modules\B2B\Services\B2bAuthService;
 use App\Modules\B2B\Services\PortalPasswordResetService;
 use App\Modules\B2B\Services\PortalPasswordService;
@@ -57,15 +58,7 @@ class SupplierAuthController
         );
 
         return response()->json([
-            'data' => [
-                'user'  => [
-                    'id'        => $user->hash_id,
-                    'name'      => $user->name,
-                    'email'     => $user->email,
-                    'vendor_id' => app('hashids')->encode((int) $user->vendor_id),
-                    'must_change_password' => $user->must_change_password,
-                ],
-            ],
+            'data' => ['user' => new SupplierPortalUserResource($user->load('vendor:id,name,is_active'))],
         ]);
     }
 
@@ -110,17 +103,8 @@ class SupplierAuthController
     public function me(Request $request): JsonResponse
     {
         /** @var \App\Modules\B2B\Models\SupplierPortalUser $user */
-        $user = $request->user('supplier_portal')->load('vendor:id,name');
+        $user = $request->user('supplier_portal')->load('vendor:id,name,is_active');
 
-        return response()->json([
-            'data' => [
-                'id'          => $user->hash_id,
-                'name'        => $user->name,
-                'email'       => $user->email,
-                'vendor_id'   => app('hashids')->encode((int) $user->vendor_id),
-                'vendor_name' => $user->vendor?->name,
-                'must_change_password' => $user->must_change_password,
-            ],
-        ]);
+        return response()->json(['data' => new SupplierPortalUserResource($user->load('vendor:id,name,is_active'))]);
     }
 }

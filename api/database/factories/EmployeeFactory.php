@@ -16,6 +16,19 @@ class EmployeeFactory extends Factory
 {
     protected $model = Employee::class;
 
+    public function newModel(array $attributes = []): Employee
+    {
+        $status = $attributes['status'] ?? null;
+        unset($attributes['status']);
+
+        $employee = new Employee($attributes);
+        if ($status !== null) {
+            $employee->forceFill(['status' => $status]);
+        }
+
+        return $employee;
+    }
+
     public function definition(): array
     {
         return [

@@ -23,6 +23,7 @@ use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
@@ -92,6 +93,8 @@ class SalesOrderChainBridgeTest extends TestCase
         $this->assertIsInt($cr['prs_created']);
         $this->assertIsArray($cr['work_orders']);
         $this->assertIsArray($cr['scheduling_conflicts']);
+        $this->assertSame('completed', $cr['planning_status'],
+            'With the sync queue driver the MRP run has completed before the response is built.');
         $this->assertNotEmpty(
             $cr['scheduling_conflicts'],
             'The chain response must expose the capacity planner conflict for the unassigned work order.',
@@ -123,6 +126,42 @@ class SalesOrderChainBridgeTest extends TestCase
         $pr = PurchaseRequest::where('mrp_plan_id', $plan->id)->first();
         $this->assertNotNull($pr, 'Purchase request should be created for shortages.');
         $this->assertTrue((bool) $pr->is_auto_generated, 'PR should be marked auto-generated.');
+    }
+
+    public function test_cancel_retires_mrp_auto_purchase_requests(): void
+    {
+        // No stock → MRP raises a draft auto-PR for the shortfall.
+        [$so] = $this->makeSoWithBom(stockQuantity: 0);
+        $this->soService->confirmWithChainResult($so);
+
+        $plan = MrpPlan::where('sales_order_id', $so->id)->firstOrFail();
+        $pr = PurchaseRequest::where('mrp_plan_id', $plan->id)->firstOrFail();
+        $this->assertSame(PurchaseRequestStatus::Draft->value, $pr->status->value);
+
+        $this->soService->cancel($so->fresh(), 'customer withdrew');
+
+        $this->assertSame(
+            PurchaseRequestStatus::Cancelled->value,
+            $pr->fresh()->status->value,
+            'A cancelled SO must not leave buying demand in the purchasing queue.',
+        );
+        $this->assertSame('cancelled', $plan->fresh()->status->value);
+    }
+
+    public function test_confirm_reports_mrp_failure_instead_of_queued(): void
+    {
+        // An inactive component fails BOM integrity, which the engine records
+        // as a per-SO run error and leaves without a plan.
+        [$so, , $rawItem] = $this->makeSoWithBom(stockQuantity: 0);
+        $rawItem->update(['is_active' => false]);
+
+        $cr = $this->soService->confirmWithChainResult($so)['chain_result'];
+
+        $this->assertSame('failed', $cr['planning_status'],
+            'A completed-but-failed planning run must not be reported as queued.');
+        $this->assertNotNull($cr['planning_error']);
+        $this->assertStringContainsString('inactive', $cr['planning_error']['message']);
+        $this->assertNull($so->fresh()->mrp_plan_id);
     }
 
     public function test_confirm_so_handles_missing_bom_gracefully(): void

@@ -23,6 +23,8 @@ class SupplierQuoteItemResource extends JsonResource
             'line_freight_amount' => $commercialVisible ? (string) $this->line_freight_amount : null,
             'line_other_charges' => $commercialVisible ? (string) $this->line_other_charges : null,
             'line_total_delivered_cost' => $commercialVisible ? (string) $this->line_total_delivered_cost : null,
+            // Comparison only: the line's share of quote-level freight, charges and VAT included.
+            'allocated_delivered_cost' => $commercialVisible && ($this->allocated_delivered_cost ?? null) !== null ? (string) $this->allocated_delivered_cost : null,
             'lead_time_days' => $this->lead_time_days, 'proposed_delivery_date' => optional($this->proposed_delivery_date)->toDateString(),
             'compliance_status' => $this->compliance_status?->value ?? (string) $this->compliance_status, 'compliance_notes' => $this->compliance_notes,
             'rfq_item' => $this->whenLoaded('rfqItem', fn () => ['id' => $this->rfqItem->hash_id, 'description' => $this->rfqItem->description, 'quantity' => (string) $this->rfqItem->quantity, 'unit' => $this->rfqItem->unit]),

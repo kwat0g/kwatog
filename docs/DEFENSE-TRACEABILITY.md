@@ -80,8 +80,8 @@
 - **Demo proof:** warehouse map color-codes bins; count session freezes zone, variance → supervisor sign-off → adjustment.
 
 ### ADV9 — Budgeting (allocation)
-- **Screens:** `/budgeting`, `/budgeting/:id`, `/budgeting/departments/:id`, `/budgeting/budget-vs-actual`, `/budgeting/transfers`
-- **Backend:** `Budget`, `BudgetLineItem`, `BudgetTransfer`, `BudgetRevision`, `fiscal_years`; migration `0162`; budget enforcement wired into PR/PO
+- **Screens:** `/budgeting`, `/budgeting/:id`, `/budgeting/departments/:id`, `/budgeting/budget-vs-actual`
+- **Backend:** `Budget`, `BudgetLineItem`, `fiscal_years`; migration `0162`; budget enforcement wired into PR/PO
 - **Tests:** `Feature/Accounting/BudgetEnforcementWiringTest`
 - **Demo proof:** FY2026 overview with per-department allocated/spent/%, a department at 🔴 Critical (≥95%), budget-vs-actual P&L.
 

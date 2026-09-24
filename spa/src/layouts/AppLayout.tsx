@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { LuCircleHelp } from '@/lib/icons';
@@ -34,11 +34,16 @@ function AppLayoutInner() {
  const features = useAuthStore((s) => s.features);
  const logout = useAuthStore((s) => s.logout);
  const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
- const { data: businessPolicies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+ const { data: businessPolicies, isFetched: policiesFetched } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+ // formatPeso reads the currency from a module variable, so a page that
+ // rendered before this policy arrived kept bare numbers ("58,800.00", no ₱)
+ // until something else re-rendered it. Hold route content until it is set.
+ const [currencyApplied, setCurrencyApplied] = useState(false);
 
  useEffect(() => {
  setFunctionalCurrency(businessPolicies?.functional_currency_code);
- }, [businessPolicies?.functional_currency_code]);
+ if (policiesFetched) setCurrencyApplied(true);
+ }, [businessPolicies?.functional_currency_code, policiesFetched]);
 
  // Listen for real-time permission and module toggle changes
  usePermissionSync();
@@ -94,7 +99,7 @@ function AppLayoutInner() {
  * the user that page now, not their navigation.
  */}
  <ErrorBoundary>
- <Outlet />
+ {currencyApplied && <Outlet />}
  </ErrorBoundary>
  </RouteTransition>
  </main>

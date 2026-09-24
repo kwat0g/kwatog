@@ -9,12 +9,18 @@ use App\Common\Services\SettingsService;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
+use App\Modules\HR\Exceptions\ProvisioningConfigurationException;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
 class AutoProvisionUserOnEmployeeHire implements ShouldQueue
 {
+    public int $tries = 3;
+
+    /** @var list<int> */
+    public array $backoff = [60, 300, 900];
+
     public function __construct(
         private readonly UserProvisioningService $provisioning,
         private readonly SettingsService $settings,
@@ -48,6 +54,12 @@ class AutoProvisionUserOnEmployeeHire implements ShouldQueue
                 'employee_id' => $event->employee->id,
             ]);
             app(ChainListenerRunService::class)->recordOutcome('skipped', 'employee_no_longer_exists');
+        } catch (ProvisioningConfigurationException $e) {
+            Log::error('AutoProvisionUserOnEmployeeHire has invalid configuration.', [
+                'employee_id' => $event->employee->id,
+                'error' => $e->getMessage(),
+            ]);
+            app(ChainListenerRunService::class)->recordOutcome('failed', 'provisioning_configuration_invalid', $e->getMessage());
         }
     }
 }

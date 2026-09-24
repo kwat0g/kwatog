@@ -154,6 +154,7 @@ class PurchaseRequestService
                 'mrp_plan_id' => $data['mrp_plan_id'] ?? null,
                 'template_id' => $data['template_id'] ?? null,
                 'date' => $data['date'] ?? now()->toDateString(),
+                'required_delivery_date' => $data['required_delivery_date'] ?? null,
                 'reason' => $data['reason'] ?? null,
                 'priority' => $priority,
                 'is_auto_generated' => $isAuto,
@@ -270,6 +271,9 @@ class PurchaseRequestService
                     ? ['is_urgent' => $this->isUrgentPriority($this->priorityValue($data['priority']))]
                     : [],
                 'date' => $data['date'] ?? $locked->date,
+                ...array_key_exists('required_delivery_date', $data)
+                    ? ['required_delivery_date' => $data['required_delivery_date']]
+                    : [],
                 ...array_key_exists('department_id', $data)
                     ? ['department_id' => $data['department_id']]
                     : [],

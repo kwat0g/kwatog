@@ -10,7 +10,7 @@ return new class extends Migration {
     {
         DB::table('settings')->insertOrIgnore([
             'key' => 'crm.complaint_8d.notification_roles',
-            'value' => json_encode(['quality', 'qc_inspector']),
+            'value' => json_encode(['qc_inspector', 'production_manager']),
             'group' => 'crm', 'label' => '8D Escalation Notification Roles',
             'description' => 'Role slugs notified when a customer complaint 8D milestone is overdue.',
             'created_at' => now(), 'updated_at' => now(),

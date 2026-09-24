@@ -24,7 +24,7 @@ import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
 import { forecastingApi } from '@/api/forecasting';
 import { usePermission } from '@/hooks/usePermission';
-import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
+import type { ComputedForecastMethod, DemandForecast } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { LuTriangleAlert } from '@/lib/icons';
@@ -50,7 +50,7 @@ export default function DemandForecastingPage() {
   const canManage = can('forecasting.manage');
   const [productId, setProductId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
-  const [method, setMethod] = useState<ForecastMethod | ''>('');
+  const [method, setMethod] = useState<ComputedForecastMethod | ''>('');
   const [horizon, setHorizon] = useState<number | undefined>(undefined);
   const [lookback, setLookback] = useState<number | undefined>(undefined);
   const [manualOpen, setManualOpen] = useState(false);
@@ -141,7 +141,7 @@ export default function DemandForecastingPage() {
       forecastingApi.recompute({
         product_id: productId,
         customer_id: customerId || undefined,
-        method: method === 'manual' ? 'weighted_avg' : (method as 'moving_avg' | 'weighted_avg'),
+        method: method as ComputedForecastMethod,
         horizon_months: horizon,
         lookback_months: lookback,
       }),
@@ -319,7 +319,7 @@ export default function DemandForecastingPage() {
               <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
                 Method
               </label>
-              <Select value={method} onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
+              <Select value={method} onChange={(e) => setMethod(e.target.value as ComputedForecastMethod)}>
                 <option value="">— Select method —</option>
                 {(methodsQ.data?.methods ?? []).map((option) => (
                   <option key={option.value} value={option.value}>

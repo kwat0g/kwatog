@@ -15,6 +15,7 @@ use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\BillPaymentStatus;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Enums\WithholdingTaxType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
@@ -149,12 +150,24 @@ class BillService
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             // Build items + totals.
-            [$items, $subtotal] = $this->normalizeItems($data['items'] ?? [], $landedCostClearingAccountId);
+            [$items, $subtotal] = $this->normalizeItems($data['items'] ?? [], $landedCostClearingAccountId, $provenance);
             if ($landedCostShipmentId !== null) {
                 $this->assertLandedCostBillAmount($landedCostShipmentId, $subtotal);
             }
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            $linkedPo = ! empty($data['purchase_order_id'])
+                ? PurchaseOrder::query()->find(HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class) ?? (int) $data['purchase_order_id'])
+                : null;
+            if ($linkedPo?->rfq_vat_amount !== null) {
+                // Same rule as the GRN auto-draft: an RFQ PO's VAT is the
+                // supplier's quoted amount, not the rate on delivered cost
+                // (which would tax the capitalized freight too).
+                $vat = $this->rfqVatShare($linkedPo, $subtotal);
+                $isVatable = ! Money::isZero($vat);
+            }
             $total = Money::add($subtotal, $vat);
+
+            [$ewtType, $ewtRate, $ewtAmount] = $this->ewtFor($vendor, $subtotal);
 
             // Vendor uniqueness on bill_number.
             $exists = Bill::query()
@@ -165,18 +178,20 @@ class BillService
                 throw new BusinessRuleException("Bill number '{$data['bill_number']}' already exists for this vendor.");
             }
 
-            // Budget enforcement check.
-            if (! empty($data['department_id'])) {
-                $deptId = is_int($data['department_id'])
+            // Budget enforcement check + persisted scope. The department is
+            // stored so postDraft() can re-check at the ledger mutation; it
+            // used to be read from the request and then discarded.
+            $departmentId = ! empty($data['department_id'])
+                ? (is_int($data['department_id'])
                     ? $data['department_id']
-                    : HashIdFilter::decode($data['department_id'], Department::class);
-                if ($deptId) {
-                    [$canProceed, , $message] = $this->budget->checkAvailability($deptId, (string) $total);
-                    if (! $canProceed) {
-                        throw ValidationException::withMessages([
-                            'budget' => [$message],
-                        ]);
-                    }
+                    : HashIdFilter::decode($data['department_id'], Department::class))
+                : null;
+            if ($departmentId) {
+                [$canProceed, , $message] = $this->budget->checkAvailability($departmentId, (string) $total);
+                if (! $canProceed) {
+                    throw ValidationException::withMessages([
+                        'budget' => [$message],
+                    ]);
                 }
             }
 
@@ -223,7 +238,12 @@ class BillService
                             'unit_price' => $li['unit_price'],
                         ];
                     }
-                    $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
+                    // Decode the GRN id once if this bill is tied to a specific receipt.
+                    $grnRef = $data['goods_receipt_note_id'] ?? null;
+                    $grnId = $provenance === 'stock' && $grnRef
+                        ? (HashIdFilter::decode($grnRef, GoodsReceiptNote::class) ?? (int) $grnRef)
+                        : null;
+                    $result = $this->threeWayMatch->matchForPo($po, array_values($billLines), $grnId, null);
                     $allowOverride = (bool) ($data['allow_override'] ?? false);
                     if ($result->overallStatus === 'blocked' && $allowOverride) {
                         throw new BusinessRuleException(
@@ -241,6 +261,7 @@ class BillService
             $bill = Bill::create([
                 'bill_number' => $data['bill_number'],
                 'vendor_id' => $vendor->id,
+                'department_id' => $departmentId,
                 'purchase_order_id' => $poId,
                 'goods_receipt_note_id' => $provenance === 'stock' ? (HashIdFilter::decode($data['goods_receipt_note_id'], GoodsReceiptNote::class) ?? (int) $data['goods_receipt_note_id']) : null,
                 'landed_cost_shipment_id' => $landedCostShipmentId,
@@ -253,6 +274,9 @@ class BillService
                 'due_date' => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($vendor->payment_terms_days)->toDateString(),
                 'is_vatable' => $isVatable,
+                'withholding_tax_type' => $ewtType->value,
+                'ewt_rate' => $ewtRate,
+                'ewt_amount' => $ewtAmount,
                 'subtotal' => $subtotal,
                 'vat_amount' => $vat,
                 'total_amount' => $total,
@@ -318,15 +342,23 @@ class BillService
             if (! $lockedGrn->status->isBillable()) {
                 return null; // only receipts with accepted quantity stage a bill
             }
-            $existingBill = Bill::query()
+            $existingDraftBill = Bill::query()
                 ->where('goods_receipt_note_id', $lockedGrn->id)
+                ->where('status', BillStatus::Draft->value)
                 ->orderByDesc('id')
                 ->first();
-            if ($existingBill && $existingBill->status !== BillStatus::Draft) {
-                return null; // a posted bill is immutable; no duplicate is staged
-            }
 
-            $lockedGrn->loadMissing(['vendor', 'purchaseOrder', 'items.item', 'items.purchaseOrderItem']);
+            $alreadyBilledByItemId = BillItem::query()
+                ->join('bills', 'bills.id', '=', 'bill_items.bill_id')
+                ->where('bills.goods_receipt_note_id', $lockedGrn->id)
+                ->where('bills.status', '!=', BillStatus::Draft->value)
+                ->where('bills.status', '!=', BillStatus::Cancelled->value)
+                ->groupBy('bill_items.item_id')
+                ->selectRaw('bill_items.item_id, SUM(bill_items.quantity) as billed_qty')
+                ->pluck('billed_qty', 'item_id')
+                ->all();
+
+            $lockedGrn->loadMissing(['vendor', 'purchaseOrder.items', 'items.item', 'items.purchaseOrderItem']);
             $vendor = $lockedGrn->vendor;
             $po = $lockedGrn->purchaseOrder;
             if (! $vendor || ! $po) {
@@ -349,16 +381,33 @@ class BillService
             $rows = [];
             $subtotal = Money::zero();
             foreach ($lockedGrn->items as $line) {
-                $qty = Money::round2((string) $line->quantity_accepted);
+                $acceptedQty = Money::round2((string) $line->quantity_accepted);
+                $alreadyBilled = (string) ($alreadyBilledByItemId[$line->item_id] ?? '0');
+                $qty = Money::round2(bcsub($acceptedQty, $alreadyBilled, 4));
                 if (Money::lte($qty, '0')) {
-                    continue; // rejected lines are not billed
+                    continue; // already billed or rejected lines are not billed
                 }
-                $unitPrice = Money::round2((string) $line->unit_cost);
+                // Use GRN unit_cost, which for RFQ POs includes delivered cost (line + header charges).
+                // Keep full 4dp precision for unit_cost (especially for RFQ POs with distributed charges).
+                $unitPrice = (string) $line->unit_cost;
                 $total = Money::round2(bcmul($qty, $unitPrice, 4));
                 $description = $line->item?->name
                     ?? $line->purchaseOrderItem?->description
                     ?? "Line {$line->id}";
                 $unit = $line->item?->unit_of_measure ?? $line->purchaseOrderItem?->unit;
+
+                // When PO line carries RFQ charges (freight/other), suffix the description
+                // to indicate the bill includes landed cost.
+                $poItem = $line->purchaseOrderItem;
+                if ($poItem && (
+                    ($poItem->rfq_line_freight_amount && (string) $poItem->rfq_line_freight_amount !== '0')
+                    || ($poItem->rfq_line_other_charges && (string) $poItem->rfq_line_other_charges !== '0')
+                    || ($po->rfq_freight_amount && (string) $po->rfq_freight_amount !== '0')
+                    || ($po->rfq_other_charges && (string) $po->rfq_other_charges !== '0')
+                )) {
+                    $description .= ' (incl. agreed freight/charges)';
+                }
+
                 $rows[] = [
                     'expense_account_id' => $expenseAccountId,
                     'item_id' => $line->item_id,
@@ -371,7 +420,7 @@ class BillService
                 $subtotal = Money::add($subtotal, $total);
             }
             if ($rows === []) {
-                return null; // nothing accepted → nothing to bill
+                return null; // nothing unbilled accepted → nothing to bill
             }
 
             $po->loadMissing(['items.item']);
@@ -383,7 +432,7 @@ class BillService
                     'unit_price' => $row['unit_price'],
                 ],
                 $rows,
-            ));
+            ), $lockedGrn->id, null);
             $hasVariances = $match->overallStatus !== 'matched';
             $matchSnapshot = $match->toArray();
             $reviewNote = $match->overallStatus === 'blocked'
@@ -391,7 +440,15 @@ class BillService
                 : '';
 
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
+            if ($po->rfq_vat_amount !== null) {
+                // RFQ POs carry the supplier's quoted VAT as a fixed amount and
+                // are stored is_vatable=false so nothing recomputes it. Reading
+                // only the flag billed those receipts with no VAT at all.
+                $vat = $this->rfqVatShare($po, $subtotal);
+                $isVatable = ! Money::isZero($vat);
+            }
             $total = Money::add($subtotal, $vat);
+            [$ewtType, $ewtRate, $ewtAmount] = $this->ewtFor($vendor, $subtotal);
 
             $billData = [
                 'vendor_id' => $vendor->id,
@@ -404,6 +461,9 @@ class BillService
                 'subtotal' => $subtotal,
                 'vat_amount' => $vat,
                 'total_amount' => $total,
+                'withholding_tax_type' => $ewtType->value,
+                'ewt_rate' => $ewtRate,
+                'ewt_amount' => $ewtAmount,
                 'amount_paid' => Money::zero(),
                 'balance' => $total,
                 'status' => BillStatus::Draft,
@@ -412,13 +472,13 @@ class BillService
                 'remarks' => "Auto-created from GRN {$lockedGrn->grn_number}. Review and post to record the payable.{$reviewNote}",
             ];
 
-            if ($existingBill) {
-                $existingBill->forceFill($billData)->save();
-                $existingBill->items()->delete();
-                $bill = $existingBill;
+            if ($existingDraftBill) {
+                $existingDraftBill->forceFill($billData)->save();
+                $existingDraftBill->items()->delete();
+                $bill = $existingDraftBill;
             } else {
                 $bill = Bill::create([
-                    'bill_number' => $this->sequences->generate('bill'),
+                    'bill_number' => $this->sequences->generate('bill', $lockedGrn->received_date),
                     ...$billData,
                     'created_by' => $by->id,
                 ]);
@@ -496,8 +556,24 @@ class BillService
 
             $this->periods->assertPostingAllowed($lockedBill->date);
 
+            // Re-check the budget at the ledger mutation, not only at draft
+            // creation: other documents may have consumed it in between, and
+            // drafts (including GRN handoffs) never passed the create check.
+            // enforce() follows budgeting.enforcement_mode (off/warn/block).
+            if ($lockedBill->department_id) {
+                $this->budget->enforce((int) $lockedBill->department_id, (string) $lockedBill->total_amount);
+            }
+
             $lockedBill->loadMissing(['vendor', 'items']);
             $vendor = $lockedBill->vendor;
+            // The vendor's EWT classification can change while a draft waits;
+            // the payable is withheld on what is true when it is recognised.
+            [$ewtType, $ewtRate, $ewtAmount] = $this->ewtFor($vendor, (string) $lockedBill->subtotal);
+            $lockedBill->forceFill([
+                'withholding_tax_type' => $ewtType->value,
+                'ewt_rate' => $ewtRate,
+                'ewt_amount' => $ewtAmount,
+            ]);
             $items = $lockedBill->items->map(fn (BillItem $item) => [
                 'expense_account_id' => $item->expense_account_id,
                 'item_id' => $item->item_id,
@@ -587,13 +663,32 @@ class BillService
             $lockedBill = Bill::query()
                 ->lockForUpdate()
                 ->findOrFail($bill->getKey());
+            // Resolve the cash account before the idempotency branch so a
+            // replay can be checked against the full original payload.
+            $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
+            if (! $cashAccountId) {
+                throw new BusinessRuleException('Invalid cash account.');
+            }
+
             if (! empty($data['idempotency_key'])) {
                 $existing = BillPayment::query()
                     ->where('bill_id', $lockedBill->id)
                     ->where('idempotency_key', $data['idempotency_key'])
+                    ->lockForUpdate()
                     ->first();
                 if ($existing) {
-                    return $existing->fresh(['cashAccount', 'journalEntry', 'approvalRecords']);
+                    // A replay is only a replay when the payload matches. The
+                    // key used to return whatever payment it found, so a retry
+                    // with a corrected amount/cash account/date silently got
+                    // the old payment back and the correction was lost.
+                    if (Money::cmp((string) $existing->amount, $amount) !== 0
+                        || (int) $existing->cash_account_id !== $cashAccountId
+                        || $existing->payment_date->toDateString() !== (string) $data['payment_date']
+                        || $existing->payment_method?->value !== (string) $data['payment_method']) {
+                        throw new BusinessRuleException('The idempotency key was already used with a different payment payload.');
+                    }
+
+                    return $existing->fresh(['cashAccount', 'journalEntry', 'approvalRecords.approver:id,name']);
                 }
             }
             if ($lockedBill->status === BillStatus::Cancelled) {
@@ -621,20 +716,34 @@ class BillService
             if (Money::lte($amount, '0')) {
                 throw new BusinessRuleException('Payment amount must be greater than zero.');
             }
+
+            // Check pending payment reservations
+            // NOTE: Cannot use lockForUpdate() with sum aggregate in PostgreSQL
+            $pendingPayments = BillPayment::query()
+                ->where('bill_id', $lockedBill->id)
+                ->where('status', BillPaymentStatus::PendingApproval)
+                ->pluck('amount');
+            $pendingTotal = $pendingPayments->reduce(fn ($carry, $item) => Money::add($carry, (string) $item), Money::zero());
+            $available = Money::sub((string) $lockedBill->balance, $pendingTotal);
+            if (Money::gt($amount, $available)) {
+                throw new BusinessRuleException("Payment {$amount} exceeds the unreserved balance {$available} (pending payment requests hold the rest).");
+            }
+
             if (Money::gt($amount, (string) $lockedBill->balance)) {
                 throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance ".$lockedBill->balance.'.');
             }
 
-            $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
-            if (! $cashAccountId) {
-                throw new BusinessRuleException('Invalid cash account.');
-            }
             $cashAccount = Account::query()->lockForUpdate()->find($cashAccountId);
             if (! $cashAccount || ! $cashAccount->is_active) {
                 throw new BusinessRuleException('The selected cash account is inactive or no longer exists.');
             }
             if ($cashAccount->type !== AccountType::Asset || ! str_starts_with($cashAccount->code, '10')) {
                 throw new BusinessRuleException('Payments must use an active cash or bank asset account.');
+            }
+            // A header account passes the checks above but the approver's GL
+            // posting refuses it, so the request would strand in pending_approval.
+            if (Account::query()->where('parent_id', $cashAccount->id)->exists()) {
+                throw new BusinessRuleException("Account {$cashAccount->code} is a header account and cannot receive new postings.");
             }
 
             $payment = BillPayment::create([
@@ -650,7 +759,7 @@ class BillService
             ]);
             $this->approvals->submit($payment, 'bill_payment', $amount);
 
-            return $payment->fresh(['cashAccount', 'approvalRecords']);
+            return $payment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
         });
     }
 
@@ -667,7 +776,7 @@ class BillService
             $this->approvals->approve($lockedPayment, $by);
             $lockedPayment->refresh();
             if (! $this->approvals->isFullyApproved($lockedPayment)) {
-                return $lockedPayment->fresh(['cashAccount', 'approvalRecords']);
+                return $lockedPayment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
             }
 
             $this->assertPaymentBillIsOpen($lockedBill, (string) $lockedPayment->amount);
@@ -696,7 +805,7 @@ class BillService
             $this->approvals->reject($lockedPayment, $by, $remarks);
             $lockedPayment->forceFill(['status' => BillPaymentStatus::Rejected])->save();
 
-            return $lockedPayment->fresh(['cashAccount', 'approvalRecords']);
+            return $lockedPayment->fresh(['cashAccount', 'approvalRecords.approver:id,name']);
         });
     }
 
@@ -726,22 +835,93 @@ class BillService
         }
     }
 
+    /**
+     * EWT withheld and cash disbursed when $amount of the bill is settled.
+     * Posting uses it, and a pending payment shows it so the approver sees
+     * the cash that will actually leave the bank.
+     *
+     * @return array{0: string, 1: string} [ewt, cash]
+     */
+    public function withholdingFor(Bill $bill, string $amount): array
+    {
+        // Calculate EWT for this payment
+        // Expected total EWT to date = (sum of posted payments incl. this one / bill total) × bill EWT amount
+        // This payment's EWT = expected - already withheld
+        $ewtAmount = Money::zero();
+        $cashAmount = $amount;
+
+        if (Money::gt((string) $bill->ewt_amount, '0')) {
+            // Get sum of already-posted payments' EWT and amounts
+            $postedPayments = BillPayment::query()
+                ->where('bill_id', $bill->id)
+                ->where('status', BillPaymentStatus::Posted)
+                ->get(['amount', 'ewt_amount']);
+
+            $postedAmountSum = $postedPayments->reduce(fn ($carry, $posted) => Money::add($carry, (string) $posted->amount), Money::zero());
+            $postedEwtSum = $postedPayments->reduce(fn ($carry, $posted) => Money::add($carry, (string) $posted->ewt_amount), Money::zero());
+
+            // Calculate sum of amounts including this payment
+            $totalAmountPaid = Money::add($postedAmountSum, $amount);
+
+            // Calculate expected total EWT proportional to amount paid.
+            // Multiply before dividing: the ratio alone truncates to 4 dp
+            // (65052/65640 → 0.9910), which withheld ₱582.71 where the 2307
+            // base of ₱58,273.27 certifies ₱582.73.
+            $expectedTotalEwt = Money::round2(Money::div(
+                bcmul((string) $bill->ewt_amount, $totalAmountPaid, Money::INNER),
+                (string) $bill->total_amount,
+                8,
+            ));
+
+            // This payment's EWT = expected - already withheld, never negative
+            // and never more than the AP amount it settles.
+            $ewtAmount = Money::sub($expectedTotalEwt, $postedEwtSum);
+            if (Money::lt($ewtAmount, '0')) {
+                $ewtAmount = Money::zero();
+            }
+            if (Money::gt($ewtAmount, $amount)) {
+                $ewtAmount = $amount;
+            }
+
+            $cashAmount = Money::sub($amount, $ewtAmount);
+        }
+
+        return [$ewtAmount, $cashAmount];
+    }
+
     private function postApprovedPayment(Bill $bill, BillPayment $payment, User $by): BillPayment
     {
         $amount = (string) $payment->amount;
         $apId = $this->accountId($this->accounts->ap());
+
+        [$ewtAmount, $cashAmount] = $this->withholdingFor($bill, $amount);
+
+        $lines = [
+            ['account_id' => $apId, 'debit' => $amount, 'credit' => '0.00', 'description' => 'AP settled'],
+            ['account_id' => $payment->cash_account_id, 'debit' => '0.00', 'credit' => $cashAmount, 'description' => 'Cash disbursed'],
+        ];
+
+        // Add EWT line if applicable
+        if (Money::gt($ewtAmount, '0')) {
+            $ewtCode = $this->settings->requiredString('accounting.accounts.ewt_payable_code');
+            $ewtAccountId = $this->postingAccounts->configuredIdByCode($ewtCode, AccountType::Liability);
+            $lines[] = ['account_id' => $ewtAccountId, 'debit' => '0.00', 'credit' => $ewtAmount, 'description' => 'Expanded withholding tax withheld'];
+        }
+
         $je = $this->journals->create([
             'date' => $payment->payment_date->toDateString(),
             'description' => "Payment for Bill {$bill->bill_number}",
             'reference_type' => 'bill_payment',
             'reference_id' => $payment->id,
-            'lines' => [
-                ['account_id' => $apId, 'debit' => $amount, 'credit' => '0.00', 'description' => 'AP settled'],
-                ['account_id' => $payment->cash_account_id, 'debit' => '0.00', 'credit' => $amount, 'description' => 'Cash disbursed'],
-            ],
+            'lines' => $lines,
         ], $by);
         $je = $this->journals->post($je, $by);
-        $payment->forceFill(['journal_entry_id' => $je->id, 'status' => BillPaymentStatus::Posted])->save();
+        $payment->forceFill([
+            'ewt_amount' => $ewtAmount,
+            'cash_amount' => $cashAmount,
+            'journal_entry_id' => $je->id,
+            'status' => BillPaymentStatus::Posted,
+        ])->save();
 
         $newPaid = Money::add((string) $bill->amount_paid, $amount);
         $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
@@ -754,7 +934,7 @@ class BillService
         $fresh = $bill->fresh();
         app(ChainBroadcaster::class)->broadcastFor($fresh, (string) $fresh->status?->value, $by);
 
-        return $payment->fresh(['cashAccount', 'journalEntry', 'approvalRecords']);
+        return $payment->fresh(['cashAccount', 'journalEntry', 'approvalRecords.approver:id,name']);
     }
 
     /**
@@ -999,7 +1179,12 @@ class BillService
         if ((int) $vendorId !== (int) $po->vendor_id || (int) $po->vendor_id !== (int) $grn->vendor_id) {
             throw new BusinessRuleException('The bill vendor must match the purchase order and accepted GRN vendor.');
         }
-        if (Bill::query()->where('goods_receipt_note_id', $grn->id)->exists()) {
+        // A cancelled bill (e.g. the auto-draft discarded because the supplier
+        // invoiced a different price) no longer holds the receipt.
+        if (Bill::query()
+            ->where('goods_receipt_note_id', $grn->id)
+            ->where('status', '!=', BillStatus::Cancelled->value)
+            ->exists()) {
             throw new BusinessRuleException('An AP bill already exists for this accepted goods receipt.');
         }
     }
@@ -1090,7 +1275,7 @@ class BillService
      * SupplierPortalController happening to wrap the call in
      * `catch (\RuntimeException)`.
      */
-    private function normalizeItems(array $rawItems, ?int $forcedAccountId = null): array
+    private function normalizeItems(array $rawItems, ?int $forcedAccountId = null, string $provenance = 'stock'): array
     {
         if (count($rawItems) === 0) {
             throw new BusinessRuleException('A bill must have at least one line item.');
@@ -1102,6 +1287,16 @@ class BillService
             $accountId = $forcedAccountId ?? $this->expenseAccountId($raw['expense_account_id'] ?? null);
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
+
+            // Service bills must not reference inventory items. All ItemType cases
+            // (RawMaterial, FinishedGood, Packaging, SparePart) are tracked inventory,
+            // which must be received through purchase orders and GRN to enforce incoming QC.
+            if ($provenance === 'service' && $itemId !== null) {
+                throw new BusinessRuleException(
+                    "Service bills cannot reference inventory items; "
+                    . "buy stock through a purchase order and receive it on a GRN."
+                );
+            }
 
             $qty = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
@@ -1132,6 +1327,12 @@ class BillService
      * Shared by the manual create() path and the draft post path so the ledger
      * logic can never drift between them.
      *
+     * Stock bills clear GRNI at the value the receipt actually posted, not at
+     * the bill subtotal. Any bill-vs-receipt price difference goes to the
+     * purchase price variance account (debit when the bill is higher, credit
+     * when lower) — debiting GRNI with the bill subtotal left a permanent
+     * residual on 2110 for every in-tolerance price difference.
+     *
      * @param  array<int, array{expense_account_id:int, item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>  $items
      */
     private function postBillToGl(Bill $bill, Vendor $vendor, array $items, bool $isVatable, string $vat, string $total, User $by): void
@@ -1152,12 +1353,37 @@ class BillService
         } elseif ($bill->provenance_type === 'stock' || $bill->goods_receipt_note_id !== null) {
             $grniCode = $this->settings->requiredString('accounting.accounts.grni_code');
             $grniId = $this->postingAccounts->configuredIdByCode($grniCode, AccountType::Liability);
+
+            $grniToClear = $this->remainingGrniForGrn($bill, $grniCode);
+
             $lines[] = [
                 'account_id' => $grniId,
-                'debit' => (string) $bill->subtotal,
+                'debit' => $grniToClear,
                 'credit' => '0.00',
                 'description' => "GRNI clearing for {$bill->bill_number}",
             ];
+
+            $ppvAmount = Money::sub((string) $bill->subtotal, $grniToClear);
+            if (! Money::isZero($ppvAmount)) {
+                $ppvCode = $this->settings->requiredString('accounting.accounts.purchase_price_variance_code');
+                $ppvId = $this->postingAccounts->configuredIdByCode($ppvCode, AccountType::Expense);
+
+                if (Money::gt($ppvAmount, '0')) {
+                    $lines[] = [
+                        'account_id' => $ppvId,
+                        'debit' => $ppvAmount,
+                        'credit' => '0.00',
+                        'description' => "Purchase price variance (bill higher) for {$bill->bill_number}",
+                    ];
+                } else {
+                    $lines[] = [
+                        'account_id' => $ppvId,
+                        'debit' => '0.00',
+                        'credit' => Money::negate($ppvAmount),
+                        'description' => "Purchase price variance (bill lower) for {$bill->bill_number}",
+                    ];
+                }
+            }
         } else {
             foreach ($items as $row) {
                 $lines[] = [
@@ -1196,9 +1422,120 @@ class BillService
     }
 
     /**
+     * Calculate the GRNI amount available to clear for this bill's GRN.
+     *
+     * When a GRN receives multiple acceptances over time, multiple bills may be
+     * created. Each bill must clear only its proportional share of the GRNI:
+     * - Start with: the net GRNI credit posted by the GRN acceptance JEs
+     * - Subtract: the GRNI debits already posted by OTHER bills on this GRN
+     * - Result: the remaining GRNI to clear on this bill
+     *
+     * If nothing remains to clear, the goods were already billed; throw to prevent
+     * a second bill against the same receipt. A receipt that never posted GRNI
+     * (legacy rows) falls back to clearing the bill subtotal, as before.
+     */
+    /**
+     * This receipt's share of an RFQ PO's quoted VAT, by value. Clamped to what
+     * earlier posted bills left unbilled so partial receipts never over-claim
+     * input VAT through rounding.
+     */
+    private function rfqVatShare(PurchaseOrder $po, string $subtotal): string
+    {
+        $quoted = (string) $po->rfq_vat_amount;
+        if (Money::isZero($quoted) || Money::isZero((string) $po->subtotal)) {
+            return Money::zero();
+        }
+
+        $share = Money::round2(Money::div(bcmul($quoted, $subtotal, 8), (string) $po->subtotal, 8));
+        $billed = (string) Bill::query()
+            ->where('purchase_order_id', $po->id)
+            ->whereNotIn('status', [BillStatus::Draft->value, BillStatus::Cancelled->value])
+            ->sum('vat_amount');
+        $remaining = Money::sub($quoted, $billed);
+        if (Money::lte($remaining, '0')) {
+            return Money::zero();
+        }
+
+        return Money::lte($share, $remaining) ? $share : $remaining;
+    }
+
+    private function remainingGrniForGrn(Bill $bill, string $grniCode): string
+    {
+        if (! $bill->goods_receipt_note_id) {
+            return (string) $bill->subtotal;
+        }
+
+        // Query the GRN's own posted JEs (acceptance postings)
+        $grnResult = DB::table('journal_entry_lines as line')
+            ->join('journal_entries as entry', 'entry.id', '=', 'line.journal_entry_id')
+            ->join('accounts as account', 'account.id', '=', 'line.account_id')
+            ->where('entry.reference_type', 'goods_receipt_note')
+            ->where('entry.reference_id', $bill->goods_receipt_note_id)
+            ->where('entry.status', 'posted')
+            ->where('account.code', $grniCode)
+            ->select([
+                DB::raw('COALESCE(SUM(line.credit), 0) as total_credit'),
+                DB::raw('COALESCE(SUM(line.debit), 0) as total_debit'),
+            ])
+            ->first();
+
+        $grnNetCredit = Money::sub(
+            (string) ($grnResult->total_credit ?? '0'),
+            (string) ($grnResult->total_debit ?? '0')
+        );
+
+        if (Money::lte($grnNetCredit, '0')) {
+            return (string) $bill->subtotal;
+        }
+
+        // Query GRNI debits posted by OTHER bills on this GRN
+        $otherBillsResult = DB::table('journal_entry_lines as line')
+            ->join('journal_entries as entry', 'entry.id', '=', 'line.journal_entry_id')
+            ->join('accounts as account', 'account.id', '=', 'line.account_id')
+            ->join('bills', 'bills.journal_entry_id', '=', 'entry.id')
+            ->where('bills.goods_receipt_note_id', $bill->goods_receipt_note_id)
+            ->where('bills.id', '!=', $bill->id)
+            ->whereNotIn('bills.status', ['draft', 'cancelled'])
+            ->where('bills.journal_entry_id', '!=', null)
+            ->where('account.code', $grniCode)
+            ->select([
+                DB::raw('COALESCE(SUM(line.debit), 0) as total_debit'),
+            ])
+            ->first();
+
+        $alreadyClearedByOthers = (string) ($otherBillsResult->total_debit ?? '0');
+        $remaining = Money::sub($grnNetCredit, $alreadyClearedByOthers);
+
+        if (Money::lte($remaining, '0')) {
+            throw new BusinessRuleException(
+                "Nothing left to clear on GRNI for this goods receipt; "
+                . "the goods were already billed in full."
+            );
+        }
+
+        return $remaining;
+    }
+
+    /**
      * Resolve the default expense account (int id) for auto-created bill lines
      * — same setting the B2B portal's submitInvoice uses.
      */
+    /**
+     * Expanded withholding tax on a bill: the vendor's classification rate
+     * applied to the VAT-exclusive subtotal. The one derivation shared by
+     * manual bills, GRN draft bills and draft posting.
+     *
+     * @return array{0: WithholdingTaxType, 1: string, 2: string}
+     */
+    private function ewtFor(Vendor $vendor, string $subtotal): array
+    {
+        $type = $vendor->withholding_tax_type ?? WithholdingTaxType::None;
+        $rate = $type->rate();
+        $amount = Money::isZero($rate) ? Money::zero() : Money::round2(Money::mul($subtotal, $rate));
+
+        return [$type, $rate, $amount];
+    }
+
     private function defaultExpenseAccountId(): ?int
     {
         $code = (string) $this->settings->get('accounting.default_expense_account_code');
@@ -1226,14 +1563,12 @@ class BillService
             throw new BusinessRuleException('Invalid expense account selected on bill item.');
         }
 
-        $account = Account::query()->lockForUpdate()->find($accountId);
-        if (! $account || ! $account->is_active) {
-            throw new BusinessRuleException('The selected expense account is inactive or no longer exists.');
+        // Delegate the invariant check, but keep the bill boundary's stable
+        // business message instead of leaking the resolver's internal detail.
+        try {
+            return $this->postingAccounts->assertTypes((int) $accountId, AccountType::Expense);
+        } catch (BusinessRuleException $e) {
+            throw new BusinessRuleException('Selected bill expense account must be an active expense account.', previous: $e);
         }
-        if ($account->type !== AccountType::Expense) {
-            throw new BusinessRuleException('Bill lines must use an active expense account.');
-        }
-
-        return (int) $account->id;
     }
 }

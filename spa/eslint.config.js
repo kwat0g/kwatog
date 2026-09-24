@@ -30,6 +30,13 @@ export default [
       'react-hooks/exhaustive-deps': 'error',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.property.name=/^(slice|substring)$/][callee.object.callee.property.name="toISOString"]',
+          message: 'toISOString() is UTC — use localIsoDate() from @/lib/formatDate for calendar dates (Manila is UTC+8).',
+        },
+      ],
     },
   },
 ];

@@ -4,50 +4,51 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Resources;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
+use App\Common\Support\Money;
 use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Services\WorkOrderService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 
 class WorkOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
         return [
-            'id'                  => $this->hash_id,
-            'wo_number'           => $this->wo_number,
-            'work_order_class'    => $this->work_order_class ?: 'standard',
-            'exception_reason'    => $this->exception_reason,
+            'id' => $this->hash_id,
+            'wo_number' => $this->wo_number,
+            'work_order_class' => $this->work_order_class ?: 'standard',
+            'exception_reason' => $this->exception_reason,
             'exception_authorized_by' => $this->hashId($this->exception_authorized_by),
             'material_plan_source' => $this->material_plan_source,
             // ADV3 — IATF 16949 traceability fields.
-            'batch_number'            => $this->batch_number,
+            'batch_number' => $this->batch_number,
             'material_lot_references' => $this->material_lot_references ?? [],
-            'product'             => $this->whenLoaded('product', fn () => [
+            'product' => $this->whenLoaded('product', fn () => [
                 'id' => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
                 'name' => $this->product->name,
             ]),
-            'sales_order'         => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
+            'sales_order' => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id' => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
             ] : null),
-            'machine'             => $this->whenLoaded('machine', fn () => $this->machine ? [
+            'machine' => $this->whenLoaded('machine', fn () => $this->machine ? [
                 'id' => $this->machine->hash_id,
                 'machine_code' => $this->machine->machine_code,
                 'name' => $this->machine->name,
             ] : null),
-            'mold'                => $this->whenLoaded('mold', fn () => $this->mold ? [
+            'mold' => $this->whenLoaded('mold', fn () => $this->mold ? [
                 'id' => $this->mold->hash_id,
                 'mold_code' => $this->mold->mold_code,
                 'name' => $this->mold->name,
             ] : null),
-            'parent'              => $this->whenLoaded('parent', fn () => $this->parent ? [
+            'parent' => $this->whenLoaded('parent', fn () => $this->parent ? [
                 'id' => $this->parent->hash_id,
                 'wo_number' => $this->parent->wo_number,
             ] : null),
-            'children'            => $this->whenLoaded('children', fn () => $this->children->map(fn ($child) => [
+            'children' => $this->whenLoaded('children', fn () => $this->children->map(fn ($child) => [
                 'id' => $child->hash_id,
                 'wo_number' => $child->wo_number,
                 'product_id' => $this->hashId($child->product_id),
@@ -55,109 +56,105 @@ class WorkOrderResource extends JsonResource
                 'quantity_good' => (int) $child->quantity_good,
                 'status' => (string) $child->status?->value,
             ])->values()),
-            'production_readiness' => $this->whenLoaded('children', fn () =>
-                app(WorkOrderService::class)->productionReadiness($this->resource)
+            'production_readiness' => $this->whenLoaded('children', fn () => app(WorkOrderService::class)->productionReadiness($this->resource)
             ),
-            'quantity_target'     => (int) $this->quantity_target,
-            'quantity_produced'   => (int) $this->quantity_produced,
-            'quantity_good'       => (int) $this->quantity_good,
-            'quantity_rejected'   => (int) $this->quantity_rejected,
+            'quantity_target' => (int) $this->quantity_target,
+            'quantity_produced' => (int) $this->quantity_produced,
+            'quantity_good' => (int) $this->quantity_good,
+            'quantity_rejected' => (int) $this->quantity_rejected,
             'progress_percentage' => (float) $this->progress_percentage,
-            'scrap_rate'          => (string) $this->scrap_rate,
-            'planned_start'       => optional($this->planned_start)->toIso8601String(),
-            'planned_end'         => optional($this->planned_end)->toIso8601String(),
-            'actual_start'        => optional($this->actual_start)->toIso8601String(),
-            'actual_end'          => optional($this->actual_end)->toIso8601String(),
-            'status'              => (string) $this->status?->value,
-            'status_label'        => $this->status?->label(),
-            'next_statuses'       => array_map(
+            'scrap_rate' => (string) $this->scrap_rate,
+            'planned_start' => optional($this->planned_start)->toIso8601String(),
+            'planned_end' => optional($this->planned_end)->toIso8601String(),
+            'actual_start' => optional($this->actual_start)->toIso8601String(),
+            'actual_end' => optional($this->actual_end)->toIso8601String(),
+            'status' => (string) $this->status?->value,
+            'status_label' => $this->status?->label(),
+            'next_statuses' => array_map(
                 static fn (string $next): array => [
                     'value' => $next,
                     'label' => WorkOrderStatus::tryFrom($next)?->label() ?? $next,
                 ],
                 WorkOrderService::allowedTransitions()[$this->status?->value ?? ''] ?? [],
             ),
-            'pause_reason'        => $this->pause_reason,
-            'priority'            => (int) $this->priority,
-            'creator'             => $this->whenLoaded('creator', fn () => $this->creator ? [
+            'pause_reason' => $this->pause_reason,
+            'priority' => (int) $this->priority,
+            'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->hash_id, 'name' => $this->creator->name,
             ] : null),
-            'materials'           => $this->whenLoaded('materials', fn () =>
-                $this->materials->map(fn ($m) => [
-                    'id' => $m->hash_id,
-                    'item' => $m->relationLoaded('item') && $m->item ? [
-                        'id' => $m->item->hash_id, 'code' => $m->item->code,
-                        'name' => $m->item->name, 'unit_of_measure' => $m->item->unit_of_measure,
-                    ] : null,
-                    'bom_quantity' => (string) $m->bom_quantity,
-                    'standard_unit_cost' => (string) $m->standard_unit_cost,
-                    'standard_cost' => (string) $m->standard_cost,
-                    'actual_quantity_issued' => (string) $m->actual_quantity_issued,
-                    'actual_cost' => (string) $m->actual_cost,
-                    'cost_variance' => (string) $m->cost_variance,
-                    'variance' => (string) $m->variance,
-                ])
+            'materials' => $this->whenLoaded('materials', fn () => $this->materials->map(fn ($m) => [
+                'id' => $m->hash_id,
+                'item' => $m->relationLoaded('item') && $m->item ? [
+                    'id' => $m->item->hash_id, 'code' => $m->item->code,
+                    'name' => $m->item->name, 'unit_of_measure' => $m->item->unit_of_measure,
+                ] : null,
+                'bom_quantity' => (string) $m->bom_quantity,
+                'standard_unit_cost' => (string) $m->standard_unit_cost,
+                'standard_cost' => (string) $m->standard_cost,
+                'actual_quantity_issued' => (string) $m->actual_quantity_issued,
+                'actual_cost' => (string) $m->actual_cost,
+                'cost_variance' => (string) $m->cost_variance,
+                'variance' => (string) $m->variance,
+            ])
             ),
             'material_cost_summary' => $this->whenLoaded('materials', function (): array {
                 $standard = '0.00';
                 $actual = '0.00';
                 foreach ($this->materials as $material) {
-                    $standard = \App\Common\Support\Money::add($standard, (string) $material->standard_cost);
-                    $actual = \App\Common\Support\Money::add($actual, (string) $material->actual_cost);
+                    $standard = Money::add($standard, (string) $material->standard_cost);
+                    $actual = Money::add($actual, (string) $material->actual_cost);
                 }
 
                 return [
                     'standard_cost' => $standard,
                     'actual_cost' => $actual,
-                    'cost_variance' => \App\Common\Support\Money::sub($actual, $standard),
+                    'cost_variance' => Money::sub($actual, $standard),
                 ];
             }),
-            'outputs'             => $this->whenLoaded('outputs', fn () =>
-                $this->outputs->map(fn ($o) => [
-                    'id' => $o->hash_id,
-                    'recorded_at' => optional($o->recorded_at)->toIso8601String(),
-                    'good_count' => (int) $o->good_count,
-                    'reject_count' => (int) $o->reject_count,
-                    'shift' => $o->shift,
-                    'batch_code' => $o->batch_code,
-                    'remarks' => $o->remarks,
-                    'material_lineage' => $this->normalizeMaterialLineage($o->material_lineage),
-                    'production_receipt_handoff' => [
-                        'status' => $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
-                            ? $o->production_receipt_handoff_status->value
-                            : (string) $o->production_receipt_handoff_status,
-                        'status_label' => ($handoff = $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
-                            ? $o->production_receipt_handoff_status
-                            : ProductionReceiptHandoffStatus::tryFrom((string) $o->production_receipt_handoff_status))?->label(),
-                        'message' => $o->production_receipt_handoff_message,
-                        'at' => optional($o->production_receipt_handoff_at)->toIso8601String(),
-                    ],
-                    'recorder' => $o->relationLoaded('recorder') && $o->recorder ? [
-                        'id' => $o->recorder->hash_id, 'name' => $o->recorder->name,
+            'outputs' => $this->whenLoaded('outputs', fn () => $this->outputs->map(fn ($o) => [
+                'id' => $o->hash_id,
+                'recorded_at' => optional($o->recorded_at)->toIso8601String(),
+                'good_count' => (int) $o->good_count,
+                'reject_count' => (int) $o->reject_count,
+                'shift' => $o->shift,
+                'batch_code' => $o->batch_code,
+                'remarks' => $o->remarks,
+                'material_lineage' => $this->normalizeMaterialLineage($o->material_lineage),
+                'production_receipt_handoff' => [
+                    'status' => $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                        ? $o->production_receipt_handoff_status->value
+                        : (string) $o->production_receipt_handoff_status,
+                    'status_label' => ($handoff = $o->production_receipt_handoff_status instanceof ProductionReceiptHandoffStatus
+                        ? $o->production_receipt_handoff_status
+                        : ProductionReceiptHandoffStatus::tryFrom((string) $o->production_receipt_handoff_status))?->label(),
+                    'message' => $o->production_receipt_handoff_message,
+                    'at' => optional($o->production_receipt_handoff_at)->toIso8601String(),
+                ],
+                'recorder' => $o->relationLoaded('recorder') && $o->recorder ? [
+                    'id' => $o->recorder->hash_id, 'name' => $o->recorder->name,
+                ] : null,
+                'defects' => $o->relationLoaded('defects') ? $o->defects->map(fn ($d) => [
+                    'id' => $d->hash_id,
+                    'count' => (int) $d->count,
+                    'defect_type' => $d->relationLoaded('defectType') && $d->defectType ? [
+                        'id' => $d->defectType->hash_id,
+                        'code' => $d->defectType->code,
+                        'name' => $d->defectType->name,
                     ] : null,
-                    'defects' => $o->relationLoaded('defects') ? $o->defects->map(fn ($d) => [
-                        'id' => $d->hash_id,
-                        'count' => (int) $d->count,
-                        'defect_type' => $d->relationLoaded('defectType') && $d->defectType ? [
-                            'id' => $d->defectType->hash_id,
-                            'code' => $d->defectType->code,
-                            'name' => $d->defectType->name,
-                        ] : null,
-                    ]) : [],
-                ])
+                ]) : [],
+            ])
             ),
-            'inspections'         => $this->whenLoaded('inspections', fn () =>
-                $this->inspections->map(fn ($inspection) => [
-                    'id' => $inspection->hash_id,
-                    'inspection_number' => $inspection->inspection_number,
-                    'stage' => (string) ($inspection->stage?->value ?? $inspection->stage),
-                    'status' => (string) ($inspection->status?->value ?? $inspection->status),
-                    'completed_at' => optional($inspection->completed_at)->toIso8601String(),
-                ])->values()
+            'inspections' => $this->whenLoaded('inspections', fn () => $this->inspections->map(fn ($inspection) => [
+                'id' => $inspection->hash_id,
+                'inspection_number' => $inspection->inspection_number,
+                'stage' => (string) ($inspection->stage?->value ?? $inspection->stage),
+                'status' => (string) ($inspection->status?->value ?? $inspection->status),
+                'completed_at' => optional($inspection->completed_at)->toIso8601String(),
+            ])->values()
             ),
-            'created_at'          => optional($this->created_at)->toIso8601String(),
-            'updated_at'          => optional($this->updated_at)->toIso8601String(),
-            'deleted_at'          => optional($this->deleted_at)?->toIso8601String(),
+            'created_at' => optional($this->created_at)->toIso8601String(),
+            'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 

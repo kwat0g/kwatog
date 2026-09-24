@@ -63,12 +63,13 @@ class MaintenanceScheduleService
             $type = MaintainableType::from((string) $data['maintainable_type']);
             $interval = MaintenanceScheduleInterval::from((string) $data['interval_type']);
 
-            // Validate target exists
-            $exists = match ($type) {
-                MaintainableType::Machine => Machine::query()->whereKey((int) $data['maintainable_id'])->exists(),
-                MaintainableType::Mold => Mold::query()->whereKey((int) $data['maintainable_id'])->exists(),
+            // Lock the polymorphic target so it cannot disappear between
+            // validation and committing the schedule reference.
+            $target = match ($type) {
+                MaintainableType::Machine => Machine::query()->lockForUpdate()->find((int) $data['maintainable_id']),
+                MaintainableType::Mold => Mold::query()->lockForUpdate()->find((int) $data['maintainable_id']),
             };
-            if (! $exists) {
+            if (! $target) {
                 throw ValidationException::withMessages([
                     'maintainable_id' => ["Target {$type->value}#{$data['maintainable_id']} not found."],
                 ]);
@@ -76,7 +77,7 @@ class MaintenanceScheduleService
             $this->assertIntervalMatchesTarget($interval, $type);
 
             $machine = $type === MaintainableType::Machine
-                ? Machine::query()->lockForUpdate()->findOrFail((int) $data['maintainable_id'])
+                ? $target
                 : null;
 
             $schedule = MaintenanceSchedule::create([

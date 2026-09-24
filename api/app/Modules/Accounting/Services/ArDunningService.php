@@ -118,7 +118,7 @@ class ArDunningService
                     $locked->forceFill([
                         'last_dunning_tier' => $tier,
                         'last_dunning_at' => now(),
-                    ])->saveQuietly();
+                    ])->save();
 
                     if ($tier === max($tiers)) {
                         $this->notifyArOfficers($locked, $daysOverdue);

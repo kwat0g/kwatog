@@ -9,6 +9,7 @@ use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
 use App\Modules\MRP\Enums\MrpRunStatus;
 use App\Modules\MRP\Enums\MrpRunTrigger;
+use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
@@ -71,13 +72,26 @@ class MrpAutomationService
         $planningErrors = collect((array) ($run->summary['per_sales_order'] ?? []))
             ->filter(static fn ($row): bool => is_array($row) && isset($row['error']))
             ->values();
+        $missingBomWarnings = MrpPlan::query()
+            ->where('mrp_run_id', $run->id)
+            ->get(['sales_order_id', 'diagnostics'])
+            ->flatMap(static fn (MrpPlan $plan) => collect((array) $plan->diagnostics)
+                ->filter(static fn ($diagnostic): bool => is_array($diagnostic)
+                    && ($diagnostic['type'] ?? null) === 'missing_bom')
+                ->map(static fn (array $diagnostic): array => [
+                    'so_id' => (int) $plan->sales_order_id,
+                    'type' => 'missing_bom',
+                    'message' => (string) ($diagnostic['message'] ?? 'No active BOM exists for this product.'),
+                ]))
+            ->values();
+        $planningErrors = $planningErrors->concat($missingBomWarnings)->values();
 
         if ($planningErrors->isNotEmpty()) {
             $this->alerts->raise(
                 AlertType::MrpDataError,
                 AlertSeverity::Warning,
                 'MRP data requires correction',
-                $planningErrors->count().' sales order(s) could not be planned because of BOM or demand data errors.',
+                $planningErrors->count().' sales order(s) have planning exceptions, including missing BOMs or demand data errors.',
                 $run,
                 ['run_id' => $run->id, 'errors' => $planningErrors->all()],
             );
@@ -116,7 +130,7 @@ class MrpAutomationService
             );
         }
 
-        if ($run->status === MrpRunStatus::Partial && $planningErrors->isEmpty()) {
+        if ($run->status === MrpRunStatus::Partial && $planningErrors->isEmpty() && $missingBomWarnings->isEmpty()) {
             $this->alerts->raise(
                 AlertType::MrpDataError,
                 AlertSeverity::Warning,

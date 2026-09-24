@@ -21,6 +21,7 @@ use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
@@ -33,11 +34,14 @@ use App\Modules\Purchasing\Events\RfqLifecycleEvent;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Models\PurchaseOrderResponse;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Models\RfqQuoteReconfirmation;
 use App\Modules\Purchasing\Policies\PurchaseOrderAccessPolicy;
 use App\Modules\Quality\Services\PpapService;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Models\Shipment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -135,7 +139,7 @@ class PurchaseOrderService
                 'items.item:id,code,name,unit_of_measure', 'items.rfqAward', 'items.supplierQuoteVersion',
                 'approvalRecords.approver:id,name',
                 'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
-                'latestResponse.items',
+                'latestResponse.items', 'pendingChangeResponse.items',
                 // Every column PurchaseOrderResource reads off a bill must be in this
                 // projection. `has_variances`, `three_way_overridden`,
                 // `three_way_match_snapshot` (via Bill::threeWayReviewStatus()) and
@@ -196,9 +200,13 @@ class PurchaseOrderService
 
             $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class)
                 ?? (int) $data['vendor_id'];
+            $this->assertVendorPurchasable($vendorId);
             $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? [], $sourcePr);
+            if ($sourcePr !== null) {
+                $this->assertPrLineQuantityCoverage($sourcePr, $lines);
+            }
             $rfqCommercial = is_array($data['rfq_commercial'] ?? null) ? $data['rfq_commercial'] : null;
             if ($rfqCommercial !== null) {
                 $subtotal = Money::add(
@@ -302,10 +310,12 @@ class PurchaseOrderService
                 throw new BusinessRuleException('This purchase request is not marked for direct PO sourcing.');
             }
 
-            // Lines already on a live PO are done. A partial retry must not
-            // re-create them, so build the covered set from the live POs.
-            $covered = $this->coveredPrLineIds($lockedPr);
-            $coveredLineIds = $covered === [] ? [] : array_flip($covered);
+            // Lines whose requested quantity is already fully ordered on live
+            // POs are done. Lines with remaining uncovered quantity can still
+            // be ordered up to the unfulfilled remainder.
+            $orderedByLine = $this->orderedQuantitiesByPrLine($lockedPr);
+            $fullyCovered = $this->fullyCoveredPrLineIds($lockedPr);
+            $coveredLineIds = $fullyCovered === [] ? [] : array_flip($fullyCovered);
 
             $lockedPr->load('items');
             $byVendor = [];
@@ -358,19 +368,31 @@ class PurchaseOrderService
                     if ($unitPrice === null || Money::lte((string) $unitPrice, '0')) {
                         throw new BusinessRuleException('PR line "'.($line->description ?? 'unnamed').'" has no authoritative unit price.');
                     }
+                    $orderedSoFar = (string) ($orderedByLine[$line->id] ?? '0');
+                    $quantityToOrder = bccomp((string) $line->quantity, $orderedSoFar, 3) > 0
+                        ? bcsub((string) $line->quantity, $orderedSoFar, 3)
+                        : (string) $line->quantity;
                     $itemPayload[] = [
                         'item_id' => $line->item_id,
                         'purchase_request_item_id' => $line->id,
                         'description' => $line->description,
-                        'quantity' => (string) $line->quantity,
+                        'quantity' => $quantityToOrder,
                         'unit' => $line->unit,
                         'unit_price' => (string) $unitPrice,
                     ];
                 }
+                // Derive expected delivery date: use the provided value if given, otherwise
+                // fall back to the PR's required_delivery_date. Never set a date in the past;
+                // use today instead if needed (supplier cannot deliver retroactively).
+                $finalDeliveryDate = $expectedDeliveryDate ?? $lockedPr->required_delivery_date?->toDateString();
+                if ($finalDeliveryDate !== null && $finalDeliveryDate < now()->toDateString()) {
+                    $finalDeliveryDate = now()->toDateString();
+                }
+
                 $po = $this->create([
                     'vendor_id' => $vendorId,
                     'date' => now()->toDateString(),
-                    'expected_delivery_date' => $expectedDeliveryDate,
+                    'expected_delivery_date' => $finalDeliveryDate,
                     'is_vatable' => $this->taxPolicy->isVatRegistered(),
                     'remarks' => "Auto-converted from PR {$lockedPr->pr_number}",
                     'items' => $itemPayload,
@@ -385,20 +407,69 @@ class PurchaseOrderService
         });
     }
 
-    /** @return list<int> */
-    private function coveredPrLineIds(PurchaseRequest $pr): array
+    /** @return array<int, string> Map of purchase_request_item_id => total_ordered_quantity */
+    private function orderedQuantitiesByPrLine(PurchaseRequest $pr, ?int $exceptPurchaseOrderId = null): array
     {
-        return PurchaseOrderItem::query()
+        $query = PurchaseOrderItem::query()
             ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
             ->where('purchase_orders.purchase_request_id', $pr->id)
             ->where('purchase_orders.status', '!=', PurchaseOrderStatus::Cancelled->value)
             ->whereNull('purchase_orders.deleted_at')
-            ->whereNotNull('purchase_order_items.purchase_request_item_id')
-            ->pluck('purchase_order_items.purchase_request_item_id')
-            ->unique()
-            ->map(static fn ($id): int => (int) $id)
-            ->values()
+            ->whereNotNull('purchase_order_items.purchase_request_item_id');
+        if ($exceptPurchaseOrderId !== null) {
+            $query->where('purchase_orders.id', '!=', $exceptPurchaseOrderId);
+        }
+
+        return $query
+            ->groupBy('purchase_order_items.purchase_request_item_id')
+            ->selectRaw('purchase_order_items.purchase_request_item_id, SUM(purchase_order_items.quantity) as total_ordered')
+            ->pluck('total_ordered', 'purchase_order_items.purchase_request_item_id')
             ->all();
+    }
+
+    /** @param array<int, array{purchase_request_item_id:?int, quantity:string}> $lines */
+    private function assertPrLineQuantityCoverage(
+        PurchaseRequest $pr,
+        array $lines,
+        ?int $exceptPurchaseOrderId = null,
+    ): void {
+        $ordered = $this->orderedQuantitiesByPrLine($pr, $exceptPurchaseOrderId);
+        $adding = [];
+        foreach ($lines as $line) {
+            $sourceLineId = $line['purchase_request_item_id'] ?? null;
+            if ($sourceLineId !== null) {
+                $adding[$sourceLineId] = bcadd($adding[$sourceLineId] ?? '0', (string) $line['quantity'], 3);
+            }
+        }
+
+        foreach ($pr->items as $sourceLine) {
+            $sourceLineId = (int) $sourceLine->id;
+            if (! isset($adding[$sourceLineId])) {
+                continue;
+            }
+
+            $total = bcadd((string) ($ordered[$sourceLineId] ?? '0'), $adding[$sourceLineId], 3);
+            if (bccomp($total, (string) $sourceLine->quantity, 3) > 0) {
+                throw new BusinessRuleException(
+                    'PO quantity for PR line "'.($sourceLine->description ?? 'unnamed').'" would exceed the requested quantity.',
+                );
+            }
+        }
+    }
+
+    /** @return list<int> Lines whose ordered quantity meets or exceeds requested quantity */
+    private function fullyCoveredPrLineIds(PurchaseRequest $pr): array
+    {
+        $ordered = $this->orderedQuantitiesByPrLine($pr);
+        $fullyCovered = [];
+        foreach ($pr->items as $line) {
+            $orderedQty = (string) ($ordered[$line->id] ?? '0');
+            if (bccomp($orderedQty, (string) $line->quantity, 3) >= 0) {
+                $fullyCovered[] = (int) $line->id;
+            }
+        }
+
+        return $fullyCovered;
     }
 
     /**
@@ -419,11 +490,13 @@ class PurchaseOrderService
         }
 
         $pr->loadMissing('items');
-        $covered = array_flip($this->coveredPrLineIds($pr));
+        $fullyCovered = array_flip($this->fullyCoveredPrLineIds($pr));
+        $orderedByLine = $this->orderedQuantitiesByPrLine($pr);
         $total = $pr->items->count();
-        $coveredCount = $pr->items->filter(static fn ($line): bool => isset($covered[$line->id]))->count();
+        $fullyCoveredCount = $pr->items->filter(static fn ($line): bool => isset($fullyCovered[$line->id]))->count();
+        $anyCoveredCount = $pr->items->filter(static fn ($line): bool => isset($orderedByLine[$line->id]) && bccomp((string) $orderedByLine[$line->id], '0', 3) > 0)->count();
 
-        if ($total > 0 && $coveredCount >= $total) {
+        if ($total > 0 && $fullyCoveredCount >= $total) {
             $pr->forceFill([
                 'status' => PurchaseRequestStatus::Converted,
                 'po_conversion_status' => PurchaseRequestConversionStatus::Converted,
@@ -444,7 +517,7 @@ class PurchaseOrderService
             return;
         }
 
-        if ($coveredCount > 0) {
+        if ($anyCoveredCount > 0) {
             $pr->forceFill([
                 'status' => PurchaseRequestStatus::Approved,
                 'po_conversion_status' => PurchaseRequestConversionStatus::Partial,
@@ -494,6 +567,7 @@ class PurchaseOrderService
 
             $isVatable = (bool) ($data['is_vatable'] ?? $locked->is_vatable);
             $sourcePr = $locked->purchase_request_id === null ? null : PurchaseRequest::query()
+                ->lockForUpdate()
                 ->with('items')
                 ->find($locked->purchase_request_id);
             $lineData = is_array($data['items'] ?? null)
@@ -507,6 +581,9 @@ class PurchaseOrderService
                     'unit_price' => (string) $line->unit_price,
                 ])->all();
             [$lines, $subtotal] = $this->normalizeLines($lineData, $sourcePr);
+            if ($sourcePr !== null) {
+                $this->assertPrLineQuantityCoverage($sourcePr, $lines, (int) $locked->id);
+            }
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->requiredVatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
             $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
@@ -530,6 +607,10 @@ class PurchaseOrderService
                 PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $locked->id]));
             }
 
+            if ($sourcePr !== null) {
+                $this->syncConversionStatus($sourcePr);
+            }
+
             if ($sourcePr?->department_id !== null) {
                 // Recalculate under the same locked draft transaction. The
                 // service clears prior acknowledgment fields itself.
@@ -549,8 +630,12 @@ class PurchaseOrderService
         });
     }
 
-    public function submit(PurchaseOrder $po): PurchaseOrder
+    public function submit(PurchaseOrder $po, ?User $by = null): PurchaseOrder
     {
+        if ($by !== null && ! $this->visibility->canManageDraft($by, $po)) {
+            throw new ForbiddenActionException('You do not have permission to submit this purchase order.');
+        }
+
         $reconfirmation = $this->createExpiredQuoteReconfirmation($po);
         if ($reconfirmation !== null) {
             app(OutboxService::class)->record(
@@ -560,7 +645,7 @@ class PurchaseOrderService
             throw new BusinessRuleException('The winning supplier quotation expired. Supplier reconfirmation is required before PO submission.');
         }
 
-        return DB::transaction(function () use ($po) {
+        return DB::transaction(function () use ($po, $by) {
             // Lock and re-read before creating approval records so an update
             // cannot change the lines/amount between the state check and
             // submission.
@@ -570,6 +655,11 @@ class PurchaseOrderService
             if ($locked->status !== PurchaseOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft POs can be submitted.');
             }
+            if ($by !== null && ! $this->visibility->canManageDraft($by, $locked)) {
+                throw new ForbiddenActionException('You do not have permission to submit this purchase order.');
+            }
+            // Vendor must be active to submit a PO.
+            $this->assertVendorPurchasable((int) $locked->vendor_id);
 
             $this->approvals->submit($locked, 'purchase_order', (string) $locked->total_amount);
             $locked->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
@@ -643,6 +733,8 @@ class PurchaseOrderService
             throw new BusinessRuleException('PO is not in an approvable state.');
         }
         $this->budget->assertAcknowledged($po);
+        // Vendor must be active to approve a PO.
+        $this->assertVendorPurchasable((int) $po->vendor_id);
         // OGAMI-002 — segregation of duties: the approver must not be the user
         // who created the vendor on this PO (vendor-create vs PO-approve).
         $this->assertVendorSod($po, $by);
@@ -651,8 +743,23 @@ class PurchaseOrderService
         // Resolve the department via the linked PR; skip when there's no link.
         $deptId = $po->purchaseRequest?->department_id
             ?? PurchaseRequest::find($po->purchase_request_id)?->department_id;
+
+        // If this PO has a pending change response, budget enforcement must use
+        // the PROPOSED total, not the original. The proposal was already
+        // assessed in resolve(), so we re-check here to be defensive.
+        $enforcementAmount = (string) $po->total_amount;
+        if ($po->pending_change_response_id !== null) {
+            $response = PurchaseOrderResponse::find($po->pending_change_response_id);
+            if ($response) {
+                // Recalculate proposed totals to get the enforcement amount
+                $proposed = app(SupplierResponseService::class)
+                    ->computeProposalTotals($response, $po);
+                $enforcementAmount = $proposed['total_amount'];
+            }
+        }
+
         if ($deptId !== null) {
-            $this->budget->enforce($deptId, (string) $po->total_amount);
+            $this->budget->enforce($deptId, $enforcementAmount);
         }
 
         // PPAP gate is controlled by the persisted quality.ppap_gate_enabled setting.
@@ -685,19 +792,59 @@ class PurchaseOrderService
 
             $this->approvals->approve($locked, $by, $remarks);
             $becameApproved = false;
+            $hasAppliedProposal = false;
+
             if ($this->approvals->isFullyApproved($locked)) {
-                $locked->forceFill([
-                    'status' => PurchaseOrderStatus::Approved,
-                    'approved_by' => $by->id,
-                    'approved_at' => now(),
-                ])->save();
-                $this->recordSupplierItemLinks($locked);
-                $becameApproved = true;
+                // If this PO has a pending change response, apply it now before
+                // moving to acknowledged. The proposal was already budget-checked
+                // during resolve().
+                if ($locked->pending_change_response_id !== null) {
+                    $response = PurchaseOrderResponse::query()
+                        ->lockForUpdate()
+                        ->findOrFail($locked->pending_change_response_id);
+
+                    // Apply the supplier's proposed changes to all lines
+                    app(SupplierResponseService::class)->applyProposal($response, $locked);
+
+                    // Set confirmed delivery if the response proposed one
+                    if ($response->proposed_delivery_date !== null) {
+                        $locked->confirmed_delivery_date = $response->proposed_delivery_date;
+                    }
+
+                    // Move to acknowledged (supplier already agreed to these terms)
+                    $locked->forceFill([
+                        'status' => $locked->receiptStatusOr(PurchaseOrderStatus::Acknowledged),
+                        'pending_change_response_id' => null,
+                        'approved_by' => $by->id,
+                        'approved_at' => now(),
+                    ])->save();
+
+                    // Mark response as accepted
+                    $response->forceFill(['status' => PurchaseOrderResponseStatus::Accepted])->save();
+
+                    // Notify supplier that their proposed terms were approved
+                    app(SupplierResponseService::class)->emailSupplierDecision($response->load('purchaseOrder'), 'accept');
+
+                    $hasAppliedProposal = true;
+                } else {
+                    // Normal approval path
+                    $locked->forceFill([
+                        'status' => PurchaseOrderStatus::Approved,
+                        'approved_by' => $by->id,
+                        'approved_at' => now(),
+                    ])->save();
+                    $this->recordSupplierItemLinks($locked);
+                    $becameApproved = true;
+                }
             }
+
             $fresh = $locked->fresh();
+
             if ($becameApproved) {
                 // Series C — Task C2. Domain event for chain listeners
                 // (NotifyOnPurchaseOrderApproved + future SendPOToSupplier).
+                // NOT recorded for pending-approval re-approval, so supplier
+                // dispatch listeners don't trigger again.
                 app(OutboxService::class)->recordForChain(
                     new PurchaseOrderApproved($fresh),
                     $fresh,
@@ -706,6 +853,7 @@ class PurchaseOrderService
                     PurchaseOrderStatus::Approved->value,
                 );
             }
+
             // Series C — Task C4. Stage chain progress with the approval
             // transaction; publication remains post-commit via the outbox.
             $this->broadcastChain($fresh, $by);
@@ -756,7 +904,7 @@ class PurchaseOrderService
     }
 
     /** OGAMI-002 — permission that lets a PO approver bypass the vendor-creator SoD check. */
-    private const VENDOR_SOD_OVERRIDE_PERMISSION = 'purchasing.po.sod_override';
+    public const VENDOR_SOD_OVERRIDE_PERMISSION = 'purchasing.po.sod_override';
 
     /**
      * OGAMI-002 — block a PO approver who is also the creator of the PO's vendor.
@@ -771,23 +919,10 @@ class PurchaseOrderService
      */
     private function assertVendorSod(PurchaseOrder $po, User $by): void
     {
-        // Gracefully skip when the schema does not record who created a vendor.
-        if (! Schema::hasColumn('vendors', 'created_by')) {
+        // The rule lives in the policy so the PO detail's Approve button and
+        // this guard can never disagree.
+        if (! $this->visibility->vendorSodBlocks($po, $by)) {
             return;
-        }
-
-        $vendorCreatorId = Vendor::query()
-            ->whereKey($po->vendor_id)
-            ->value('created_by');
-
-        if ($vendorCreatorId === null) {
-            return; // unknown maker — guard cannot fire.
-        }
-        if ((int) $vendorCreatorId !== (int) $by->id) {
-            return; // different user — allowed.
-        }
-        if ($by->hasPermission(self::VENDOR_SOD_OVERRIDE_PERMISSION)) {
-            return; // explicit override.
         }
 
         // Named exception, not abort(403): a refusal must be visible to the
@@ -798,6 +933,17 @@ class PurchaseOrderService
         throw new ForbiddenActionException(
             'You cannot approve a purchase order to a vendor you created (segregation of duties).'
         );
+    }
+
+    private function assertVendorPurchasable(int $vendorId): void
+    {
+        $vendor = Vendor::withTrashed()->find($vendorId);
+        if (! $vendor || ! $vendor->isPurchasable()) {
+            $vendorName = $vendor?->name ?? "Vendor #{$vendorId}";
+            throw new BusinessRuleException(
+                "Vendor {$vendorName} is inactive. Reactivate it or choose another supplier."
+            );
+        }
     }
 
     public function reject(PurchaseOrder $po, User $by, string $reason): PurchaseOrder
@@ -811,24 +957,49 @@ class PurchaseOrderService
             }
 
             $this->approvals->reject($locked, $by, $reason);
-            // status is non-fillable; service-only.
-            $locked->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+
+            // If this PO has a pending change response, it's a re-approval
+            // rejection. Return the PO to sent with original terms intact, and
+            // mark the response as rejected so supplier can respond again.
+            // DO NOT cancel the dispatch (PO is still viable).
+            if ($locked->pending_change_response_id !== null) {
+                $response = PurchaseOrderResponse::query()
+                    ->lockForUpdate()
+                    ->find($locked->pending_change_response_id);
+                if ($response) {
+                    $response->forceFill([
+                        'status' => PurchaseOrderResponseStatus::Rejected,
+                        'resolution_notes' => $reason,
+                    ])->save();
+                    // Notify supplier their proposal was rejected
+                    app(SupplierResponseService::class)->emailSupplierDecision($response->load('purchaseOrder'), 'reject');
+                }
+                $locked->forceFill([
+                    'status' => $locked->receiptStatusOr(PurchaseOrderStatus::Sent),
+                    'pending_change_response_id' => null,
+                ])->save();
+            } else {
+                // Normal rejection: PO is cancelled and dispatch is killed
+                $locked->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+                $fresh = $locked->fresh();
+                $this->supplierDispatches->cancelForPurchaseOrder(
+                    $fresh,
+                    'Purchase order was rejected; supplier dispatch is no longer actionable.',
+                );
+                $this->reopenSourcePrIfLastLink($fresh);
+                // Rejection is a cancellation from the downstream chain's point
+                // of view. Keep it on the same durable outbox path as an explicit
+                // cancellation so future listeners cannot miss this transition.
+                app(OutboxService::class)->recordForChain(
+                    new PurchaseOrderCancelled($fresh),
+                    $fresh,
+                    'p2p',
+                    'purchase_order',
+                    PurchaseOrderStatus::Cancelled->value,
+                );
+            }
+
             $fresh = $locked->fresh();
-            $this->supplierDispatches->cancelForPurchaseOrder(
-                $fresh,
-                'Purchase order was rejected; supplier dispatch is no longer actionable.',
-            );
-            $this->reopenSourcePrIfLastLink($fresh);
-            // Rejection is a cancellation from the downstream chain's point
-            // of view. Keep it on the same durable outbox path as an explicit
-            // cancellation so future listeners cannot miss this transition.
-            app(OutboxService::class)->recordForChain(
-                new PurchaseOrderCancelled($fresh),
-                $fresh,
-                'p2p',
-                'purchase_order',
-                PurchaseOrderStatus::Cancelled->value,
-            );
             $this->broadcastChain($fresh, $by);
 
             return $fresh;
@@ -938,18 +1109,48 @@ class PurchaseOrderService
             if ($by !== null && ! $this->visibility->canCancel($by, $row)) {
                 throw new ForbiddenActionException('You do not have permission to cancel this purchase order.');
             }
-            // A3 — a `draft` GRN is auto-staged the moment a PO is sent, so
-            // refusing any PO that has one made sent POs uncancellable while
-            // the UI advertised Cancel. Only a GRN that has left the draft
-            // stage (pending QC onward) means goods are in motion.
-            if ($row->goodsReceiptNotes()->where('status', '!=', GrnStatus::Draft->value)->exists()) {
+            // Refuse cancellation if any non-cancelled bills are linked to this PO.
+            // This includes bills linked via GRN (receivable) and direct service/expense bills.
+            if ($row->bills()->whereNot('status', 'cancelled')->exists()) {
+                throw new BusinessRuleException('Cannot cancel a PO that has linked bills. Cancel or void the bills first.');
+            }
+
+            // Refuse cancellation if any GRNs exist that represent real goods in motion.
+            // Both Draft (auto-staged placeholder) and Rejected (supplier didn't ship) are exempt.
+            // Goods in motion (pending_qc onward, or accepted) prevent cancellation.
+            if ($row->goodsReceiptNotes()
+                ->whereNotIn('status', [GrnStatus::Draft->value, GrnStatus::Rejected->value])
+                ->exists()
+            ) {
                 throw new BusinessRuleException('Cannot cancel a PO with received goods.');
+            }
+
+            // If this PO has a pending change response, mark it as rejected
+            // before cancelling the PO.
+            if ($row->pending_change_response_id !== null) {
+                $response = PurchaseOrderResponse::query()
+                    ->lockForUpdate()
+                    ->find($row->pending_change_response_id);
+                if ($response) {
+                    $response->forceFill(['status' => PurchaseOrderResponseStatus::Rejected])->save();
+                }
+                $row->pending_change_response_id = null;
             }
 
             // Single save → single audit row for one logical action.
             $row->fill(['remarks' => trim(($row->remarks ? $row->remarks."\n" : '').'Cancelled: '.$reason)]);
             $row->status = PurchaseOrderStatus::Cancelled;
             $row->save();
+
+            // Purge any staged draft GRNs so a cancelled PO cannot be received against
+            $draftGrns = $row->goodsReceiptNotes()
+                ->where('status', GrnStatus::Draft->value)
+                ->get();
+            foreach ($draftGrns as $draftGrn) {
+                $draftGrn->items()->delete();
+                $draftGrn->delete();
+            }
+
             $fresh = $row->fresh();
             $this->supplierDispatches->cancelForPurchaseOrder(
                 $fresh,
@@ -982,6 +1183,66 @@ class PurchaseOrderService
                 throw new ForbiddenActionException('You do not have permission to close this purchase order.');
             }
             $row->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
+            $fresh = $row->fresh();
+            $this->broadcastChain($fresh, null);
+
+            return $fresh;
+        });
+    }
+
+    public function shortClose(PurchaseOrder $po, string $reason, ?User $by = null, bool $systemAction = false): PurchaseOrder
+    {
+        return DB::transaction(function () use ($po, $reason, $by, $systemAction): PurchaseOrder {
+            $row = PurchaseOrder::query()->lockForUpdate()->findOrFail($po->id);
+            if (! $row->isShortClosable()) {
+                throw new BusinessRuleException('Only a PO with received goods can be short-closed. Cancel a PO with no receipts instead.');
+            }
+            // Permission: creator OR company-wide approver tier (skip on systemAction)
+            if ($by !== null && ! $systemAction) {
+                $isCreator = (int) $row->created_by === (int) $by->id;
+                $isApprover = $by->hasPermission('purchasing.po.approve');
+                if (! ($isCreator || $isApprover)) {
+                    throw new ForbiddenActionException('You do not have permission to close this purchase order.');
+                }
+            }
+
+            // Refuse if any GRN is in pending_qc
+            if ($row->goodsReceiptNotes()
+                ->where('status', GrnStatus::PendingQc->value)
+                ->exists()
+            ) {
+                throw new BusinessRuleException('Finish incoming QC before short-closing this PO.');
+            }
+
+            // Refuse if an open inbound shipment exists for this PO
+            $openShipment = Shipment::query()
+                ->where('purchase_order_id', $row->id)
+                ->whereNotIn('status', [ShipmentStatus::Received->value, ShipmentStatus::Cancelled->value])
+                ->first();
+            if ($openShipment !== null) {
+                throw new BusinessRuleException(
+                    "Cannot short-close this PO: an open inbound shipment ({$openShipment->shipment_number}) exists. "
+                    .'Receive or cancel the shipment first.'
+                );
+            }
+
+            // Purge any staged draft GRNs
+            $draftGrns = $row->goodsReceiptNotes()
+                ->where('status', GrnStatus::Draft->value)
+                ->get();
+            foreach ($draftGrns as $draftGrn) {
+                $draftGrn->items()->delete();
+                $draftGrn->delete();
+            }
+
+            // Set status to Closed with short-close metadata
+            $row->forceFill([
+                'status' => PurchaseOrderStatus::Closed,
+                'short_closed_at' => now(),
+                'short_closed_by' => $by?->id,
+                'short_close_reason' => $reason,
+            ])->save();
+
             $fresh = $row->fresh();
             $this->broadcastChain($fresh, null);
 
@@ -1109,7 +1370,7 @@ class PurchaseOrderService
             }
             $qty = (string) $r['quantity'];
             $price = (string) $r['unit_price'];
-            if (Money::lte($qty, '0') || Money::lte($price, '0')) {
+            if (! preg_match('/^\d+(?:\.\d{1,3})?$/D', $qty) || Money::lte($qty, '0') || Money::lte($price, '0')) {
                 throw new BusinessRuleException('Quantity must be > 0 and unit price must be > 0.');
             }
 

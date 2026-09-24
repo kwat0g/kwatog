@@ -18,14 +18,33 @@ class RunApprovalEscalations extends Command
 
     public function handle(ApprovalEscalationService $svc): int
     {
-        $reminders   = $svc->runReminders();
-        $escalations = $svc->runEscalations();
-        $autoResolved = $svc->runAutoResolve();
+        $outcome = $svc->runWithOutcome();
 
         $this->info(sprintf(
-            'Approval escalation completed: %d reminders, %d escalations, %d auto-resolved.',
-            $reminders, $escalations, $autoResolved,
+            'Approval escalation completed: %d reminders, %d escalations, %d auto-resolved, %d unstaffed, %d failed.',
+            $outcome['reminders'],
+            $outcome['escalations'],
+            $outcome['auto_resolved'],
+            $outcome['unstaffed'],
+            $outcome['failed'],
         ));
+
+        if ($outcome['unstaffed'] > 0) {
+            $this->warn(sprintf(
+                '%d approval candidate(s) had no active approver or superior. They remain eligible for the next sweep.',
+                $outcome['unstaffed'],
+            ));
+        }
+
+        if ($outcome['failed'] > 0) {
+            $this->error(sprintf(
+                '%d approval candidate(s) failed during escalation processing. See the log for details.',
+                $outcome['failed'],
+            ));
+
+            return self::FAILURE;
+        }
+
         return self::SUCCESS;
     }
 }

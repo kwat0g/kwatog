@@ -5,18 +5,21 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Services\OutboxEventCodec;
+use App\Common\Services\SettingsService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Listeners\RunPayrollComputationOnRequested;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
+use App\Modules\Payroll\Services\PayrollAnomalyService;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\PayrollProgressTracker;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Tests\TestCase;
 
 class PayrollComputeHandoffTest extends TestCase
@@ -92,5 +95,38 @@ class PayrollComputeHandoffTest extends TestCase
             ProcessPayrollJob::TIMEOUT_SECONDS,
             $middleware[0]->expiresAfter,
         );
+    }
+
+    public function test_anomaly_detection_finishes_before_the_compute_claim_is_released(): void
+    {
+        $token = 'compute-owner-token';
+        $period = PayrollPeriod::factory()->create();
+        $period->forceFill([
+            'status' => PayrollPeriodStatus::Processing->value,
+            'processing_started_at' => now(),
+            'processing_token' => $token,
+        ])->save();
+        $statusAtDetection = null;
+        $anomalies = Mockery::mock(PayrollAnomalyService::class, [app(SettingsService::class)])->makePartial();
+        $anomalies->shouldReceive('detect')->once()->andReturnUsing(
+            function (PayrollPeriod $candidate) use (&$statusAtDetection): int {
+                $statusAtDetection = $candidate->fresh()->status;
+                return 0;
+            },
+        );
+        $this->instance(PayrollAnomalyService::class, $anomalies);
+
+        app(ProcessPayrollJob::class, [
+            'period' => $period->fresh(),
+            'triggeredBy' => null,
+            'claimToken' => $token,
+        ])->handle(
+            app(PayrollCalculatorService::class),
+            app(PayrollPeriodService::class),
+            app(PayrollProgressTracker::class),
+        );
+
+        $this->assertSame(PayrollPeriodStatus::Processing, $statusAtDetection);
+        $this->assertSame(PayrollPeriodStatus::Draft, $period->fresh()->status);
     }
 }

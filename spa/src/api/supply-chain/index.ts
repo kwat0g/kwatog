@@ -136,6 +136,8 @@ export const deliveriesApi = {
   client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/confirm`, data ?? {}).then((r) => r.data.data),
   retryCoc: (id: string) =>
   client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/retry-coc`).then((r) => r.data.data),
+  retryInvoice: (id: string) =>
+  client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/retry-invoice`).then((r) => r.data.data),
 };
 
 /** ADV7 — Proof of Delivery file management. */

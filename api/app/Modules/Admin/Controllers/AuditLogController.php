@@ -83,8 +83,8 @@ class AuditLogController
                 'ip_address' => $log->ip_address,
                 'user_agent' => $log->user_agent,
                 'created_at' => optional($log->created_at)?->toISOString(),
-                'old_values' => $log->old_values,
-                'new_values' => $log->new_values,
+                'old_values' => AuditDiffBuilder::publicValues((array) ($log->old_values ?? [])),
+                'new_values' => AuditDiffBuilder::publicValues((array) ($log->new_values ?? [])),
                 'diff'       => $diff,
             ],
         ]);

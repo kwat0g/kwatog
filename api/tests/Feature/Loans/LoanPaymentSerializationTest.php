@@ -9,12 +9,19 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
 use App\Modules\Loans\Services\LoanService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class LoanPaymentSerializationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(ChartOfAccountsSeeder::class);
+    }
 
     public function test_manual_payment_reloads_authoritative_state_before_updating_loan(): void
     {

@@ -32,6 +32,7 @@ use App\Modules\MRP\Services\MrpScopeResolver;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
@@ -145,6 +146,47 @@ class MrpAutomationTest extends TestCase
         );
     }
 
+    public function test_stock_change_scope_keeps_partially_delivered_invoiced_orders(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create(['unit_of_measure' => 'pcs']);
+        $bom = Bom::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+        ]);
+        BomItem::create([
+            'bom_id' => $bom->id,
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+            'waste_factor' => '0.00',
+            'sort_order' => 0,
+        ]);
+
+        $open = SalesOrder::factory()->create(['status' => 'invoiced']);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $open->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'quantity_delivered' => 4,
+        ]);
+
+        $shipped = SalesOrder::factory()->create(['status' => 'invoiced']);
+        SalesOrderItem::factory()->create([
+            'sales_order_id' => $shipped->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'quantity_delivered' => 10,
+        ]);
+
+        $this->assertSame(
+            [$open->id],
+            app(MrpScopeResolver::class)->salesOrderIdsForProduct($product->id),
+            'Only the invoiced order with undelivered quantity stays in MRP scope.',
+        );
+    }
+
     public function test_mrp_replan_event_is_supported_by_the_durable_event_codec(): void
     {
         $codec = app(OutboxEventCodec::class);
@@ -212,5 +254,62 @@ class MrpAutomationTest extends TestCase
 
         $this->assertSame('completed', $result->status?->value);
         $this->assertSame(1, count($result->summary['scheduling']['conflicts']));
+    }
+
+    public function test_missing_bom_diagnostic_raises_an_operator_alert(): void
+    {
+        $salesOrder = SalesOrder::factory()->create(['status' => 'confirmed']);
+        $run = MrpRun::create([
+            'run_at' => now(),
+            'triggered_by' => MrpRunTrigger::Automatic->value,
+            'status' => 'partial',
+            'summary' => [
+                'per_sales_order' => [['so_id' => $salesOrder->id, 'plan_no' => 'MRP-MISSING-BOM']],
+            ],
+        ]);
+        MrpPlan::create([
+            'mrp_plan_no' => 'MRP-MISSING-BOM',
+            'sales_order_id' => $salesOrder->id,
+            'mrp_run_id' => $run->id,
+            'version' => 1,
+            'status' => 'active',
+            'generated_by' => $salesOrder->created_by,
+            'generated_at' => now(),
+            'diagnostics' => [[
+                'kind' => 'warning',
+                'type' => 'missing_bom',
+                'product_id' => 1,
+                'message' => 'No active BOM found for this product.',
+            ]],
+        ]);
+
+        $engine = Mockery::mock(MrpEngineService::class);
+        $engine->shouldReceive('runForActiveSalesOrders')->once()->andReturn($run);
+        $planner = Mockery::mock(CapacityPlanningService::class);
+        $alerts = Mockery::mock(AlertEngineService::class);
+        $alerts->shouldReceive('raise')->once()->withArgs(fn (
+            AlertType $type,
+            AlertSeverity $severity,
+            string $title,
+        ): bool => $type === AlertType::MrpDataError
+            && $severity === AlertSeverity::Warning
+            && $title === 'MRP data requires correction');
+
+        (new MrpAutomationService($engine, $planner, $alerts))
+            ->run([$salesOrder->id], MrpRunTrigger::Automatic, null, 'missing_bom_test');
+    }
+
+    public function test_an_mrp_run_cannot_overlap_a_run_holding_the_plant_mutex(): void
+    {
+        $lock = Cache::lock('mrp:plant-run', 1200);
+        $this->assertTrue($lock->get());
+
+        try {
+            $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+            $this->expectExceptionMessage('Another MRP run is already in progress');
+            app(MrpEngineService::class)->runForActiveSalesOrders(MrpRunTrigger::Scheduled);
+        } finally {
+            $lock->release();
+        }
     }
 }

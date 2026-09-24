@@ -22,9 +22,15 @@ class PurchaseRequestItem extends Model
     ];
 
     protected $casts = [
-        'quantity'             => 'decimal:2',
         'estimated_unit_price' => 'decimal:2',
     ];
+
+    public function getQuantityAttribute(mixed $value): string
+    {
+        $quantity = bcadd((string) $value, '0', 3);
+
+        return str_ends_with($quantity, '0') ? bcadd($quantity, '0', 2) : $quantity;
+    }
 
     public function suggestedVendor(): BelongsTo
     {

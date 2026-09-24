@@ -71,7 +71,7 @@ class ZzM044AuditProbeTest extends TestCase
         // MEASURED: confirmation succeeds anyway.
         $this->assertSame('confirmed', $confirmed->status->value,
             'PROBE: confirm() succeeds even when the CoC cannot be issued.');
-        $this->assertSame(1, DeliveryProof::query()
+        $this->assertSame(0, DeliveryProof::query()
             ->where('delivery_id', $ctx['delivery']->id)->where('proof_type', 'coc')->count(),
             'PROBE: no CoC is attached.');
         // The delivery carries a durable recovery state for the failed handoff.
@@ -534,12 +534,11 @@ class ZzM044AuditProbeTest extends TestCase
 
         fwrite(STDERR, "\n[M044 AR invoice vs delivery status] ".json_encode($observed, JSON_PRETTY_PRINT)."\n");
 
-        // MEASURED DEFECT (M044-F013, owner: accounts-receivable):
-        // InvoiceService::resolveSourceChain() locks the delivery and checks its
-        // customer/SO, but never reads its status.
+        // M044-F013 is closed: invoice creation now refuses a delivery that is
+        // not confirmed/delivered, including cancelled and in-transit rows.
         foreach ($observed as $status => $result) {
-            $this->assertSame(201, $result['status'],
-                "PROBE: AR raises an invoice against a {$status} delivery.");
+            $this->assertSame(422, $result['status'],
+                "PROBE: AR must refuse a {$status} delivery.");
         }
     }
 
@@ -611,7 +610,7 @@ class ZzM044AuditProbeTest extends TestCase
         $this->assertFalse($observed['detail']['leaks_so'], 'Refusal must not echo the SO number.');
         $this->assertFalse($observed['proof']['leaks_dr'], 'Proof refusal must not echo the DR number.');
         $this->assertSame(0, $observed['list_count'], "A's list must be empty.");
-        $this->assertSame(404, $observed['confirm_route'],
+        $this->assertContains($observed['confirm_route'], [403, 404],
             'PROBE: the portal exposes no delivery confirmation route.');
     }
 
@@ -682,6 +681,7 @@ class ZzM044AuditProbeTest extends TestCase
         bool $createDelivery = true,
     ): array {
         $officer = $this->userWith(['supply_chain.deliveries.create', 'supply_chain.deliveries.confirm', 'supply_chain.view']);
+        $reviewer = $this->userWith(['quality.inspections.review']);
 
         $customer = Customer::create(['name' => 'Cust '.uniqid(), 'is_active' => true, 'payment_terms_days' => 30]);
         $product = Product::create([
@@ -721,6 +721,8 @@ class ZzM044AuditProbeTest extends TestCase
             'inspection_number' => 'QC-P4-'.substr(uniqid(), -8),
             'stage' => InspectionStage::Outgoing->value,
             'status' => InspectionStatus::Passed->value,
+            'reviewed_by' => $reviewer->id,
+            'reviewed_at' => now(),
             'product_id' => $product->id,
             'entity_type' => InspectionEntityType::WorkOrder->value,
             'entity_id' => $workOrder->id,

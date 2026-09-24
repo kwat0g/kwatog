@@ -4,14 +4,25 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Requests;
 
+use App\Common\Concerns\ResolvesHashIds;
+use App\Modules\Accounting\Models\Account;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
+    use ResolvesHashIds {
+        prepareForValidation as prepareHashIdsForValidation;
+    }
+
     public function authorize(): bool
     {
         return $this->user()?->hasPermission('crm.products.manage') ?? false;
+    }
+
+    protected function hashIdFields(): array
+    {
+        return ['revenue_account_id' => Account::class];
     }
 
     public function rules(): array
@@ -25,12 +36,23 @@ class StoreProductRequest extends FormRequest
                 Rule::exists('uoms', 'code')->whereNull('deleted_at'),
             ],
             'standard_cost'   => ['required', 'decimal:0,2', 'min:0'],
+            'revenue_account_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('accounts', 'id')->where(fn ($query) => $query
+                    ->where('type', 'revenue')
+                    ->where('is_active', true)),
+            ],
             'is_active'       => ['nullable', 'boolean'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
+        $this->prepareHashIdsForValidation();
+        if ($this->has('part_number')) {
+            $this->merge(['part_number' => strtoupper(trim((string) $this->input('part_number')))]);
+        }
         if ($this->has('unit_of_measure')) {
             $this->merge(['unit_of_measure' => strtoupper(trim((string) $this->input('unit_of_measure')))]);
         }

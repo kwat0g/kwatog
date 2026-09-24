@@ -6,6 +6,7 @@ namespace Tests\Feature\Quality;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Production\Models\WorkOrder;
@@ -44,6 +45,8 @@ class CoCEvidenceIntegrityTest extends TestCase
 
     private User $user;
 
+    private User $reviewer;
+
     private Product $product;
 
     private InspectionSpec $spec;
@@ -57,6 +60,13 @@ class CoCEvidenceIntegrityTest extends TestCase
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $reviewRole = Role::firstOrCreate(['slug' => 'quality_reviewer_test'], ['name' => 'Quality Reviewer Test']);
+        $reviewPermission = Permission::firstOrCreate(
+            ['slug' => 'quality.inspections.review'],
+            ['name' => 'Review inspections', 'module' => 'quality'],
+        );
+        $reviewRole->permissions()->syncWithoutDetaching([$reviewPermission->id]);
+        $this->reviewer = User::factory()->create(['role_id' => $reviewRole->id, 'is_active' => true]);
 
         $this->product = Product::create([
             'part_number' => 'COC-'.substr(uniqid(), -6),
@@ -228,7 +238,10 @@ class CoCEvidenceIntegrityTest extends TestCase
         }
         $this->svc->recordMeasurements($inspection, $patch, $this->user);
 
-        return $this->svc->complete($inspection->fresh(), $this->user);
+        $completed = $this->svc->complete($inspection->fresh(), $this->user);
+        return $completed->status === InspectionStatus::AwaitingReview
+            ? $this->svc->review($completed, InspectionStatus::Passed->value, null, $this->reviewer)
+            : $completed;
     }
 
     /**
@@ -256,6 +269,8 @@ class CoCEvidenceIntegrityTest extends TestCase
         $inspection->forceFill([
             'status' => InspectionStatus::Passed->value,
             'completed_at' => now(),
+            'reviewed_by' => $this->reviewer->id,
+            'reviewed_at' => now(),
         ])->save();
 
         return $inspection->fresh();

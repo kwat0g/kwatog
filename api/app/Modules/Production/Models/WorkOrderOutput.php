@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Models;
 
-use App\Common\Traits\HasHashId;
 use App\Common\Traits\HasAuditLog;
+use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WorkOrderOutput extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     public $timestamps = false;
 

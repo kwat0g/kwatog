@@ -51,7 +51,7 @@ export default function LeavesPage() {
  });
  const { data: leaveOptions } = useQuery({
  queryKey: ['leaves', 'requests', 'options'],
- queryFn: leaveRequestsApi.options,
+  queryFn: () => leaveRequestsApi.options(),
  staleTime: 5 * 60 * 1000,
  });
  const statusLabels = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));

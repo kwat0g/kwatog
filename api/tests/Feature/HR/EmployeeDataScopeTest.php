@@ -40,9 +40,9 @@ class EmployeeDataScopeTest extends TestCase
 
     private function employeeIn(Department $d, string $last): Employee
     {
-        $pos = Position::create(['title' => 'Operator', 'department_id' => $d->id]);
+        $pos = Position::firstOrCreate(['title' => 'Operator', 'department_id' => $d->id]);
 
-        return Employee::create([
+        $employee = Employee::create([
             'employee_no' => 'OGM-'.substr(uniqid(), -6),
             'first_name' => 'Test', 'last_name' => $last,
             'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
@@ -51,8 +51,10 @@ class EmployeeDataScopeTest extends TestCase
             'emergency_contact_name' => 'K', 'emergency_contact_phone' => '09181234567',
             'department_id' => $d->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly', 'date_hired' => '2025-01-01',
-            'basic_monthly_salary' => '20000.00', 'status' => 'active',
+            'basic_monthly_salary' => '20000.00',
         ]);
+        $employee->forceFill(['status' => 'active'])->save();
+        return $employee->refresh();
     }
 
     private function userFor(Employee $emp, string $roleSlug): User

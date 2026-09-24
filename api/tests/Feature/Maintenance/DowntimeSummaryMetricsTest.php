@@ -59,4 +59,43 @@ class DowntimeSummaryMetricsTest extends TestCase
         $this->assertNotNull($summary['availability_pct'], 'availability must be computed, not skipped by a negative-window guard');
         $this->assertSame(99.17, $summary['availability_pct']);
     }
+
+    public function test_overlapping_downtime_is_unioned_and_incidents_count_only_when_they_start_in_window(): void
+    {
+        $this->seed(MachineSeeder::class);
+        $machineId = (int) Machine::query()->value('id');
+        $from = Carbon::parse('2026-08-01 00:00:00');
+        $to = Carbon::parse('2026-08-03 00:00:00');
+
+        MachineDowntime::create([
+            'machine_id' => $machineId,
+            'start_time' => '2026-07-31 23:00:00',
+            'end_time' => '2026-08-01 01:00:00',
+            'duration_minutes' => 120,
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Started before the report window',
+        ]);
+        MachineDowntime::create([
+            'machine_id' => $machineId,
+            'start_time' => '2026-08-01 02:00:00',
+            'end_time' => '2026-08-01 04:00:00',
+            'duration_minutes' => 120,
+            'category' => MachineDowntimeCategory::Breakdown->value,
+            'description' => 'Breakdown interval',
+        ]);
+        MachineDowntime::create([
+            'machine_id' => $machineId,
+            'start_time' => '2026-08-01 03:00:00',
+            'end_time' => '2026-08-01 05:00:00',
+            'duration_minutes' => 120,
+            'category' => MachineDowntimeCategory::PlannedMaintenance->value,
+            'description' => 'Overlapping repair interval',
+        ]);
+
+        $summary = app(DowntimeAnalyticsService::class)->summary(null, $from, $to);
+
+        $this->assertSame(240, $summary['total_downtime_minutes']);
+        $this->assertSame(1, $summary['breakdown_count']);
+        $this->assertSame(120.0, $summary['mttr_minutes']);
+    }
 }

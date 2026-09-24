@@ -7,6 +7,7 @@ namespace App\Common\Services;
 use Illuminate\Support\Facades\DB;
 use App\Common\Services\SettingsService;
 use InvalidArgumentException;
+use Carbon\CarbonInterface;
 
 /**
  * Atomic document number generator.
@@ -52,7 +53,7 @@ class DocumentSequenceService
      *   monthly  →  {PREFIX}-{YYYYMM}-{NNNN}
      *   yearly   →  {PREFIX}-{YYYY}-{NNNN}
      */
-    public function generate(string $documentType): string
+    public function generate(string $documentType, ?CarbonInterface $documentDate = null): string
     {
         $config = $this->config();
         if (! isset($config[$documentType])) {
@@ -61,7 +62,7 @@ class DocumentSequenceService
 
         ['prefix' => $prefix, 'reset' => $reset, 'pad' => $pad] = $config[$documentType];
 
-        $now = now();
+        $now = $documentDate ?? now();
         $year = (int) $now->format('Y');
         $month = $reset === 'yearly' ? 0 : (int) $now->format('n');
 
@@ -75,7 +76,10 @@ class DocumentSequenceService
                 ->first();
 
             if (! $row) {
-                DB::table('document_sequences')->insert([
+                // A first-use SELECT cannot lock a row that does not exist.
+                // Let the unique key elect one creator, then lock the row
+                // below so concurrent callers continue safely.
+                DB::table('document_sequences')->insertOrIgnore([
                     'document_type' => $documentType,
                     'prefix'        => $prefix,
                     'year'          => $year,

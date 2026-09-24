@@ -60,7 +60,7 @@ class MachineBreakdownNotificationTest extends TestCase
         $this->assertStringContainsString('MC-001', $data['title']);
         $this->assertStringContainsString('Test Molder', $data['message']);
         $this->assertStringContainsString('Oil leak', $data['message']);
-        $this->assertStringContainsString('/maintenance/machines/', $data['link_to']);
+        $this->assertSame("/mrp/machines/{$machine->hash_id}", $data['link_to']);
     }
 
     public function test_listener_class_exists(): void

@@ -12,7 +12,9 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeSalaryHistory;
 use App\Modules\HR\Models\EmploymentHistory;
 use App\Modules\HR\Models\SalaryAdjustment;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * REC-03 — maker-checker gate for salary changes.
@@ -32,7 +34,10 @@ class SalaryAdjustmentService
 {
     private const WORKFLOW_TYPE = 'salary_adjustment';
 
-    public function __construct(private readonly ApprovalService $approvals) {}
+    public function __construct(
+        private readonly ApprovalService $approvals,
+        private readonly PayrollPeriodService $payrollPeriods,
+    ) {}
 
     /**
      * @param  array{to_basic_monthly_salary?: string|float|null, to_semi_monthly_rate?: string|float|null, effective_date: string, reason?: string|null}  $data
@@ -40,10 +45,20 @@ class SalaryAdjustmentService
     public function request(Employee $employee, array $data, User $requester): SalaryAdjustment
     {
         return DB::transaction(function () use ($employee, $data, $requester): SalaryAdjustment {
+            $lockedEmployee = Employee::query()->lockForUpdate()->findOrFail($employee->id);
+            if (SalaryAdjustment::query()
+                ->where('employee_id', $lockedEmployee->id)
+                ->where('status', SalaryAdjustmentStatus::Pending->value)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'employee_id' => ['This employee already has a salary adjustment awaiting approval.'],
+                ]);
+            }
+
             $adjustment = SalaryAdjustment::create([
-                'employee_id'               => $employee->id,
-                'from_basic_monthly_salary' => $employee->basic_monthly_salary,
-                'from_semi_monthly_rate'           => $employee->semi_monthly_rate,
+                'employee_id'               => $lockedEmployee->id,
+                'from_basic_monthly_salary' => $lockedEmployee->basic_monthly_salary,
+                'from_semi_monthly_rate'           => $lockedEmployee->semi_monthly_rate,
                 'to_basic_monthly_salary'   => $data['to_basic_monthly_salary'] ?? null,
                 'to_semi_monthly_rate'             => $data['to_semi_monthly_rate'] ?? null,
                 'effective_date'            => $data['effective_date'],
@@ -72,7 +87,7 @@ class SalaryAdjustmentService
             $this->approvals->approve($locked, $user, $remarks);
 
             if ($this->approvals->isFullyApproved($locked)) {
-                $this->apply($locked);
+                $this->apply($locked, $user);
             }
 
             return $locked->fresh(['employee', 'requester']);
@@ -95,13 +110,17 @@ class SalaryAdjustmentService
      * Apply the approved pay to the employee, effective-date it in salary history,
      * and log the change. Idempotent: a second call after applied_at is a no-op.
      */
-    private function apply(SalaryAdjustment $adjustment): void
+    private function apply(SalaryAdjustment $adjustment, User $approver): void
     {
         if ($adjustment->applied_at !== null) {
             return;
         }
 
         $employee = $adjustment->employee;
+        $this->payrollPeriods->assertCompensationInputMutable(
+            (int) $employee->id,
+            $adjustment->effective_date,
+        );
         $changes = [];
         if ($adjustment->to_basic_monthly_salary !== null) {
             $changes['basic_monthly_salary'] = $adjustment->to_basic_monthly_salary;
@@ -143,7 +162,7 @@ class SalaryAdjustmentService
                 'semi_monthly_rate'           => $adjustment->to_semi_monthly_rate,
             ],
             'effective_date' => $adjustment->effective_date->toDateString(),
-            'approved_by'    => $adjustment->requested_by,
+            'approved_by'    => $approver->id,
             'created_at'     => now(),
         ]);
 

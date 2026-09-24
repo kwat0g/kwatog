@@ -1,6 +1,6 @@
 import { client } from './client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Asset, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, UpdateAssetData, AssetTransfer, AssetTransferStatus, CreateTransferData } from '@/types/assets';
+import type { Asset, AssetCategory, AssetStatus, CreateAssetData, DisposeAssetData, UpdateAssetData, AssociateAssetData } from '@/types/assets';
 
 export interface AssetListParams extends ListParams {
  category?: AssetCategory;
@@ -16,8 +16,10 @@ export const assetsApi = {
  client.get<ApiSuccess<Asset>>(`/assets/${id}`).then(r => r.data.data),
  create: (data: CreateAssetData) =>
  client.post<ApiSuccess<Asset>>('/assets', data).then(r => r.data.data),
- update: (id: string, data: UpdateAssetData) =>
- client.put<ApiSuccess<Asset>>(`/assets/${id}`, data).then(r => r.data.data),
+  update: (id: string, data: UpdateAssetData) =>
+  client.put<ApiSuccess<Asset>>(`/assets/${id}`, data).then(r => r.data.data),
+  associate: (id: string, data: AssociateAssetData) =>
+  client.patch<ApiSuccess<Asset>>(`/assets/${id}/association`, data).then(r => r.data.data),
  destroy: (id: string) =>
  client.delete(`/assets/${id}`),
  restore: (id: string) =>
@@ -41,24 +43,4 @@ export const depreciationApi = {
  client.get('/asset-depreciations', { params }).then(r => r.data),
  runMonth: (year: number, month: number, backfill = false) =>
   client.post('/asset-depreciations/run', { year, month, backfill }).then(r => r.data),
-};
-
-/* ── Asset Transfers ── */
-
-export interface AssetTransferListParams extends ListParams {
- status?: AssetTransferStatus;
-}
-
-export const assetTransfersApi = {
- options: () => client.get<ApiSuccess<{ statuses: Array<{ value: AssetTransferStatus; label: string }> }>>('/asset-transfers/options').then(r => r.data.data),
- list: (params?: AssetTransferListParams) =>
- client.get<PaginatedResponse<AssetTransfer>>('/asset-transfers', { params }).then(r => r.data),
- show: (id: string) =>
- client.get<ApiSuccess<AssetTransfer>>(`/asset-transfers/${id}`).then(r => r.data.data),
- create: (data: CreateTransferData) =>
- client.post<ApiSuccess<AssetTransfer>>('/asset-transfers', data).then(r => r.data.data),
- approve: (id: string) =>
- client.post<ApiSuccess<AssetTransfer>>(`/asset-transfers/${id}/approve`).then(r => r.data.data),
- reject: (id: string) =>
- client.post<ApiSuccess<AssetTransfer>>(`/asset-transfers/${id}/reject`).then(r => r.data.data),
 };

@@ -55,10 +55,14 @@ class AuthService
                 ->first();
 
             if (! $user) {
+                Hash::check($password, (string) config('auth.dummy_password_hash'));
+
                 return ['status' => 'unknown'];
             }
 
             if (! $user->is_active) {
+                Hash::check($password, (string) config('auth.dummy_password_hash'));
+
                 return ['status' => 'inactive', 'user' => $user];
             }
 
@@ -192,6 +196,12 @@ class AuthService
                 throw ValidationException::withMessages(['current_password' => 'Current password is incorrect.']);
             }
 
+            if (Hash::check($new, $locked->password)) {
+                throw ValidationException::withMessages([
+                    'new_password' => 'Your new password must be different from your current password.',
+                ]);
+            }
+
             $historyDepth = $this->settings->requiredInt('security.password_history_depth', 0);
             $recent = $locked->passwordHistory()->limit($historyDepth)->pluck('password_hash');
             foreach ($recent as $oldHash) {
@@ -220,9 +230,10 @@ class AuthService
                 ->limit($historyDepth)
                 ->pluck('id')
                 ->all();
-            if (! empty($keepIds)) {
-                $locked->passwordHistory()->whereNotIn('id', $keepIds)->delete();
-            }
+            $historyQuery = $locked->passwordHistory();
+            $keepIds === []
+                ? $historyQuery->delete()
+                : $historyQuery->whereNotIn('id', $keepIds)->delete();
 
             $this->sessions->revokeOtherSessions(
                 $locked,

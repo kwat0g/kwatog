@@ -111,7 +111,8 @@ class SupplierReturnShipNotificationTest extends TestCase
         $vendor   = Vendor::factory()->create(['created_by' => null]);
         $item     = Item::factory()->create();
         $location = WarehouseLocation::factory()->create();
-        $expense  = Account::query()->where('type', 'expense')->firstOrFail();
+        // Use a leaf expense account (5010 = Direct Materials), not a header account (5000 = COGS).
+        $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
         $po = PurchaseOrder::factory()->create([
             'vendor_id'    => $vendor->id,

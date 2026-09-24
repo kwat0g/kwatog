@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Controllers;
 
+use App\Common\Rules\StrongPassword;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Resources\UserResource;
 use App\Common\Services\SettingsService;
@@ -32,10 +33,10 @@ class AuthUserController
     {
         return response()->json(['data' => [
             'minimum_length' => $this->settings->requiredInt('security.password_min_length', 1),
-            'requires_uppercase' => true,
-            'requires_lowercase' => true,
-            'requires_digit' => true,
-            'requires_special' => true,
+            'requires_uppercase' => StrongPassword::REQUIRE_UPPERCASE,
+            'requires_lowercase' => StrongPassword::REQUIRE_LOWERCASE,
+            'requires_digit' => StrongPassword::REQUIRE_DIGIT,
+            'requires_special' => StrongPassword::REQUIRE_SPECIAL,
         ]]);
     }
 }

@@ -8,7 +8,6 @@ use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Services\InvoiceService;
-use App\Modules\Accounting\Services\OfficialReceiptService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -113,21 +112,4 @@ class InvoiceBirFieldsTest extends TestCase
         $this->assertSame('10640.00', (string) $inv->total_amount);
     }
 
-    public function test_official_receipt_issued_for_invoice(): void
-    {
-        $svc   = app(InvoiceService::class);
-        $orSvc = app(OfficialReceiptService::class);
-        $user  = $this->user();
-
-        $inv = $this->makeInvoice($svc, $user, [
-            'vat_classification' => VatClassification::Vatable->value,
-        ]);
-
-        $or = $orSvc->issueForInvoice($inv, '11200.00', $user);
-
-        $this->assertStringStartsWith('OR-', $or->or_number);
-        $this->assertSame('11200.00', (string) $or->amount);
-        $this->assertSame($inv->id, $or->invoice_id);
-        $this->assertDatabaseHas('official_receipts', ['or_number' => $or->or_number]);
-    }
 }

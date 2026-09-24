@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
-use App\Modules\Inventory\Enums\StockCountSessionStatus;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\OutboxService;
+use App\Modules\Accounting\Services\SourceReferenceRegistry;
 use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Events\StockMovementCompleted;
@@ -17,9 +20,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
-use App\Modules\Accounting\Services\SourceReferenceRegistry;
-use App\Common\Exceptions\BusinessRuleException;
-use App\Common\Services\OutboxService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -60,12 +61,11 @@ class StockMovementService
         // transaction back, so no partial ledger row survives a transient
         // concurrency failure.
         return DB::transaction(function () use ($in) {
-            if (! $in->bypassCountFreeze) {
-                $this->assertLocationsNotFrozen([
-                    $in->fromLocationId,
-                    $in->toLocationId,
-                ]);
-            }
+            $this->assertLocationsNotFrozen(
+                [$in->fromLocationId, $in->toLocationId],
+                ! $in->bypassCountFreeze,
+            );
+            $this->assertMovementLocationsUsable($in);
 
             // Lock every affected (item, location) row in one deterministic
             // location-id order. A->B and B->A therefore acquire the same pair
@@ -107,10 +107,20 @@ class StockMovementService
 
             $lotNumber = $in->lotNumber;
             $expiryDate = $in->expiryDate;
-            if ($in->type === StockMovementType::Transfer && $lotNumber === null && $in->fromLocationId !== null) {
+            if ($lotNumber === null && $in->fromLocationId !== null) {
                 $lot = $this->locationSummary->preferredLot($in->itemId, $in->fromLocationId);
                 $lotNumber = $lot['lot_number'] ?? null;
                 $expiryDate = $lot['expiry_date'] ?? null;
+            }
+
+            if ($fromLevel !== null && $lotNumber !== null) {
+                $lotAvailable = $this->locationSummary->lotQuantity($in->itemId, (int) $in->fromLocationId, $lotNumber);
+                if (bccomp($lotAvailable, $in->quantity, 3) < 0) {
+                    throw new InsufficientStockException(
+                        "Insufficient stock in lot {$lotNumber} at location {$in->fromLocationId}: "
+                        ."needed {$in->quantity}, available {$lotAvailable}."
+                    );
+                }
             }
 
             // ── Issue side: validate availability and decrement source.
@@ -146,20 +156,20 @@ class StockMovementService
 
             // ── Persist the movement record.
             $movement = StockMovement::create([
-                'item_id'          => $in->itemId,
+                'item_id' => $in->itemId,
                 'from_location_id' => $in->fromLocationId,
-                'to_location_id'   => $in->toLocationId,
-                'movement_type'    => $in->type,
-                'quantity'         => $in->quantity,
-                'unit_cost'        => $unitCost,
-                'total_cost'       => $this->round2($totalCost),
-                'reference_type'   => $in->referenceType,
-                'reference_id'     => $in->referenceId,
-                'lot_number'       => $lotNumber,
-                'expiry_date'      => $expiryDate,
-                'remarks'          => $in->remarks,
-                'created_by'       => $in->createdBy,
-                'created_at'       => now(),
+                'to_location_id' => $in->toLocationId,
+                'movement_type' => $in->type,
+                'quantity' => $in->quantity,
+                'unit_cost' => $unitCost,
+                'total_cost' => $this->round2($totalCost),
+                'reference_type' => $in->referenceType,
+                'reference_id' => $in->referenceId,
+                'lot_number' => $lotNumber,
+                'expiry_date' => $expiryDate,
+                'remarks' => $in->remarks,
+                'created_by' => $in->createdBy,
+                'created_at' => now(),
             ]);
 
             // Record the stock-ledger event atomically. Publication waits for
@@ -231,14 +241,14 @@ class StockMovementService
         if (! $level) {
             // Insert (race-safe via unique constraint) then re-lock.
             StockLevel::query()->insertOrIgnore([
-                'item_id'           => $itemId,
-                'location_id'       => $locationId,
-                'quantity'          => 0,
+                'item_id' => $itemId,
+                'location_id' => $locationId,
+                'quantity' => 0,
                 'reserved_quantity' => 0,
                 'weighted_avg_cost' => 0,
-                'lock_version'      => 0,
-                'created_at'        => now(),
-                'updated_at'        => now(),
+                'lock_version' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
             $level = StockLevel::query()
                 ->where('item_id', $itemId)
@@ -246,6 +256,7 @@ class StockMovementService
                 ->lockForUpdate()
                 ->firstOrFail();
         }
+
         return $level;
     }
 
@@ -279,7 +290,7 @@ class StockMovementService
 
         // Receipts require a destination; issues require a source.
         $hasFrom = $in->fromLocationId !== null;
-        $hasTo   = $in->toLocationId !== null;
+        $hasTo = $in->toLocationId !== null;
 
         if ($in->type === StockMovementType::Transfer) {
             if (! $hasFrom || ! $hasTo) {
@@ -288,6 +299,7 @@ class StockMovementService
             if ($in->fromLocationId === $in->toLocationId) {
                 throw new InvalidMovementException('Transfer source and destination must differ.');
             }
+
             return;
         }
 
@@ -314,12 +326,8 @@ class StockMovementService
             return;
         }
 
-        $zoneType = WarehouseLocation::query()
-            ->where('id', $fromLocationId)
-            ->with('zone:id,zone_type')
-            ->first()
-            ?->zone
-            ?->zone_type;
+        $location = $this->activeLocation($fromLocationId);
+        $zoneType = $location->zone?->zone_type;
 
         $zoneValue = $zoneType instanceof WarehouseZoneType ? $zoneType->value : (string) $zoneType;
         if (in_array($zoneValue, [WarehouseZoneType::Quarantine->value, WarehouseZoneType::Scrap->value], true)) {
@@ -329,8 +337,36 @@ class StockMovementService
         }
     }
 
+    private function assertMovementLocationsUsable(StockMovementInput $input): void
+    {
+        if ($input->toLocationId !== null) {
+            $destination = $this->activeLocation($input->toLocationId);
+            if ($destination->is_blocked && $input->type->isReceipt()) {
+                throw new BusinessRuleException("Warehouse location {$input->toLocationId} is blocked for receiving.");
+            }
+        }
+
+        if ($input->fromLocationId !== null) {
+            $this->activeLocation($input->fromLocationId);
+        }
+    }
+
+    private function activeLocation(int $locationId): WarehouseLocation
+    {
+        $location = WarehouseLocation::query()
+            ->with('zone.warehouse')
+            ->whereKey($locationId)
+            ->first();
+
+        if (! $location || ! $location->is_active || ! $location->zone?->warehouse?->is_active) {
+            throw new BusinessRuleException("Warehouse location {$locationId} is missing or inactive.");
+        }
+
+        return $location;
+    }
+
     /** @param array<int, int|null> $locationIds */
-    private function assertLocationsNotFrozen(array $locationIds): void
+    private function assertLocationsNotFrozen(array $locationIds, bool $checkFreeze = true): void
     {
         $ids = array_values(array_unique(array_filter($locationIds)));
         if ($ids === []) {
@@ -342,6 +378,10 @@ class StockMovementService
             ->orderBy('id')
             ->lockForUpdate()
             ->get(['id', 'zone_id']);
+
+        if (! $checkFreeze) {
+            return;
+        }
 
         foreach ($locations as $location) {
             $session = StockCountSession::query()
@@ -388,6 +428,7 @@ class StockMovementService
 
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
             $this->assertLocationsNotFrozen([$locationId]);
+            $this->activeLocation($locationId);
             // F-02 — never reserve stock held in quarantine/scrap zones.
             $zoneType = WarehouseLocation::query()
                 ->where('id', $locationId)
@@ -426,7 +467,9 @@ class StockMovementService
             $this->assertLocationsNotFrozen([$locationId]);
             $level = $this->lockOrCreate($itemId, $locationId);
             $rem = bcsub((string) $level->reserved_quantity, $quantity, 3);
-            if (bccomp($rem, '0', 3) < 0) $rem = '0';
+            if (bccomp($rem, '0', 3) < 0) {
+                $rem = '0';
+            }
             $level->reserved_quantity = $rem;
             $level->lock_version++;
             $level->save();
@@ -452,6 +495,7 @@ class StockMovementService
         $abs = ltrim($v, '-');
         $isNeg = strlen($v) > strlen($abs);
         $r = bcadd($abs, '0.005', 2);
+
         return $isNeg ? '-'.$r : $r;
     }
 
@@ -460,6 +504,7 @@ class StockMovementService
         $abs = ltrim($v, '-');
         $isNeg = strlen($v) > strlen($abs);
         $r = bcadd($abs, '0.00005', 4);
+
         return $isNeg ? '-'.$r : $r;
     }
 
@@ -491,9 +536,9 @@ class StockMovementService
      * OGAMI-012 — lot ledger: every movement carrying a given lot for an item,
      * oldest first. Lets a supplier lot be traced GRN-receipt → material-issue.
      *
-     * @return \Illuminate\Support\Collection<int, StockMovement>
+     * @return Collection<int, StockMovement>
      */
-    public function lotHistory(int $itemId, string $lotNumber): \Illuminate\Support\Collection
+    public function lotHistory(int $itemId, string $lotNumber): Collection
     {
         return StockMovement::query()
             ->where('item_id', $itemId)

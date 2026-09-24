@@ -51,10 +51,19 @@ class ApprovalBoardService
      *   meta: array<string, int|bool>,
      * }
      */
-    public function board(User $user, ?string $kindFilter = null, int $pendingLimit = 100, int $historyLimit = 50): array
+    public function board(
+        User $user,
+        ?string $kindFilter = null,
+        int $pendingLimit = 100,
+        int $historyLimit = 50,
+        int $pendingPage = 1,
+        int $historyPage = 1,
+    ): array
     {
         $pendingLimit = max(1, min($pendingLimit, 500));
         $historyLimit = max(1, min($historyLimit, 500));
+        $pendingPage = max(1, $pendingPage);
+        $historyPage = max(1, $historyPage);
         // Delegated slugs kept separately from the merged list: only a
         // DELEGATED step earns the masked fallback card below. A user's own
         // role being an out-of-scope step means the record is another
@@ -84,7 +93,10 @@ class ApprovalBoardService
             $pendingQuery->whereIn('approvable_type', $types);
         }
 
-        $pendingRows = $pendingQuery->limit($pendingLimit + 1)->get();
+        $pendingRows = $pendingQuery
+            ->offset(($pendingPage - 1) * $pendingLimit)
+            ->limit($pendingLimit + 1)
+            ->get();
         $pendingTruncated = $pendingRows->count() > $pendingLimit;
         $pending = $pendingRows->take($pendingLimit)->values();
 
@@ -108,6 +120,7 @@ class ApprovalBoardService
             $actionedQuery->whereIn('approvable_type', $types);
         }
         $actionedRows = $actionedQuery
+            ->offset(($historyPage - 1) * ($historyLimit * 4))
             ->limit(($historyLimit * 4) + 1)
             ->get();
         $actionedTruncated = $actionedRows->count() > ($historyLimit * 4);
@@ -268,8 +281,12 @@ class ApprovalBoardService
             'meta' => [
                 'pending_limit' => $pendingLimit,
                 'history_limit' => $historyLimit,
+                'pending_page' => $pendingPage,
+                'history_page' => $historyPage,
                 'pending_truncated' => $pendingTruncated,
                 'history_truncated' => $actionedTruncated,
+                'pending_has_more' => $pendingTruncated,
+                'history_has_more' => $actionedTruncated,
             ],
         ];
     }

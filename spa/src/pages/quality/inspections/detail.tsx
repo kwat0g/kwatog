@@ -32,11 +32,14 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Input } from '@/components/ui/Input';
 import { SpecToleranceBar } from '@/components/ui/SpecToleranceBar';
 import { cn } from '@/lib/cn';
+import { formatDateTime } from '@/lib/formatDate';
+import { IncomingLotChecklist } from './components/IncomingLotChecklist';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
   {
     draft: 'neutral',
     in_progress: 'info',
+    awaiting_review: 'warning',
     passed: 'success',
     failed: 'danger',
     cancelled: 'neutral',
@@ -65,6 +68,10 @@ export default function InspectionDetailPage() {
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmReviewPass, setConfirmReviewPass] = useState(false);
+  // The decision the reason dialog will submit — set by the button clicked,
+  // not inferred from proposed_result (which made "Fail inspection" submit a pass).
+  const [reasonDecision, setReasonDecision] = useState<'passed' | 'failed' | null>(null);
   const [cocLoading, setCocLoading] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -173,7 +180,11 @@ export default function InspectionDetailPage() {
   const complete = useMutation({
     mutationFn: () => inspectionsApi.complete(id),
     onSuccess: (insp) => {
-      toast.success(`Inspection ${insp.status === 'passed' ? 'PASSED' : 'FAILED'}`);
+      toast.success(
+        insp.status === 'awaiting_review'
+          ? 'Inspection submitted for checker review.'
+          : `Inspection ${insp.status === 'passed' ? 'PASSED' : 'FAILED'}`,
+      );
       qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
       setConfirmComplete(false);
     },
@@ -192,6 +203,19 @@ export default function InspectionDetailPage() {
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Could not cancel');
     },
+  });
+
+  const review = useMutation({
+    mutationFn: ({ decision, remarks }: { decision: 'passed' | 'failed'; remarks?: string }) =>
+      inspectionsApi.review(id, decision, remarks),
+    onSuccess: (insp) => {
+      toast.success(`Inspection ${insp.status === 'passed' ? 'approved' : 'failed'} by checker.`);
+      qc.invalidateQueries({ queryKey: ['quality', 'inspections', id] });
+      setConfirmReviewPass(false);
+      setReasonDecision(null);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Could not review inspection.'),
   });
 
   if (isLoading && !data) {
@@ -222,7 +246,7 @@ export default function InspectionDetailPage() {
     .map(Number)
     .sort((a, b) => a - b);
 
-  const isTerminal = ['passed', 'failed', 'cancelled'].includes(data.status);
+  const isTerminal = ['awaiting_review', 'passed', 'failed', 'cancelled'].includes(data.status);
   const dirtyCount = Object.values(drafts).filter((d) => d.dirty).length;
   const unresolvedCount = (data.measurements ?? []).filter((m) => m.is_pass === null).length;
 
@@ -252,6 +276,9 @@ export default function InspectionDetailPage() {
           <div className="flex items-center gap-2">
             {!isTerminal && can('quality.inspections.manage') && (
               <>
+                {/* The lot checklist carries its own Save draft / Submit result. */}
+                {data.inspection_mode !== 'lot_checklist' && (
+                <>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -276,6 +303,8 @@ export default function InspectionDetailPage() {
                 >
                   Complete
                 </Button>
+                </>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -284,6 +313,39 @@ export default function InspectionDetailPage() {
                 >
                   Cancel
                 </Button>
+              </>
+            )}
+            {/* can_review also excludes the maker — the service refuses self-review. */}
+            {data.can_review && (
+              <>
+                {data.proposed_result === 'passed' ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<LuCheck size={14} />}
+                    onClick={() => setConfirmReviewPass(true)}
+                  >
+                    Approve pass
+                  </Button>
+                ) : (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<LuBan size={14} />}
+                    onClick={() => setReasonDecision('failed')}
+                  >
+                    Confirm failure
+                  </Button>
+                )}
+                {data.proposed_result === 'passed' ? (
+                  <Button variant="danger" size="sm" onClick={() => setReasonDecision('failed')}>
+                    Fail inspection
+                  </Button>
+                ) : (
+                  <Button variant="primary" size="sm" onClick={() => setReasonDecision('passed')}>
+                    Pass as override
+                  </Button>
+                )}
               </>
             )}
             {/* CoC available for passed outgoing inspections */}
@@ -319,194 +381,214 @@ export default function InspectionDetailPage() {
 
       <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
-          <Panel title="Sample plan">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
-                <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
-                <dd className="font-mono tabular-nums">{data.batch_quantity}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Sample</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.sample_size}
-                  {data.aql_code ? (
-                    <span className="ml-2 text-muted">[{data.aql_code}]</span>
-                  ) : null}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Ac / Re</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.accept_count} / {data.reject_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
-                <dd
-                  className={`font-mono tabular-nums ${
-                    data.defect_count > data.accept_count ? 'text-danger-fg' : ''
-                  }`}
-                >
-                  {data.defect_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Inspector</dt>
-                <dd>{data.inspector?.name ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.started_at?.slice(0, 16).replace('T', ' ') ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
-                <dd className="font-mono tabular-nums">
-                  {data.completed_at?.slice(0, 16).replace('T', ' ') ?? '—'}
-                </dd>
-              </div>
-            </dl>
-          </Panel>
+          {/* Lot checklist mode */}
+          {data.inspection_mode === 'lot_checklist' ? (
+            <IncomingLotChecklist inspection={data} isTerminal={isTerminal} />
+          ) : (
+            <>
+              <Panel title="Sample plan">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
+                    <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
+                    <dd className="font-mono tabular-nums">{data.batch_quantity}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Sample</dt>
+                    <dd className="font-mono tabular-nums">
+                      {data.sample_size}
+                      {data.aql_code ? (
+                        <span className="ml-2 text-muted">[{data.aql_code}]</span>
+                      ) : null}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Ac / Re</dt>
+                    <dd className="font-mono tabular-nums">
+                      {data.accept_count} / {data.reject_count}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
+                    <dd
+                      className={`font-mono tabular-nums ${
+                        data.defect_count > data.accept_count ? 'text-danger-fg' : ''
+                      }`}
+                    >
+                      {data.defect_count}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Inspector</dt>
+                    <dd>{data.inspector?.name ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
+                    <dd className="font-mono tabular-nums">
+                      {formatDateTime(data.started_at)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
+                    <dd className="font-mono tabular-nums">
+                      {formatDateTime(data.completed_at)}
+                    </dd>
+                  </div>
+                </dl>
+              </Panel>
 
-          {sampleIndices.map((idx) => (
-            <Panel
-              key={idx}
-              title={`Sample #${idx}`}
-              meta={`${grouped[idx].length} parameter${grouped[idx].length === 1 ? '' : 's'}`}
-              noPadding
-            >
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Parameter</Th>
-                    <Th align="right">Nominal</Th>
-                    <Th align="right">Tolerance</Th>
-                    <Th align="right">Measured</Th>
-                    <Th align="center">Pass</Th>
-                    <Th>Notes</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {grouped[idx].map((m) => {
-                    const draft = drafts[m.id];
-                    if (!draft) return null;
-                    const hasTolerance = isNumericMeasurement(m);
-                    const numericTol = hasTolerance
-                      ? `${m.tolerance_min ?? '−∞'} … ${m.tolerance_max ?? '+∞'}`
-                      : '—';
-                    return (
-                      <tr key={m.id} className={trCls}>
-                        <Td>
-                          <div className="flex items-center gap-2">
-                            <span>{m.parameter_name}</span>
-                            {m.is_critical && <Chip variant="danger">Critical</Chip>}
-                            <span className="text-2xs uppercase text-muted">
-                              {m.parameter_type_label ?? m.parameter_type}
-                            </span>
-                          </div>
-                        </Td>
-                        <Td align="right" mono>
-                          {m.nominal_value ?? '—'} {m.unit_of_measure ?? ''}
-                        </Td>
-                        <Td align="right" mono>
-                          {numericTol}
-                        </Td>
-                        <Td align="right" mono>
-                          {hasTolerance ? (
-                            <div className="flex flex-col items-end gap-1">
+              {sampleIndices.map((idx) => (
+                <Panel
+                  key={idx}
+                  title={`Sample #${idx}`}
+                  meta={`${grouped[idx].length} parameter${grouped[idx].length === 1 ? '' : 's'}`}
+                  noPadding
+                >
+                  <table className={tableCls}>
+                    <thead>
+                      <tr className={theadTrCls}>
+                        <Th>Parameter</Th>
+                        <Th align="right">Nominal</Th>
+                        <Th align="right">Tolerance</Th>
+                        <Th align="right">Measured</Th>
+                        <Th align="center">Pass</Th>
+                        <Th>Notes</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grouped[idx].map((m) => {
+                        const draft = drafts[m.id];
+                        if (!draft) return null;
+                        const hasTolerance = isNumericMeasurement(m);
+                        const numericTol = hasTolerance
+                          ? `${m.tolerance_min ?? '−∞'} … ${m.tolerance_max ?? '+∞'}`
+                          : '—';
+                        return (
+                          <tr key={m.id} className={trCls}>
+                            <Td>
+                              <div className="flex items-center gap-2">
+                                <span>{m.parameter_name}</span>
+                                {m.is_critical && <Chip variant="danger">Critical</Chip>}
+                                <span className="text-2xs uppercase text-muted">
+                                  {m.parameter_type_label ?? m.parameter_type}
+                                </span>
+                              </div>
+                            </Td>
+                            <Td align="right" mono>
+                              {m.nominal_value ?? '—'} {m.unit_of_measure ?? ''}
+                            </Td>
+                            <Td align="right" mono>
+                              {numericTol}
+                            </Td>
+                            <Td align="right" mono>
+                              {hasTolerance ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <Input
+                                    fieldSize="sm"
+                                    type="number"
+                                    step="any"
+                                    disabled={isTerminal}
+                                    aria-label={`Measured value — ${m.parameter_name}, sample ${m.sample_index}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
+                                    containerClassName="inline-flex w-24"
+                                    className="text-right font-mono tabular-nums"
+                                    value={draft.measured_value}
+                                    onChange={(e) =>
+                                      updateDraft(m.id, { measured_value: e.target.value })
+                                    }
+                                  />
+                                  <SpecToleranceBar
+                                    nominal={m.nominal_value}
+                                    min={m.tolerance_min}
+                                    max={m.tolerance_max}
+                                    value={draft.measured_value}
+                                    unit={m.unit_of_measure ?? ''}
+                                    className="mt-0.5"
+                                  />
+                                </div>
+                              ) : (
+                                <span className="text-muted text-2xs">Manual result</span>
+                              )}
+                            </Td>
+                            <Td align="center">
+                              {!hasTolerance ? (
+                                <Select
+                                  fieldSize="sm"
+                                  containerClassName="inline-flex w-24"
+                                  aria-label={`${m.parameter_type_label ?? m.parameter_type} result`}
+                                  disabled={isTerminal}
+                                  value={
+                                    draft.is_pass === null ? '' : draft.is_pass ? 'pass' : 'fail'
+                                  }
+                                  onChange={(e) =>
+                                    updateDraft(m.id, {
+                                      is_pass:
+                                        e.target.value === '' ? null : e.target.value === 'pass',
+                                    })
+                                  }
+                                >
+                                  <option value="">—</option>
+                                  {(inspectionOptions?.measurement_results ?? []).map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </Select>
+                              ) : draft.is_pass === null ? (
+                                <span className="text-muted text-2xs">—</span>
+                              ) : draft.is_pass ? (
+                                <Chip variant="success">
+                                  {measurementResultLabels.get('pass') ?? 'Pass'}
+                                </Chip>
+                              ) : (
+                                <Chip variant="danger">
+                                  {measurementResultLabels.get('fail') ?? 'Fail'}
+                                </Chip>
+                              )}
+                            </Td>
+                            <Td>
                               <Input
                                 fieldSize="sm"
-                                type="number"
-                                step="any"
+                                type="text"
                                 disabled={isTerminal}
-                                aria-label={`Measured value — ${m.parameter_name}, sample ${m.sample_index}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
-                                containerClassName="inline-flex w-24"
-                                className="text-right font-mono tabular-nums"
-                                value={draft.measured_value}
-                                onChange={(e) =>
-                                  updateDraft(m.id, { measured_value: e.target.value })
-                                }
+                                aria-label={`${m.parameter_name} notes`}
+                                containerClassName="inline-flex min-w-32"
+                                value={draft.notes}
+                                onChange={(e) => updateDraft(m.id, { notes: e.target.value })}
                               />
-                              <SpecToleranceBar
-                                nominal={m.nominal_value}
-                                min={m.tolerance_min}
-                                max={m.tolerance_max}
-                                value={draft.measured_value}
-                                unit={m.unit_of_measure ?? ''}
-                                className="mt-0.5"
-                              />
-                            </div>
-                          ) : (
-                            <span className="text-muted text-2xs">Manual result</span>
-                          )}
-                        </Td>
-                        <Td align="center">
-                          {!hasTolerance ? (
-                            <Select
-                              fieldSize="sm"
-                              containerClassName="inline-flex w-24"
-                              aria-label={`${m.parameter_type_label ?? m.parameter_type} result`}
-                              disabled={isTerminal}
-                              value={draft.is_pass === null ? '' : draft.is_pass ? 'pass' : 'fail'}
-                              onChange={(e) =>
-                                updateDraft(m.id, {
-                                  is_pass: e.target.value === '' ? null : e.target.value === 'pass',
-                                })
-                              }
-                            >
-                              <option value="">—</option>
-                              {(inspectionOptions?.measurement_results ?? []).map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </Select>
-                          ) : draft.is_pass === null ? (
-                            <span className="text-muted text-2xs">—</span>
-                          ) : draft.is_pass ? (
-                            <Chip variant="success">
-                              {measurementResultLabels.get('pass') ?? 'Pass'}
-                            </Chip>
-                          ) : (
-                            <Chip variant="danger">
-                              {measurementResultLabels.get('fail') ?? 'Fail'}
-                            </Chip>
-                          )}
-                        </Td>
-                        <Td>
-                          <Input
-                            fieldSize="sm"
-                            type="text"
-                            disabled={isTerminal}
-                            aria-label={`${m.parameter_name} notes`}
-                            containerClassName="inline-flex min-w-32"
-                            value={draft.notes}
-                            onChange={(e) => updateDraft(m.id, { notes: e.target.value })}
-                          />
-                        </Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Panel>
-          ))}
+                            </Td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </Panel>
+              ))}
+            </>
+          )}
         </div>
 
         <div className="space-y-4">
           <Panel title="Status">
-            {isTerminal ? (
+            {data.status === 'awaiting_review' ? (
+              <p className="text-sm text-muted">
+                Submitted — proposed <strong>{data.proposed_result ?? '—'}</strong>. Waiting for a
+                checker other than the inspector to approve or overturn the result.
+              </p>
+            ) : isTerminal ? (
               <p className="text-sm">
                 Inspection finalised on{' '}
                 <span className="font-mono tabular-nums">
-                  {data.completed_at?.slice(0, 16).replace('T', ' ')}
+                  {formatDateTime(data.completed_at)}
                 </span>
                 .
+              </p>
+            ) : data.inspection_mode === 'lot_checklist' ? (
+              <p className="text-sm text-muted">
+                Tick each checklist item that is OK, enter the defective pieces found in the
+                sample, then submit the result.
               </p>
             ) : unresolvedCount > 0 ? (
               <p className="text-sm text-muted">
@@ -735,6 +817,39 @@ export default function InspectionDetailPage() {
         onConfirm={(reason) => cancel.mutate(reason)}
         onClose={() => setConfirmCancel(false)}
         pending={cancel.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmReviewPass}
+        title="Approve inspection pass?"
+        description="This checker action releases the high-risk inspection result to the downstream quality chain."
+        confirmLabel="Approve pass"
+        onConfirm={() => review.mutate({ decision: 'passed' })}
+        onClose={() => setConfirmReviewPass(false)}
+        pending={review.isPending}
+      />
+      <ReasonDialog
+        isOpen={reasonDecision !== null}
+        title={
+          reasonDecision === 'passed'
+            ? 'Override inspection to pass?'
+            : data.proposed_result === 'failed'
+              ? 'Confirm inspection failure?'
+              : 'Override inspection to fail?'
+        }
+        description="Record the checker reason. This decision is permanent once the inspection is released."
+        confirmLabel={
+          reasonDecision === 'passed'
+            ? 'Pass as override'
+            : data.proposed_result === 'failed'
+              ? 'Confirm failure'
+              : 'Fail inspection'
+        }
+        variant={reasonDecision === 'passed' ? 'warning' : 'danger'}
+        onConfirm={(remarks) => {
+          if (reasonDecision) review.mutate({ decision: reasonDecision, remarks });
+        }}
+        onClose={() => setReasonDecision(null)}
+        pending={review.isPending}
       />
     </div>
   );

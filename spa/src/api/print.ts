@@ -1,6 +1,7 @@
 /** Sprint 8 — Task 76. Bulk-print helper. */
 import { client } from './client';
 import toast from 'react-hot-toast';
+import { localIsoDate } from '@/lib/formatDate';
 
 export type BulkPrintType = 'purchase_order' | 'bill' | 'invoice';
 
@@ -24,7 +25,7 @@ export async function bulkPrint(type: BulkPrintType, ids: string[]): Promise<boo
  const url = window.URL.createObjectURL(blob);
  const a = document.createElement('a');
  a.href = url;
- a.download = `bulk-${type}-${new Date().toISOString().slice(0, 10)}.pdf`;
+ a.download = `bulk-${type}-${localIsoDate()}.pdf`;
  document.body.appendChild(a);
  a.click();
  a.remove();

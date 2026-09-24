@@ -10,6 +10,8 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Enums\ProfileUpdateStatus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * U3 / Task SS2 — captures employee-initiated profile change requests.
@@ -54,8 +56,7 @@ class ProfileUpdateRequestService
      */
     public function submit(Employee $employee, User $requester, array $changes, ?string $note = null): ProfileUpdateRequest
     {
-        $allowed = array_merge(self::ALLOWED_FIELDS, self::FINANCE_FIELDS);
-        $filtered = array_intersect_key($changes, array_flip($allowed));
+        $filtered = $this->validatedChanges($changes);
         abort_if(empty($filtered), 422, 'No allowed fields provided.');
 
         $requiresFinance = (bool) array_intersect_key($filtered, array_flip(self::FINANCE_FIELDS));
@@ -121,6 +122,7 @@ class ProfileUpdateRequestService
      */
     public function approve(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
+        $this->assertVisibleToReviewer($request, $reviewer);
         abort_unless($request->status === ProfileUpdateStatus::Pending->value, 422, 'Request is not awaiting HR review.');
         // REC-02 — a reviewer cannot approve a request they submitted.
         $this->assertNotSelfReviewing($request, $reviewer);
@@ -155,6 +157,7 @@ class ProfileUpdateRequestService
      */
     public function financeApprove(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
+        $this->assertVisibleToReviewer($request, $reviewer, true);
         abort_unless($request->requires_finance, 422, 'This request does not require Finance review.');
         abort_unless($request->status === ProfileUpdateStatus::PendingFinance->value, 422, 'Request is not awaiting Finance review.');
         // REC-02 — a Finance reviewer cannot approve a request they submitted.
@@ -180,6 +183,12 @@ class ProfileUpdateRequestService
 
     public function reject(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
+        $this->assertVisibleToReviewer(
+            $request,
+            $reviewer,
+            $request->status === ProfileUpdateStatus::PendingFinance->value,
+        );
+        $this->assertNotSelfReviewing($request, $reviewer);
         abort_unless(in_array($request->status, [ProfileUpdateStatus::Pending->value, ProfileUpdateStatus::PendingFinance->value], true), 422, 'Request is not pending.');
 
         return DB::transaction(function () use ($request, $reviewer, $remarks) {
@@ -223,6 +232,26 @@ class ProfileUpdateRequestService
         abort(403, 'You cannot review a profile-change request you submitted. A different reviewer must act (segregation of duties).');
     }
 
+    private function assertVisibleToReviewer(ProfileUpdateRequest $request, User $reviewer, bool $finance = false): void
+    {
+        $query = ProfileUpdateRequest::query()->whereKey($request->getKey());
+
+        DepartmentScope::apply(
+            $query,
+            $reviewer,
+            viewAllPermission: $finance
+                ? 'hr.profile_updates.finance_review'
+                : 'hr.employees.view_sensitive',
+            departmentPermission: $finance ? null : 'hr.employees.view',
+            deptColumn: 'department_id',
+            selfColumn: null,
+            selfId: null,
+            deptRelation: 'employee',
+        );
+
+        $query->firstOrFail();
+    }
+
     /**
      * Write whitelisted changes to the employee row. Defensive: only fields
      * on the combined whitelist are applied, never blindly-trusted JSON keys.
@@ -232,11 +261,36 @@ class ProfileUpdateRequestService
         /** @var Employee $employee */
         $employee = Employee::query()->whereKey($request->employee_id)->firstOrFail();
 
-        $allowed = array_merge(self::ALLOWED_FIELDS, self::FINANCE_FIELDS);
-        $changes = array_intersect_key((array) $request->changes, array_flip($allowed));
+        $changes = $this->validatedChanges((array) $request->changes);
 
         if (! empty($changes)) {
             $employee->update($changes);
         }
+    }
+
+    /** @param array<string, mixed> $changes */
+    private function validatedChanges(array $changes): array
+    {
+        $allowed = array_merge(self::ALLOWED_FIELDS, self::FINANCE_FIELDS);
+        if (array_diff(array_keys($changes), $allowed) !== []) {
+            throw ValidationException::withMessages([
+                'changes' => ['One or more requested fields are not editable through self-service.'],
+            ]);
+        }
+
+        return Validator::make($changes, [
+            'mobile_number' => ['sometimes', 'nullable', 'digits:11', 'regex:/^09\d{9}$/'],
+            'email' => ['sometimes', 'nullable', 'email:rfc', 'max:255'],
+            'street_address' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'barangay' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'city' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'province' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'zip_code' => ['sometimes', 'nullable', 'string', 'max:10', 'regex:/^[0-9]{4,10}$/'],
+            'emergency_contact_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'emergency_contact_relation' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'emergency_contact_phone' => ['sometimes', 'nullable', 'string', 'digits_between:7,15'],
+            'bank_name' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'bank_account_no' => ['sometimes', 'nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\-\s]+$/'],
+        ])->validate();
     }
 }

@@ -232,7 +232,7 @@ find bracket where bracket_min <= taxable <= bracket_max
 tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 ```
 
-## 12. WORKFLOW DEFINITIONS (16)
+## 12. WORKFLOW DEFINITIONS (18)
 
 | Workflow Type | Steps |
 |---|---|
@@ -252,6 +252,8 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 | payroll | [{order:1, role:"hr_officer", label:"Reviewed by"}, {order:2, role:"finance_officer", label:"Confirmed by"}] |
 | separation_clearance | [{order:1, role:"department_head"}, {order:2, role:"warehouse_head"}, {order:3, role:"maintenance_head"}, {order:4, role:"finance_officer"}, {order:5, role:"hr_officer"}] |
 | 8d_report | [{order:1, role:"qc_manager", label:"Reviewed by"}, {order:2, role:"vice_president", label:"Approved by"}] |
+| return_request | [{order:1, role:"department_head", label:"Reviewed by"}, {order:2, role:"production_manager", label:"Approved by"}] |
+| finance_only_return_request | [{order:1, role:"finance_officer", label:"Finance approval"}] — non-stock customer credits require Finance as checker |
 
 ## 13. DEMO ACCOUNTS (18, password: `password`)
 
@@ -281,7 +283,9 @@ tax = fixed_tax + (rate_on_excess * (taxable - bracket_min))
 > (self-approval guard) — Marco covers PO step 1 on Elena's documents.
 > system_admin is IT-only and sits in NO business approval chain.
 > `finance2@ogami.test` is a distinct same-role Finance checker for workflows
-> whose maker is `finance@ogami.test`; it does not add permissions.
+> whose maker is `finance@ogami.test`. Finance also holds RMA view/approve
+> permissions to check finance-only customer credits; those RMAs use the
+> Finance-only workflow rather than the department/production chain.
 
 ## 14. DEMO PRODUCTS (8) with BOMs
 

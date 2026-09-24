@@ -156,6 +156,24 @@ class LeaveBusinessDayValidationTest extends TestCase
             ->value('used'));
     }
 
+    public function test_request_options_return_holidays_for_the_selected_date_range(): void
+    {
+        $employee = Employee::factory()->create([
+            'department_id' => Department::query()->firstOrFail()->id,
+        ]);
+        Holiday::create([
+            'name' => 'Recurring holiday options fixture',
+            'date' => '2026-04-09',
+            'type' => HolidayType::Regular->value,
+            'is_recurring' => true,
+        ]);
+
+        $this->actingAs($this->employeeUser($employee))
+            ->getJson('/api/v1/leaves/requests/options?from=2027-04-08&to=2027-04-10')
+            ->assertOk()
+            ->assertJsonPath('data.holiday_dates', ['2027-04-09']);
+    }
+
     private function employeeUser(Employee $employee): User
     {
         return User::factory()->create([

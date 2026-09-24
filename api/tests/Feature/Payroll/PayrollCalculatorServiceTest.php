@@ -11,6 +11,7 @@ use App\Modules\HR\Models\Position;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Models\LoanPayment;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
@@ -64,7 +65,6 @@ class PayrollCalculatorServiceTest extends TestCase
             'pay_type'             => 'monthly',
             'date_hired'           => '2025-01-01',
             'basic_monthly_salary' => '20000.00',
-            'status'               => 'active',
         ], $overrides));
     }
 
@@ -310,6 +310,38 @@ class PayrollCalculatorServiceTest extends TestCase
         $loan->refresh();
         $this->assertSame('5500.00', (string) $loan->balance);
         $this->assertSame(11, $loan->pay_periods_remaining);
+    }
+
+    public function test_payroll_reconciliation_preserves_payments_after_its_pay_date(): void
+    {
+        $emp = $this->makeEmployee();
+        $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
+        $this->attendanceFor($emp, '2026-04-01', '2026-04-15');
+        $loan = EmployeeLoan::create([
+            'loan_no' => 'LN-FUTURE-PAY-0001',
+            'employee_id' => $emp->id,
+            'loan_type' => LoanType::CompanyLoan->value,
+            'principal' => '6000.00',
+            'monthly_amortization' => '1000.00',
+            'total_paid' => '1000.00',
+            'balance' => '5000.00',
+            'pay_periods_total' => 12,
+            'pay_periods_remaining' => 10,
+            'start_date' => '2026-04-01',
+        ]);
+        $loan->forceFill(['status' => LoanStatus::Active->value])->save();
+        LoanPayment::create([
+            'loan_id' => $loan->id,
+            'amount' => '1000.00',
+            'payment_date' => '2026-04-20',
+            'payment_type' => 'manual',
+            'remarks' => 'Payment after this payroll date',
+        ]);
+
+        $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('1500.00', (string) $loan->fresh()->total_paid);
+        $this->assertSame('4500.00', (string) $loan->fresh()->balance);
     }
 
     public function test_recompute_replaces_previous_payroll(): void

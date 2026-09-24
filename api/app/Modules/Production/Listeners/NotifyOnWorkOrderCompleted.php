@@ -29,11 +29,11 @@ class NotifyOnWorkOrderCompleted implements ShouldQueue
                 ->get();
 
             $this->notifications->send($audience, 'production.wo_completed', [
-                'title'       => "Work Order {$wo->wo_number} Completed",
-                'message'     => "{$wo->product?->name} — {$wo->quantity_good} units produced. Ready for outgoing QC.",
-                'link_to'     => "/production/work-orders/{$wo->hash_id}",
+                'title' => "Work Order {$wo->wo_number} Completed",
+                'message' => "{$wo->product?->name} — {$wo->quantity_good} units produced. Ready for outgoing QC.",
+                'link_to' => "/production/work-orders/{$wo->hash_id}",
                 'entity_type' => 'work_order',
-                'entity_id'   => $wo->hash_id,
+                'entity_id' => $wo->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnWorkOrderCompleted failed', ['error' => $e->getMessage()]);

@@ -35,7 +35,11 @@ class StorePurchaseOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'vendor_id'              => ['required', 'integer', 'exists:vendors,id'],
+            'vendor_id'              => [
+                'required',
+                'integer',
+                Rule::exists('vendors', 'id')->whereNull('deleted_at')->where('is_active', true),
+            ],
             // POs must originate from an approved PR (PR → approved → PO).
             // The approved-status gate itself lives in PurchaseOrderService::create().
             'purchase_request_id'    => ['required', 'integer', 'exists:purchase_requests,id'],
@@ -48,14 +52,11 @@ class StorePurchaseOrderRequest extends FormRequest
             'items.*.item_id'        => ['required', 'integer', 'exists:items,id'],
             'items.*.purchase_request_item_id' => ['nullable', 'integer', 'exists:purchase_request_items,id'],
             'items.*.description'    => ['required', 'string', 'min:2', 'max:200'],
-            // `decimal:0,2` already refuses 1.999 and 1e3. What was missing is an
-            // upper bound: quantity/unit_price land in decimal(15,2) columns and
-            // feed Money::mul() into decimal(15,2) line and header totals, so an
-            // in-range-looking 1e17 reached PostgreSQL and returned SQLSTATE[22003]
-            // as a 500. 10^13 is the real ceiling for decimal(15,2); the line
-            // total is a product of two of these, so each factor is capped an
-            // order below the column ceiling to keep quantity x unit_price inside it.
-            'items.*.quantity'       => ['required', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            // Quantities keep the inventory/MRP 3dp contract; unit prices and
+            // totals remain 2dp money. Bound each factor so their product fits
+            // the decimal(15,2) line and header totals rather than overflowing
+            // into a PostgreSQL 22003 response.
+            'items.*.quantity'       => ['required', 'decimal:0,3', 'min:0.001', 'max:999999.999'],
             'items.*.unit'           => ['nullable', 'string', 'max:20'],
             // Unit price must be > 0: every automatic path (auto-PO, conversion,
             // consolidation) refuses a zero price, so the manual form refusing it

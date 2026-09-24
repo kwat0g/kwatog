@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class RoutingOperation extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'routing_id',
@@ -46,8 +46,8 @@ class RoutingOperation extends Model
         'labor_rate_per_hour' => 'decimal:4',
         'machine_rate_per_hour' => 'decimal:4',
         'overhead_rate_per_hour' => 'decimal:4',
-        'qc_required'        => 'boolean',
-        'sequence'            => 'integer',
+        'qc_required' => 'boolean',
+        'sequence' => 'integer',
     ];
 
     public function routing(): BelongsTo

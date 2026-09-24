@@ -1,8 +1,19 @@
 /** Sprint 7 / ADV7 — Delivery detail with Proof-of-Delivery management. */
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams , useNavigate} from 'react-router-dom';
-import { LuCamera, LuCheck, LuArrowRight, LuTag, LuTrash2, LuFileText, LuImage as ImageIcon, LuShieldCheck, LuArchiveRestore, LuTriangleAlert } from '@/lib/icons';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import {
+  LuCamera,
+  LuCheck,
+  LuArrowRight,
+  LuTag,
+  LuTrash2,
+  LuFileText,
+  LuImage as ImageIcon,
+  LuShieldCheck,
+  LuArchiveRestore,
+  LuTriangleAlert,
+} from '@/lib/icons';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -30,783 +41,1001 @@ import { LinkButton } from '@/components/ui/LinkButton';
 import { focusRingInset } from '@/lib/focus';
 import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
+import { formatDateTime } from '@/lib/formatDate';
 
 export default function DeliveryDetailPage() {
- const navigate = useNavigate();
- const { id = '' } = useParams<{ id: string }>();
- const qc = useQueryClient();
- const { can } = usePermission();
- const fileInput = useRef<HTMLInputElement | null>(null);
+  const navigate = useNavigate();
+  const { id = '' } = useParams<{ id: string }>();
+  const qc = useQueryClient();
+  const { can } = usePermission();
+  const fileInput = useRef<HTMLInputElement | null>(null);
 
- // Proof upload form state.
- const [proofType, setProofType] = useState<DeliveryProofType | null>(null);
- const [proofNotes, setProofNotes] = useState('');
- const [confirmModalOpen, setConfirmModalOpen] = useState(false);
- const [receiverName, setReceiverName] = useState('');
- const [receiverPosition, setReceiverPosition] = useState('');
- const [confirmRemarks, setConfirmRemarks] = useState('');
- const [deleteProofId, setDeleteProofId] = useState<string | null>(null);
- const [restoreProofId, setRestoreProofId] = useState<string | null>(null);
- const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
- const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
- const [assignmentVehicleId, setAssignmentVehicleId] = useState('');
- const [assignmentDriverId, setAssignmentDriverId] = useState('');
- const [assignmentReason, setAssignmentReason] = useState('');
+  // Proof upload form state.
+  const [proofType, setProofType] = useState<DeliveryProofType | null>(null);
+  const [proofNotes, setProofNotes] = useState('');
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverPosition, setReceiverPosition] = useState('');
+  const [confirmRemarks, setConfirmRemarks] = useState('');
+  const [deleteProofId, setDeleteProofId] = useState<string | null>(null);
+  const [restoreProofId, setRestoreProofId] = useState<string | null>(null);
+  const [finalizeInvoiceId, setFinalizeInvoiceId] = useState<string | null>(null);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [assignmentVehicleId, setAssignmentVehicleId] = useState('');
+  const [assignmentDriverId, setAssignmentDriverId] = useState('');
+  const [assignmentReason, setAssignmentReason] = useState('');
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['supply-chain', 'deliveries', id],
- queryFn: () => deliveriesApi.show(id),
- enabled: Boolean(id),
- placeholderData: (prev) => prev,
- });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['supply-chain', 'deliveries', id],
+    queryFn: () => deliveriesApi.show(id),
+    enabled: Boolean(id),
+    placeholderData: (prev) => prev,
+  });
 
- const { data: proofOptions } = useQuery({
- queryKey: ['supply-chain', 'deliveries', 'proof-options'],
- queryFn: deliveryProofsApi.options,
- staleTime: 5 * 60_000,
- });
- const { data: deliveryOptions } = useQuery({
- queryKey: ['supply-chain', 'deliveries', 'options'],
- queryFn: deliveriesApi.options,
- staleTime: 5 * 60_000,
- });
- const canEdit = can('supply_chain.deliveries.create');
- const assignmentEnabled = canEdit && data?.status === 'scheduled';
- const { data: availableVehicles } = useQuery({
-  queryKey: ['supply-chain', 'vehicles', 'available-for-assignment'],
-  queryFn: () => vehiclesApi.list({ status: 'available', per_page: 100 }),
-  enabled: assignmentEnabled,
-  staleTime: 30_000,
- });
- const { data: driverOptions = [] } = useQuery({
-  queryKey: ['supply-chain', 'deliveries', 'driver-options'],
-  queryFn: deliveriesApi.driverOptions,
-  enabled: assignmentEnabled,
-  staleTime: 30_000,
- });
- const availableProofTypes = proofOptions?.proof_types ?? [];
- const selectedProofType = proofType ?? availableProofTypes[0]?.value;
- const proofTypeLabels = new Map(availableProofTypes.map((option) => [option.value, option.label]));
+  const { data: proofOptions } = useQuery({
+    queryKey: ['supply-chain', 'deliveries', 'proof-options'],
+    queryFn: deliveryProofsApi.options,
+    staleTime: 5 * 60_000,
+  });
+  const { data: deliveryOptions } = useQuery({
+    queryKey: ['supply-chain', 'deliveries', 'options'],
+    queryFn: deliveriesApi.options,
+    staleTime: 5 * 60_000,
+  });
+  const canEdit = can('supply_chain.deliveries.create');
+  const assignmentEnabled = canEdit && data?.status === 'scheduled';
+  const { data: availableVehicles } = useQuery({
+    queryKey: ['supply-chain', 'vehicles', 'available-for-assignment'],
+    queryFn: () => vehiclesApi.list({ status: 'available', per_page: 100 }),
+    enabled: assignmentEnabled,
+    staleTime: 30_000,
+  });
+  const { data: driverOptions = [] } = useQuery({
+    queryKey: ['supply-chain', 'deliveries', 'driver-options'],
+    queryFn: deliveriesApi.driverOptions,
+    enabled: assignmentEnabled,
+    staleTime: 30_000,
+  });
+  const availableProofTypes = proofOptions?.proof_types ?? [];
+  const selectedProofType = proofType ?? availableProofTypes[0]?.value;
+  const proofTypeLabels = new Map(
+    availableProofTypes.map((option) => [option.value, option.label]),
+  );
 
- // Series C — Task C4. Real-time chain progress.
- useChainProgress('delivery', id, ['supply-chain', 'deliveries', id]);
+  // Series C — Task C4. Real-time chain progress.
+  useChainProgress('delivery', id, ['supply-chain', 'deliveries', id]);
 
- const advance = useMutation({
- mutationFn: (next: DeliveryStatus) => deliveriesApi.updateStatus(id, next),
- onSuccess: () => {
- toast.success('Status updated');
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
- },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
- });
+  const advance = useMutation({
+    mutationFn: (next: DeliveryStatus) => deliveriesApi.updateStatus(id, next),
+    onSuccess: () => {
+      toast.success('Status updated');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed'),
+  });
 
- const upload = useMutation({
- mutationFn: (file: File) => deliveriesApi.uploadReceipt(id, file),
- onSuccess: () => {
- toast.success('Receipt photo uploaded');
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
- },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Upload failed'),
- });
+  const upload = useMutation({
+    mutationFn: (file: File) => deliveriesApi.uploadReceipt(id, file),
+    onSuccess: () => {
+      toast.success('Receipt photo uploaded');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Upload failed'),
+  });
 
- const uploadProof = useMutation({
- mutationFn: (file: File) => {
- if (!selectedProofType) return Promise.reject(new Error('No delivery proof type is configured.'));
- return deliveryProofsApi.upload(id, file, selectedProofType, proofNotes || undefined);
- },
- onSuccess: () => {
- toast.success('Proof uploaded');
- setProofNotes('');
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
- },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Proof upload failed'),
- });
+  const uploadProof = useMutation({
+    mutationFn: (file: File) => {
+      if (!selectedProofType)
+        return Promise.reject(new Error('No delivery proof type is configured.'));
+      return deliveryProofsApi.upload(id, file, selectedProofType, proofNotes || undefined);
+    },
+    onSuccess: () => {
+      toast.success('Proof uploaded');
+      setProofNotes('');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Proof upload failed'),
+  });
 
-const removeProof = useMutation({
-  mutationFn: (proofId: string) => deliveryProofsApi.destroy(id, proofId),
-  onSuccess: () => {
-  toast.success('Proof archived');
-  setDeleteProofId(null);
-  qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-  },
-  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to archive proof'),
- });
+  const removeProof = useMutation({
+    mutationFn: (proofId: string) => deliveryProofsApi.destroy(id, proofId),
+    onSuccess: () => {
+      toast.success('Proof archived');
+      setDeleteProofId(null);
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to archive proof'),
+  });
 
- const restoreProof = useMutation({
-  mutationFn: (proofId: string) => deliveryProofsApi.restore(id, proofId),
-  onSuccess: () => {
-  toast.success('Proof restored');
-  setRestoreProofId(null);
-  qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-  },
-  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to restore proof'),
- });
+  const restoreProof = useMutation({
+    mutationFn: (proofId: string) => deliveryProofsApi.restore(id, proofId),
+    onSuccess: () => {
+      toast.success('Proof restored');
+      setRestoreProofId(null);
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to restore proof'),
+  });
 
- const confirm = useMutation({
- mutationFn: () => deliveriesApi.confirm(id, {
- receiver_name: receiverName.trim() || undefined,
- receiver_position: receiverPosition.trim() || undefined,
- delivery_remarks: confirmRemarks.trim() || undefined,
- }),
- onSuccess: (d) => {
- toast.success(
- d.invoice
- ? `Confirmed; draft invoice ${d.invoice.invoice_number} created`
- : d.invoice_handoff?.status === 'manual_required'
- ? 'Confirmed; Finance action is required for the customer invoice'
- : 'Delivery confirmed',
- );
- setConfirmModalOpen(false);
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
- },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to confirm'),
- });
+  const confirm = useMutation({
+    mutationFn: () =>
+      deliveriesApi.confirm(id, {
+        receiver_name: receiverName.trim() || undefined,
+        receiver_position: receiverPosition.trim() || undefined,
+        delivery_remarks: confirmRemarks.trim() || undefined,
+      }),
+    onSuccess: (d) => {
+      toast.success(
+        d.invoice
+          ? `Confirmed; draft invoice ${d.invoice.invoice_number} created`
+          : d.invoice_handoff?.status === 'manual_required'
+            ? 'Confirmed; Finance action is required for the customer invoice'
+            : 'Delivery confirmed',
+      );
+      setConfirmModalOpen(false);
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to confirm'),
+  });
 
   const finalizeInvoice = useMutation({
- mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
- onSuccess: () => {
- toast.success('Draft invoice finalized to AR + GL.');
- setFinalizeInvoiceId(null);
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
- qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
- },
- onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
+    mutationFn: (invoiceId: string) => invoicesApi.finalize(invoiceId),
+    onSuccess: () => {
+      toast.success('Draft invoice finalized to AR + GL.');
+      setFinalizeInvoiceId(null);
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to finalize invoice.'),
   });
 
   const retryCoc = useMutation({
-   mutationFn: () => deliveriesApi.retryCoc(id),
-   onSuccess: () => {
-   toast.success('Certificate of Conformance handoff retried.');
-   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-   },
-   onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to retry CoC handoff.'),
+    mutationFn: () => deliveriesApi.retryCoc(id),
+    onSuccess: () => {
+      toast.success('Certificate of Conformance handoff retried.');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to retry CoC handoff.'),
   });
 
- const assign = useMutation({
-  mutationFn: () => deliveriesApi.assign(id, {
-   vehicle_id: assignmentVehicleId,
-   driver_id: assignmentDriverId,
-   reason: assignmentReason.trim(),
-  }),
-  onSuccess: () => {
-   toast.success('Delivery assignment saved.');
-   setAssignmentModalOpen(false);
-   setAssignmentReason('');
-   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
-   qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
-   qc.invalidateQueries({ queryKey: ['driver'] });
-  },
-  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to assign delivery'),
- });
+  const retryInvoice = useMutation({
+    mutationFn: () => deliveriesApi.retryInvoice(id),
+    onSuccess: () => {
+      toast.success('Customer invoice handoff retried.');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to retry invoice handoff.'),
+  });
 
- if (isLoading && !data) return <SkeletonDetail />;
- if (isError || !data) {
- return <EmptyState icon="alert-circle" title="Failed to load delivery"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
- }
+  const assign = useMutation({
+    mutationFn: () =>
+      deliveriesApi.assign(id, {
+        vehicle_id: assignmentVehicleId,
+        driver_id: assignmentDriverId,
+        reason: assignmentReason.trim(),
+      }),
+    onSuccess: () => {
+      toast.success('Delivery assignment saved.');
+      setAssignmentModalOpen(false);
+      setAssignmentReason('');
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
+      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
+      qc.invalidateQueries({ queryKey: ['driver'] });
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to assign delivery'),
+  });
 
- const statusOptions = new Map((deliveryOptions?.statuses ?? []).map((option) => [option.value, option]));
- const next = statusOptions.get(data.status)?.next_status ?? null;
- const proofs = data.proofs ?? [];
- const hasProof = proofs.length > 0;
- const canConfirm = data.status === 'delivered' && can('supply_chain.deliveries.confirm');
- const canUploadProofNow = ['in_transit', 'delivered', 'confirmed'].includes(data.status)
- && canEdit && Boolean(selectedProofType);
+  if (isLoading && !data) return <SkeletonDetail />;
+  if (isError || !data) {
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Failed to load delivery"
+        action={
+          <Button variant="secondary" onClick={() => refetch()}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
 
- return (
- <div>
- <PageHeader
- title={
- <span>
- {data.delivery_number}
- <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{statusOptions.get(data.status)?.label ?? data.status.replace('_', ' ')}</Chip>
- {hasProof && (
- <Chip variant="success" className="ml-2">
- <LuShieldCheck size={12} className="mr-0.5" />
- {proofs.length} {proofs.length === 1 ? 'proof' : 'proofs'}
- </Chip>
- )}
- </span>
- }
- subtitle={data.sales_order ? `SO ${data.sales_order.so_number}` : undefined}
- backTo="/supply-chain/deliveries"
- backLabel="Deliveries"
- actions={
- <div className="flex items-center gap-2">
- {next && canEdit && (
- <Button variant="secondary" size="sm" icon={<LuArrowRight size={14} />}
- loading={advance.isPending} onClick={() => advance.mutate(next)}>
- {next === 'delivered' ? 'Mark delivered' : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
- </Button>
- )}
- {data.status === 'scheduled' && canEdit && (
- <Button
-  variant="secondary"
-  size="sm"
-  onClick={() => {
-   setAssignmentVehicleId(data.vehicle?.id ?? '');
-   setAssignmentDriverId(data.driver?.id ?? '');
-   setAssignmentReason('');
-   setAssignmentModalOpen(true);
-  }}
- >
-  {data.vehicle && data.driver ? 'Reassign' : 'Assign driver & vehicle'}
- </Button>
- )}
- {data.status === 'delivered' && canEdit && (
- <>
- <input
- ref={fileInput}
- type="file"
- accept="image/*"
- hidden
- onChange={(e) => {
- const file = e.target.files?.[0];
- if (file) upload.mutate(file);
- e.target.value = '';
- }}
- />
- <Button variant="secondary" size="sm" icon={<LuCamera size={14} />}
- loading={upload.isPending} onClick={() => fileInput.current?.click()}>
- {data.receipt_photo_url ? 'Replace receipt' : 'Quick photo'}
- </Button>
- </>
- )}
- {canConfirm && (
- <Button
- variant="primary"
- size="sm"
- icon={<LuCheck size={14} />}
- disabled={!hasProof}
- title={hasProof ? undefined : 'At least one proof of delivery is required before confirming'}
- onClick={() => {
- setReceiverName(data.receiver_name ?? '');
- setReceiverPosition(data.receiver_position ?? '');
- setConfirmRemarks(data.delivery_remarks ?? '');
- setConfirmModalOpen(true);
- }}
- >
- Confirm
- </Button>
- )}
- </div>
- }
- />
+  const statusOptions = new Map(
+    (deliveryOptions?.statuses ?? []).map((option) => [option.value, option]),
+  );
+  const next = statusOptions.get(data.status)?.next_status ?? null;
+  const proofs = data.proofs ?? [];
+  const hasProof = proofs.length > 0;
+  const canConfirm = data.status === 'delivered' && can('supply_chain.deliveries.confirm');
+  const canUploadProofNow =
+    ['in_transit', 'delivered', 'confirmed'].includes(data.status) &&
+    canEdit &&
+    Boolean(selectedProofType);
 
- {/* P1 — Order-to-Cash chain anchored on the Delivery record. 2026-08-08:
+  return (
+    <div>
+      <PageHeader
+        title={
+          <span>
+            {data.delivery_number}
+            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
+              {statusOptions.get(data.status)?.label ?? data.status.replace('_', ' ')}
+            </Chip>
+            {hasProof && (
+              <Chip variant="success" className="ml-2">
+                <LuShieldCheck size={12} className="mr-0.5" />
+                {proofs.length} {proofs.length === 1 ? 'proof' : 'proofs'}
+              </Chip>
+            )}
+          </span>
+        }
+        subtitle={data.sales_order ? `SO ${data.sales_order.so_number}` : undefined}
+        backTo="/supply-chain/deliveries"
+        backLabel="Deliveries"
+        actions={
+          <div className="flex items-center gap-2">
+            {next && canEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LuArrowRight size={14} />}
+                loading={advance.isPending}
+                onClick={() => advance.mutate(next)}
+              >
+                {next === 'delivered'
+                  ? 'Mark delivered'
+                  : `Mark ${statusOptions.get(next)?.label ?? next.replace('_', ' ')}`}
+              </Button>
+            )}
+            {data.status === 'scheduled' && canEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setAssignmentVehicleId(data.vehicle?.id ?? '');
+                  setAssignmentDriverId(data.driver?.id ?? '');
+                  setAssignmentReason('');
+                  setAssignmentModalOpen(true);
+                }}
+              >
+                {data.vehicle && data.driver ? 'Reassign' : 'Assign driver & vehicle'}
+              </Button>
+            )}
+            {data.status === 'delivered' && canEdit && (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) upload.mutate(file);
+                    e.target.value = '';
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuCamera size={14} />}
+                  loading={upload.isPending}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  {data.receipt_photo_url ? 'Replace receipt' : 'Quick photo'}
+                </Button>
+              </>
+            )}
+            {canConfirm && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<LuCheck size={14} />}
+                disabled={!hasProof}
+                title={
+                  hasProof
+                    ? undefined
+                    : 'At least one proof of delivery is required before confirming'
+                }
+                onClick={() => {
+                  setReceiverName(data.receiver_name ?? '');
+                  setReceiverPosition(data.receiver_position ?? '');
+                  setConfirmRemarks(data.delivery_remarks ?? '');
+                  setConfirmModalOpen(true);
+                }}
+              >
+                Confirm
+              </Button>
+            )}
+          </div>
+        }
+      />
+      {/* P1 — Order-to-Cash chain anchored on the Delivery record. 2026-08-08:
   compact cross-document stepper — SO → Delivery → Invoice → Payment. */}
- <div className="px-5 py-3 border-b border-default">
- <ChainHeader steps={buildO2cChain({
-  so: data.sales_order ? { id: data.sales_order.id, number: data.sales_order.so_number } : null,
-  delivery: { id: data.id, number: data.delivery_number },
-  deliveryStatus: data.status,
-  invoices: data.invoice
-  ? [{ id: data.invoice.id, invoice_number: data.invoice.invoice_number, status: data.invoice.status }]
-  : [],
- })} />
- </div>
+      <div className="px-5 py-3 border-b border-default">
+        <ChainHeader
+          steps={buildO2cChain({
+            so: data.sales_order
+              ? { id: data.sales_order.id, number: data.sales_order.so_number }
+              : null,
+            delivery: { id: data.id, number: data.delivery_number },
+            deliveryStatus: data.status,
+            invoices: data.invoice
+              ? [
+                  {
+                    id: data.invoice.id,
+                    invoice_number: data.invoice.invoice_number,
+                    status: data.invoice.status,
+                  },
+                ]
+              : [],
+          })}
+        />
+      </div>
+      <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="col-span-2 space-y-4">
+          <Panel title="Schedule">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Scheduled</dt>
+                <dd className="font-mono tabular-nums">{data.scheduled_date ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Departed</dt>
+                <dd className="font-mono tabular-nums">{formatDateTime(data.departed_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Delivered</dt>
+                <dd className="font-mono tabular-nums">{formatDateTime(data.delivered_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Vehicle</dt>
+                <dd>
+                  {data.vehicle ? `${data.vehicle.name} (${data.vehicle.plate_number})` : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Driver</dt>
+                <dd>{data.driver?.name ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Confirmed</dt>
+                <dd className="font-mono tabular-nums">{formatDateTime(data.confirmed_at)}</dd>
+              </div>
+            </dl>
+          </Panel>
 
- <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
- <div className="col-span-2 space-y-4">
- <Panel title="Schedule">
- <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Scheduled</dt>
- <dd className="font-mono tabular-nums">{data.scheduled_date ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Departed</dt>
- <dd className="font-mono tabular-nums">{data.departed_at?.slice(0, 16).replace('T', ' ') ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Delivered</dt>
- <dd className="font-mono tabular-nums">{data.delivered_at?.slice(0, 16).replace('T', ' ') ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Vehicle</dt>
- <dd>{data.vehicle ? `${data.vehicle.name} (${data.vehicle.plate_number})` : '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Driver</dt>
- <dd>{data.driver?.name ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Confirmed</dt>
- <dd className="font-mono tabular-nums">{data.confirmed_at?.slice(0, 16).replace('T', ' ') ?? '—'}</dd>
- </div>
- </dl>
- </Panel>
+          {/* ADV7 — Proof of Delivery. Required before confirmation. */}
+          <Panel
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                <LuShieldCheck
+                  size={14}
+                  className={hasProof ? 'text-success-fg' : 'text-warning-fg'}
+                />
+                Proof of delivery
+              </span>
+            }
+            meta={
+              hasProof
+                ? `${proofs.length} file${proofs.length === 1 ? '' : 's'}`
+                : 'Required before confirmation'
+            }
+          >
+            {(data.receiver_name || data.receiver_position || data.received_at) && (
+              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 text-sm mb-3 pb-3 border-b border-subtle">
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
+                  <dd>{data.receiver_name ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted">Position</dt>
+                  <dd>{data.receiver_position ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted">Received at</dt>
+                  <dd className="font-mono tabular-nums">{formatDateTime(data.received_at)}</dd>
+                </div>
+                {data.delivery_remarks && (
+                  <div className="col-span-3">
+                    <dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt>
+                    <dd className="text-sm whitespace-pre-line">{data.delivery_remarks}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
 
- {/* ADV7 — Proof of Delivery. Required before confirmation. */}
- <Panel
- title={
- <span className="inline-flex items-center gap-1.5">
- <LuShieldCheck size={14} className={hasProof ? 'text-success-fg' : 'text-warning-fg'} />
- Proof of delivery
- </span>
- }
- meta={hasProof ? `${proofs.length} file${proofs.length === 1 ? '' : 's'}` : 'Required before confirmation'}
- >
- {(data.receiver_name || data.receiver_position || data.received_at) && (
- <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 text-sm mb-3 pb-3 border-b border-subtle">
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt>
- <dd>{data.receiver_name ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Position</dt>
- <dd>{data.receiver_position ?? '—'}</dd>
- </div>
- <div>
- <dt className="text-2xs uppercase tracking-wider text-muted">Received at</dt>
- <dd className="font-mono tabular-nums">{data.received_at?.slice(0, 16).replace('T', ' ') ?? '—'}</dd>
- </div>
- {data.delivery_remarks && (
- <div className="col-span-3">
- <dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt>
- <dd className="text-sm whitespace-pre-line">{data.delivery_remarks}</dd>
- </div>
- )}
- </dl>
- )}
+            {!hasProof && (
+              <div className="text-xs text-muted mb-3 px-3 py-2 bg-subtle rounded-md border border-warning/30 flex items-start gap-2">
+                <LuTriangleAlert
+                  size={14}
+                  className="mt-0.5 shrink-0 text-warning-fg"
+                  aria-hidden="true"
+                />
+                <span>
+                  No proof uploaded yet. After delivering the goods, upload the signed delivery
+                  receipt or a photo here. <strong>Required</strong> before the delivery can be
+                  confirmed.
+                </span>
+              </div>
+            )}
 
- {!hasProof && (
- <div className="text-xs text-muted mb-3 px-3 py-2 bg-subtle rounded-md border border-warning/30 flex items-start gap-2">
- <LuTriangleAlert size={14} className="mt-0.5 shrink-0 text-warning-fg" aria-hidden="true" />
- <span>No proof uploaded yet. After delivering the goods, upload the signed delivery
- receipt or a photo here. <strong>Required</strong> before the delivery can be confirmed.
- </span>
- </div>
- )}
+            {/* Proof gallery */}
+            {hasProof && (
+              <ul className="grid grid-cols-2 gap-3 mb-4">
+                {proofs.map((p) => (
+                  <li
+                    key={p.id}
+                    className="border border-subtle rounded-md overflow-hidden bg-canvas"
+                  >
+                    {p.is_image && p.view_url ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void downloadAuthenticatedFile(p.view_url!, {
+                            openInNewTab: true,
+                            errorMessage: 'Failed to open the delivery proof.',
+                          })
+                        }
+                        className={cn(
+                          'block w-full aspect-video bg-subtle cursor-pointer',
+                          focusRingInset,
+                        )}
+                      >
+                        <img
+                          src={p.view_url}
+                          alt={p.file_name}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!p.view_url}
+                        onClick={() =>
+                          p.view_url &&
+                          void downloadAuthenticatedFile(p.view_url, {
+                            openInNewTab: true,
+                            errorMessage: 'Failed to open the delivery proof.',
+                          })
+                        }
+                        className={cn(
+                          'flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent cursor-pointer',
+                          focusRingInset,
+                        )}
+                      >
+                        <LuFileText size={32} />
+                      </button>
+                    )}
+                    <div className="px-2.5 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium truncate">{p.file_name}</span>
+                        <Chip variant="neutral">
+                          {proofTypeLabels.get(p.proof_type) ?? p.proof_type}
+                        </Chip>
+                      </div>
+                      <div className="text-muted mt-0.5">
+                        {p.uploader?.name ?? '—'} · {formatDateTime(p.uploaded_at)}
+                      </div>
+                      {p.notes && <div className="mt-1 text-muted line-clamp-2">{p.notes}</div>}
+                      {canEdit && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <LinkButton
+                            onClick={() => setRestoreProofId(p.id)}
+                            icon={<LuArchiveRestore size={12} />}
+                            className="text-2xs"
+                          >
+                            Restore
+                          </LinkButton>
+                          <LinkButton
+                            tone="danger"
+                            onClick={() => setDeleteProofId(p.id)}
+                            icon={<LuTrash2 size={12} />}
+                            className="text-2xs"
+                          >
+                            Archive
+                          </LinkButton>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
 
- {/* Proof gallery */}
- {hasProof && (
- <ul className="grid grid-cols-2 gap-3 mb-4">
- {proofs.map((p) => (
- <li key={p.id} className="border border-subtle rounded-md overflow-hidden bg-canvas">
- {p.is_image && p.view_url ? (
- <button type="button" onClick={() => void downloadAuthenticatedFile(p.view_url!, {
- openInNewTab: true,
- errorMessage: 'Failed to open the delivery proof.',
- })} className={cn('block w-full aspect-video bg-subtle cursor-pointer', focusRingInset)}>
- <img src={p.view_url} alt={p.file_name} className="w-full h-full object-cover" />
- </button>
- ) : (
- <button type="button" disabled={!p.view_url}
- onClick={() => p.view_url && void downloadAuthenticatedFile(p.view_url, {
- openInNewTab: true,
- errorMessage: 'Failed to open the delivery proof.',
- })}
- className={cn('flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent cursor-pointer', focusRingInset)}>
- <LuFileText size={32} />
- </button>
- )}
- <div className="px-2.5 py-2 text-xs">
- <div className="flex items-center justify-between gap-2">
- <span className="font-medium truncate">{p.file_name}</span>
- <Chip variant="neutral">{proofTypeLabels.get(p.proof_type) ?? p.proof_type}</Chip>
- </div>
- <div className="text-muted mt-0.5">
- {p.uploader?.name ?? '—'} · {p.uploaded_at?.slice(0, 16).replace('T', ' ') ?? '—'}
- </div>
- {p.notes && <div className="mt-1 text-muted line-clamp-2">{p.notes}</div>}
-{canEdit && (
-  <div className="mt-1.5 flex items-center gap-2">
-  <LinkButton
-  onClick={() => setRestoreProofId(p.id)}
-  icon={<LuArchiveRestore size={12} />}
-  className="text-2xs"
-  >
-  Restore
-  </LinkButton>
-  <LinkButton
-  tone="danger"
-  onClick={() => setDeleteProofId(p.id)}
-  icon={<LuTrash2 size={12} />}
-  className="text-2xs"
-  >
-  Archive
-  </LinkButton>
-  </div>
-  )}
- </div>
- </li>
- ))}
- </ul>
- )}
+            {/* Upload form */}
+            {canUploadProofNow && (
+              <div className="border-t border-subtle pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-2">
+                  <Select
+                    value={selectedProofType ?? ''}
+                    onChange={(e) => setProofType(e.target.value as DeliveryProofType)}
+                    aria-label="Proof type"
+                  >
+                    {availableProofTypes.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    type="text"
+                    value={proofNotes}
+                    onChange={(e) => setProofNotes(e.target.value)}
+                    placeholder="Notes (optional)"
+                    aria-label="Proof notes"
+                    containerClassName="col-span-2"
+                  />
+                </div>
+                <label className="block w-full">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadProof.mutate(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <span className="flex items-center justify-center gap-2 cursor-pointer w-full py-3 border-2 border-dashed border-default rounded-md text-sm text-muted hover:border-accent hover:text-accent transition-colors">
+                    <ImageIcon size={16} />
+                    {uploadProof.isPending
+                      ? 'Uploading…'
+                      : 'Tap to upload (camera or file, max 10MB)'}
+                  </span>
+                </label>
+              </div>
+            )}
+          </Panel>
 
- {/* Upload form */}
- {canUploadProofNow && (
- <div className="border-t border-subtle pt-3">
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-2">
- <Select
- value={selectedProofType ?? ''}
- onChange={(e) => setProofType(e.target.value as DeliveryProofType)}
- aria-label="Proof type"
- >
- {availableProofTypes.map((option) => (
- <option key={option.value} value={option.value}>{option.label}</option>
- ))}
- </Select>
- <Input
- type="text"
- value={proofNotes}
- onChange={(e) => setProofNotes(e.target.value)}
- placeholder="Notes (optional)"
- aria-label="Proof notes"
- containerClassName="col-span-2"
- />
- </div>
- <label className="block w-full">
- <input
- type="file"
- accept="image/*,application/pdf"
- className="hidden"
- onChange={(e) => {
- const file = e.target.files?.[0];
- if (file) uploadProof.mutate(file);
- e.target.value = '';
- }}
- />
- <span className="flex items-center justify-center gap-2 cursor-pointer w-full py-3 border-2 border-dashed border-default rounded-md text-sm text-muted hover:border-accent hover:text-accent transition-colors">
- <ImageIcon size={16} />
- {uploadProof.isPending ? 'Uploading…' : 'Tap to upload (camera or file, max 10MB)'}
- </span>
- </label>
- </div>
- )}
- </Panel>
+          <Panel
+            title="Items"
+            meta={`${data.items?.length ?? 0} ${(data.items?.length ?? 0) === 1 ? 'line' : 'lines'}`}
+            noPadding
+          >
+            {!data.items?.length ? (
+              <div className="px-4 py-3 text-xs text-muted">No items.</div>
+            ) : (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Inspection</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right">Unit price</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.items.map((i) => (
+                    <tr
+                      key={i.id}
+                      className={cn(trCls, i.inspection && 'cursor-pointer')}
+                      onClick={() =>
+                        i.inspection && navigate(`/quality/inspections/${i.inspection.id}`)
+                      }
+                    >
+                      <Td>
+                        {i.inspection ? (
+                          <span className="font-mono">{i.inspection.inspection_number}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </Td>
+                      <Td align="right" mono>
+                        {i.quantity}
+                      </Td>
+                      <Td align="right" mono>
+                        {i.unit_price}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        </div>
 
- <Panel title="Items" meta={`${data.items?.length ?? 0} ${(data.items?.length ?? 0) === 1 ? 'line' : 'lines'}`} noPadding>
- {!data.items?.length ? (
- <div className="px-4 py-3 text-xs text-muted">No items.</div>
- ) : (
- <table className={tableCls}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Inspection</Th>
- <Th align="right">Qty</Th>
- <Th align="right">Unit price</Th>
- </tr>
- </thead>
- <tbody>
- {data.items.map((i) => (
- <tr key={i.id} className={cn(trCls, i.inspection && "cursor-pointer")} onClick={() => i.inspection && navigate(`/quality/inspections/${i.inspection.id}`)}>
- <Td>
- {i.inspection ? (
- <span className="font-mono">{i.inspection.inspection_number}</span>
- ) : <span className="text-muted">—</span>}
- </Td>
- <Td align="right" mono>{i.quantity}</Td>
- <Td align="right" mono>{i.unit_price}</Td>
- </tr>
- ))}
- </tbody>
- </table>
- )}
- </Panel>
- </div>
-
- <div className="space-y-4">
- {data.receipt_photo_url && (
- <Panel title="Quick receipt photo">
- <button type="button" onClick={() => void downloadAuthenticatedFile(data.receipt_photo_url!, {
- openInNewTab: true,
- errorMessage: 'Failed to open the receipt photo.',
- })} className={cn('block w-full cursor-pointer', focusRingInset)}>
- <img src={data.receipt_photo_url} alt="Receipt" className="w-full rounded-md border border-default" />
- </button>
- </Panel>
- )}
- {/* 2026-08-08 — auto-invoice chain: a confirmed delivery stages a draft AR
+        <div className="space-y-4">
+          {data.receipt_photo_url && (
+            <Panel title="Quick receipt photo">
+              <button
+                type="button"
+                onClick={() =>
+                  void downloadAuthenticatedFile(data.receipt_photo_url!, {
+                    openInNewTab: true,
+                    errorMessage: 'Failed to open the receipt photo.',
+                  })
+                }
+                className={cn('block w-full cursor-pointer', focusRingInset)}
+              >
+                <img
+                  src={data.receipt_photo_url}
+                  alt="Receipt"
+                  className="w-full rounded-md border border-default"
+                />
+              </button>
+            </Panel>
+          )}
+          {/* 2026-08-08 — auto-invoice chain: a confirmed delivery stages a draft AR
   invoice; review and finalize it here (mirrors the P2P auto-bill banner). */}
- {data.invoice && data.invoice.status === 'draft' && (
- <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
- <LuFileText size={16} className="shrink-0 text-success-fg" />
- <div className="flex-1">
- <div className="font-medium">Customer invoice auto-created</div>
- <div className="text-muted">
- A draft AR invoice was staged from this confirmed delivery —{' '}
- <Link to={`/accounting/invoices/${data.invoice.id}`} className="font-mono text-accent hover:underline">{data.invoice.invoice_number ?? '(draft)'}</Link>
- {' '}· {data.invoice.total_amount} ·{' '}{data.invoice.status_label ?? data.invoice.status}. Review and finalize to post the receivable.
- </div>
- </div>
- {can('accounting.invoices.create') && (
- <Button variant="secondary" size="sm" icon={<LuCheck size={14} />}
- onClick={() => setFinalizeInvoiceId(data.invoice!.id)} loading={finalizeInvoice.isPending}>Finalize</Button>
- )}
- {data.invoice_handoff?.status === 'manual_required' && !data.invoice && (
- <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
- <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
- <div>
- <div className="font-medium">Customer invoice needs Finance action</div>
- <div className="text-muted">
- Delivery confirmation succeeded, but the draft AR invoice was not staged. Fix the accounting setup and replay the invoice handoff from Chain recovery, or create the invoice manually.
- </div>
- </div>
- </div>
- )}
- </div>
- )}
-  {data.invoice && (
- <Panel title="Invoice">
- <dl className="text-sm space-y-2">
- <div className="flex justify-between">
- <dt className="text-muted">Number</dt>
- <dd className="font-mono">{data.invoice.invoice_number}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Total</dt>
- <dd className="font-mono tabular-nums">{data.invoice.total_amount}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Status</dt>
- <dd><Chip variant="neutral">{data.invoice.status}</Chip></dd>
- </div>
- </dl>
-  </Panel>
-  )}
-  {data.coc_handoff?.status === 'manual_required' && (
-  <div className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm" role="alert">
-  <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
-  <div className="flex-1">
-  <div className="font-medium">Certificate of Conformance needs Quality action</div>
-  <div className="text-muted">{data.coc_handoff.message ?? 'The certificate could not be attached automatically.'}</div>
-  </div>
-  {can('supply_chain.deliveries.confirm') && (
-  <Button variant="secondary" size="sm" onClick={() => retryCoc.mutate()} loading={retryCoc.isPending}>
-  Retry CoC
-  </Button>
-  )}
-  </div>
-  )}
-  {data.notes && (
- <Panel title="Notes">
- <p className="whitespace-pre-line text-sm">{data.notes}</p>
- </Panel>
- )}
- {/* ADV3 — IATF 16949 outgoing shipment lot. */}
- {data.shipment_lot && (
- <Panel
- title={
- <span className="inline-flex items-center gap-1.5">
- <LuTag size={14} className="text-accent" />
- Shipment lot
- </span>
- }
- >
- <dl className="text-sm space-y-2">
- <div className="flex justify-between">
- <dt className="text-muted">Lot</dt>
- <dd className="font-mono">
- <Link
- to={`/quality/traceability?term=${encodeURIComponent(data.shipment_lot.lot_number)}`}
- className="text-accent hover:underline"
- >
- {data.shipment_lot.lot_number}
- </Link>
- </dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Lot date</dt>
- <dd className="font-mono tabular-nums">{data.shipment_lot.lot_date ?? '—'}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Quantity</dt>
- <dd className="font-mono tabular-nums">{data.shipment_lot.quantity}</dd>
- </div>
- {data.shipment_lot.product && (
- <div className="flex justify-between">
- <dt className="text-muted">Product</dt>
- <dd className="text-right">
- {data.shipment_lot.product.part_number
- ? <span className="font-mono">{data.shipment_lot.product.part_number}</span>
- : null}
- {data.shipment_lot.product.name && (
- <span className="text-muted ml-1">{data.shipment_lot.product.name}</span>
- )}
- </dd>
- </div>
- )}
- <div className="flex justify-between">
- <dt className="text-muted">Batches</dt>
- <dd className="font-mono tabular-nums">{data.shipment_lot.work_order_count}</dd>
- </div>
- </dl>
- </Panel>
- )}
+          {data.invoice && data.invoice.status === 'draft' && (
+            <div className="flex items-center gap-3 rounded-md border border-success/40 bg-success-bg/10 px-4 py-3 text-sm">
+              <LuFileText size={16} className="shrink-0 text-success-fg" />
+              <div className="flex-1">
+                <div className="font-medium">Customer invoice auto-created</div>
+                <div className="text-muted">
+                  A draft AR invoice was staged from this confirmed delivery —{' '}
+                  <Link
+                    to={`/accounting/invoices/${data.invoice.id}`}
+                    className="font-mono text-accent hover:underline"
+                  >
+                    {data.invoice.invoice_number ?? '(draft)'}
+                  </Link>{' '}
+                  · {data.invoice.total_amount} · {data.invoice.status_label ?? data.invoice.status}
+                  . Review and finalize to post the receivable.
+                </div>
+              </div>
+              {can('accounting.invoices.create') && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuCheck size={14} />}
+                  onClick={() => setFinalizeInvoiceId(data.invoice!.id)}
+                  loading={finalizeInvoice.isPending}
+                >
+                  Finalize
+                </Button>
+              )}
+              {data.invoice_handoff?.status === 'manual_required' && !data.invoice && (
+                <div
+                  className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm"
+                  role="alert"
+                >
+                  <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+                  <div className="flex-1">
+                    <div className="font-medium">Customer invoice needs Finance action</div>
+                    <div className="text-muted">
+                      Delivery confirmation succeeded, but the draft AR invoice was not staged. Fix
+                      the accounting setup and replay the invoice handoff from Chain recovery, or
+                      create the invoice manually.
+                    </div>
+                  </div>
+                  {(can('supply_chain.deliveries.confirm') ||
+                    can('accounting.invoices.create')) && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => retryInvoice.mutate()}
+                      loading={retryInvoice.isPending}
+                    >
+                      Retry Invoice
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {data.invoice && (
+            <Panel title="Invoice">
+              <dl className="text-sm space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-muted">Number</dt>
+                  <dd className="font-mono">{data.invoice.invoice_number}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted">Total</dt>
+                  <dd className="font-mono tabular-nums">{data.invoice.total_amount}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted">Status</dt>
+                  <dd>
+                    <Chip variant="neutral">{data.invoice.status}</Chip>
+                  </dd>
+                </div>
+              </dl>
+            </Panel>
+          )}
+          {data.coc_handoff?.status === 'manual_required' && (
+            <div
+              className="flex items-start gap-3 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm"
+              role="alert"
+            >
+              <LuTriangleAlert size={16} className="mt-0.5 shrink-0 text-warning-fg" />
+              <div className="flex-1">
+                <div className="font-medium">Certificate of Conformance needs Quality action</div>
+                <div className="text-muted">
+                  {data.coc_handoff.message ??
+                    'The certificate could not be attached automatically.'}
+                </div>
+              </div>
+              {can('supply_chain.deliveries.confirm') && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => retryCoc.mutate()}
+                  loading={retryCoc.isPending}
+                >
+                  Retry CoC
+                </Button>
+              )}
+            </div>
+          )}
+          {data.notes && (
+            <Panel title="Notes">
+              <p className="whitespace-pre-line text-sm">{data.notes}</p>
+            </Panel>
+          )}
+          {/* ADV3 — IATF 16949 outgoing shipment lot. */}
+          {data.shipment_lot && (
+            <Panel
+              title={
+                <span className="inline-flex items-center gap-1.5">
+                  <LuTag size={14} className="text-accent" />
+                  Shipment lot
+                </span>
+              }
+            >
+              <dl className="text-sm space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-muted">Lot</dt>
+                  <dd className="font-mono">
+                    <Link
+                      to={`/quality/traceability?term=${encodeURIComponent(data.shipment_lot.lot_number)}`}
+                      className="text-accent hover:underline"
+                    >
+                      {data.shipment_lot.lot_number}
+                    </Link>
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted">Lot date</dt>
+                  <dd className="font-mono tabular-nums">{data.shipment_lot.lot_date ?? '—'}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted">Quantity</dt>
+                  <dd className="font-mono tabular-nums">{data.shipment_lot.quantity}</dd>
+                </div>
+                {data.shipment_lot.product && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Product</dt>
+                    <dd className="text-right">
+                      {data.shipment_lot.product.part_number ? (
+                        <span className="font-mono">{data.shipment_lot.product.part_number}</span>
+                      ) : null}
+                      {data.shipment_lot.product.name && (
+                        <span className="text-muted ml-1">{data.shipment_lot.product.name}</span>
+                      )}
+                    </dd>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <dt className="text-muted">Batches</dt>
+                  <dd className="font-mono tabular-nums">{data.shipment_lot.work_order_count}</dd>
+                </div>
+              </dl>
+            </Panel>
+          )}
 
- {/* Sprint 7 audit fix: LinkedRecords (O2C chain) */}
- <Panel title="Linked records">
- <LinkedRecords
- groups={[
- ...(data.sales_order ? [{
- label: 'Sales order',
- items: [{ id: data.sales_order.so_number, href: `/crm/sales-orders/${data.sales_order.id}` }],
- }] : []),
- ...(data.invoice ? [{
- label: 'Invoice',
- items: [{
- id: data.invoice.invoice_number,
- href: `/accounting/invoices/${data.invoice.id}`,
- meta: `${data.invoice.total_amount} · ${data.invoice.status}`,
- }],
- }] : []),
- ...(data.items?.length
- ? [{
- label: 'Inspections',
- items: data.items
- .filter((i) => i.inspection)
- .map((i) => ({
- id: i.inspection!.inspection_number,
- href: `/quality/inspections/${i.inspection!.id}`,
- meta: i.inspection!.status,
- })),
- }]
- : []),
- ]}
- />
- </Panel>
- <Panel title="Navigation">
- <Link to="/supply-chain/deliveries" className="text-xs text-accent hover:underline">← Back to deliveries</Link>
- </Panel>
- </div>
- </div>
-
- {/* Confirm modal — captures receiver details. */}
- <Modal
- isOpen={confirmModalOpen}
- onClose={() => setConfirmModalOpen(false)}
- title="Confirm delivery"
- >
- <div className="space-y-3">
- <p className="text-sm text-muted">
- {hasProof
- ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and attempt to create a draft invoice.`
- : 'At least one proof must be uploaded first.'}
- </p>
- <Input
- label="Received by"
- type="text"
- value={receiverName}
- onChange={(e) => setReceiverName(e.target.value)}
- placeholder="e.g. Maria Santos"
- />
- <Input
- label="Position"
- type="text"
- value={receiverPosition}
- onChange={(e) => setReceiverPosition(e.target.value)}
- placeholder="e.g. Purchasing Officer"
- />
- <Textarea
- label="Remarks (optional)"
- value={confirmRemarks}
- onChange={(e) => setConfirmRemarks(e.target.value)}
- rows={3}
- />
- <div className="flex justify-end gap-2 pt-2">
- <Button variant="secondary" onClick={() => setConfirmModalOpen(false)}>Cancel</Button>
- <Button
- variant="primary"
- icon={<LuCheck size={14} />}
- loading={confirm.isPending}
- disabled={!hasProof}
- onClick={() => confirm.mutate()}
- >
- Confirm delivery
- </Button>
- </div>
- </div>
- </Modal>  {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
-  <Modal
-  isOpen={assignmentModalOpen}
-  onClose={() => { if (!assign.isPending) setAssignmentModalOpen(false); }}
-  title={data.vehicle && data.driver ? 'Reassign delivery' : 'Assign delivery'}
-  >
-  <div className="space-y-3">
-  <p className="text-sm text-muted">
-  The assignment is recorded with the operator and reason. Only active drivers and available vehicles can be selected.
-  </p>
-  <Select
-  label="Vehicle"
-  required
-  value={assignmentVehicleId}
-  onChange={(e) => setAssignmentVehicleId(e.target.value)}
-  disabled={assign.isPending}
-  >
-  <option value="">— Select available vehicle —</option>
-  {(availableVehicles?.data ?? []).map((vehicle) => (
-  <option key={vehicle.id} value={vehicle.id}>{vehicle.name} ({vehicle.plate_number})</option>
-  ))}
-  </Select>
-  <Select
-  label="Driver"
-  required
-  value={assignmentDriverId}
-  onChange={(e) => setAssignmentDriverId(e.target.value)}
-  disabled={assign.isPending}
-  >
-  <option value="">— Select active driver —</option>
-  {driverOptions.map((driver) => (
-  <option key={driver.id} value={driver.id}>{driver.name}</option>
-  ))}
-  </Select>
-  <Textarea
-  label="Assignment reason"
-  required
-  value={assignmentReason}
-  onChange={(e) => setAssignmentReason(e.target.value)}
-  maxLength={500}
-  placeholder="Why is this driver and vehicle being assigned?"
-  />
-  <div className="flex justify-end gap-2 pt-2">
-  <Button variant="secondary" onClick={() => setAssignmentModalOpen(false)} disabled={assign.isPending}>Cancel</Button>
-  <Button
-  variant="primary"
-  loading={assign.isPending}
-  disabled={!assignmentVehicleId || !assignmentDriverId || assignmentReason.trim().length < 5}
-  onClick={() => assign.mutate()}
-  >
-  Save assignment
-  </Button>
-  </div>
-  </div>
-  </Modal>
-
-  {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
-  <ConfirmDialog
-  isOpen={!!finalizeInvoiceId}
-  onClose={() => setFinalizeInvoiceId(null)}
-  onConfirm={() => { if (finalizeInvoiceId) finalizeInvoice.mutate(finalizeInvoiceId); }}
-  title="Finalize draft invoice?"
-  description="Finalizing locks the invoice number, posts the AR/revenue journal entry, and flips the invoice to Finalized (the SO is promoted to Invoiced). Review the auto-created amounts before posting."
-  confirmLabel="Finalize invoice"
-  pending={finalizeInvoice.isPending}
-  />
-
-  {/* Archive proof confirmation */}
-  <ConfirmDialog
-  isOpen={!!deleteProofId}
-  onClose={() => setDeleteProofId(null)}
-  onConfirm={() => { if (deleteProofId) removeProof.mutate(deleteProofId); }}
-  title="Archive this proof?"
-  description="The file will be archived and can be restored later."
-  confirmLabel="Archive"
-  variant="danger"
-  pending={removeProof.isPending}
-  />
-
-  {/* Restore proof confirmation */}
-  <ConfirmDialog
-  isOpen={!!restoreProofId}
-  onClose={() => setRestoreProofId(null)}
-  onConfirm={() => { if (restoreProofId) restoreProof.mutate(restoreProofId); }}
-  title="Restore this proof?"
-  description="The file will be restored and count toward the delivery proof requirement."
-  confirmLabel="Restore"
-  pending={restoreProof.isPending}
-  />
- </div>
- );
+          {/* Sprint 7 audit fix: LinkedRecords (O2C chain) */}
+          <Panel title="Linked records">
+            <LinkedRecords
+              groups={[
+                ...(data.sales_order
+                  ? [
+                      {
+                        label: 'Sales order',
+                        items: [
+                          {
+                            id: data.sales_order.so_number,
+                            href: `/crm/sales-orders/${data.sales_order.id}`,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
+                ...(data.invoice
+                  ? [
+                      {
+                        label: 'Invoice',
+                        items: [
+                          {
+                            id: data.invoice.invoice_number,
+                            href: `/accounting/invoices/${data.invoice.id}`,
+                            meta: `${data.invoice.total_amount} · ${data.invoice.status}`,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
+                ...(data.items?.length
+                  ? [
+                      {
+                        label: 'Inspections',
+                        items: data.items
+                          .filter((i) => i.inspection)
+                          .map((i) => ({
+                            id: i.inspection!.inspection_number,
+                            href: `/quality/inspections/${i.inspection!.id}`,
+                            meta: i.inspection!.status,
+                          })),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </Panel>
+          <Panel title="Navigation">
+            <Link to="/supply-chain/deliveries" className="text-xs text-accent hover:underline">
+              ← Back to deliveries
+            </Link>
+          </Panel>
+        </div>
+      </div>
+      {/* Confirm modal — captures receiver details. */}
+      <Modal
+        isOpen={confirmModalOpen}
+        onClose={() => setConfirmModalOpen(false)}
+        title="Confirm delivery"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            {hasProof
+              ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and attempt to create a draft invoice.`
+              : 'At least one proof must be uploaded first.'}
+          </p>
+          <Input
+            label="Received by"
+            type="text"
+            value={receiverName}
+            onChange={(e) => setReceiverName(e.target.value)}
+            placeholder="e.g. Maria Santos"
+          />
+          <Input
+            label="Position"
+            type="text"
+            value={receiverPosition}
+            onChange={(e) => setReceiverPosition(e.target.value)}
+            placeholder="e.g. Purchasing Officer"
+          />
+          <Textarea
+            label="Remarks (optional)"
+            value={confirmRemarks}
+            onChange={(e) => setConfirmRemarks(e.target.value)}
+            rows={3}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setConfirmModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={<LuCheck size={14} />}
+              loading={confirm.isPending}
+              disabled={!hasProof}
+              onClick={() => confirm.mutate()}
+            >
+              Confirm delivery
+            </Button>
+          </div>
+        </div>
+      </Modal>{' '}
+      {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
+      <Modal
+        isOpen={assignmentModalOpen}
+        onClose={() => {
+          if (!assign.isPending) setAssignmentModalOpen(false);
+        }}
+        title={data.vehicle && data.driver ? 'Reassign delivery' : 'Assign delivery'}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            The assignment is recorded with the operator and reason. Only active drivers and
+            available vehicles can be selected.
+          </p>
+          <Select
+            label="Vehicle"
+            required
+            value={assignmentVehicleId}
+            onChange={(e) => setAssignmentVehicleId(e.target.value)}
+            disabled={assign.isPending}
+          >
+            <option value="">— Select available vehicle —</option>
+            {(availableVehicles?.data ?? []).map((vehicle) => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.name} ({vehicle.plate_number})
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Driver"
+            required
+            value={assignmentDriverId}
+            onChange={(e) => setAssignmentDriverId(e.target.value)}
+            disabled={assign.isPending}
+          >
+            <option value="">— Select active driver —</option>
+            {driverOptions.map((driver) => (
+              <option key={driver.id} value={driver.id}>
+                {driver.name}
+              </option>
+            ))}
+          </Select>
+          <Textarea
+            label="Assignment reason"
+            required
+            value={assignmentReason}
+            onChange={(e) => setAssignmentReason(e.target.value)}
+            maxLength={500}
+            placeholder="Why is this driver and vehicle being assigned?"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setAssignmentModalOpen(false)}
+              disabled={assign.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={assign.isPending}
+              disabled={
+                !assignmentVehicleId || !assignmentDriverId || assignmentReason.trim().length < 5
+              }
+              onClick={() => assign.mutate()}
+            >
+              Save assignment
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      {/* 2026-08-08 — finalize the auto-created draft invoice from the delivery. */}
+      <ConfirmDialog
+        isOpen={!!finalizeInvoiceId}
+        onClose={() => setFinalizeInvoiceId(null)}
+        onConfirm={() => {
+          if (finalizeInvoiceId) finalizeInvoice.mutate(finalizeInvoiceId);
+        }}
+        title="Finalize draft invoice?"
+        description="Finalizing locks the invoice number, posts the AR/revenue journal entry, and flips the invoice to Finalized (the SO is promoted to Invoiced). Review the auto-created amounts before posting."
+        confirmLabel="Finalize invoice"
+        pending={finalizeInvoice.isPending}
+      />
+      {/* Archive proof confirmation */}
+      <ConfirmDialog
+        isOpen={!!deleteProofId}
+        onClose={() => setDeleteProofId(null)}
+        onConfirm={() => {
+          if (deleteProofId) removeProof.mutate(deleteProofId);
+        }}
+        title="Archive this proof?"
+        description="The file will be archived and can be restored later."
+        confirmLabel="Archive"
+        variant="danger"
+        pending={removeProof.isPending}
+      />
+      {/* Restore proof confirmation */}
+      <ConfirmDialog
+        isOpen={!!restoreProofId}
+        onClose={() => setRestoreProofId(null)}
+        onConfirm={() => {
+          if (restoreProofId) restoreProof.mutate(restoreProofId);
+        }}
+        title="Restore this proof?"
+        description="The file will be restored and count toward the delivery proof requirement."
+        confirmLabel="Restore"
+        pending={restoreProof.isPending}
+      />
+    </div>
+  );
 }

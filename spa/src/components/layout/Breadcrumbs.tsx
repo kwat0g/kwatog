@@ -64,6 +64,7 @@ const TITLE_OVERRIDES: Record<string, string> = {
  rbac: 'RBAC',
  coa: 'Chart of Accounts',
  boms: 'BOMs',
+ rfqs: 'RFQs',
  grn: 'GRN',
  oee: 'OEE',
  dtr: 'DTR',

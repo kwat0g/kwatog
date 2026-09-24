@@ -9,53 +9,64 @@
  */
 import type { ChainStep } from '@/types/chain';
 import type { EmployeeLoan } from '@/types/loans';
+import { formatDateIso } from '@/lib/formatDate';
 
 export function buildLoanChain(loan: EmployeeLoan): ChainStep[] {
- const isActiveOrPaid = loan.status === 'active' || loan.status === 'paid';
- const totalPaid = parseFloat(loan.total_paid ?? '0');
- const balance = parseFloat(loan.balance ?? '0');
+  const isActiveOrPaid = loan.status === 'active' || loan.status === 'paid';
+  const totalPaid = parseFloat(loan.total_paid ?? '0');
+  const balance = parseFloat(loan.balance ?? '0');
 
- if (loan.status === 'cancelled' || loan.status === 'rejected') {
- return [
- { key: 'submitted', label: 'Submitted', state: 'done', date: loan.created_at?.slice(0, 10) },
- {
- key: 'closed',
- label: loan.status === 'rejected' ? 'Rejected' : 'Cancelled',
- state: 'done',
- date: loan.updated_at?.slice(0, 10),
- },
- ];
- }
+  if (loan.status === 'cancelled' || loan.status === 'rejected') {
+    return [
+      {
+        key: 'submitted',
+        label: 'Submitted',
+        state: 'done',
+        date: loan.created_at ? formatDateIso(loan.created_at) : undefined,
+      },
+      {
+        key: 'closed',
+        label: loan.status === 'rejected' ? 'Rejected' : 'Cancelled',
+        state: 'done',
+        date: loan.updated_at ? formatDateIso(loan.updated_at) : undefined,
+      },
+    ];
+  }
 
- return [
- { key: 'submitted', label: 'Submitted', state: 'done', date: loan.created_at?.slice(0, 10) },
- {
- key: 'approved',
- label: 'Approved',
- state: isActiveOrPaid ? 'done' : loan.status === 'pending' ? 'active' : 'pending',
- date: loan.approved_at?.slice(0, 10),
- },
- {
- key: 'disbursed',
- label: 'Disbursed',
- state: isActiveOrPaid ? 'done' : 'pending',
- date: loan.start_date ?? undefined,
- },
- {
- key: 'repaying',
- label: 'Repaying',
- state:
- loan.status === 'paid'
- ? 'done'
- : loan.status === 'active' && totalPaid > 0
- ? 'active'
- : 'pending',
- },
- {
- key: 'settled',
- label: 'Settled',
- state: loan.status === 'paid' || balance <= 0 ? 'done' : 'pending',
- date: loan.end_date ?? undefined,
- },
- ];
+  return [
+    {
+      key: 'submitted',
+      label: 'Submitted',
+      state: 'done',
+      date: loan.created_at ? formatDateIso(loan.created_at) : undefined,
+    },
+    {
+      key: 'approved',
+      label: 'Approved',
+      state: isActiveOrPaid ? 'done' : loan.status === 'pending' ? 'active' : 'pending',
+      date: loan.approved_at ? formatDateIso(loan.approved_at) : undefined,
+    },
+    {
+      key: 'disbursed',
+      label: 'Disbursed',
+      state: isActiveOrPaid ? 'done' : 'pending',
+      date: loan.start_date ?? undefined,
+    },
+    {
+      key: 'repaying',
+      label: 'Repaying',
+      state:
+        loan.status === 'paid'
+          ? 'done'
+          : loan.status === 'active' && totalPaid > 0
+            ? 'active'
+            : 'pending',
+    },
+    {
+      key: 'settled',
+      label: 'Settled',
+      state: loan.status === 'paid' || balance <= 0 ? 'done' : 'pending',
+      date: loan.end_date ?? undefined,
+    },
+  ];
 }

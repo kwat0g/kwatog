@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -251,6 +252,68 @@ class MaterialIssueReservationInvariantTest extends TestCase
         $ok->assertCreated();
         $this->assertSame('1.999', (string) DB::table('material_issue_slip_items')
             ->orderByDesc('id')->value('quantity_issued'));
+    }
+
+    public function test_material_issue_request_replay_does_not_issue_stock_twice(): void
+    {
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $payload = [
+            'issued_date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $this->item->hash_id,
+                'location_id' => $this->location->hash_id,
+                'quantity_issued' => '5.000',
+            ]],
+        ];
+
+        $this->actingAs($warehouse)
+            ->postJson('/api/v1/inventory/material-issues', $payload, ['Idempotency-Key' => 'MIS-RETRY-1'])
+            ->assertCreated();
+        $this->actingAs($warehouse)
+            ->postJson('/api/v1/inventory/material-issues', $payload, ['Idempotency-Key' => 'MIS-RETRY-1'])
+            ->assertCreated();
+
+        $this->assertSame(1, MaterialIssueSlip::query()->where('created_by', $warehouse->id)->count());
+        $this->assertSame('95.000', (string) $this->level()->quantity);
+
+        $otherWarehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+        $this->actingAs($otherWarehouse)
+            ->postJson('/api/v1/inventory/material-issues', $payload, ['Idempotency-Key' => 'MIS-RETRY-1'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The idempotency key was already used for a different material-issue payload.');
+
+        $changed = $payload;
+        $changed['items'][0]['quantity_issued'] = '4.000';
+        $this->actingAs($warehouse)
+            ->postJson('/api/v1/inventory/material-issues', $changed, ['Idempotency-Key' => 'MIS-RETRY-1'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The idempotency key was already used for a different material-issue payload.');
+
+        $this->assertSame('95.000', (string) $this->level()->quantity);
+    }
+
+    public function test_material_issue_list_search_uses_the_shared_search_operator(): void
+    {
+        $slip = $this->issues->create([
+            'issued_date' => now()->toDateString(),
+            'items' => [[
+                'item_id' => $this->item->id,
+                'location_id' => $this->location->id,
+                'quantity_issued' => '1.000',
+            ]],
+        ], $this->user);
+        $warehouse = User::factory()->create([
+            'role_id' => Role::where('slug', 'warehouse_staff')->value('id'),
+        ]);
+
+        $this->actingAs($warehouse)
+            ->getJson('/api/v1/inventory/material-issues?search='.urlencode(substr($slip->slip_number, -4)))
+            ->assertOk()
+            ->assertJsonPath('data.0.slip_number', $slip->slip_number);
     }
 
     /**

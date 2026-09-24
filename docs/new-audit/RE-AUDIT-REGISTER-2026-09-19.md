@@ -17,82 +17,74 @@ and point back here for complete current evidence.
   said `FINISHED`.
 - Current tests were inspected; the re-audit agents did not claim a test passed unless it was
   already documented as current evidence. A full suite was not rerun during this re-audit.
-- Jev was used only as read-only corroboration after deterministic evidence collection. The live
-  verifier processed 19 scenarios sequentially with model `jev-1.13.0`: `0 covered`, `0 gaps`,
-  `19 review`, `0 not_applicable`, `0 service_errors`. Jev did not close or downgrade any finding.
-- Scenario manifest: `RE-AUDIT-JEV-SCENARIOS-2026-09-19.json`.
-- Jev raw result was captured outside the repository at `/tmp/opencode/re-audit-jev-2026-09-19.json`.
 
 Evidence priority: current code and executable regression tests outrank historical report labels;
-Jev is corroboration only; deployed settings, queues, schedulers, migrations, providers, and
+deployed settings, queues, schedulers, migrations, providers, and
 business-policy intent remain untestable without the relevant runtime or owner decision.
 
 ## Artifact Re-Audit
 
 | Artifact | Current verdict |
 |---|---|
-| `FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md` | Historical label stale. Current SO chain has new open gaps: cancelled SO draft auto-PR survives; invoiced partial SOs are excluded from MRP replan; chain/paid timestamps and MRP queued-vs-failed response are incomplete; CoC failure has no durable recovery. No-spec outgoing QC now fails closed without creating a dead-end inspection. |
-| `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md` | Historical fixes are partly correct. Current P2P has critical cancelled-PO/draft-GRN resurrection, RFQ partial-quantity conversion, duplicate manual PO coverage, posted partial-bill continuation, fractional/archived incoming-QC gaps, PO submission ownership drift, and missing GRN GL recovery. |
-| `HIRE-TO-RETIRE-PAYROLL-TRACE-2026-09-18-FINISHED.md` | Most historical payroll fixes are present, but SSS R-3 still returns an empty workbook for unfinalized periods and new input-freeze, eligibility-completeness, anomaly-race, government-table, 13th-month-period, tax-correction, and statutory-basis gaps remain. |
-| `ACCOUNTING-CORE-AUDIT-2026-09-18-PARTIAL.md` | Partial status is accurate. New invoice-source, credit-note-source, bill-payment-idempotency, budget-posting, account-policy, fiscal-year, raw-ID, and service-bill SOD risks remain. |
-| `INVENTORY-RETURNS-AUDIT-2026-09-18.md` | Search imports and stock-card direction are fixed. WAC read arithmetic, stock-count completion/self-approval, fractional QC, zone reclassification, item restore, idempotency, lot authority, source integrity, and RMA boundaries remain. |
-| `QUALITY-AUDIT-2026-09-18.md` | AQL unit counting, 8D command status, declared sample enforcement, no-spec fail-closed behavior, multi-product return inspections, PPAP lifecycle, NCR API linkage, supplier-return closure, revision immutability, and traceability gap signaling are fixed in the current worktree. Full-sampling bounds, seeded role config, decimal serialization, approval policy, and calibration-to-inspection integration remain. |
-| `PRODUCTION-AUDIT-2026-09-18-FINISHED.md` | Breakdown MWO, summary SQL, operation windows, machine/mold guards, schedule constraints, and mold PM creation were improved. Resume-after-breakdown, machine ownership on pause/complete, material-lot truth, operation ledger limits, downtime interval math, dashboard invalidation, dead links, and audit coverage remain. |
-| `MRP-AUDIT-2026-09-18-FINISHED.md` | Most historical BOM/MRP fixes are current. Same-second routing replan dedupe, BOM soft-deleted version collision, UOM-normalized in-transit supply, manual/daily MRP overlap, plan-history reconstruction, missing-BOM status/alerting, MOQ precision, and direct-service numeric validation remain. |
-| `MRP-AUDIT-2026-09-18-MISSING-TESTS.md` | Still valid as a test-gap inventory, but it is not a current pass/fail result. Redis overlap, two-worker races, migration preflight, full-suite triage, and several BOM/MRP boundary tests remain unproven. |
-| `SUPPLYCHAIN-AUDIT-2026-09-18.md` | Landed-cost visibility was fixed; capitalization remains absent. Customs evidence, shipment immutability/status, duplicate documents, shipment lots, CoC recovery, delivery inventory decrement, active delivery deletion, driver double-booking, decimal contracts, and manual delivery idempotency remain. |
-| `CRM-AUDIT-2026-09-18.md` | Portal raw-ID fallback was fixed. Product/price management ownership, revenue-account API reachability, feature-gated inquiries, price fallback, product case matching, archive semantics, inquiry audit/status, stale funnel config, and missing CRM SPA tests remain. |
-| `HR-AUDIT-2026-09-18.md` | Profile encryption/list scope was fixed, but direct bank edits bypass Finance, review mutations lack row scope, profile fields lack validation, salary basis/history is weak, restore leaves accounts disabled, recruitment conversion is under-validated, and document/training/position gaps remain. |
-| `ATTENDANCE-LEAVE-LOANS-AUDIT-2026-09-18-FINISHED.md` | Several historical fixes are current. Attendance still has payroll scope drift, overnight OT, ceiling disagreement, stale auto-OT, break/rest/recurring-holiday issues, shift assignment gaps, manual OT duplicates, bulk disclosure, stale DTR; Leave has show/options/document/archived-balance/negative-days/holiday/SPA gaps; Loans has partial final-pay replay, as-of rewind, terminal visibility, write-off, workflow migration, notifications, feature-gate, disbursement, provenance, and database-invariant gaps. |
-| `FORECASTING-ASSETS-AUDIT-2026-09-18.md` | Forecasts remain advisory-only; reconciliation is not rerunnable, accuracy double-counts scopes, invalid hashes broaden queries, manual method is coerced, DB invariants and decimal contracts are weak. Assets still lack operational links, maintenance status, transfer route cleanup, QR contract, deployed workflow migration, raw depreciation journal ID, and failure recovery. |
-| `B2B-MAINTENANCE-AUDIT-2026-09-18.md` | Supplier expiry, customer invitation audit, token revoke parity, reset pruning, supplier document download, write throttles, parent deactivation, SPA response/RMA reachability, timed-expiry routing, and order idempotency remain. Maintenance still has predictive race/freshness, downtime trust/double-count, due-widget, dead link, polymorphic integrity, and audit gaps. |
-| `PLATFORM-CROSS-CUTTING-AUDIT-2026-09-18.md` | Several top findings are fixed (imports, 8D, unsubscribe, settings transaction). Approval escalation health, direct bottleneck alerts, recovery audit entity IDs, delegated HTTP approvals, approval-board pagination, business-policy exposure, document sequence first-use race, outbox version handling, checksum verification, notification idempotency, and feature-toggle/search drift remain. |
+| `FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md` | **FINISHED (2026-09-23).** All current-risk items closed or dispositioned: cancelled SO retires linked draft/pending MRP auto-PRs; MRP scope is undelivered quantity so invoiced partial SOs replan; confirm reports `planning_status=failed` with the run error instead of `queued`; Delivered chain tile derives from coverage; invoice finalize refuses a second invoice consuming an already-invoiced delivery; CoC durable recovery and no-spec outgoing QC fail-closed verified current. §7 items are dispositioned in the report (7 fixed/stale, 6 by-design or tracked in their owning module). |
+| `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md` | FINISHED (remediated). Cancelled PO/draft GRN purge, partial quantity conversion, posted partial-bill continuation, fractional/archived incoming-QC handling, manual PO coverage, PO submission ownership, and accepted-GRN GL retry are fixed and focused-tested. Production migration preflight and a GRN-GL retry UI affordance remain operational/polish follow-up. |
+| `HIRE-TO-RETIRE-PAYROLL-TRACE-2026-09-18-FINISHED.md` | Payroll, Attendance, Leave, and Loans remediation is current-tested. SSS R-3 now rejects non-finalized periods; input freezing, eligibility, anomaly serialization, effective-table, 13th-month date, statutory, Finance-controlled loan write-off, disbursement, and repayment mappings are present. Manual-OT/break/maternity policy, statutory certification, and live provider proof remain. |
+| `ACCOUNTING-CORE-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (current worktree).** Credit-note voiding, account-policy collision rejection, fiscal-year lifecycle/overlap controls, effective-date numbering, canonical five-bucket statement aging, update authorization, audit hooks, sync identifier hardening, budget-scope serialization, dead-path removal, and stale budget reference cleanup are implemented. Year-end retained earnings, multi-currency translation, company-wide/cross-module budget semantics, service-bill SOD, and historical account archiving remain explicit policy/scope dispositions. Focused test execution is blocked by an unrelated duplicate import in Maintenance; modified Accounting files pass PHP syntax checks. |
+| `INVENTORY-RETURNS-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (2026-09-23).** Inventory location/count/decimal/QC/lot/idempotency controls and Return Management source, approval, VAT, NCR, bill, and MRB traceability boundaries are remediated or explicitly dispositioned. Focused Inventory/RMA/Quality regressions passed (239 tests, 888 assertions). Full-suite attempts were blocked by PostgreSQL migration/schema deadlocks and duplicate/missing-table errors; one run also failed an existing `CarbonDiffSignConventionTest` in `WoOperationService`, so the full suite is not claimed green. Single-screen fractional receiving and fully-paid supplier-credit settlement remain documented policy workflows. |
+| `QUALITY-AUDIT-2026-09-18-FINISHED.md` | FINISHED for engineering scope. AQL/unit counting, declared samples, no-spec fail-closed behavior, calibration linkage, full-sampling bounds, and high-risk incoming/outgoing maker-checker review are fixed and focused-tested. Stored-but-unused legacy fields remain cleanup follow-up. |
+| `PRODUCTION-AUDIT-2026-09-18-FINISHED.md` | Remediated (2026-09-23). Breakdown MWO, summary SQL, operation windows, machine/mold guards, schedule constraints, resume-after-breakdown, machine ownership, material-lot truth, operation ledger limits, downtime interval math, dashboard invalidation, authorization, notification filtering, and audit coverage are implemented and tested. Only dead/broadcast-only paths and Pareto duplication remain. |
+| `MRP-AUDIT-2026-09-18-FINISHED.md` | Remediated for current engineering scope. BOM version/numeric validation, PO in-transit UOM, manual/daily overlap, plan history, missing-BOM status/alerting, MOQ precision, and direct-service validation are fixed and focused-tested. Redis/two-worker behavior and production migration preflight remain unproven. |
+| `MRP-AUDIT-2026-09-18-MISSING-TESTS.md` | Focused MRP boundaries, read-only migration preflight, and Redis two-worker overlap smoke are verified. Full-suite triage, production-database migration execution, and deployed worker recovery remain release evidence. |
+| `SUPPLYCHAIN-AUDIT-2026-09-18-FINISHED.md` | Remediated. Landed-cost capitalization, shipment-to-GRN, customs evidence, immutability, document deduplication, delivery stock decrement, deletion guards, driver booking, CoC recovery, lot provenance, manual idempotency, and Asset-to-fleet association are verified. Secondary container/restore UI and B2B shipment cross-reference remain non-blocking. |
+| `CRM-AUDIT-2026-09-18.md` | Non-SO CRM engineering findings remediated. Product/price ownership, revenue-account HashID reachability, inquiry feature gating/audit/terminal status, price fallback, case-insensitive product identity, and archive semantics are fixed and focused-tested. Product-form account selection, Product-to-Item identity, unused legacy schema, and CRM SPA coverage remain. |
+| `HR-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (2026-09-23).** Direct bank edits, review-action scope, profile validation/redaction, salary basis/history, archive restore, recruitment conversion, document retention, training chronology, skill metadata, boolean filters, position direction, salary approval attribution, and dead HR surfaces are remediated or explicitly dispositioned. |
+| `ATTENDANCE-LEAVE-LOANS-AUDIT-2026-09-18-FINISHED.md` | Current remediation covers raw-punch routing, payroll recovery, OT ceilings/overnight and stale recalculation, shift/holiday recomputation, cross-year leave allocations, private documents, negative balances, holiday semantics, loan replay/visibility/workflow migration, Finance-controlled write-off, disbursement/manual-repayment GL, and payroll mutation guards. Manual OT duplicate prevention, break-interval/rest policy, maternity entitlement policy, and live provider proof remain. Loan evidence uses a controlled Finance reference string by policy. |
+| `FORECASTING-ASSETS-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (2026-09-23).** Forecast generation is scheduled; invalid HashIDs fail closed; total/customer accuracy scopes are authoritative; reconciliation is transactionally rerunnable; decimal projection paths and BOM failure visibility are hardened. Assets have authorized machine/mold/vehicle association, truthful maintenance status, retired transfer routes/permissions, corrected QR contract, deployed disposal-workflow migration, HashID depreciation responses, aligned scheduler mutex, and durable failure outcomes. Forecast-driven MRP remains advisory by explicit product-policy disposition. |
+| `B2B-MAINTENANCE-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (2026-09-23).** Portal password expiry, parent-state and invitation audit, customer token revoke, reset pruning, supplier RFQ document download, authenticated write throttles, customer response/RMA SPA, timed-expiry routing, and customer-order idempotency are implemented. Maintenance predictive de-duplication/freshness, ledger-derived downtime, runtime interval accounting, due-widget visibility, breakdown notification routing, polymorphic target integrity, and reading audit are implemented or explicitly scope-dispositioned. See the finished report for evidence. |
+| `PLATFORM-CROSS-CUTTING-AUDIT-2026-09-18-FINISHED.md` | **FINISHED (2026-09-23).** Approval escalation health, bottleneck alert deduplication, recovery audit subjects, approval-board pagination, business-policy authorization, document sequence first-use, outbox version handling, vault checksum verification, notification idempotency, dashboard badge scopes/failure signalling, supplier password expiry, auth timing/current-password/history controls, landing feature/PII controls, and Edge reference cleanup are remediated. Nginx PDF-preview framing, annual budget KPI semantics, the `/auth/login` compatibility alias, delegated-approval API expansion, and 2FA remain explicit policy/compatibility dispositions. |
 | `FINDINGS-REGISTER-2026-09-18.md` | Historical overlay is stale in multiple locations: it says P0-07 has zero MWO references although current code creates one, and P0-08 still describes row-count AQL although current code counts sample units. Use this re-audit register for current status. |
-| `MODULE-AUDIT-TRACKER-2026-09-18.md` | All rows say `audited`, but three document links are broken: payroll, accounting, and production names omit their `-FINISHED`/`-PARTIAL` suffixes. The status vocabulary does not distinguish current evidence from historical coverage. |
-| `JEV-SCENARIO-MANIFEST.example.json` | Operational example only. It contains placeholder evidence; scenario R7 cites the wrong runbook line (`#97` instead of the R7 row around `#947`). Not a completed audit. |
-| `JEV-SCENARIO-VERIFIER.md` | Current operational documentation matches the verifier implementation. Live Jev corroboration is available, but its results are review signals, not proof. |
-
+| `MODULE-AUDIT-TRACKER-2026-09-18.md` | The tracker now points Accounting at its `-FINISHED` artifact; historical status vocabulary and any remaining legacy links should not override the current per-artifact evidence. |
 ## Current Module Matrix
 
 | # | Module/feature | Re-audit result | Highest current residual risk |
 |---:|---|---|---|
-| 1 | CRM Sales Order | Historical FINISHED label invalid as a current closure | cancelled SO leaves draft auto-PR; invoiced partial SO excluded from MRP replan; QC/CoC/MRP response ambiguity |
-| 2 | Purchasing PR/P2P | Historical FINISHED label invalid as a current closure | cancelled PO resurrected by draft GRN; RFQ partial quantity converts full line; duplicate manual PO coverage; posted partial bill cannot bill remainder |
-| 3 | Payroll/H2R | Historical FINISHED label incomplete | mutable payroll inputs after approval; eligibility completeness; anomaly recompute race; inactive gov-table lookup; SSS-R3 contract; malformed 13th period |
-| 4 | Accounting core | PARTIAL status remains accurate | duplicate invoice consumption; source-less credit-note state; changed-payload payment replay; bill budget bypass; fiscal-year lifecycle |
-| 5 | Budgeting | Embedded Accounting feature remains incomplete | bill posting bypass; concurrent budget overrun; overlapping fiscal years; dead revision/transfer references |
-| 6 | Inventory | Historical report partly remediated | stock-card WAC math; zone reclassification; count self-approval/incomplete counts; fractional QC; idempotency; lot authority |
-| 7 | Quality | Historical report partly remediated | full-sampling bounds; seeded role config; decimal serialization; approval policy; calibration not linked to inspections |
-| 8 | Production | Historical FINISHED label invalid as current closure | resume while machine down; pause/complete assignment ownership; false lot lineage; operation ledger divergence; downtime intervals |
-| 9 | MRP/BOM | Historical FINISHED label incomplete | BOM version collision; PO UOM; manual/daily overlap; history loss; missing-BOM alert/status; MOQ precision |
-| 10 | SupplyChain | Open | landed-cost capitalization; shipment/GRN handoff; delivery stock decrement; CoC recovery; active deletion; driver double-booking |
-| 11 | CRM remaining | Open | no business owner for product/price manage; revenue account unreachable; inquiry feature gate; pricing/product identity; inquiry audit |
-| 12 | HR | Open | direct bank edits; profile action scope/validation; restore account; salary basis/history; recruitment conversion; document cleanup |
-| 13 | Attendance | Open | scope drift after employee transfer; overnight OT; OT ceilings; stale OT; break/holiday/rest math; shift validity |
-| 14 | Leave | Open | detail/options contract; documents unavailable; archived balances; negative days; holiday/half-day semantics; long maternity precision |
-| 15 | Loans | Open | partial final-pay replay; as-of aggregate rewind; terminal chain visibility; write-off absence; workflow migration; disbursement accounting |
-| 16 | Return Management | Open | product/item mismatch; duplicate NCR; Finance-only approval role; source-state enforcement; supplier bill provenance; replacement VAT |
-| 17 | Forecasting | Open | no automatic generation; accuracy double-count/zero actual; stale reconciliation; swallowed BOM errors; invalid hash broadening; manual-method coercion |
-| 18 | Assets | Open | no operational asset links; stale workflow rows in deployed DB; raw depreciation journal ID; linked-asset lifecycle; failed depreciation visibility |
-| 19 | B2B Portal | Open | supplier expiry; invitation audit/parent state; reset pruning; customer response/RMA SPA reachability; customer resource overexposure; order idempotency |
-| 20 | Maintenance | Open | stale predictive readings; duplicate corrective MWO race; downtime ledger mismatch/double count; due-widget omissions; dead notification route |
-| 21 | Dashboard | Open | missing session/password middleware; badge row-scope leaks; widget failure invisibility; inactive KPI reads; money floats; permission cache staleness |
-| 22 | Admin | Open | privileged custom-role assignment; nested raw IDs in audit; bulk-role audit loss; import audit/error leakage; session control; feature dependency enforcement |
-| 23 | Auth/security | Open | timing oracles; current-password reuse; history depth zero; expiry-at-login UX; per-user idle clock; session admin; ungated business policies; no 2FA policy |
-| 24 | Edge/shop-floor device integration | Removed, residual stale references | no live module; dead `/api/v1/edge/*` middleware carve-outs and stale docs; factory/driver PWAs are separate live features |
-| 25 | Landing/public pages | Open | CRM feature gate on inquiry inbox; PII exposure; newsletter write-only lifecycle; no PII retention/deletion; public customer disclosure; state-changing GET unsubscribe |
-| 26 | Common infrastructure | Open | approval escalation health; direct bottleneck alert path; recovery audit entity IDs; outbox version ignored; sequence first-use race; vault checksum verification; notification idempotency |
+| 1 | CRM Sales Order | **FINISHED** (2026-09-23) — all SO-chain gaps closed or dispositioned | none tracked here; see `FINISHED-SALES-ORDER-CHAIN-TRACE-2026-09-18.md` §7 table |
+| 2 | Purchasing PR/P2P | FINISHED (remediated) | migration preflight; GRN-GL retry UI; operational proof |
+| 3 | Payroll/H2R | Remediated for current engineering scope | Finance/statutory reporting policy and live filing/provider proof |
+| 4 | Accounting core | FINISHED for current engineering scope | credit-note void, policy collisions, fiscal-year overlap/lifecycle, effective-date numbering, canonical statement aging, audit hooks, and wired budget serialization are closed; explicit owner-policy dispositions remain |
+| 5 | Budgeting | FINISHED for current engineering scope | company-wide/cross-module spend policy and owner decisions |
+| 6 | Inventory | **FINISHED** (2026-09-23) | single-screen fractional receiving remains line-level-QC only; cleanup debt is non-blocking |
+| 7 | Quality | FINISHED (remediated) | stored-but-unused legacy code |
+| 8 | Production | Remediated (2026-09-23) | dead/broadcast-only paths; three Pareto implementations |
+| 9 | MRP/BOM | Remediated for current engineering scope | deployed worker recovery and production migration execution |
+| 10 | SupplyChain | Remediated | secondary SPA container/restore UI; B2B shipment cross-reference |
+| 11 | CRM remaining | Remediated for current engineering scope | product-form revenue account selector; Product-to-Item identity; SPA coverage |
+| 12 | HR | **FINISHED (2026-09-23)** | policy dispositions are recorded in `HR-AUDIT-2026-09-18-FINISHED.md` |
+| 13 | Attendance | Remediated for current engineering scope | manual OT duplicates; break-interval/rest policy; live biometric-provider proof |
+| 14 | Leave | Remediated for current engineering scope | maternity entitlement policy and live SPA/browser breadth |
+| 15 | Loans | Remediated for current engineering scope | live accounting/provider proof |
+| 16 | Return Management | **FINISHED** (2026-09-23) | fully-paid supplier-credit settlement is an explicit Finance refund/offset workflow; broad row visibility is policy |
+| 17 | Forecasting | **FINISHED** (2026-09-23) | advisory-only MRP integration is an explicit policy disposition; remaining engineering findings are remediated and focused-tested |
+| 18 | Assets | **FINISHED** (2026-09-23) | operational links, maintenance lifecycle, deployed workflow migration, HashIDs, transfer cleanup, and failure visibility are remediated and focused-tested |
+| 19 | B2B Portal | **FINISHED** (2026-09-23) | no open finding in this report; customer-order and supplier-RFQ evidence is recorded in the finished artifact |
+| 20 | Maintenance | **FINISHED** (2026-09-23) | no open finding in this report; condition-reading routes remain intentionally hidden pending an IoT source |
+| 21 | Dashboard | FINISHED for current engineering scope | annual KPI semantics and deployed browser/runtime proof |
+| 22 | Admin | FINISHED for current engineering scope | delegated-approval API expansion and deployed runtime proof |
+| 23 | Auth/security | FINISHED for current engineering scope | 2FA product/security decision and deployed runtime proof |
+| 24 | Edge/shop-floor device integration | Removed by design | no live Edge module; factory/driver PWAs are separate live features |
+| 25 | Landing/public pages | FINISHED for current engineering scope | public policy decisions and deployed runtime/provider proof |
+| 26 | Common infrastructure | FINISHED for current engineering scope | deployed scheduler/queue/provider proof |
 
 ## Highest-priority residual findings
 
-1. **Purchasing G1/G2/G4/G5:** cancelled PO/draft GRN resurrection, partial RFQ conversion, posted partial-bill continuation, and incoming-QC quantity truncation.
-2. **Payroll PAY-NEW-01/PAY-NEW-02/PAY-NEW-04:** post-compute input mutation, incomplete eligible employee set, and inactive government schedules.
-3. **Accounting A-01/A-02/A-03/A-04:** duplicate invoice source consumption, invalid source credit notes, changed-payload payment replay, and budget bypass at bill posting.
-4. **HR N1/N2/N3/N4/N5:** direct bank edits, unscoped review actions, unvalidated profile values, salary-basis mismatch, and mutable hire/employment dates.
-5. **Inventory H-08 plus current zone/count/lot gaps:** fractional QC truncation, zone reclassification, incomplete counts, and non-authoritative lot selection.
-6. **Production N-01/N-02/N-04/N-05:** resume during machine failure, wrong assignment clearing, false lot lineage, and independent operation output ledger.
-7. **Quality operational/policy gaps:** unbounded full sampling, seeded role configuration, decimal serialization, inspection approval policy, and calibration evidence integration.
-8. **Security:** B2B supplier expiry, Auth timing/current-password/session issues, Admin privileged custom roles, raw nested audit IDs, and Landing inquiry PII.
+1. **~~Purchasing G1/G2/G4/G5:~~** closed — cancelled PO/draft GRN resurrection, partial RFQ conversion, posted partial-bill continuation, and incoming-QC fractional/archived truncation are remediated with regression tests (see `PURCHASE-REQUEST-CHAIN-TRACE-2026-09-18-FINISHED.md` §9).
+2. **Payroll:** source-level input-freeze, eligibility, anomaly, effective-table, 13th-month-date, SSS-R3, and tax-correction gaps are closed; statutory policy certification and live filing/provider proof remain.
+3. **Accounting:** engineering residuals are closed in the current worktree; year-end close, multi-currency, company-wide/cross-module budget semantics, service-bill SOD, and historical account archiving are explicit owner-policy dispositions.
+4. **~~HR N1/N2/N3/N4/N5:~~** closed 2026-09-23; direct bank edits, unscoped review actions, unvalidated profile values, salary-basis mismatch, and mutable hire/employment dates are fixed or dispositioned in `HR-AUDIT-2026-09-18-FINISHED.md`.
+5. **~~Inventory H-08 and location/count/lot gaps:~~** closed or dispositioned 2026-09-23 — fractional QC is fail-closed or ceiling-counted by path, location changes are guarded, count verification/completion is maker-checker controlled, and return lot/source provenance is enforced (see inventory report §7).
+6. **~~Production N-01/N-02/N-04/N-05:~~** closed 2026-09-23 — resume during machine failure, wrong assignment clearing, false lot lineage, independent operation output ledger, and downtime interval math are remediated with regression tests (see `PRODUCTION-AUDIT-2026-09-18-FINISHED.md` §10).
+7. **Quality cleanup:** stored-but-unused legacy code.
+8. **Operational proof:** Redis/two-worker MRP behavior, production migration preflight, deployed scheduler/queue/provider behavior, and live browser coverage remain release evidence gaps.
 
 ## Test-gap summary
 
@@ -110,26 +102,9 @@ around:
 - SPA route/permission parity and decimal serialization;
 - database-level invariants versus service-only guards.
 
-## TypeSafe corroboration
-
-The verifier processed 19 scenarios sequentially using `jev-1.13.0`:
-
-```text
-covered: 0
-gaps: 0
-review: 19
-not_applicable: 0
-service_errors: 0
-```
-
-This outcome is expected for the supplied evidence: the scenarios deliberately describe
-incomplete coverage or contradictory implementation/test state, and the verifier confidence
-gate routes ambiguous or low-confidence cases to `review`. It corroborates that these scenarios
-need human/code follow-up; it does not prove that all 19 are defects.
-
 ## Re-audit conclusion
 
-The current `FINISHED` and `PARTIAL` labels are not reliable enough to drive release decisions.
+The current `FINISHED` and `PARTIAL` labels are not reliable enough to drive release decisions without the per-artifact current-status evidence.
 The source has materially improved, but every module still has either residual correctness,
 security, financial, quality, operational, documentation, or test-coverage gaps. The current
 release gate should use this register plus focused tests, not historical filenames.

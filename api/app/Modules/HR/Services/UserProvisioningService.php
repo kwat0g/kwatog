@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Exceptions\AccountAlreadyProvisionedException;
 use App\Modules\HR\Exceptions\EmployeeNoLongerExistsException;
+use App\Modules\HR\Exceptions\ProvisioningConfigurationException;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Notifications\EmployeePasswordResetNotification;
 use App\Modules\HR\Notifications\EmployeeWelcomeNotification;
@@ -292,10 +293,12 @@ class UserProvisioningService
     {
         $slug = $this->settings->requiredString('hr.default_user_role_slug');
         if (! in_array($slug, self::ASSIGNABLE_ROLE_SLUGS, true)) {
-            throw new \DomainException("Configured employee provisioning role [{$slug}] is not assignable by HR.");
+            throw new ProvisioningConfigurationException("Configured employee provisioning role [{$slug}] is not assignable by HR.");
         }
         $role = Role::query()->where('slug', $slug)->first();
-        abort_if(! $role, 500, "Configured default role [{$slug}] does not exist.");
+        if (! $role) {
+            throw new ProvisioningConfigurationException("Configured default role [{$slug}] does not exist.");
+        }
         return (int) $role->id;
     }
 

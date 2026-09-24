@@ -8,6 +8,7 @@ use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -86,8 +87,11 @@ final class LoanAccessPolicy
             // submitted, so this never exposes a co-worker's unsubmitted row.
             // Same shape as PurchaseRequestAccessPolicy::visibleTo.
             if ($stepRoles !== []) {
-                $scope->orWhereHas('approvalRecords', function ($records) use ($stepRoles): void {
-                    $records->whereIn('role_slug', $stepRoles);
+                $scope->orWhere(function (Builder $waiting) use ($stepRoles): void {
+                    $waiting->where('status', LoanStatus::Pending->value)
+                        ->whereHas('approvalRecords', function ($records) use ($stepRoles): void {
+                            $records->whereIn('role_slug', $stepRoles);
+                        });
                 });
             }
         });
@@ -142,6 +146,10 @@ final class LoanAccessPolicy
      */
     private function isChainParticipant(User $user, EmployeeLoan $loan): bool
     {
+        if ($loan->status !== LoanStatus::Pending) {
+            return false;
+        }
+
         $stepRoles = $this->plantWideStepRoles($user);
         if ($stepRoles === []) {
             return false;

@@ -7,12 +7,18 @@ namespace App\Modules\Attendance\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\TrashedFilter;
 use App\Common\Support\SearchOperator;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\Shift;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class ShiftService
 {
+    private const DTR_INPUT_FIELDS = [
+        'start_time', 'end_time', 'break_minutes', 'grace_minutes',
+        'is_night_shift', 'is_extended', 'auto_ot_hours',
+    ];
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Shift::query();
@@ -41,6 +47,7 @@ class ShiftService
     {
         return DB::transaction(function () use ($shift, $data) {
             $locked = Shift::query()->lockForUpdate()->findOrFail($shift->getKey());
+            $recomputeDtr = array_intersect(array_keys($data), self::DTR_INPUT_FIELDS) !== [];
             $this->assertDistinctTimes(
                 $data['start_time'] ?? $locked->start_time,
                 $data['end_time'] ?? $locked->end_time,
@@ -51,11 +58,41 @@ class ShiftService
                 $data['is_active'] = true;
             }
 
+            $willDeactivate = array_key_exists('is_active', $data)
+                && ! filter_var($data['is_active'], FILTER_VALIDATE_BOOLEAN);
+            if ($willDeactivate && $locked->is_active && $locked->assignments()
+                ->where(function ($query): void {
+                    $query->whereNull('end_date')->orWhereDate('end_date', '>=', now()->toDateString());
+                })->exists()) {
+                throw new BusinessRuleException('Cannot deactivate a shift with current or future employee assignments.');
+            }
+
             if ($locked->is_default && (($data['is_default'] ?? true) === false || ($data['is_active'] ?? true) === false)) {
                 throw new BusinessRuleException('Choose another default shift before disabling or unmarking this one.');
             }
 
             $locked->update($data);
+
+            if ($recomputeDtr) {
+                $attendanceDays = Attendance::query()
+                    ->where('shift_id', $locked->getKey())
+                    ->whereHas('employee')
+                    ->get(['employee_id', 'date']);
+                foreach ($attendanceDays as $attendance) {
+                    if (! app(AttendanceDateMutabilityGuard::class)->isMutable(
+                        (int) $attendance->employee_id,
+                        $attendance->date->toDateString(),
+                    )) {
+                        continue;
+                    }
+
+                    app(AttendanceService::class)->recomputeForEmployeeOnDate(
+                        (int) $attendance->employee_id,
+                        $attendance->date->toDateString(),
+                    );
+                }
+            }
+
             return $locked->fresh();
         });
     }

@@ -13,10 +13,48 @@ use Illuminate\Support\Facades\Log;
 
 class ApprovalEscalationService
 {
+    /** Candidates that threw during the current run. */
+    private int $failed = 0;
+
+    /** Candidates whose configured role resolved to no active user. */
+    private int $unstaffed = 0;
+
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly \App\Common\Services\SettingsService $settings,
     ) {}
+
+    /**
+     * Run the whole sweep and report its health, not just its volume.
+     *
+     * The three run* methods below only ever returned the number of records
+     * they touched: a candidate that threw was Log::warning'ed and not counted,
+     * so a run where every record failed printed the same zeros as an idle run.
+     * That is the byte-identical-to-idle blind spot that let the 8D SLA ledger
+     * be dead for its entire life (see CLAUDE.md), and this sweep had it too.
+     * `failed` counts candidates that threw; `unstaffed` counts candidates
+     * whose role (and superior role, for escalations) has no active user, so a
+     * misconfigured escalation chain is distinguishable from an idle one.
+     *
+     * @return array{reminders:int,escalations:int,auto_resolved:int,failed:int,unstaffed:int}
+     */
+    public function runWithOutcome(): array
+    {
+        $this->failed = 0;
+        $this->unstaffed = 0;
+
+        $reminders = $this->runReminders();
+        $escalations = $this->runEscalations();
+        $autoResolved = $this->runAutoResolve();
+
+        return [
+            'reminders' => $reminders,
+            'escalations' => $escalations,
+            'auto_resolved' => $autoResolved,
+            'failed' => $this->failed,
+            'unstaffed' => $this->unstaffed,
+        ];
+    }
 
     public function runReminders(): int
     {
@@ -32,18 +70,26 @@ class ApprovalEscalationService
             foreach ($stale as $rec) {
                 try {
                     $approver = $this->resolveCurrentApprover($rec);
-                    if ($approver) {
-                        $hours = (int) abs(now()->diffInHours($rec->created_at));
-                        $this->notifications->send($approver, 'approval_reminder', [
-                            'title'   => 'Approval Reminder',
-                            'message' => "Approval pending for {$hours}h on "
-                                         .class_basename((string) $rec->approvable_type).".",
-                            'link_to' => $this->linkFor($rec),
-                        ]);
+                    if ($approver === null) {
+                        // No active holder of the step role: nothing to remind.
+                        // Leave reminder_sent_at null so a later run notifies
+                        // once the role has an active user again.
+                        $this->unstaffed++;
+
+                        continue;
                     }
+
+                    $hours = (int) abs(now()->diffInHours($rec->created_at));
+                    $this->notifications->send($approver, 'approval_reminder', [
+                        'title'   => 'Approval Reminder',
+                        'message' => "Approval pending for {$hours}h on "
+                                     .class_basename((string) $rec->approvable_type).".",
+                        'link_to' => $this->linkFor($rec),
+                    ], $this->notificationKey($rec, 'reminder'));
                     $rec->update(['reminder_sent_at' => now()]);
                     $count++;
                 } catch (\Throwable $e) {
+                    $this->failed++;
                     Log::warning('ApprovalEscalationService::reminder failed', [
                         'record_id' => $rec->id,
                         'error'     => $e->getMessage(),
@@ -71,15 +117,22 @@ class ApprovalEscalationService
                     $superior = $this->resolveSuperior($rec);
                     $hours = (int) abs(now()->diffInHours($rec->created_at));
 
-                    $data = [
+                    $recipients = collect([$approver, $superior])->filter()->unique('id');
+                    if ($recipients->isEmpty()) {
+                        // Neither the step role nor its configured superior has
+                        // an active user. Don't stamp escalated_at — that would
+                        // silence the record for good — just report it.
+                        $this->unstaffed++;
+
+                        continue;
+                    }
+
+                    $this->notifications->send($recipients, 'approval_escalation', [
                         'title'   => 'Approval Escalation',
                         'message' => "Escalation: approval pending {$hours}h on "
                                      .class_basename((string) $rec->approvable_type).".",
                         'link_to' => $this->linkFor($rec),
-                    ];
-
-                    $recipients = collect([$approver, $superior])->filter()->unique('id');
-                    $this->notifications->send($recipients, 'approval_escalation', $data);
+                    ], $this->notificationKey($rec, 'escalation'));
 
                     $rec->update([
                         'escalated_at'         => now(),
@@ -87,6 +140,7 @@ class ApprovalEscalationService
                     ]);
                     $count++;
                 } catch (\Throwable $e) {
+                    $this->failed++;
                     Log::warning('ApprovalEscalationService::escalate failed', [
                         'record_id' => $rec->id,
                         'error'     => $e->getMessage(),
@@ -247,7 +301,7 @@ class ApprovalEscalationService
                              .class_basename((string) $rec->approvable_type)
                              .". Routed to superior for action.",
                 'link_to' => $this->linkFor($rec),
-            ]);
+            ], $this->notificationKey($rec, 'auto-escalation').':'.(string) $rec->escalated_at);
 
             $rec->update([
                 'escalated_at'         => now(),
@@ -297,6 +351,17 @@ class ApprovalEscalationService
         $hashId = app('hashids')->encode((int) $rec->approvable_id);
 
         return ApprovalTypeRegistry::linkFor((string) $rec->approvable_type, $hashId);
+    }
+
+    private function notificationKey(ApprovalRecord $rec, string $kind): string
+    {
+        return sprintf(
+            'approval:%s:%s:%d:%s',
+            $kind,
+            (string) $rec->approvable_type,
+            (int) $rec->approvable_id,
+            (int) $rec->step_order,
+        );
     }
 
     private function resolveCurrentApprover(ApprovalRecord $rec): ?User

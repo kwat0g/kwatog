@@ -48,9 +48,8 @@ class EmployeeDocumentService
     {
         $this->assertDocumentBelongsToEmployee($employee, $document);
         $this->assertEmployeeVisible($employee, $actor);
-        if ($document->file_path) {
-            Storage::disk('local')->delete($document->file_path);
-        }
+        // Keep the private file while the row is soft-deleted so restore remains
+        // reversible. Permanent purge belongs to a separate retention job.
         $document->delete();
     }
 

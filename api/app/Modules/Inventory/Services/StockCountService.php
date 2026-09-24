@@ -42,6 +42,7 @@ class StockCountService
             'items.location.zone.warehouse',
             'items.item',
             'items.counter',
+            'items.verifier',
             'warehouse',
             'zone',
             'creator',
@@ -63,24 +64,14 @@ class StockCountService
                 'created_by'      => $user->id,
             ]);
 
-            // Auto-populate locations based on scope
-            $query = WarehouseLocation::query()->where('is_active', true);
-            if ($data['scope'] === 'zone' && !empty($data['zone_id'])) {
-                $query->where('zone_id', $data['zone_id']);
-            } elseif ($data['scope'] === 'warehouse' && !empty($data['warehouse_id'])) {
-                $query->whereIn('zone_id', function ($q) use ($data) {
-                    $q->select('id')->from('warehouse_zones')
-                      ->where('warehouse_id', $data['warehouse_id']);
-                });
-            }
+            // Auto-populate the current stock snapshot. startSession() refreshes
+            // it under locks so inventory received after draft creation is not missed.
+            $query = $this->locationsFor($session)->where('is_active', true);
 
             $locations = $query->get();
             $items = [];
             foreach ($locations as $loc) {
-                $stockLevels = StockLevel::query()
-                    ->where('location_id', $loc->id)
-                    ->where('quantity', '>', 0)
-                    ->get();
+                $stockLevels = StockLevel::query()->where('location_id', $loc->id)->get();
 
                 if ($stockLevels->isNotEmpty()) {
                     foreach ($stockLevels as $sl) {
@@ -116,7 +107,11 @@ class StockCountService
                 throw new BusinessRuleException('Session must be in draft status to start.');
             }
 
-            $locationIds = $session->items()->pluck('location_id');
+            $locations = $this->locationsFor($session)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->get();
+            $locationIds = $locations->pluck('id');
             $overlap = StockCountSession::query()
                 ->where('status', StockCountSessionStatus::InProgress->value)
                 ->whereHas('items', fn ($items) => $items->whereIn('location_id', $locationIds))
@@ -125,6 +120,34 @@ class StockCountService
             if ($overlap) {
                 throw new BusinessRuleException("Locations are already frozen by stock count {$overlap->session_number}.");
             }
+
+            $existing = $session->items()->lockForUpdate()->get()->keyBy(
+                fn (StockCountItem $item): string => $item->location_id.':'.$item->item_id
+            );
+            $newItems = [];
+            foreach (StockLevel::query()->whereIn('location_id', $locationIds)->lockForUpdate()->get() as $level) {
+                $key = $level->location_id.':'.$level->item_id;
+                if ($existing->has($key)) {
+                    $existing[$key]->update(['system_quantity' => $level->quantity]);
+                    continue;
+                }
+                $newItems[] = [
+                    'session_id' => $session->id,
+                    'location_id' => $level->location_id,
+                    'item_id' => $level->item_id,
+                    'system_quantity' => $level->quantity,
+                    'counted_quantity' => null,
+                    'variance' => '0.000',
+                    'variance_percent' => '0.00',
+                    'status' => StockCountItemStatus::Pending->value,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+            if ($newItems !== []) {
+                StockCountItem::insert($newItems);
+            }
+            $session->update(['total_locations' => $session->items()->count()]);
 
             $session->update([
                 'status'    => StockCountSessionStatus::InProgress->value,
@@ -207,7 +230,7 @@ class StockCountService
 
     public function approveVariance(int $itemId, User $user): StockCountItem
     {
-        return DB::transaction(function () use ($itemId) {
+        return DB::transaction(function () use ($itemId, $user) {
             $sessionId = StockCountItem::query()->whereKey($itemId)->value('session_id');
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($sessionId);
             $item = StockCountItem::query()->lockForUpdate()->findOrFail($itemId);
@@ -217,10 +240,15 @@ class StockCountService
             if ($item->status !== StockCountItemStatus::Counted) {
                 throw new BusinessRuleException('Item must be counted first.');
             }
+            if ((int) $item->counted_by === (int) $user->id || (int) $session->created_by === (int) $user->id) {
+                throw new BusinessRuleException('A different user must approve this stock-count variance.');
+            }
 
-            $item->update(['status' => StockCountItemStatus::Verified->value]);
+            $item->status = StockCountItemStatus::Verified;
+            $item->verified_by = $user->id;
+            $item->save();
 
-            return $item->fresh()->load(['location', 'item']);
+            return $item->fresh()->load(['location', 'item', 'verifier']);
         });
     }
 
@@ -231,33 +259,46 @@ class StockCountService
             if ($session->status !== StockCountSessionStatus::InProgress) {
                 throw new BusinessRuleException('Session must be in progress to complete.');
             }
+            if ((int) $session->created_by === (int) $user->id) {
+                throw new BusinessRuleException('A different user must complete and approve this stock-count session.');
+            }
             // Lock the session's items too: a count recorded concurrently with
             // completion must not be overwritten by the variance snapshot, or a
             // wrong adjustment could be posted from stale counted values.
             $session->setRelation('items', $session->items()->lockForUpdate()->get());
 
+            if ($session->items->isEmpty() || $session->items->contains(
+                static fn (StockCountItem $item): bool => ! in_array(
+                    $item->status,
+                    [StockCountItemStatus::Counted, StockCountItemStatus::Verified],
+                    true,
+                ),
+            )) {
+                throw new BusinessRuleException('Every count line must be recorded before completing the stock-count session.');
+            }
+
             $varianceCount = 0;
-            $varianceValue = 0;
-            $varianceTolerance = $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0);
+            $varianceValue = '0.00';
+            $varianceTolerance = (string) $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0);
 
             foreach ($session->items as $item) {
-                if ($item->status !== StockCountItemStatus::Counted && $item->status !== StockCountItemStatus::Verified) continue;
-
-                $variance = (float) $item->variance;
-                if (abs($variance) > 0.001) {
+                $variance = (string) $item->variance;
+                $absoluteVariance = ltrim($variance, '-');
+                if (bccomp($absoluteVariance, '0', 3) > 0) {
                     $varianceCount++;
-                    $varianceValue += abs($variance);
+                    $varianceValue = bcadd($varianceValue, $absoluteVariance, 2);
                 }
 
                 // If variance exceeds the configured tolerance and is not verified, require approval.
-                if (abs((float) $item->variance_percent) > $varianceTolerance && $item->status !== StockCountItemStatus::Verified) {
+                if (bccomp(ltrim((string) $item->variance_percent, '-'), $varianceTolerance, 2) > 0
+                    && $item->status !== StockCountItemStatus::Verified) {
                     throw new BusinessRuleException(
                         "Item #{$item->id} has a variance of {$item->variance_percent}% — requires supervisor sign-off."
                     );
                 }
 
                 // Auto-create stock adjustment for variances
-                if (abs($variance) > 0.001 && $item->item_id && $item->counted_quantity !== null) {
+                if (bccomp($absoluteVariance, '0', 3) > 0 && $item->item_id && $item->counted_quantity !== null) {
                     $diff = bcsub((string) $item->counted_quantity, (string) $item->system_quantity, 3);
                     if (bccomp($diff, '0', 3) !== 0) {
                         // Reconciliation derives direction and values the
@@ -276,7 +317,10 @@ class StockCountService
                 'variance_value'   => $varianceValue,
             ]);
 
-            return $session->fresh()->load(['warehouse', 'zone', 'creator', 'approver', 'items.location', 'items.item']);
+            return $session->fresh()->load([
+                'warehouse', 'zone', 'creator', 'approver',
+                'items.location', 'items.item', 'items.counter', 'items.verifier',
+            ]);
         });
     }
 
@@ -293,5 +337,19 @@ class StockCountService
             $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
             return $session->fresh();
         });
+    }
+
+    private function locationsFor(StockCountSession $session)
+    {
+        $query = WarehouseLocation::query();
+        if ($session->scope === 'zone' && $session->zone_id !== null) {
+            return $query->where('zone_id', $session->zone_id);
+        }
+        if ($session->scope === 'warehouse' && $session->warehouse_id !== null) {
+            return $query->whereIn('zone_id', fn ($zones) => $zones
+                ->select('id')->from('warehouse_zones')->where('warehouse_id', $session->warehouse_id));
+        }
+
+        return $query;
     }
 }

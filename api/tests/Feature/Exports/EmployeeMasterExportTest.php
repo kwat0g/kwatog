@@ -54,7 +54,6 @@ class EmployeeMasterExportTest extends TestCase
             'employment_type' => 'regular',
             'pay_type'       => 'monthly',
             'date_hired'     => '2026-01-10',
-            'status'         => 'active',
         ]);
 
         $export = new EmployeeMasterExport(['employee_no', 'full_name', 'department']);
@@ -75,15 +74,16 @@ class EmployeeMasterExportTest extends TestCase
             'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
-            'date_hired' => '2026-01-01', 'status' => 'active',
+            'date_hired' => '2026-01-01',
         ]);
-        Employee::create([
+        $resigned = Employee::create([
             'employee_no' => 'B', 'first_name' => 'B', 'last_name' => 'B',
             'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
-            'date_hired' => '2026-01-01', 'status' => 'resigned',
+            'date_hired' => '2026-01-01',
         ]);
+        $resigned->forceFill(['status' => 'resigned'])->save();
 
         $exp = new EmployeeMasterExport(['employee_no'], ['status' => 'active']);
         $rows = $exp->collection();

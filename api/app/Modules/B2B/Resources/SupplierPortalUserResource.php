@@ -17,10 +17,10 @@ class SupplierPortalUserResource extends JsonResource
             'email'        => $this->email,
             'is_active'    => (bool) $this->is_active,
             'must_change_password' => (bool) $this->must_change_password,
-            'failed_login_attempts' => (int) $this->failed_login_attempts,
-            'locked_until' => optional($this->locked_until)->toIso8601String(),
             'status'       => $this->portalStatus(),
             'deleted_at'   => optional($this->deleted_at)->toIso8601String(),
+            'vendor_id'    => app('hashids')->encode((int) $this->vendor_id),
+            'vendor_name'  => $this->whenLoaded('vendor', fn () => $this->vendor?->name),
             'vendor'       => $this->whenLoaded('vendor', fn () => [
                 'id'   => $this->vendor->hash_id,
                 'name' => $this->vendor->name,
@@ -32,7 +32,8 @@ class SupplierPortalUserResource extends JsonResource
 
     private function portalStatus(): string
     {
-        if ($this->trashed() || ! $this->is_active) return 'inactive';
+        if ($this->trashed() || ! $this->is_active
+            || ($this->relationLoaded('vendor') && (! $this->vendor || ! $this->vendor->is_active))) return 'inactive';
         if ($this->isLocked()) return 'locked';
         if ($this->must_change_password) return 'pending';
         return 'active';

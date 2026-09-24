@@ -115,6 +115,92 @@ class CustomerPortalAccessLifecycleTest extends TestCase
         app(PortalInvitationService::class)->inviteCustomer($customerB, 'Someone', 'service-level@example.test');
     }
 
+    public function test_customer_invitation_requires_an_active_parent_and_is_audited(): void
+    {
+        $inactive = Customer::factory()->create(['is_active' => false]);
+
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$inactive->hash_id}/invite", [
+                'name' => 'Inactive Contact',
+                'email' => 'inactive-contact@example.test',
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseMissing('customer_portal_users', ['email' => 'inactive-contact@example.test']);
+
+        $active = Customer::factory()->create();
+        $this->actingAs($this->operator())
+            ->postJson("/api/v1/b2b/portal-access/customers/{$active->hash_id}/invite", [
+                'name' => 'Active Contact',
+                'email' => 'active-contact@example.test',
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'portal_user.invited',
+            'model_type' => CustomerPortalUser::class,
+            'new_values->customer_id' => $active->id,
+            'new_values->email' => 'active-contact@example.test',
+        ]);
+    }
+
+    public function test_inactive_customer_parent_revokes_portal_access(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'inactive-parent@example.test');
+        $customer->update(['is_active' => false]);
+
+        $this->actingAs($user, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/dashboard')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'portal_account_inactive');
+
+        $this->actingAs($this->operator(), 'sanctum')
+            ->getJson('/api/v1/b2b/portal-access/customers?status=inactive')
+            ->assertOk()
+            ->assertJsonPath('data.0.status', 'inactive');
+
+        $this->actingAs($this->operator(), 'sanctum')
+            ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/reactivate")
+            ->assertStatus(422);
+    }
+
+    public function test_customer_portal_token_revocation_is_audited_and_permission_gated(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->portalUser($customer, 'revoke-customer-token@example.test');
+        $user->createToken('customer-portal');
+
+        $this->actingAs($this->operator())
+            ->deleteJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/tokens")
+            ->assertOk();
+
+        $this->assertSame(0, $user->fresh()->tokens()->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'portal_tokens.revoke',
+            'model_type' => CustomerPortalUser::class,
+            'model_id' => $user->id,
+        ]);
+    }
+
+    public function test_portal_account_resources_do_not_expose_login_strike_details(): void
+    {
+        $customer = Customer::factory()->create();
+        $this->portalUser($customer, 'private-lock-state@example.test', [
+            'failed_login_attempts' => 4,
+            'locked_until' => now()->addMinutes(10),
+        ]);
+
+        $row = $this->actingAs($this->operator())
+            ->getJson('/api/v1/b2b/portal-access/customers')
+            ->assertOk()
+            ->json('data.0');
+
+        $this->assertArrayNotHasKey('failed_login_attempts', $row);
+        $this->assertArrayNotHasKey('locked_until', $row);
+        $this->assertSame('locked', $row['status']);
+    }
+
     public function test_same_customer_reinvitation_rotates_the_credential(): void
     {
         $customer = Customer::factory()->create();
@@ -277,6 +363,8 @@ class CustomerPortalAccessLifecycleTest extends TestCase
             ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/deactivate")->assertStatus(403);
         $this->actingAs($outsider)
             ->patchJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/reactivate")->assertStatus(403);
+        $this->actingAs($outsider)
+            ->deleteJson("/api/v1/b2b/portal-access/customers/{$user->hash_id}/tokens")->assertStatus(403);
 
         $this->assertTrue((bool) $user->fresh()->is_active);
     }

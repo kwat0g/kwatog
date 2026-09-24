@@ -112,7 +112,8 @@ final class RfqBiddingTest extends TestCase
             'version' => 1,
             'is_current' => true,
             'vat_inclusive' => false,
-            'vat_amount' => '20.00',
+            // With line VAT present the header only sums it (resolveHeaderVat).
+            'vat_amount' => '10.00',
             'freight_amount' => '30.00',
             'other_charges' => '4.00',
         ]);
@@ -141,14 +142,15 @@ final class RfqBiddingTest extends TestCase
         $po = $result['purchase_orders'][0]->fresh('items');
         $line = $po->items->first();
         $this->assertSame('336.50', (string) $po->subtotal);
-        $this->assertSame('25.00', (string) $po->vat_amount);
-        $this->assertSame('361.50', (string) $po->total_amount);
+        // Half the line VAT for half the goods; the header VAT merely summarised it.
+        $this->assertSame('5.00', (string) $po->vat_amount);
+        $this->assertSame('341.50', (string) $po->total_amount);
         $this->assertTrue((bool) $po->is_auto_generated);
         $this->assertSame((int) $result['rfq']->id, (int) $po->request_for_quote_id);
         $this->assertSame((int) $result['rfq']->awards()->first()->id, (int) $line->rfq_award_id);
         $this->assertSame((int) $quote->id, (int) $line->supplier_quote_version_id);
-        $this->assertSame(PurchaseRequestStatus::Converted, $pr->fresh()->status);
-        $this->assertSame(PurchaseRequestConversionStatus::Converted, $pr->fresh()->po_conversion_status);
+        $this->assertSame(PurchaseRequestStatus::Approved, $pr->fresh()->status);
+        $this->assertSame(PurchaseRequestConversionStatus::Partial, $pr->fresh()->po_conversion_status);
     }
 
     public function test_qc_cannot_download_a_supplier_commercial_quotation(): void
@@ -245,6 +247,118 @@ final class RfqBiddingTest extends TestCase
         $this->get('/api/v1/b2b/supplier/rfqs/'.$rfq->hash_id.'/documents/'.$document['id'].'/download')->assertOk();
     }
 
+    public function test_revised_quote_supersedes_the_prior_submitted_version(): void
+    {
+        // The partial unique index allows one current submitted quote per
+        // supplier; a revision used to flip itself to submitted before
+        // superseding v1, so every revision was a unique violation (500).
+        Storage::fake('local');
+        [$pr, $rfq, $rfqItem, $vendor] = $this->openRfq();
+        $this->actingAs($this->roleUser('purchasing_officer'));
+        $capture = function (string $price) use ($rfq, $rfqItem, $vendor) {
+            $quotation = $this->post('/api/v1/purchasing/rfqs/'.$rfq->hash_id.'/documents', [
+                'document_type' => 'quotation_pdf',
+                'vendor_id' => $vendor->hash_id,
+                'file' => UploadedFile::fake()->create('manual-quote.pdf', 20, 'application/pdf'),
+            ])->assertCreated()->json('data');
+
+            return $this->postJson('/api/v1/purchasing/rfqs/'.$rfq->hash_id.'/quotes/manual', [
+                'vendor_id' => $vendor->hash_id,
+                'quotation_document_id' => $quotation['id'],
+                'items' => [[
+                    'request_for_quote_item_id' => $rfqItem->hash_id,
+                    'response_status' => 'quoted',
+                    'offered_quantity' => '5.0000',
+                    'unit_price' => $price,
+                ]],
+            ]);
+        };
+        $capture('60.0000')->assertCreated();
+        $capture('55.0000')->assertCreated()->assertJsonPath('data.status', 'submitted');
+
+        $this->assertSame(1, SupplierQuote::query()->where('request_for_quote_id', $rfq->id)->where('is_current', true)->count());
+        $this->assertDatabaseHas('supplier_quotes', ['request_for_quote_id' => $rfq->id, 'version' => 1, 'is_current' => false, 'status' => SupplierQuoteStatus::Superseded->value]);
+        $this->assertDatabaseHas('supplier_quotes', ['request_for_quote_id' => $rfq->id, 'version' => 2, 'is_current' => true, 'status' => SupplierQuoteStatus::Submitted->value]);
+
+        // The supplier portal revision path goes through submit() and hit the same ordering.
+        $supplier = SupplierPortalUser::factory()->create(['vendor_id' => $vendor->id, 'must_change_password' => false]);
+        Sanctum::actingAs($supplier, ['*'], 'supplier_portal');
+        $draft = $this->postJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/quotes", ['items' => [[
+            'request_for_quote_item_id' => $rfqItem->hash_id,
+            'response_status' => 'quoted',
+            'offered_quantity' => '5.0000',
+            'unit_price' => '52.0000',
+        ]]])->assertCreated()->json('data');
+        $this->post("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/documents", [
+            'quote_id' => $draft['id'],
+            'document_type' => 'quotation_pdf',
+            'file' => UploadedFile::fake()->create('supplier-quote.pdf', 20, 'application/pdf'),
+        ])->assertCreated();
+        $this->postJson("/api/v1/b2b/supplier/rfqs/{$rfq->hash_id}/quotes/{$draft['id']}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'submitted');
+
+        $this->assertSame(1, SupplierQuote::query()->where('request_for_quote_id', $rfq->id)->where('is_current', true)->count());
+        $this->assertDatabaseHas('supplier_quotes', ['request_for_quote_id' => $rfq->id, 'version' => 2, 'is_current' => false, 'status' => SupplierQuoteStatus::Superseded->value]);
+    }
+
+    public function test_vat_inclusive_quote_is_not_charged_vat_twice(): void
+    {
+        Storage::fake('local');
+        [$pr, $rfq, $rfqItem, $vendor] = $this->openRfq();
+        $purchasing = $this->roleUser('purchasing_officer');
+        $this->actingAs($purchasing);
+        $this->captureManual($rfq, $rfqItem, $vendor, '112.0000', '50.00', vatInclusive: true)
+            ->assertCreated()
+            ->assertJsonPath('data.vat_amount', '125.36')
+            // Gross prices including freight: 1,120 + 50 = 1,170. VAT extracted from this base (12/112 rule).
+            ->assertJsonPath('data.total_delivered_cost', '1170.00');
+
+        $rfq->forceFill(['closes_at' => now()->subMinute()])->save();
+        app(RequestForQuoteService::class)->closeDue($rfq->fresh());
+        $result = app(RfqAwardService::class)->award($rfq->fresh(), [[
+            'request_for_quote_item_id' => $rfqItem->id,
+            'supplier_quote_item_id' => SupplierQuoteItem::query()->value('id'),
+            'awarded_quantity' => '10.0000',
+            'award_reason' => 'Lowest compliant delivered cost.',
+            'single_response_justification' => 'Only invited supplier able to meet the required material grade.',
+        ]], $purchasing);
+
+        $po = $result['purchase_orders'][0]->fresh('items');
+        // 10 × ₱112 + ₱50 freight, all VAT-inclusive: both goods and freight are
+        // netted (100.00 each, freight 44.64) and the whole 125.36 lands as input
+        // VAT — freight kept gross would capitalise its 5.36 into landed cost.
+        $this->assertSame('100.00', (string) $po->items->first()->unit_price);
+        $this->assertSame('44.64', (string) $po->rfq_freight_amount);
+        $this->assertSame('1044.64', (string) $po->subtotal);
+        $this->assertSame('125.36', (string) $po->vat_amount);
+        $this->assertSame('1170.00', (string) $po->total_amount);
+    }
+
+    public function test_comparison_recommends_the_lowest_delivered_cost_including_quote_freight(): void
+    {
+        Storage::fake('local');
+        [$pr, $rfq, $rfqItem, $cheapFreight] = $this->openRfq();
+        $heavyFreight = Vendor::factory()->create();
+        $rfq->invitations()->create(['vendor_id' => $heavyFreight->id, 'invited_by' => $rfq->created_by, 'invited_at' => now()]);
+        $this->actingAs($this->roleUser('purchasing_officer'));
+        // VAT is now computed on items + freight: both base = (items + freight) × 12%
+        // cheapFreight: 950 + 117 VAT (on 975 base) + 25 = 1,092.00
+        // heavyFreight: 920 + 117.60 VAT (on 980 base) + 60 = 1,097.60
+        $this->captureManual($rfq, $rfqItem, $cheapFreight, '95.0000', '25.00')->assertCreated();
+        $this->captureManual($rfq, $rfqItem, $heavyFreight, '92.0000', '60.00')->assertCreated();
+        $rfq->forceFill(['closes_at' => now()->subMinute()])->save();
+
+        $quotes = collect($this->getJson('/api/v1/purchasing/rfqs/'.$rfq->hash_id.'/comparison')->assertOk()->json('data.quotes'))
+            ->keyBy(fn (array $quote): string => $quote['vendor']['id']);
+        $cheapLine = $quotes[$cheapFreight->hash_id]['items'][0];
+        $heavyLine = $quotes[$heavyFreight->hash_id]['items'][0];
+        $this->assertSame('1092.00', $cheapLine['allocated_delivered_cost']);
+        $this->assertSame('1097.60', $heavyLine['allocated_delivered_cost']);
+        $this->assertTrue($cheapLine['is_recommended']);
+        $this->assertFalse($heavyLine['is_recommended']);
+    }
+
     public function test_expired_winning_quote_requires_supplier_reconfirmation_before_po_approval(): void
     {
         [$pr, $rfq, $rfqItem, $vendor] = $this->openRfq(closesAt: now()->subMinute());
@@ -303,6 +417,28 @@ final class RfqBiddingTest extends TestCase
         $this->assertNotNull($rfq->invitations()->firstOrFail()->fresh()->portal_notified_at);
         $this->assertNotNull($rfq->invitations()->firstOrFail()->fresh()->email_notified_at);
         Mail::assertQueued(SupplierRfqLifecycleMail::class);
+    }
+
+    private function captureManual(RequestForQuote $rfq, RequestForQuoteItem $rfqItem, Vendor $vendor, string $price, string $freight, bool $vatInclusive = false): \Illuminate\Testing\TestResponse
+    {
+        $quotation = $this->post('/api/v1/purchasing/rfqs/'.$rfq->hash_id.'/documents', [
+            'document_type' => 'quotation_pdf',
+            'vendor_id' => $vendor->hash_id,
+            'file' => UploadedFile::fake()->create('manual-quote.pdf', 20, 'application/pdf'),
+        ])->assertCreated()->json('data');
+
+        return $this->postJson('/api/v1/purchasing/rfqs/'.$rfq->hash_id.'/quotes/manual', [
+            'vendor_id' => $vendor->hash_id,
+            'quotation_document_id' => $quotation['id'],
+            'vat_inclusive' => $vatInclusive,
+            'freight_amount' => $freight,
+            'items' => [[
+                'request_for_quote_item_id' => $rfqItem->hash_id,
+                'response_status' => 'quoted',
+                'offered_quantity' => '10.0000',
+                'unit_price' => $price,
+            ]],
+        ]);
     }
 
     /** @return array{0: PurchaseRequest, 1: RequestForQuote, 2: RequestForQuoteItem, 3: Vendor} */

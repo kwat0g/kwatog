@@ -25,6 +25,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -42,6 +43,8 @@ class GrnGlPostingTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    // Maker-checker: an incoming inspection counts only when a different user checks it.
+    private User $checker;
 
     private GrnService $grnSvc;
 
@@ -65,8 +68,21 @@ class GrnGlPostingTest extends TestCase
             ['slug' => 'quality.inspections.manage'],
             ['name' => 'Quality Inspections Manage', 'module' => 'quality']
         );
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $postingPermission = Permission::firstOrCreate(
+            ['slug' => 'accounting.journal.post'],
+            ['name' => 'Post Journal Entries', 'module' => 'accounting']
+        );
+        $viewPermission = Permission::firstOrCreate(
+            ['slug' => 'accounting.journal.view'],
+            ['name' => 'View Journal Entries', 'module' => 'accounting']
+        );
+        $role->permissions()->syncWithoutDetaching([
+            $permission->id,
+            $postingPermission->id,
+            $viewPermission->id,
+        ]);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
+        $this->checker = User::factory()->create(['is_active' => true]);
 
         $this->grnSvc = app(GrnService::class);
         $this->glSvc = app(GrnGlPostingService::class);
@@ -127,18 +143,19 @@ class GrnGlPostingTest extends TestCase
             ]);
         }
 
-        // F-06 — the incoming-QC gate is fail-closed now. buildGrn creates the
-        // GRN directly (bypassing GrnService::create()'s synchronous inspection
-        // creation), so it must attach a passed inspection itself or accept()
-        // refuses to run.
-        $firstLine = $grn->items->first();
-        $inspection = app(InspectionService::class)->createIncomingForItem(
-            Item::query()->findOrFail($firstLine->item_id),
-            max(1, (int) $firstLine->quantity_received),
-            $grn->id,
-            $this->user,
-        );
-        $inspection->update(['status' => 'passed']);
+        // F-06 — incoming QC is now required per eligible GRN line; a legacy
+        // whole-GRN inspection cannot stand in for the second line.
+        foreach ($grn->items as $line) {
+            $inspection = app(InspectionService::class)->createIncomingForItem(
+                Item::query()->findOrFail($line->item_id),
+                max(1, (int) $line->quantity_received),
+                $grn->id,
+                $this->user,
+                null,
+                (int) $line->id,
+            );
+            $inspection->update(['status' => 'passed', 'reviewed_by' => $this->checker->id, 'reviewed_at' => now()]);
+        }
         $grn->refresh();
 
         return $grn->fresh(['items']);
@@ -224,12 +241,29 @@ class GrnGlPostingTest extends TestCase
             $this->user,
         );
 
-        $this->assertSame(GrnStatus::Accepted, $result['grn']->status);
-        $this->assertNotNull($result['grn']->journal_entry_id);
-        $this->assertSame('passed', $result['inspection']->status->value);
+        // Incoming GRN inspections require maker-checker review. After receiveWithQc(),
+        // the GRN is pending_qc and the inspection is awaiting_review.
+        $this->assertSame(GrnStatus::PendingQc, $result['grn']->status);
+        $this->assertSame('awaiting_review', $result['inspection']->status->value);
         $this->assertSame($item->id, $result['inspection']->item_id);
+
+        // A different user (the checker) reviews the inspection and approves it.
+        $inspectionService = app(InspectionService::class);
+        $reviewedInspection = $inspectionService->review(
+            $result['inspection'],
+            'passed',
+            null,
+            $this->checker,
+        );
+
+        // After the checker reviews and approves, the inspection passes and the
+        // listener AcceptGrnOnIncomingQcPass accepts the GRN and posts the GL entry.
+        $this->assertSame('passed', $reviewedInspection->status->value);
+        $acceptedGrn = $result['grn']->fresh();
+        $this->assertSame(GrnStatus::Accepted, $acceptedGrn->status);
+        $this->assertNotNull($acceptedGrn->journal_entry_id);
         $this->assertDatabaseHas('journal_entries', [
-            'id' => $result['grn']->journal_entry_id,
+            'id' => $acceptedGrn->journal_entry_id,
             'reference_type' => 'goods_receipt_note',
             'status' => 'posted',
         ]);
@@ -248,6 +282,66 @@ class GrnGlPostingTest extends TestCase
         $this->assertSame(GrnStatus::Accepted, $accepted->status, 'GRN must still be accepted');
         $this->assertNull($accepted->journal_entry_id, 'No JE should be linked when accounting is disabled');
         $this->assertSame(0, DB::table('journal_entries')->count(), 'No JE rows should exist');
+    }
+
+    public function test_accept_also_skips_when_accounting_module_setting_is_missing(): void
+    {
+        DB::table('settings')->where('key', 'modules.accounting')->delete();
+        Cache::forget('settings:modules.accounting');
+
+        $grn = $this->buildGrn([
+            ['item_type' => ItemType::RawMaterial->value, 'quantity' => '10', 'unit_cost' => '5.00'],
+        ]);
+
+        $accepted = $this->grnSvc->accept($grn, $this->user);
+
+        $this->assertSame(GrnStatus::Accepted, $accepted->status);
+        $this->assertNull($accepted->journal_entry_id);
+        $this->assertSame(0, DB::table('journal_entries')->count());
+    }
+
+    public function test_authorized_operator_can_retry_gl_for_an_accepted_grn_after_accounting_is_enabled(): void
+    {
+        $this->enableAccounting(false);
+        $grn = $this->buildGrn([
+            ['item_type' => ItemType::RawMaterial->value, 'quantity' => '10', 'unit_cost' => '5.00'],
+        ]);
+        $accepted = $this->grnSvc->accept($grn, $this->user);
+        $this->assertNull($accepted->journal_entry_id);
+
+        $this->enableAccounting(true);
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/inventory/grn/'.$accepted->hash_id.'/retry-gl');
+
+        $response->assertOk()->assertJsonPath('data.journal_entry.status', 'posted');
+        $this->assertDatabaseHas('journal_entries', [
+            'reference_type' => 'goods_receipt_note',
+            'reference_id' => $accepted->id,
+            'status' => 'posted',
+        ]);
+        $this->assertSame(
+            1,
+            DB::table('journal_entries')->where('reference_type', 'goods_receipt_note')->where('reference_id', $accepted->id)->count(),
+            'Retry must post the accepted receipt exactly once.',
+        );
+    }
+
+    public function test_grn_gl_retry_requires_journal_post_permission(): void
+    {
+        $this->enableAccounting(false);
+        $grn = $this->buildGrn([
+            ['item_type' => ItemType::RawMaterial->value, 'quantity' => '10', 'unit_cost' => '5.00'],
+        ]);
+        $accepted = $this->grnSvc->accept($grn, $this->user);
+        $this->user->role->permissions()->detach(
+            Permission::query()->where('slug', 'accounting.journal.post')->value('id'),
+        );
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/inventory/grn/'.$accepted->hash_id.'/retry-gl')
+            ->assertForbidden();
+
+        $this->assertNull($accepted->fresh()->journal_entry_id);
     }
 
     public function test_accept_is_idempotent_does_not_double_post(): void

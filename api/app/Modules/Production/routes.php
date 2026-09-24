@@ -7,6 +7,8 @@ use App\Modules\Production\Controllers\OeeController;
 use App\Modules\Production\Controllers\ProductionRoutingController;
 use App\Modules\Production\Controllers\WoOperationController;
 use App\Modules\Production\Controllers\WorkOrderController;
+use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Models\DefectType;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -14,29 +16,29 @@ use Illuminate\Support\Facades\Route;
  * Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.
  */
 
-Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')->group(function () {
+Route::middleware(['auth:sanctum', 'feature:production', 'permission:production.view'])->prefix('production')->group(function () {
 
     Route::get('/downtime-categories', function () {
         return response()->json(['data' => array_map(
-            fn (\App\Modules\Production\Enums\MachineDowntimeCategory $category) => [
+            fn (MachineDowntimeCategory $category) => [
                 'value' => $category->value,
                 'label' => $category->label(),
                 'is_planned' => $category->isPlanned(),
             ],
-            \App\Modules\Production\Enums\MachineDowntimeCategory::cases(),
+            MachineDowntimeCategory::cases(),
         )]);
     })->middleware('permission:production.work_orders.view');
 
     /* ─── Defect types (lookup for output recording) ─── */
     Route::get('/defect-types', function () {
         return response()->json([
-            'data' => \App\Modules\Production\Models\DefectType::active()
+            'data' => DefectType::active()
                 ->orderBy('code')
                 ->get()
-                ->map(fn (\App\Modules\Production\Models\DefectType $t) => [
-                    'id'          => $t->hash_id,
-                    'code'        => $t->code,
-                    'name'        => $t->name,
+                ->map(fn (DefectType $t) => [
+                    'id' => $t->hash_id,
+                    'code' => $t->code,
+                    'name' => $t->name,
                     'description' => $t->description,
                 ])
                 ->values(),
@@ -44,56 +46,56 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     })->middleware('permission:production.work_orders.view');
 
     /* ─── Work orders (Task 51) ─── */
-    Route::get('/work-orders/options',               [WorkOrderController::class, 'options'])->middleware('permission:production.work_orders.view');
-    Route::get('/work-orders',                       [WorkOrderController::class, 'index']) ->middleware('permission:production.work_orders.view');
-    Route::get('/work-orders/{workOrder}',           [WorkOrderController::class, 'show'])  ->middleware('permission:production.work_orders.view');
-    Route::get('/work-orders/{workOrder}/chain',     [WorkOrderController::class, 'chain']) ->middleware('permission:production.work_orders.view');
-    Route::post('/work-orders',                      [WorkOrderController::class, 'store']) ->middleware('permission:production.wo.create');
-    Route::delete('/work-orders/{workOrder}',        [WorkOrderController::class, 'destroy'])->middleware('permission:production.wo.create');
+    Route::get('/work-orders/options', [WorkOrderController::class, 'options'])->middleware('permission:production.work_orders.view');
+    Route::get('/work-orders', [WorkOrderController::class, 'index'])->middleware('permission:production.work_orders.view');
+    Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->middleware('permission:production.work_orders.view');
+    Route::get('/work-orders/{workOrder}/chain', [WorkOrderController::class, 'chain'])->middleware('permission:production.work_orders.view');
+    Route::post('/work-orders', [WorkOrderController::class, 'store'])->middleware('permission:production.wo.create');
+    Route::delete('/work-orders/{workOrder}', [WorkOrderController::class, 'destroy'])->middleware('permission:production.wo.create');
     Route::patch('/work-orders/{workOrder}/restore', [WorkOrderController::class, 'restore'])->middleware('permission:production.wo.create')->withTrashed();
-    Route::post('/work-orders/{workOrder}/confirm',  [WorkOrderController::class, 'confirm'])->middleware('permission:production.wo.confirm');
-    Route::post('/work-orders/{workOrder}/start',    [WorkOrderController::class, 'start'])  ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/work-orders/{workOrder}/pause',    [WorkOrderController::class, 'pause'])  ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/work-orders/{workOrder}/resume',   [WorkOrderController::class, 'resume']) ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/confirm', [WorkOrderController::class, 'confirm'])->middleware('permission:production.wo.confirm');
+    Route::post('/work-orders/{workOrder}/start', [WorkOrderController::class, 'start'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/pause', [WorkOrderController::class, 'pause'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/resume', [WorkOrderController::class, 'resume'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/work-orders/{workOrder}/close',    [WorkOrderController::class, 'close'])  ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/work-orders/{workOrder}/cancel',   [WorkOrderController::class, 'cancel']) ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/close', [WorkOrderController::class, 'close'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel'])->middleware('permission:production.work_orders.lifecycle');
 
     /* ─── Output recording (Task 55) ─── */
-    Route::get('/work-orders/{workOrder}/outputs',   [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
-    Route::post('/work-orders/{workOrder}/outputs',  [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
+    Route::get('/work-orders/{workOrder}/outputs', [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
+    Route::post('/work-orders/{workOrder}/outputs', [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
     Route::post('/work-orders/{workOrder}/outputs/{output}/retry-receipt', [WorkOrderController::class, 'retryProductionReceipt'])->middleware('permission:production.wo.record');
 
     /* ─── OEE (Task 57) ─── */
     Route::get('/oee/machine/{machine}', [OeeController::class, 'forMachine'])->middleware('permission:production.dashboard.view');
-    Route::get('/oee/today',             [OeeController::class, 'todayAll']) ->middleware('permission:production.dashboard.view');
+    Route::get('/oee/today', [OeeController::class, 'todayAll'])->middleware('permission:production.dashboard.view');
     // Sprint P10 — full OEE report page.
-    Route::get('/oee/report',            [OeeController::class, 'report'])   ->middleware('permission:production.dashboard.view');
+    Route::get('/oee/report', [OeeController::class, 'report'])->middleware('permission:production.dashboard.view');
 
     /* ─── Production dashboard (Task 58) ─── */
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:production.dashboard.view');
 
     /* ─── Product routings (Task 10) ─── */
-    Route::get('/routings',                       [ProductionRoutingController::class, 'index'])    ->middleware('permission:production.routings.view');
-    Route::post('/routings',                      [ProductionRoutingController::class, 'store'])    ->middleware('permission:production.routings.manage');
-    Route::get('/routings/{routing}',             [ProductionRoutingController::class, 'show'])     ->middleware('permission:production.routings.view');
-    Route::put('/routings/{routing}',             [ProductionRoutingController::class, 'update'])   ->middleware('permission:production.routings.manage');
-    Route::post('/routings/{routing}/duplicate',  [ProductionRoutingController::class, 'duplicate'])->middleware('permission:production.routings.manage');
+    Route::get('/routings', [ProductionRoutingController::class, 'index'])->middleware('permission:production.routings.view');
+    Route::post('/routings', [ProductionRoutingController::class, 'store'])->middleware('permission:production.routings.manage');
+    Route::get('/routings/{routing}', [ProductionRoutingController::class, 'show'])->middleware('permission:production.routings.view');
+    Route::put('/routings/{routing}', [ProductionRoutingController::class, 'update'])->middleware('permission:production.routings.manage');
+    Route::post('/routings/{routing}/duplicate', [ProductionRoutingController::class, 'duplicate'])->middleware('permission:production.routings.manage');
     // Roll back to a superseded version. Routings are never deleted, so this
     // is the only lifecycle write besides publishing a new version.
-    Route::post('/routings/{routing}/activate',   [ProductionRoutingController::class, 'activate'])  ->middleware('permission:production.routings.manage');
+    Route::post('/routings/{routing}/activate', [ProductionRoutingController::class, 'activate'])->middleware('permission:production.routings.manage');
 
     /* ─── WO Operations (Task 11) ─── */
-    Route::get('/work-orders/{workOrder}/operations',   [WoOperationController::class, 'index'])       ->middleware('permission:production.work_orders.view');
+    Route::get('/work-orders/{workOrder}/operations', [WoOperationController::class, 'index'])->middleware('permission:production.work_orders.view');
     // Literal "/operations/schedule" MUST come before "{operation}" parameter routes.
-    Route::get('/operations/schedule',                   [WoOperationController::class, 'schedule'])    ->middleware('permission:production.dashboard.view');
-    Route::get('/operations/{operation}',                [WoOperationController::class, 'show'])        ->middleware('permission:production.work_orders.view');
-    Route::post('/operations/{operation}/start-setup',   [WoOperationController::class, 'startSetup']) ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/end-setup',     [WoOperationController::class, 'endSetup'])   ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/start',         [WoOperationController::class, 'start'])      ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/pause',         [WoOperationController::class, 'pause'])      ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/resume',        [WoOperationController::class, 'resume'])     ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/output',        [WoOperationController::class, 'recordOutput'])->middleware('permission:production.wo.record');
-    Route::post('/operations/{operation}/complete',      [WoOperationController::class, 'complete'])   ->middleware('permission:production.work_orders.lifecycle');
-    Route::post('/operations/{operation}/skip',          [WoOperationController::class, 'skip'])       ->middleware('permission:production.work_orders.lifecycle');
+    Route::get('/operations/schedule', [WoOperationController::class, 'schedule'])->middleware('permission:production.dashboard.view');
+    Route::get('/operations/{operation}', [WoOperationController::class, 'show'])->middleware('permission:production.work_orders.view');
+    Route::post('/operations/{operation}/start-setup', [WoOperationController::class, 'startSetup'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/end-setup', [WoOperationController::class, 'endSetup'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/start', [WoOperationController::class, 'start'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/pause', [WoOperationController::class, 'pause'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/resume', [WoOperationController::class, 'resume'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/output', [WoOperationController::class, 'recordOutput'])->middleware('permission:production.wo.record');
+    Route::post('/operations/{operation}/complete', [WoOperationController::class, 'complete'])->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/skip', [WoOperationController::class, 'skip'])->middleware('permission:production.work_orders.lifecycle');
 });

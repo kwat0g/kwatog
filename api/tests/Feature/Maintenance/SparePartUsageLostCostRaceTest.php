@@ -15,6 +15,8 @@ use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Services\SparePartUsageService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\MRP\Models\Machine;
+use Database\Seeders\MachineSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -45,6 +47,8 @@ class SparePartUsageLostCostRaceTest extends TestCase
 
     private function fixture(): array
     {
+        $this->seed(MachineSeeder::class);
+        $machine = Machine::query()->firstOrFail();
         $item = Item::factory()->create([
             'item_type'       => ItemType::SparePart->value,
             'unit_of_measure' => 'pcs',
@@ -60,7 +64,7 @@ class SparePartUsageLostCostRaceTest extends TestCase
         $wo = MaintenanceWorkOrder::create([
             'mwo_number'        => 'MWO-RACE-'.substr(uniqid(), -6),
             'maintainable_type' => 'machine',
-            'maintainable_id'   => 1,
+            'maintainable_id'   => $machine->id,
             'type'              => MaintenanceWorkOrderType::Corrective->value,
             'priority'          => MaintenancePriority::Medium->value,
             'description'       => 'Race test WO',

@@ -7,7 +7,7 @@ export const materialIssuesApi = {
  client.get<PaginatedResponse<MaterialIssueSlip>>('/inventory/material-issues', { params }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<MaterialIssueSlip>>(`/inventory/material-issues/${id}`).then((r) => r.data.data),
- create: (data: {
+  create: (data: {
  work_order_id?: string | number | null;
  issued_date: string;
  reference_text?: string;
@@ -21,6 +21,6 @@ export const materialIssuesApi = {
  material_reservation_id?: number;
  remarks?: string;
  }>;
- }) =>
- client.post<ApiSuccess<MaterialIssueSlip>>('/inventory/material-issues', data).then((r) => r.data.data),
+  }, idempotencyKey: string) =>
+  client.post<ApiSuccess<MaterialIssueSlip>>('/inventory/material-issues', data, { headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.data.data),
 };

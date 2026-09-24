@@ -98,6 +98,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/purchase-orders/{purchaseOrder}/send', [PurchaseOrderController::class, 'send'])->middleware('permission:purchasing.po.send');
     Route::patch('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/close', [PurchaseOrderController::class, 'close'])->middleware('permission:purchasing.po.create');
+    Route::patch('/purchase-orders/{purchaseOrder}/short-close', [PurchaseOrderController::class, 'shortClose'])->middleware('permission:purchasing.po.create');
     Route::get('/purchase-orders/{purchaseOrder}/pdf', [PurchaseOrderController::class, 'pdf'])->middleware('permission:purchasing.view');
 
     /* ─── Approved Suppliers ─── */

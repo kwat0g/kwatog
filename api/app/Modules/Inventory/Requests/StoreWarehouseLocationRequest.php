@@ -32,6 +32,7 @@ class StoreWarehouseLocationRequest extends FormRequest
             'rack'      => ['nullable', 'string', 'max:10'],
             'bin'       => ['nullable', 'string', 'max:10'],
             'is_active' => ['nullable', 'boolean'],
+            'is_blocked' => ['nullable', 'boolean'],
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Common\Support\Money;
 
 /**
  * Series F — Task F3. Stock Card.
@@ -36,8 +37,10 @@ class StockCardService
      */
     public function card(Item $item, Carbon $from, Carbon $to, ?int $locationId = null): array
     {
-        // 1) Opening: sum(quantity) net for movements BEFORE $from.
-        $opening = $this->balanceBefore($item->id, $from, $locationId);
+        // Rebuild each location's ledger state so the card follows the same
+        // four-decimal WAC rounding as StockMovementService.
+        $levels = $this->levelsBefore($item->id, $from, $locationId);
+        $opening = $this->summarize($levels);
 
         // 2) In-range movements in ASC order.
         $q = StockMovement::query()
@@ -56,36 +59,14 @@ class StockCardService
 
         $movements = $q->get();
 
-        $balance = (float) $opening['balance'];
-        $totalValue = (float) $opening['value'];
-
         $rows = [];
         foreach ($movements as $m) {
             $direction = $this->direction($m, $locationId);
-            // A transfer viewed WITHOUT a location filter is a movement between
-            // two internal locations: it is simultaneously an in and an out and
-            // must net to zero. The old code fell through to 'in', inflating the
-            // running balance by the transfer quantity.
-            $isTransfer = $direction === 'transfer';
-            $signed = match ($direction) {
-                'in'    => (float) $m->quantity,
-                'out'   => -1.0 * (float) $m->quantity,
-                default => 0.0,
-            };
-            $balance += $signed;
-
-            // Recompute weighted avg only on genuine receipts (movement IN).
-            // Transfers, issues and other movement types preserve the existing
-            // weighted-avg cost.
-            if (! $isTransfer && $direction === 'in' && (float) $m->quantity > 0) {
-                $totalValue += (float) $m->quantity * (float) $m->unit_cost;
-            } elseif (! $isTransfer && $direction === 'out' && $balance >= 0) {
-                $avg = $balance > 0 ? $totalValue / max($balance + (float) $m->quantity, 0.0001) : 0.0;
-                $totalValue -= (float) $m->quantity * $avg;
-                if ($totalValue < 0) $totalValue = 0;
-            }
-
-            $weightedAvg = $balance > 0 ? $totalValue / $balance : (float) $m->unit_cost;
+            $this->applyMovement($levels, $m, $locationId);
+            $current = $this->summarize($levels);
+            $weightedAvg = bccomp($current['balance'], '0', 3) > 0
+                ? $current['weighted_avg']
+                : $this->round4((string) $m->unit_cost);
 
             $rows[] = [
                 'id'             => $m->hash_id,
@@ -100,15 +81,14 @@ class StockCardService
                 'in'             => in_array($direction, ['in', 'transfer'], true)  ? (string) $m->quantity : '0',
                 'out'            => in_array($direction, ['out', 'transfer'], true) ? (string) $m->quantity : '0',
                 'unit_cost'      => (string) $m->unit_cost,
-                'balance'        => number_format($balance, 3, '.', ''),
-                'weighted_avg'   => number_format($weightedAvg, 4, '.', ''),
+                'balance'        => $current['balance'],
+                'weighted_avg'   => $weightedAvg,
                 'created_by'     => $m->creator?->name,
                 'remarks'        => (string) ($m->remarks ?? ''),
             ];
         }
 
-        $closingValue = $totalValue;
-        $closingCost  = $balance > 0 ? $closingValue / $balance : 0;
+        $closing = $this->summarize($levels);
 
         return [
             'item' => [
@@ -120,26 +100,26 @@ class StockCardService
             'from'    => $from->toDateString(),
             'to'      => $to->toDateString(),
             'opening' => [
-                'balance'      => number_format($opening['balance'], 3, '.', ''),
-                'weighted_avg' => number_format($opening['weighted_avg'], 4, '.', ''),
-                'value'        => number_format($opening['value'], 2, '.', ''),
+                'balance'      => $opening['balance'],
+                'weighted_avg' => $opening['weighted_avg'],
+                'value'        => Money::round2($opening['value']),
             ],
             'rows'    => $rows,
             'closing' => [
-                'balance'      => number_format($balance, 3, '.', ''),
-                'weighted_avg' => number_format($closingCost, 4, '.', ''),
-                'value'        => number_format($closingValue, 2, '.', ''),
+                'balance'      => $closing['balance'],
+                'weighted_avg' => $closing['weighted_avg'],
+                'value'        => Money::round2($closing['value']),
             ],
         ];
     }
 
     /**
-     * @return array{balance: float, weighted_avg: float, value: float}
+     * @return array<int, array{quantity: string, weighted_avg_cost: string}>
      */
-    private function balanceBefore(int $itemId, Carbon $cutoff, ?int $locationId): array
+    private function levelsBefore(int $itemId, Carbon $cutoff, ?int $locationId): array
     {
         $q = DB::table('stock_movements')
-            ->select(['movement_type', 'quantity', 'unit_cost', 'from_location_id', 'to_location_id'])
+            ->select(['quantity', 'unit_cost', 'from_location_id', 'to_location_id'])
             ->where('item_id', $itemId)
             ->where('created_at', '<', $cutoff)
             ->orderBy('created_at')
@@ -152,29 +132,74 @@ class StockCardService
             });
         }
 
-        $balance = 0.0;
-        $totalValue = 0.0;
+        $levels = [];
         foreach ($q->get() as $r) {
-            $isIn = $r->to_location_id !== null && ($locationId === null || (int) $r->to_location_id === $locationId);
-            $isOut = $r->from_location_id !== null && ($locationId === null || (int) $r->from_location_id === $locationId);
+            $this->applyMovement($levels, $r, $locationId);
+        }
 
-            if ($isIn && ! $isOut) {
-                $balance += (float) $r->quantity;
-                $totalValue += (float) $r->quantity * (float) $r->unit_cost;
-            } elseif ($isOut && ! $isIn) {
-                $avg = $balance > 0 ? $totalValue / $balance : (float) $r->unit_cost;
-                $balance -= (float) $r->quantity;
-                $totalValue -= (float) $r->quantity * $avg;
-                if ($balance < 0) $balance = 0;
-                if ($totalValue < 0) $totalValue = 0;
+        return $levels;
+    }
+
+    /**
+     * Apply one ledger row to its affected location state. The stock movement
+     * ledger stores the issue cost at the source's already-rounded WAC, so
+     * each location must retain that WAC across issues and transfers out.
+     *
+     * @param array<int, array{quantity: string, weighted_avg_cost: string}> $levels
+     */
+    private function applyMovement(array &$levels, object $movement, ?int $locationId): void
+    {
+        $quantity = (string) $movement->quantity;
+        $fromId = $movement->from_location_id === null ? null : (int) $movement->from_location_id;
+        $toId = $movement->to_location_id === null ? null : (int) $movement->to_location_id;
+
+        if ($fromId !== null && ($locationId === null || $fromId === $locationId)) {
+            $levels[$fromId] ??= ['quantity' => '0.000', 'weighted_avg_cost' => '0.0000'];
+            $levels[$fromId]['quantity'] = bcsub($levels[$fromId]['quantity'], $quantity, 3);
+            if (bccomp($levels[$fromId]['quantity'], '0', 3) < 0) {
+                $levels[$fromId]['quantity'] = '0.000';
             }
         }
 
+        if ($toId !== null && ($locationId === null || $toId === $locationId)) {
+            $levels[$toId] ??= ['quantity' => '0.000', 'weighted_avg_cost' => '0.0000'];
+            $oldQuantity = $levels[$toId]['quantity'];
+            $newQuantity = bcadd($oldQuantity, $quantity, 3);
+            $oldValue = bcmul($oldQuantity, $levels[$toId]['weighted_avg_cost'], 4);
+            $incomingValue = bcmul($quantity, (string) $movement->unit_cost, 4);
+            $newValue = bcadd($oldValue, $incomingValue, 4);
+
+            if (bccomp($newQuantity, '0', 3) > 0) {
+                $levels[$toId]['weighted_avg_cost'] = $this->round4(bcdiv($newValue, $newQuantity, 6));
+            }
+            $levels[$toId]['quantity'] = $newQuantity;
+        }
+    }
+
+    /** @param array<int, array{quantity: string, weighted_avg_cost: string}> $levels
+     *  @return array{balance: string, weighted_avg: string, value: string}
+     */
+    private function summarize(array $levels): array
+    {
+        $balance = '0.000';
+        $value = '0.0000000';
+        foreach ($levels as $level) {
+            $balance = bcadd($balance, $level['quantity'], 3);
+            $value = bcadd($value, bcmul($level['quantity'], $level['weighted_avg_cost'], 7), 7);
+        }
+
         return [
-            'balance'      => $balance,
-            'weighted_avg' => $balance > 0 ? $totalValue / $balance : 0.0,
-            'value'        => $totalValue,
+            'balance' => $balance,
+            'weighted_avg' => bccomp($balance, '0', 3) > 0
+                ? $this->round4(bcdiv($value, $balance, 6))
+                : '0.0000',
+            'value' => $value,
         ];
+    }
+
+    private function round4(string $value): string
+    {
+        return bcadd($value, '0.00005', 4);
     }
 
     private function direction(StockMovement $m, ?int $locationId): string

@@ -34,7 +34,7 @@ export default function LeaveDetailPage() {
  });
  const { data: leaveOptions } = useQuery({
  queryKey: ['leaves', 'options'],
- queryFn: leaveRequestsApi.options,
+  queryFn: () => leaveRequestsApi.options(),
  staleTime: 300_000,
  });
 

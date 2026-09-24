@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
@@ -30,6 +31,7 @@ class RfqAwardService
         private readonly PurchaseOrderService $purchaseOrders,
         private readonly BudgetEnforcementService $budget,
         private readonly OutboxService $outbox,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     /**
@@ -71,6 +73,12 @@ class RfqAwardService
                     throw new BusinessRuleException('The selected quotation line does not belong to this RFQ line.');
                 }
                 $qty = (string) $row['awarded_quantity'];
+                // Purchase-order quantities are 3dp; a 4th decimal would be
+                // silently truncated (or refused) when the PO line is built.
+                if (bccomp($qty, bcadd($qty, '0', 3), 4) !== 0) {
+                    throw new BusinessRuleException('Awarded quantity may have at most 3 decimal places.');
+                }
+                $qty = bcadd($qty, '0', 3);
                 if (Money::lte($qty, '0') || Money::gt($qty, (string) $quoteItem->offered_quantity)) {
                     throw new BusinessRuleException('Awarded quantity must be positive and no more than the supplier offer.');
                 }
@@ -134,12 +142,10 @@ class RfqAwardService
             $locked->invitations()->whereNotIn('vendor_id', $winningVendorIds)->update(['status' => 'not_awarded']);
             SupplierQuote::query()->where('request_for_quote_id', $locked->id)->where('is_current', true)->whereNotIn('id', $winningQuoteIds)->where('status', SupplierQuoteStatus::Submitted->value)->update(['status' => SupplierQuoteStatus::NotAwarded->value]);
 
-            $awardTotal = Money::add(...$awards->map(static fn (RfqAward $award): string => (string) $award->awarded_total_delivered_cost)->all());
+            // Same figures the POs will carry, so the budget check cannot count
+            // VAT twice (an inclusive quote's prices already hold it).
+            $awardTotal = $this->commercialFor($awards)['total'];
             $sourcePr = PurchaseRequest::query()->lockForUpdate()->with('items')->findOrFail($locked->purchase_request_id);
-            foreach ($awards->groupBy('supplier_quote_id') as $quoteAwards) {
-                $quote = $quoteAwards->first()->quote;
-                $awardTotal = Money::add($awardTotal, (string) $quote->vat_amount, (string) $quote->freight_amount, (string) $quote->other_charges);
-            }
             if (Money::gt($awardTotal, $sourcePr->totalEstimatedAmount())) {
                 $locked->forceFill([
                     'budget_warning_level' => 'warning',
@@ -177,9 +183,9 @@ class RfqAwardService
                         'item_id' => $award->rfqItem->item_id,
                         'purchase_request_item_id' => $award->rfqItem->purchase_request_item_id,
                         'description' => $award->rfqItem->description,
-                        'quantity' => (string) $award->awarded_quantity,
+                        'quantity' => bcadd((string) $award->awarded_quantity, '0', 3),
                         'unit' => $award->rfqItem->unit,
-                        'unit_price' => (string) $award->awarded_unit_price,
+                        'unit_price' => $commercial['lines'][$award->id]['unit_price'],
                         'rfq_line_vat_amount' => $commercial['lines'][$award->id]['vat_amount'],
                         'rfq_line_freight_amount' => $commercial['lines'][$award->id]['freight_amount'],
                         'rfq_line_other_charges' => $commercial['lines'][$award->id]['other_charges'],
@@ -189,7 +195,13 @@ class RfqAwardService
                 $created[] = $po;
             }
 
-            $full = $locked->items->every(fn ($line) => $locked->awards()->where('request_for_quote_item_id', $line->id)->exists());
+            $full = $locked->items->every(function ($line) use ($locked): bool {
+                $awardedQty = (string) $locked->awards()
+                    ->where('request_for_quote_item_id', $line->id)
+                    ->sum('awarded_quantity');
+
+                return bccomp($awardedQty, (string) $line->quantity, 3) >= 0;
+            });
             $locked->forceFill([
                 'status' => $full ? RfqStatus::Awarded : RfqStatus::PartiallyAwarded,
                 'evaluation_started_at' => $locked->evaluation_started_at ?? now(),
@@ -203,34 +215,88 @@ class RfqAwardService
     }
 
     /**
-     * Allocate quote line charges by awarded quantity. Header charges remain
-     * attached once to the generated PO for each winning quote version.
+     * Price the awarded lines exactly as the generated POs will carry them.
+     * Line charges follow the awarded quantity; quote freight and other charges
+     * stay attached once per winning quote version. VAT follows the goods
+     * actually awarded: line VAT pro rata, otherwise the quote VAT by awarded
+     * share of the quoted goods (it used to ride in full on a partial award,
+     * and was added on top of line VAT the quote header merely summed). A
+     * VAT-inclusive quote is split into net PO prices plus that VAT, so the PO
+     * does not add VAT to prices that already contain it.
      *
      * @param  Collection<int, RfqAward>  $awards
-     * @return array{header: array{vat_amount:string,freight_amount:string,other_charges:string}, lines: array<int, array{vat_amount:string,freight_amount:string,other_charges:string}>}
+     * @return array{header: array{vat_amount:string,freight_amount:string,other_charges:string}, lines: array<int, array{unit_price:string,vat_amount:string,freight_amount:string,other_charges:string}>, total: string}
      */
     private function commercialFor($awards): array
     {
         $header = ['vat_amount' => Money::zero(), 'freight_amount' => Money::zero(), 'other_charges' => Money::zero()];
         $lines = [];
+        $total = Money::zero();
         foreach ($awards->groupBy('supplier_quote_id') as $quoteAwards) {
             $quote = $quoteAwards->first()->quote;
-            $header['vat_amount'] = Money::add($header['vat_amount'], (string) $quote->vat_amount);
-            $header['freight_amount'] = Money::add($header['freight_amount'], (string) $quote->freight_amount);
-            $header['other_charges'] = Money::add($header['other_charges'], (string) $quote->other_charges);
+            $quoted = $quote->items()->where('response_status', SupplierQuoteResponseStatus::Quoted->value)->get(['offered_quantity', 'unit_price', 'line_vat_amount', 'line_freight_amount', 'line_other_charges']);
+            $quotedGoods = Money::add('0', ...$quoted->map(static fn ($line): string => Money::mul((string) $line->offered_quantity, (string) $line->unit_price))->all());
+            $quotedLineVat = Money::add('0', ...$quoted->map(static fn ($line): string => (string) $line->line_vat_amount)->all());
+            $headerVat = Money::isZero($quotedLineVat) ? (string) $quote->vat_amount : Money::zero();
+            // Header VAT is assessed on the goods plus every charge the supplier
+            // bills (SupplierQuoteService::resolveHeaderVat), so it is allocated on
+            // that same base: an inclusive quote nets VAT out of prices AND charges
+            // at one ratio (freight kept gross would carry its VAT into landed cost
+            // instead of input VAT), and a partial award carries VAT on the goods
+            // and charges it actually takes.
+            $quotedBase = Money::add($quotedGoods, (string) $quote->freight_amount, (string) $quote->other_charges, ...$quoted->map(static fn ($line): string => Money::add((string) $line->line_freight_amount, (string) $line->line_other_charges))->all());
+            $splitInclusive = $quote->vat_inclusive && ! Money::isZero($headerVat) && ! Money::isZero($quotedGoods);
+            // Net at the statutory rate (112 → 100.00), not the declared VAT's
+            // rounded ratio (→ 99.9997); the VAT line below absorbs the centavos.
+            $vatDivisor = Money::add('1', $this->taxPolicy->requiredVatRate());
+            $netOf = static fn (string $gross): string => $splitInclusive
+                ? Money::round2(Money::div($gross, $vatDivisor, 8))
+                : $gross;
+            $quoteFreight = $netOf((string) $quote->freight_amount);
+            $quoteOther = $netOf((string) $quote->other_charges);
+            $header['freight_amount'] = Money::add($header['freight_amount'], $quoteFreight);
+            $header['other_charges'] = Money::add($header['other_charges'], $quoteOther);
+            $total = Money::add($total, $quoteFreight, $quoteOther);
+            $awardedGross = Money::add((string) $quote->freight_amount, (string) $quote->other_charges);
+            $awardedNet = Money::add($quoteFreight, $quoteOther);
             foreach ($quoteAwards as $award) {
                 $quoteItem = $award->quoteItem;
-                $lineVat = $this->prorateCharge((string) $quoteItem->line_vat_amount, (string) $award->awarded_quantity, (string) $quoteItem->offered_quantity);
+                $qty = (string) $award->awarded_quantity;
+                $price = (string) $quoteItem->unit_price;
+                $gross = Money::mul($qty, $price);
+                if ($splitInclusive) {
+                    $price = bcdiv($price, $vatDivisor, 4);
+                }
+                $net = Money::mul($qty, $price);
+                $lineVat = $this->prorateCharge((string) $quoteItem->line_vat_amount, $qty, (string) $quoteItem->offered_quantity);
+                $freightGross = $this->prorateCharge((string) $quoteItem->line_freight_amount, $qty, (string) $quoteItem->offered_quantity);
+                $otherGross = $this->prorateCharge((string) $quoteItem->line_other_charges, $qty, (string) $quoteItem->offered_quantity);
+                $freight = $netOf($freightGross);
+                $other = $netOf($otherGross);
                 $lines[$award->id] = [
+                    'unit_price' => $price,
                     'vat_amount' => $lineVat,
-                    'freight_amount' => $this->prorateCharge((string) $quoteItem->line_freight_amount, (string) $award->awarded_quantity, (string) $quoteItem->offered_quantity),
-                    'other_charges' => $this->prorateCharge((string) $quoteItem->line_other_charges, (string) $award->awarded_quantity, (string) $quoteItem->offered_quantity),
+                    'freight_amount' => $freight,
+                    'other_charges' => $other,
                 ];
                 $header['vat_amount'] = Money::add($header['vat_amount'], $lineVat);
+                $total = Money::add($total, $net, $lineVat, $freight, $other);
+                $awardedGross = Money::add($awardedGross, $gross, $freightGross, $otherGross);
+                $awardedNet = Money::add($awardedNet, $net, $freight, $other);
+            }
+            if (! Money::isZero($headerVat)) {
+                $vat = match (true) {
+                    // Absorb net-price rounding so the PO totals what was quoted.
+                    $splitInclusive => Money::sub($awardedGross, $awardedNet),
+                    Money::isZero($quotedBase) => $headerVat,
+                    default => Money::round2(Money::div(bcmul($headerVat, $awardedGross, 8), $quotedBase, 8)),
+                };
+                $header['vat_amount'] = Money::add($header['vat_amount'], $vat);
+                $total = Money::add($total, $vat);
             }
         }
 
-        return ['header' => $header, 'lines' => $lines];
+        return ['header' => $header, 'lines' => $lines, 'total' => $total];
     }
 
     private function prorateCharge(string $charge, string $awardedQuantity, string $offeredQuantity): string
@@ -239,7 +305,9 @@ class RfqAwardService
             return Money::zero();
         }
 
-        return Money::mul($charge, Money::div($awardedQuantity, $offeredQuantity));
+        // Multiply before dividing: a 4 dp ratio (1/3 → 0.3333) lost ₱0.10
+        // of a ₱3,000 freight charge on every third of an award.
+        return Money::round2(Money::div(bcmul($charge, $awardedQuantity, 8), $offeredQuantity, 8));
     }
 
     public function reviewQuality(RequestForQuote $rfq, SupplierQuoteItem $quoteItem, array $data, User $by): SupplierQuoteItem

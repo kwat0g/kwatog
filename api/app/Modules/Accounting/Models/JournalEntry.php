@@ -115,6 +115,9 @@ class JournalEntry extends Model
             'invoice'                => 'Invoice',
             'collection'             => 'Collection',
             'credit_note'            => 'Credit Note',
+            'loan_disbursement'     => 'Loan Disbursement',
+            'loan_write_off'        => 'Loan Write-off',
+            'loan_manual_repayment' => 'Loan Manual Repayment',
             'journal_entry_reversal' => 'Reversal of JE',
             default                  => ucfirst(str_replace(
                 '_', ' ', class_basename($this->reference_type),

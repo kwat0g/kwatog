@@ -54,6 +54,7 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
         'bill_payment' => ['accounting.bills.payment_approve'],
         'salary_adjustment' => ['hr.salary_adjustments.act'],
         'return_request' => ['return_management.approve'],
+        'finance_only_return_request' => ['return_management.approve'],
         'asset_disposal' => ['assets.dispose.approve'],
     ];
 
@@ -122,6 +123,7 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
             'company_loan' => \App\Modules\Loans\Models\EmployeeLoan::class,
             'salary_adjustment' => \App\Modules\HR\Models\SalaryAdjustment::class,
             'return_request' => \App\Modules\ReturnManagement\Models\ReturnRequest::class,
+            'finance_only_return_request' => \App\Modules\ReturnManagement\Models\ReturnRequest::class,
         ];
 
         $registered = ApprovalTypeRegistry::all();

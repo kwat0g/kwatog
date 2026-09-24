@@ -37,6 +37,7 @@ class StockCountCancelRegressionTest extends TestCase
 
     private StockCountService $svc;
     private User $user;
+    private User $checker;
     private WarehouseLocation $location;
     private Item $item;
     private StockCountSession $session;
@@ -49,6 +50,7 @@ class StockCountCancelRegressionTest extends TestCase
 
         $this->svc  = app(StockCountService::class);
         $this->user = User::factory()->create(['is_active' => true]);
+        $this->checker = User::factory()->create(['is_active' => true]);
 
         // Allow variance beyond the default tolerance so completion posts the
         // adjustment without supervisor sign-off.
@@ -105,7 +107,7 @@ class StockCountCancelRegressionTest extends TestCase
     public function test_cancel_after_completion_is_blocked(): void
     {
         $this->countedItem('10.000'); // zero variance → completes cleanly
-        $completed = $this->svc->completeSession($this->session->id, $this->user);
+        $completed = $this->svc->completeSession($this->session->id, $this->checker);
         $this->assertSame(StockCountSessionStatus::Completed, $completed->status);
 
         $this->expectException(BusinessRuleException::class);
@@ -140,7 +142,7 @@ class StockCountCancelRegressionTest extends TestCase
     {
         $this->countedItem('12.000'); // +2 overage
 
-        $completed = $this->svc->completeSession($this->session->id, $this->user);
+        $completed = $this->svc->completeSession($this->session->id, $this->checker);
 
         $this->assertSame(StockCountSessionStatus::Completed, $completed->status);
         $movement = StockMovement::query()

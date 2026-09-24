@@ -61,6 +61,12 @@ class PredictiveMaintenanceService
 
         $result = ['reading' => $reading, 'triggered' => false];
 
+        if (! $this->isFresh($reading)) {
+            $result['reason'] = 'The reading is older than the configured predictive-maintenance freshness window and was not used to trigger a work order.';
+
+            return $result;
+        }
+
         if ($this->isBreach((string) $data['metric'], (float) $data['value'])) {
             $reason = sprintf(
                 '%s reading %.3f %s exceeds safe threshold.',
@@ -70,16 +76,18 @@ class PredictiveMaintenanceService
             );
 
             if ($this->shouldTriggerWorkOrder((int) $data['machine_id'], (string) $data['metric'])) {
-                $wo = $this->createCorrectiveWorkOrder((int) $data['machine_id'], $reason, $by);
-                $result['triggered'] = true;
-                $result['reason'] = $reason;
+                [$wo, $created] = $this->createCorrectiveWorkOrder((int) $data['machine_id'], $reason, $by);
+                $result['triggered'] = $created;
+                $result['reason'] = $created ? $reason : $reason.' An open predictive corrective work order already exists.';
                 $result['work_order'] = $wo;
-                Log::info('PredictiveMaintenance: triggered corrective WO', [
-                    'machine_id' => $data['machine_id'],
-                    'metric'     => $data['metric'],
-                    'value'      => $data['value'],
-                    'mwo_number' => $wo->mwo_number,
-                ]);
+                if ($created) {
+                    Log::info('PredictiveMaintenance: triggered corrective WO', [
+                        'machine_id' => $data['machine_id'],
+                        'metric'     => $data['metric'],
+                        'value'      => $data['value'],
+                        'mwo_number' => $wo->mwo_number,
+                    ]);
+                }
             } else {
                 $result['reason'] = $reason . ' (insufficient consecutive breaches)';
             }
@@ -103,7 +111,7 @@ class PredictiveMaintenanceService
 
         foreach ($machines as $machine) {
             foreach (array_column($this->metricDefinitions(), 'value') as $metric) {
-                $latest = $this->latestReading((int) $machine->id, $metric);
+                $latest = $this->latestFreshReading((int) $machine->id, $metric);
                 if ($latest && $this->isBreach($metric, (float) $latest->value)) {
                     if ($this->shouldTriggerWorkOrder((int) $machine->id, $metric)) {
                         $reason = sprintf(
@@ -112,8 +120,10 @@ class PredictiveMaintenanceService
                             (float) $latest->value,
                             $latest->unit,
                         );
-                        $this->createCorrectiveWorkOrder((int) $machine->id, $reason, $by);
-                        $count++;
+                        [, $created] = $this->createCorrectiveWorkOrder((int) $machine->id, $reason, $by);
+                        if ($created) {
+                            $count++;
+                        }
                     }
                 }
             }
@@ -208,8 +218,7 @@ class PredictiveMaintenanceService
 
     private function shouldTriggerWorkOrder(int $machineId, string $metric): bool
     {
-        return $this->consecutiveBreachCount($machineId, $metric) >= $this->configuration()['breach_window']
-            && ! $this->hasOpenCorrectiveWoForMachine($machineId, $metric);
+        return $this->consecutiveBreachCount($machineId, $metric) >= $this->configuration()['breach_window'];
     }
 
     private function consecutiveBreachCount(int $machineId, string $metric): int
@@ -217,6 +226,7 @@ class PredictiveMaintenanceService
         $recent = MachineConditionReading::query()
             ->where('machine_id', $machineId)
             ->where('metric', $metric)
+            ->whereBetween('recorded_at', [now()->subHours($this->maxReadingAgeHours()), now()])
             ->orderByDesc('recorded_at')
             ->limit($this->configuration()['breach_window'] * 2)
             ->get();
@@ -232,39 +242,27 @@ class PredictiveMaintenanceService
         return $count;
     }
 
-    private function hasOpenCorrectiveWoForMachine(int $machineId, string $metric): bool
+    /** @return array{MaintenanceWorkOrder, bool} */
+    private function createCorrectiveWorkOrder(int $machineId, string $reason, \App\Modules\Auth\Models\User $by): array
     {
-        $keyword = 'predictive';
-        return MaintenanceWorkOrder::query()
-            ->where('maintainable_type', 'machine')
-            ->where('maintainable_id', $machineId)
-            ->where('type', MaintenanceWorkOrderType::Corrective->value)
-            ->whereIn('status', ['open', 'assigned', 'in_progress'])
-            ->where('description', SearchOperator::like(), SearchOperator::contains($keyword))
-            ->exists();
-    }
-
-    private function createCorrectiveWorkOrder(int $machineId, string $reason, \App\Modules\Auth\Models\User $by): MaintenanceWorkOrder
-    {
-        return DB::transaction(function () use ($machineId, $reason, $by): MaintenanceWorkOrder {
+        return DB::transaction(function () use ($machineId, $reason, $by): array {
             Machine::query()->lockForUpdate()->findOrFail($machineId);
 
-            // Re-check after taking the machine lock. Two queue deliveries
-            // can both pass the earlier read, but only one may open a
-            // predictive corrective WO for the same machine.
+            // The machine lock is the idempotency claim. Every evaluator can
+            // reach this transaction; only the first opens a corrective MWO.
             $existing = MaintenanceWorkOrder::query()
                 ->where('maintainable_type', 'machine')
                 ->where('maintainable_id', $machineId)
                 ->where('type', MaintenanceWorkOrderType::Corrective->value)
                 ->whereIn('status', ['open', 'assigned', 'in_progress'])
-                ->where('description', 'like', '%predictive%')
+                ->where('description', SearchOperator::like(), SearchOperator::contains('[Predictive]'))
                 ->orderByDesc('id')
                 ->first();
             if ($existing) {
-                return $existing;
+                return [$existing, false];
             }
 
-            return $this->workOrders->create([
+            return [$this->workOrders->create([
                 'maintainable_type' => 'machine',
                 'maintainable_id'   => $machineId,
                 'type'              => MaintenanceWorkOrderType::Corrective->value,
@@ -273,7 +271,7 @@ class PredictiveMaintenanceService
                     '[Predictive] %s — Auto-generated from condition monitoring.',
                     $reason,
                 ),
-            ], $by);
+            ], $by), true];
         });
     }
 
@@ -283,6 +281,32 @@ class PredictiveMaintenanceService
             if ($definition['value'] === $metric) return $definition['unit'];
         }
         throw new BusinessRuleException("Unknown predictive-maintenance metric: {$metric}.");
+    }
+
+    private function latestFreshReading(int $machineId, string $metric): ?MachineConditionReading
+    {
+        return MachineConditionReading::query()
+            ->where('machine_id', $machineId)
+            ->where('metric', $metric)
+            ->whereBetween('recorded_at', [now()->subHours($this->maxReadingAgeHours()), now()])
+            ->orderByDesc('recorded_at')
+            ->first();
+    }
+
+    private function isFresh(MachineConditionReading $reading): bool
+    {
+        return $reading->recorded_at !== null
+            && $reading->recorded_at->betweenIncluded(now()->subHours($this->maxReadingAgeHours()), now());
+    }
+
+    private function maxReadingAgeHours(): int
+    {
+        $hours = (int) $this->settings->get('maintenance.predictive.max_reading_age_hours', 24);
+        if ($hours < 1 || $hours > 87600) {
+            throw new BusinessRuleException('Predictive-maintenance reading freshness must be between 1 hour and 10 years.');
+        }
+
+        return $hours;
     }
 
     /** @return list<array{value:string,label:string,unit:string}> */

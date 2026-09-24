@@ -10,11 +10,12 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Idle-session timeout. Durations are configurable via admin settings;
- * defaults: 15 min for `employee` role, 30 min for everyone else.
+ * Idle-session timeout. Durations and the short-timeout role set are
+ * configurable via admin settings; defaults remain 15 min and 30 min.
  * Refreshes last_activity at most once per minute for authenticated requests.
  */
 class SessionTimeout
@@ -24,8 +25,8 @@ class SessionTimeout
     public function handle(Request $request, Closure $next): Response
     {
         // This middleware is also appended to the API group so security policy
-        // cannot be accidentally omitted from a new module route. Public,
-        // portal, and edge-device routes use different principals/policies.
+        // cannot be accidentally omitted from a new module route. Public and
+        // portal routes use different principals/policies.
         if (! $this->usesInternalSanctumGuard($request)) {
             return $next($request);
         }
@@ -72,27 +73,22 @@ class SessionTimeout
             ], 401);
         }
 
-        // Block all activity if password is expired, except change-password
-        if ($user->must_change_password) {
-            $allowedPaths = [
-                'api/v1/auth/change-password',
-                'api/v1/auth/user',
-                'api/v1/auth/logout',
-            ];
-            $path = $request->path();
-            if (! in_array($path, $allowedPaths, true)) {
-                return response()->json([
-                    'message' => 'Your password has expired. Please change it before proceeding.',
-                    'code' => 'password_expired',
-                ], 403);
-            }
-        }
-
-        $isEmployee = ($user->role?->slug ?? null) === 'employee';
-        $minutes = $isEmployee
+        $shortTimeoutRoles = $this->settings->get('security.session_timeout_short_roles');
+        $shortTimeoutRoles = is_array($shortTimeoutRoles)
+            ? array_values(array_filter($shortTimeoutRoles, 'is_string'))
+            : ['employee'];
+        $isShortTimeout = in_array((string) ($user->role?->slug ?? ''), $shortTimeoutRoles, true);
+        $minutes = $isShortTimeout
             ? $this->settings->requiredInt('security.session_timeout_employee', 1)
             : $this->settings->requiredInt('security.session_timeout_default', 1);
-        $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;
+        $sessionLastActivity = $request->hasSession()
+            ? DB::table('sessions')
+                ->where('id', $request->session()->getId())
+                ->value('last_activity')
+            : null;
+        $lastActivity = $sessionLastActivity !== null
+            ? Carbon::createFromTimestamp((int) $sessionLastActivity)
+            : ($user->last_activity ? Carbon::parse($user->last_activity) : null);
 
         if ($lastActivity && $lastActivity->diffInMinutes(now(), true) >= $minutes) {
             // `auth()` resolves Sanctum's RequestGuard on these routes, which
@@ -120,10 +116,6 @@ class SessionTimeout
 
     private function usesInternalSanctumGuard(Request $request): bool
     {
-        if ($request->is('api/v1/edge/*')) {
-            return false;
-        }
-
         $route = $request->route();
         if (! is_object($route) || ! method_exists($route, 'gatherMiddleware')) {
             return false;

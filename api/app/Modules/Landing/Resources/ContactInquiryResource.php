@@ -14,6 +14,8 @@ class ContactInquiryResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
+        $canManage = $request->user()?->can('crm.inquiries.manage') === true;
+
         return [
             'id' => $this->hash_id,
             'inquiry_no' => $this->inquiry_no,
@@ -24,8 +26,8 @@ class ContactInquiryResource extends JsonResource
             'message' => $this->message,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
-            'ip_address' => $this->ip_address,
-            'user_agent' => $this->user_agent,
+            'ip_address' => $canManage ? $this->ip_address : null,
+            'user_agent' => $canManage ? $this->user_agent : null,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

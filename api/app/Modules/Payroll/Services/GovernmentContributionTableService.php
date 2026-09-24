@@ -58,6 +58,7 @@ class GovernmentContributionTableService
             function () use ($key, $on) {
                 $effective = GovernmentContributionTable::query()
                     ->agency($key)
+                    ->active()
                     ->whereDate('effective_date', '<=', $on)
                     ->max('effective_date');
 
@@ -68,6 +69,7 @@ class GovernmentContributionTableService
 
                 return GovernmentContributionTable::query()
                     ->agency($key)
+                    ->active()
                     ->whereDate('effective_date', $effective)
                     ->orderBy('bracket_min')
                     ->get();

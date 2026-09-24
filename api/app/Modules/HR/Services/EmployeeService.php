@@ -17,11 +17,15 @@ use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
+use App\Modules\HR\Models\EmployeeSalaryHistory;
 use App\Modules\HR\Models\Position;
 use App\Modules\Leave\Services\LeaveBalanceService;
+use App\Modules\Payroll\Services\PayrollPeriodService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class EmployeeService
 {
@@ -29,6 +33,7 @@ class EmployeeService
         private readonly DocumentSequenceService $sequences,
         private readonly OnboardingService $onboarding,
         private readonly UserProvisioningService $provisioning,
+        private readonly PayrollPeriodService $payrollPeriods,
     ) {}
 
     /**
@@ -169,7 +174,7 @@ class EmployeeService
         return $employee->load([
             'department', 'position', 'user',
             'employmentHistory.approver',
-            'documents', 'property',
+            'documents',
         ]);
     }
 
@@ -184,9 +189,31 @@ class EmployeeService
 
             $shiftId = ! empty($data['shift_id']) ? (int) $data['shift_id'] : null;
             unset($data['shift_id']);
+            // Lifecycle status is owned by EmployeeStateMachine, not create
+            // payload mass assignment. New employees start active by schema default.
+            unset($data['status']);
 
             /** @var Employee $employee */
-            $employee = Employee::create($data);
+            try {
+                $employee = Employee::create($data);
+            } catch (QueryException $e) {
+                if ($this->isEmployeeNumberConflict($e)) {
+                    throw ValidationException::withMessages([
+                        'employee_no' => ['Employee number is already in use.'],
+                    ]);
+                }
+                throw $e;
+            }
+
+            if (Schema::hasTable('employee_salary_history')
+                && $employee->monthlyEquivalentSalary() !== null) {
+                EmployeeSalaryHistory::create([
+                    'employee_id' => $employee->id,
+                    'basic_monthly_salary' => $employee->monthlyEquivalentSalary(),
+                    'semi_monthly_rate' => $employee->semi_monthly_rate,
+                    'effective_date' => $employee->date_hired,
+                ]);
+            }
 
             EmploymentHistory::create([
                 'employee_id' => $employee->id,
@@ -210,7 +237,7 @@ class EmployeeService
                 }
             }
             if ($shiftId && Schema::hasTable('employee_shift_assignments')) {
-                DB::table('employee_shift_assignments')->insert([
+                DB::table('employee_shift_assignments')->insertOrIgnore([
                     'employee_id'    => $employee->id,
                     'shift_id'       => $shiftId,
                     'effective_date' => $employee->date_hired?->toDateString() ?? now()->toDateString(),
@@ -258,6 +285,12 @@ class EmployeeService
                 );
             }
 
+            if (array_key_exists('bank_name', $data) || array_key_exists('bank_account_no', $data)) {
+                throw new BusinessRuleException(
+                    'Bank details must go through the HR and Finance profile-change workflow.',
+                );
+            }
+
             // REC-03 — pay and pay type can ONLY change through the maker-checker
             // SalaryAdjustment gate. Reject rather than silently dropping a
             // caller's requested financial change.
@@ -267,6 +300,16 @@ class EmployeeService
                 throw new BusinessRuleException(
                     'Compensation changes must go through the salary adjustment workflow.',
                 );
+            }
+
+            $currentEmploymentType = $employee->employment_type instanceof \BackedEnum
+                ? $employee->employment_type->value
+                : (string) $employee->employment_type;
+            if ((array_key_exists('department_id', $data)
+                    && (int) $data['department_id'] !== (int) $employee->department_id)
+                || (array_key_exists('employment_type', $data)
+                    && (string) $data['employment_type'] !== $currentEmploymentType)) {
+                $this->payrollPeriods->assertEmployeeScopeMutable((int) $employee->id);
             }
 
             $original = $employee->only([
@@ -311,6 +354,8 @@ class EmployeeService
                 ]);
             }
 
+            $this->onboarding->recompute($employee);
+
             return $employee->load(['department', 'position']);
         });
     }
@@ -330,8 +375,42 @@ class EmployeeService
             // Revoke the linked account before soft-deleting the employee so
             // the user cannot retain a login to a record that self-service no
             // longer resolves.
+            $linkedUser = $lockedEmployee->user()->lockForUpdate()->first();
+            $lockedEmployee->forceFill([
+                'account_deactivated_by_archive' => $linkedUser?->is_active === true,
+            ])->save();
             $this->provisioning->deactivateForEmployee($lockedEmployee);
             $lockedEmployee->delete();
         });
+    }
+
+    public function restore(Employee $employee): Employee
+    {
+        return DB::transaction(function () use ($employee): Employee {
+            $locked = Employee::withTrashed()->lockForUpdate()->findOrFail($employee->id);
+            if (! $locked->trashed()) {
+                throw new BusinessRuleException('Employee is already active in the directory.');
+            }
+
+            $locked->restore();
+            if ($locked->account_deactivated_by_archive) {
+                $user = $locked->user()->lockForUpdate()->first();
+                if ($user) {
+                    $user->update(['is_active' => true]);
+                    $user->flushPermissionsCache();
+                }
+                $locked->forceFill(['account_deactivated_by_archive' => false])->save();
+            }
+
+            return $locked->fresh(['department', 'position', 'user']);
+        });
+    }
+
+    private function isEmployeeNumberConflict(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'employees_employee_no_unique')
+            || str_contains($message, 'employee_no');
     }
 }

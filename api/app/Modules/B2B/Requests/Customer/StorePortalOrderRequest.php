@@ -16,6 +16,7 @@ class StorePortalOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'idempotency_key'       => ['required', 'string', 'max:128', 'regex:/\A[A-Za-z0-9._:-]+\z/'],
             'date'                  => ['sometimes', 'nullable', 'date'],
             'notes'                 => ['nullable', 'string', 'max:1000'],
             'items'                 => ['required', 'array', 'min:1'],
@@ -23,5 +24,10 @@ class StorePortalOrderRequest extends FormRequest
             'items.*.quantity'      => ['required', 'numeric', 'min:0.01'],
             'items.*.delivery_date' => ['required', 'date'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['idempotency_key' => $this->header('Idempotency-Key')]);
     }
 }

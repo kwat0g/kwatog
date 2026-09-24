@@ -53,7 +53,8 @@ const locationSchema = z.object({
  code: z.string().trim().min(1).max(20).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
  rack: z.string().max(10).optional().or(z.literal('')),
  bin: z.string().max(10).optional().or(z.literal('')),
- is_active: z.boolean().default(true),
+  is_active: z.boolean().default(true),
+  is_blocked: z.boolean().default(false),
 });
 type LocationFormValues = z.infer<typeof locationSchema>;
 
@@ -276,7 +277,7 @@ export default function WarehousePage() {
  <Th>Code</Th>
  <Th>Rack</Th>
  <Th>Bin</Th>
- <Th>Status</Th>
+  <Th>Status</Th>
  <Th />
  </tr>
  </thead>
@@ -287,7 +288,10 @@ export default function WarehousePage() {
  <Td>{l.rack ?? <span className="text-muted">—</span>}</Td>
  <Td>{l.bin ?? <span className="text-muted">—</span>}</Td>
  <Td>
- <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
+  <div className="flex gap-1.5">
+  <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
+  {l.is_blocked && <Chip variant="warning">blocked</Chip>}
+  </div>
  </Td>
  <Td align="right" mono>
  {canManage && (
@@ -477,8 +481,8 @@ function WarehouseForm({ mode, existing, onClose, onSaved }: {
  defaultValues: {
  name: existing?.name ?? '',
  code: existing?.code ?? '',
- address: existing?.address ?? '',
- is_active: existing?.is_active ?? true,
+  address: existing?.address ?? '',
+  is_active: existing?.is_active ?? true,
  },
  });
 
@@ -499,8 +503,8 @@ function WarehouseForm({ mode, existing, onClose, onSaved }: {
  <Input label="Name" required maxLength={100} autoFocus {...register('name')} error={errors.name?.message} />
  <Input label="Code" required maxLength={20} {...register('code')} error={errors.code?.message}
  className="font-mono uppercase" placeholder="Warehouse code" />
- <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
- <Switch label="Active" {...register('is_active')} />
+  <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
+  <Switch label="Active" {...register('is_active')} />
  </div>
  <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
@@ -565,9 +569,10 @@ function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
  resolver: zodResolver(locationSchema),
  defaultValues: {
  code: existing?.code ?? '',
- rack: existing?.rack ?? '',
- bin: existing?.bin ?? '',
- is_active: existing?.is_active ?? true,
+  rack: existing?.rack ?? '',
+  bin: existing?.bin ?? '',
+  is_active: existing?.is_active ?? true,
+  is_blocked: existing?.is_blocked ?? false,
  },
  });
 
@@ -589,9 +594,10 @@ function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
  className="font-mono uppercase" placeholder="Location code" />
  <div className="grid grid-cols-2 gap-3">
  <Input label="Rack" maxLength={10} {...register('rack')} error={errors.rack?.message} />
- <Input label="Bin" maxLength={10} {...register('bin')} error={errors.bin?.message} />
- </div>
- <Switch label="Active" {...register('is_active')} />
+  <Input label="Bin" maxLength={10} {...register('bin')} error={errors.bin?.message} />
+  </div>
+  <Switch label="Active" {...register('is_active')} />
+  <Switch label="Blocked for receiving" {...register('is_blocked')} />
  </div>
  <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>

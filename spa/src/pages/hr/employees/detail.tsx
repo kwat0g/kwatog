@@ -40,6 +40,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 import { DocumentList } from '@/components/documents/DocumentList';
+import { localIsoDate } from '@/lib/formatDate';
 
 const TABS = [
   'Overview',
@@ -881,7 +882,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
   const completeMutation = useMutation({
     mutationFn: (data: { recordId: string; certificate?: File | null }) =>
       employeeTrainingsApi.complete(data.recordId, {
-        completed_at: new Date().toISOString().slice(0, 10),
+        completed_at: localIsoDate(),
         certificate: data.certificate,
       }),
     onSuccess: () => {
@@ -1047,7 +1048,7 @@ function AssignTrainingModal({ employeeId, onClose }: { employeeId: string; onCl
     handleSubmit,
     formState: { errors },
   } = useForm<{ training_id: string; scheduled_for: string }>({
-    defaultValues: { scheduled_for: new Date().toISOString().slice(0, 10) },
+    defaultValues: { scheduled_for: localIsoDate() },
   });
   const mutation = useMutation({
     mutationFn: (d: { training_id: string; scheduled_for: string }) =>
@@ -1441,7 +1442,7 @@ function SeparateModal({
     resolver: zodResolver(separateSchema),
     defaultValues: {
       separation_reason: '',
-      separation_date: new Date().toISOString().slice(0, 10),
+      separation_date: localIsoDate(),
     },
   });
 

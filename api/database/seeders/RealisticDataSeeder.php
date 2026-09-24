@@ -183,7 +183,6 @@ class RealisticDataSeeder extends Seeder
                 'basic_monthly_salary' => $isSemiMonthly ? null : (string) ($this->rand(18, 65) * 1000),
                 // Per cutoff — roughly the old daily band × 11 working days.
                 'semi_monthly_rate'    => $isSemiMonthly ? (string) ($this->rand(610, 950) * 11) : null,
-                'status'               => EmployeeStatus::Active->value,
                 'created_at'           => $hired,
                 'updated_at'           => $now,
             ];

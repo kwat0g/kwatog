@@ -23,19 +23,6 @@ use App\Modules\HR\Controllers\TrainingMatrixController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function () {
-    /*
-     * Employee directory + org chart — HIDDEN 2026-08-08 (scope cut).
-     * SPA page was orphaned (no sidebar entry) and duplicated the Employees
-     * list. hr.directory.view permission KEPT — the employee-photo gate
-     * (permission_any:hr.employees.view,hr.directory.view) depends on it.
-     * Re-enable: restore the import + routes below.
-     *
-     * Route::get('/directory', [EmployeeDirectoryController::class, 'index'])
-     *     ->middleware('permission:hr.directory.view');
-     * Route::get('/directory/org-chart', [EmployeeDirectoryController::class, 'orgChart'])
-     *     ->middleware('permission:hr.directory.view');
-     */
-
     // Departments
     Route::prefix('departments')->group(function () {
         Route::get('/tree', [DepartmentController::class, 'tree'])->middleware('permission:hr.departments.view');
@@ -114,20 +101,6 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         // Sprint 8 — Task 71: separation + clearance flow
         Route::post('/{employee}/separation', [SeparationController::class, 'initiate'])
             ->middleware('permission:hr.separation.initiate');
-
-        /*
-         * Employee property — HIDDEN 2026-08-08 (scope cut).
-         * 0 rows in DB, no test file, not in demo script. Re-enable: restore
-         * the EmployeePropertyController import + this route group.
-         *
-         * Route::prefix('{employee}/property')->group(function () {
-         *     Route::get('/', [EmployeePropertyController::class, 'index'])
-         *         ->middleware('permission:hr.employees.view');
-         *     Route::post('/', [EmployeePropertyController::class, 'store'])
-         *         ->middleware('permission:hr.employees.edit');
-         *     ...
-         * });
-         */
 
         // Employee document management
         Route::prefix('{employee}/documents')->group(function () {

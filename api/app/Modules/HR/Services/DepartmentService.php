@@ -82,8 +82,10 @@ class DepartmentService
     {
         return DB::transaction(function () use ($data): Department {
             $this->validateHierarchy(null, $data);
+            $department = Department::create($data);
+            $this->assertHeadBelongsToDepartment($department, $data['head_employee_id'] ?? null);
 
-            return Department::create($data)
+            return $department
                 ->load(['parent', 'headEmployee'])
                 ->loadCount(['positions', 'employees']);
         });
@@ -145,18 +147,26 @@ class DepartmentService
             }
         }
 
-        if (array_key_exists('head_employee_id', $data) && $data['head_employee_id'] !== null) {
-            $targetDepartmentId = $department?->id;
-            $head = Employee::query()->find((int) $data['head_employee_id']);
-            if (! $head) {
-                throw new BusinessRuleException('Department head employee does not exist or is archived.');
-            }
-            if ($targetDepartmentId === null || (int) $head->department_id !== (int) $targetDepartmentId) {
-                throw new BusinessRuleException('Department head must belong to the department.');
-            }
-            if ($head->status !== EmployeeStatus::Active) {
-                throw new BusinessRuleException('Department head must be an active employee.');
-            }
+        if ($department && array_key_exists('head_employee_id', $data) && $data['head_employee_id'] !== null) {
+            $this->assertHeadBelongsToDepartment($department, (int) $data['head_employee_id']);
+        }
+    }
+
+    private function assertHeadBelongsToDepartment(Department $department, mixed $headEmployeeId): void
+    {
+        if ($headEmployeeId === null) {
+            return;
+        }
+
+        $head = Employee::query()->find((int) $headEmployeeId);
+        if (! $head) {
+            throw new BusinessRuleException('Department head employee does not exist or is archived.');
+        }
+        if ((int) $head->department_id !== (int) $department->id) {
+            throw new BusinessRuleException('Department head must belong to the department.');
+        }
+        if ($head->status !== EmployeeStatus::Active) {
+            throw new BusinessRuleException('Department head must be an active employee.');
         }
     }
 }

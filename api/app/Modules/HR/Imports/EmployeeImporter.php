@@ -187,9 +187,16 @@ class EmployeeImporter implements EntityImporter
         if ($title === '') {
             throw new RuntimeException('position is required.');
         }
-        $position = Position::firstOrCreate(
-            ['title' => $title, 'department_id' => $dept->id],
-        );
+        $position = Position::query()
+            ->where('department_id', $dept->id)
+            ->whereRaw('lower(btrim(title)) = lower(btrim(?))', [$title])
+            ->first();
+        if (! $position) {
+            $position = Position::create([
+                'title' => trim($title),
+                'department_id' => $dept->id,
+            ]);
+        }
         return [$position, (bool) $position->wasRecentlyCreated];
     }
 

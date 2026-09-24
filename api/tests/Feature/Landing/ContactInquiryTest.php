@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Landing;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
@@ -145,6 +146,16 @@ class ContactInquiryTest extends TestCase
         $this->actingAs($employee)->getJson('/api/v1/crm/inquiries')->assertForbidden();
     }
 
+    public function test_inbox_is_closed_when_crm_feature_is_disabled(): void
+    {
+        app(SettingsService::class)->set('modules.crm', false, 'modules');
+
+        $this->actingAs($this->admin())
+            ->getJson('/api/v1/crm/inquiries')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'feature_disabled');
+    }
+
     public function test_inbox_lists_inquiries_and_never_exposes_integer_ids(): void
     {
         $inquiry = ContactInquiry::factory()->create(['email' => 'listed@example.com']);
@@ -207,10 +218,27 @@ class ContactInquiryTest extends TestCase
             ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", ['status' => 'in_progress'])
             ->assertOk()
             ->assertJsonPath('data.status', 'in_progress');
+        $this->assertDatabaseHas('audit_logs', [
+            'model_type' => ContactInquiry::class,
+            'model_id' => $inquiry->id,
+            'action' => 'updated',
+        ]);
 
         // 'converted' belonged to the removed sales funnel — no longer a valid status.
         $this->actingAs($admin)
             ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", ['status' => 'converted'])
             ->assertStatus(422);
+    }
+
+    public function test_closed_inquiry_is_terminal_and_cannot_be_reopened_by_status_patch(): void
+    {
+        $inquiry = ContactInquiry::factory()->create(['status' => ContactInquiryStatus::Closed]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", ['status' => 'in_progress'])
+            ->assertUnprocessable();
+
+        $this->assertSame(ContactInquiryStatus::Closed, $inquiry->fresh()->status);
     }
 }

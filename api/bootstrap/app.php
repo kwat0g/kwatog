@@ -25,8 +25,6 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
-use Laravel\Sanctum\Http\Middleware\CheckAbilities;
-use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -66,9 +64,6 @@ return Application::configure(basePath: dirname(__DIR__))
             // B2B portal guard-type assertion — blocks web-session bleed into
             // the sanctum-driver portal guards (see EnsurePortalGuard).
             'portal' => EnsurePortalGuard::class,
-            // Sanctum token-ability gate (T2.1 — Edge devices).
-            'ability' => CheckAbilities::class,
-            'abilities' => CheckForAnyAbility::class,
         ]);
 
         // Trust the reverse proxy (Nginx) for real client IP
@@ -77,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Dev-only: log queries that exceed 100ms (no-op in non-local envs)
         $middleware->api(append: [
             // Enforce the security policy consistently. Both middleware inspect
-            // the resolved route and no-op for public, portal, and edge routes.
+            // the resolved route and no-op for public and portal routes.
             SessionTimeout::class,
             CheckPasswordExpiry::class,
             ThrottleRequests::class.':api',

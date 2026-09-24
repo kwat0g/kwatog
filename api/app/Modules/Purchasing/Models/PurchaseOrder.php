@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierShipment;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\SupplyChain\Enums\Incoterm;
@@ -50,6 +51,7 @@ class PurchaseOrder extends Model
         'expected_delivery_date' => 'date',
         'confirmed_delivery_date' => 'date',
         'budget_acknowledged_at' => 'datetime',
+        'short_closed_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'vat_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
@@ -91,6 +93,27 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseOrderItem::class);
     }
 
+    /**
+     * The receipt-derived status, or $fallback when nothing has landed.
+     * SupplierProposed is receivable, so goods can arrive before a proposal
+     * is resolved; restoring a fixed status then would hide the receipt.
+     * Same rule as GrnService::refreshPoStatus().
+     */
+    public function receiptStatusOr(PurchaseOrderStatus $fallback): PurchaseOrderStatus
+    {
+        $lines = $this->items()->get(['quantity', 'quantity_received', 'quantity_accepted']);
+        if ($lines->isNotEmpty() && $lines->every(
+            fn (PurchaseOrderItem $l): bool => bccomp((string) $l->quantity_accepted, (string) $l->quantity, 3) >= 0
+        )) {
+            return PurchaseOrderStatus::Received;
+        }
+        if ($lines->contains(fn (PurchaseOrderItem $l): bool => bccomp((string) $l->quantity_received, '0', 3) > 0)) {
+            return PurchaseOrderStatus::PartiallyReceived;
+        }
+
+        return $fallback;
+    }
+
     public function goodsReceiptNotes(): HasMany
     {
         return $this->hasMany(GoodsReceiptNote::class);
@@ -116,6 +139,46 @@ class PurchaseOrder extends Model
         return $this->hasOne(PurchaseOrderResponse::class)->latestOfMany();
     }
 
+    /**
+     * Short-close ends a PO whose goods arrived but whose balance will never
+     * come. Its eligibility is the exact complement of cancel(): cancel refuses
+     * once a GRN has left draft, so a PO whose only receipt was rejected in
+     * full (status back to sent/approved) must be short-closable, or it is
+     * stranded open forever.
+     */
+    public function isShortClosable(): bool
+    {
+        // Status PartiallyReceived is always short-closable
+        if ($this->status === PurchaseOrderStatus::PartiallyReceived) {
+            return true;
+        }
+
+        // For Approved, Sent, Acknowledged: true only if at least one non-draft GRN exists
+        if (in_array($this->status, [PurchaseOrderStatus::Approved, PurchaseOrderStatus::Sent, PurchaseOrderStatus::Acknowledged], true)) {
+            if ($this->relationLoaded('goodsReceiptNotes')) {
+                return $this->goodsReceiptNotes->some(
+                    fn (GoodsReceiptNote $grn): bool => $grn->status !== GrnStatus::Draft
+                );
+            }
+            return $this->goodsReceiptNotes()
+                ->where('status', '!=', GrnStatus::Draft->value)
+                ->exists();
+        }
+
+        return false;
+    }
+
+    /**
+     * The pending change response, if any. A price-increase proposal that
+     * was accepted but requires re-approval stays linked here while the
+     * approval chain re-runs. Once approved, applied, and committed to
+     * 'acknowledged', this is cleared.
+     */
+    public function pendingChangeResponse(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrderResponse::class, 'pending_change_response_id');
+    }
+
     public function supplierDispatch(): HasOne
     {
         return $this->hasOne(SupplierOrderDispatch::class);
@@ -139,6 +202,11 @@ class PurchaseOrder extends Model
     public function budgetAcknowledger(): BelongsTo
     {
         return $this->belongsTo(User::class, 'budget_acknowledged_by');
+    }
+
+    public function shortClosedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'short_closed_by');
     }
 
     public function scopeOpen(Builder $q): Builder

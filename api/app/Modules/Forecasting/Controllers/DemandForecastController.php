@@ -6,6 +6,7 @@ namespace App\Modules\Forecasting\Controllers;
 
 use App\Common\Services\SettingsService;
 use Illuminate\Routing\Controller;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\Forecasting\Enums\DemandSource;
@@ -25,7 +26,12 @@ class DemandForecastController extends Controller
     public function options(): JsonResponse
     {
         return response()->json(['data' => [
-            'methods' => array_values(array_filter((array) $this->settings->get('forecasting.methods', []), static fn ($method): bool => is_array($method) && isset($method['value'], $method['label']))),
+            'methods' => array_values(array_filter(
+                (array) $this->settings->get('forecasting.methods', []),
+                static fn ($method): bool => is_array($method)
+                    && isset($method['value'], $method['label'])
+                    && in_array($method['value'], DemandForecast::COMPUTED_METHODS, true),
+            )),
             'demand_sources' => array_map(
                 static fn (DemandSource $source): array => ['value' => $source->value, 'label' => $source->label()],
                 DemandSource::cases(),
@@ -45,13 +51,15 @@ class DemandForecastController extends Controller
     {
         $q = DemandForecast::query()->with(['product', 'customer', 'creator']);
 
-        if ($pid = $request->query('product_id')) {
+        $pid = $request->query('product_id');
+        if ($pid !== null && $pid !== '') {
             $decoded = Product::tryDecodeHash((string) $pid);
-            if ($decoded) $q->where('product_id', $decoded);
+            abort_unless($decoded !== null, 404, 'Product not found');
+            $q->where('product_id', $decoded);
         }
-        if ($cid = $request->query('customer_id')) {
-            $decoded = \App\Modules\Accounting\Models\Customer::tryDecodeHash((string) $cid);
-            if ($decoded) $q->where('customer_id', $decoded);
+        $cid = $request->query('customer_id');
+        if ($cid !== null && $cid !== '') {
+            $q->where('customer_id', $this->decodeCustomer($cid));
         }
         if ($year = $request->query('year')) {
             $q->where('forecast_year', (int) $year);
@@ -99,8 +107,8 @@ class DemandForecastController extends Controller
         abort_unless($productId, 404, 'Product not found');
 
         $customerId = null;
-        if (! empty($data['customer_id'])) {
-            $customerId = \App\Modules\Accounting\Models\Customer::tryDecodeHash($data['customer_id']);
+        if (($data['customer_id'] ?? null) !== null && $data['customer_id'] !== '') {
+            $customerId = $this->decodeCustomer($data['customer_id']);
         }
 
         $now    = Carbon::now();
@@ -140,8 +148,8 @@ class DemandForecastController extends Controller
         abort_unless($productId, 404, 'Product not found');
 
         $customerId = null;
-        if (! empty($data['customer_id'])) {
-            $customerId = \App\Modules\Accounting\Models\Customer::tryDecodeHash($data['customer_id']);
+        if (($data['customer_id'] ?? null) !== null && $data['customer_id'] !== '') {
+            $customerId = $this->decodeCustomer($data['customer_id']);
         }
 
         $horizon  = (int) ($data['horizon_months'] ?? $this->settings->requiredInt('forecasting.default_horizon_months', $minHorizon, $maxHorizon));
@@ -211,8 +219,8 @@ class DemandForecastController extends Controller
         abort_unless($productId, 404, 'Product not found');
 
         $customerId = null;
-        if (! empty($data['customer_id'])) {
-            $customerId = \App\Modules\Accounting\Models\Customer::tryDecodeHash($data['customer_id']);
+        if (($data['customer_id'] ?? null) !== null && $data['customer_id'] !== '') {
+            $customerId = $this->decodeCustomer($data['customer_id']);
         }
 
         $f = $this->service->storeManual(
@@ -229,5 +237,13 @@ class DemandForecastController extends Controller
             'data'    => new DemandForecastResource($f->load(['product', 'customer', 'creator'])),
             'message' => 'Manual forecast saved.',
         ], 201);
+    }
+
+    private function decodeCustomer(mixed $hash): int
+    {
+        $id = Customer::tryDecodeHash((string) $hash);
+        abort_unless($id !== null, 404, 'Customer not found');
+
+        return $id;
     }
 }

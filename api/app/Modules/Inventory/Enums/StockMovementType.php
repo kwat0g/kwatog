@@ -37,16 +37,4 @@ enum StockMovementType: string
         ], true);
     }
 
-    /** Movements that REMOVE stock from the source location. */
-    public function isIssue(): bool
-    {
-        return in_array($this, [
-            self::MaterialIssue,
-            self::Delivery,
-            self::AdjustmentOut,
-            self::Scrap,
-            self::ReturnToVendor,
-            self::Transfer, // removes from source
-        ], true);
-    }
 }

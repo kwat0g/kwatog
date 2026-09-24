@@ -17,7 +17,6 @@ class CompleteMaintenanceWorkOrderRequest extends FormRequest
     {
         return [
             'remarks'          => ['nullable', 'string', 'max:5000'],
-            'downtime_minutes' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ];
     }
 }

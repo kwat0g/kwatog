@@ -23,6 +23,7 @@ class PurchaseRequestResource extends JsonResource
             'id' => $this->hash_id,
             'pr_number' => $this->pr_number,
             'date' => optional($this->date)->toDateString(),
+            'required_delivery_date' => optional($this->required_delivery_date)->toDateString(),
             'reason' => $this->reason,
             'priority' => (string) $this->priority?->value,
             'priority_label' => $this->priority?->label(),

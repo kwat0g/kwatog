@@ -11,6 +11,7 @@ use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Events\MonthlyDepreciationRequested;
 use App\Modules\Assets\Listeners\RunMonthlyDepreciationOnRequested;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Models\AssetDepreciationRun;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
@@ -53,6 +54,13 @@ class AssetDepreciationDurableHandoffTest extends TestCase
             ->firstOrFail();
         $this->assertSame(MonthlyDepreciationRequested::class, $outbox->event_type);
         $this->assertSame('assets-depreciation:2026-07', $outbox->dedupe_key);
+        $this->assertDatabaseHas('chain_step_runs', [
+            'outbox_id' => $outbox->getKey(),
+            'chain' => 'assets',
+            'entity_type' => 'asset_depreciation_run',
+            'entity_hash_id' => AssetDepreciationRun::query()->where('period_year', 2026)->where('period_month', 7)->firstOrFail()->hash_id,
+            'step' => 'monthly_depreciation',
+        ]);
         Queue::assertPushed(DispatchOutboxMessage::class, fn (DispatchOutboxMessage $job): bool => $job->outboxId === $outbox->getKey());
 
         $event = app(OutboxEventCodec::class)->decode(

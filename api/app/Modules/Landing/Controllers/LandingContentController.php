@@ -85,15 +85,7 @@ class LandingContentController
     /** @return list<string> */
     private function activeCustomerNames(): array
     {
-        return Customer::query()
-            ->where('is_active', true)
-            ->whereNotNull('name')
-            ->orderBy('name')
-            ->pluck('name')
-            ->map(static fn ($name): string => trim((string) $name))
-            ->filter(static fn (string $name): bool => $name !== '')
-            ->values()
-            ->all();
+        return $this->listSetting('landing.oem_partners');
     }
 
     /** @return list<string> */

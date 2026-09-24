@@ -8,17 +8,20 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
-use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
-use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Enums\WoOperationStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
+use App\Modules\Production\Exceptions\ProductionReceiptHandoffException;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Production\Requests\CancelWorkOrderRequest;
 use App\Modules\Production\Requests\ConfirmWorkOrderRequest;
 use App\Modules\Production\Requests\PauseWorkOrderRequest;
+use App\Modules\Production\Requests\RecordOutputRequest;
 use App\Modules\Production\Requests\StoreWorkOrderRequest;
+use App\Modules\Production\Resources\WorkOrderOutputResource;
 use App\Modules\Production\Resources\WorkOrderResource;
+use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,9 +48,11 @@ class WorkOrderController
      *     summary="List work orders",
      *     description="Returns a paginated list of work orders. Filterable by status, product, and date range.",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="status[]", in="query", required=false, description="One or more statuses (a single status= value is also accepted)", @OA\Schema(type="array", @OA\Items(type="string", enum={"planned","confirmed","in_progress","paused","completed","closed","cancelled"}))),
      *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=15)),
+     *
      *     @OA\Response(response=200, description="Paginated work order list"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized")
@@ -80,7 +85,9 @@ class WorkOrderController
      *     summary="Show work order detail",
      *     description="Returns full work order details including product, machine, mold assignment, outputs, and chain links.",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string"), description="Work order hash ID"),
+     *
      *     @OA\Response(response=200, description="Work order detail"),
      *     @OA\Response(response=404, description="Work order not found")
      * )
@@ -97,8 +104,10 @@ class WorkOrderController
      *     summary="Create a draft work order",
      *     description="Creates a new work order in draft status. Generates WO number (WO-YYYYMM-NNNN).",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\RequestBody(required=true, @OA\JsonContent(
      *         required={"product_id", "quantity"},
+     *
      *         @OA\Property(property="product_id", type="string", description="Product hash ID"),
      *         @OA\Property(property="quantity", type="integer", minimum=1),
      *         @OA\Property(property="priority", type="string", enum={"low","normal","high","urgent"}),
@@ -106,6 +115,7 @@ class WorkOrderController
      *         @OA\Property(property="planned_end", type="string", format="date"),
      *         @OA\Property(property="notes", type="string")
      *     )),
+     *
      *     @OA\Response(response=201, description="Draft work order created"),
      *     @OA\Response(response=422, description="Validation error")
      * )
@@ -115,6 +125,7 @@ class WorkOrderController
         $payload = $request->validated();
         $payload['created_by'] = $request->user()->id;
         $wo = $this->service->createDraft($payload);
+
         return (new WorkOrderResource($wo))->response()->setStatusCode(201);
     }
 
@@ -125,6 +136,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(null, 204);
     }
 
@@ -149,12 +161,16 @@ class WorkOrderController
      *     summary="Confirm a draft work order",
      *     description="Assigns machine and mold to the work order and transitions from draft to confirmed.",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
+     *
      *     @OA\RequestBody(required=true, @OA\JsonContent(
      *         required={"machine_id"},
+     *
      *         @OA\Property(property="machine_id", type="string", description="Machine hash ID"),
      *         @OA\Property(property="mold_id", type="string", description="Mold hash ID (optional)")
      *     )),
+     *
      *     @OA\Response(response=200, description="Work order confirmed"),
      *     @OA\Response(response=422, description="Invalid state transition or validation error")
      * )
@@ -172,6 +188,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -181,7 +198,9 @@ class WorkOrderController
      *     tags={"Work Orders"},
      *     summary="Start production on a confirmed work order",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
+     *
      *     @OA\Response(response=200, description="Work order started"),
      *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=422, description="Invalid state transition")
@@ -199,6 +218,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -215,6 +235,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -230,6 +251,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -245,6 +267,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -260,6 +283,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -272,6 +296,7 @@ class WorkOrderController
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return new WorkOrderResource($wo);
     }
 
@@ -282,10 +307,10 @@ class WorkOrderController
 
     /** Sprint 6 Task 55 — record production output (idempotent). */
     public function recordOutput(
-        \App\Modules\Production\Requests\RecordOutputRequest $request,
+        RecordOutputRequest $request,
         WorkOrder $workOrder,
-        \App\Modules\Production\Services\WorkOrderOutputService $outputs,
-    ): \App\Modules\Production\Resources\WorkOrderOutputResource|JsonResponse {
+        WorkOrderOutputService $outputs,
+    ): WorkOrderOutputResource|JsonResponse {
         $idempotency = $request->header('X-Idempotency-Key');
         try {
             $output = $outputs->record(
@@ -307,12 +332,13 @@ class WorkOrderController
         } catch (BusinessRuleException|ClosedPeriodException|ProductionReceiptHandoffException|InvalidMovementException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
-        return new \App\Modules\Production\Resources\WorkOrderOutputResource($output);
+
+        return new WorkOrderOutputResource($output);
     }
 
-    public function listOutputs(WorkOrder $workOrder): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+    public function listOutputs(WorkOrder $workOrder): AnonymousResourceCollection
     {
-        return \App\Modules\Production\Resources\WorkOrderOutputResource::collection(
+        return WorkOrderOutputResource::collection(
             $workOrder->outputs()->with(['recorder:id,name,role_id', 'defects.defectType'])->get()
         );
     }
@@ -321,8 +347,8 @@ class WorkOrderController
     public function retryProductionReceipt(
         WorkOrder $workOrder,
         WorkOrderOutput $output,
-        \App\Modules\Production\Services\WorkOrderOutputService $outputs,
-    ): \App\Modules\Production\Resources\WorkOrderOutputResource|JsonResponse {
+        WorkOrderOutputService $outputs,
+    ): WorkOrderOutputResource|JsonResponse {
         if ((int) $output->work_order_id !== (int) $workOrder->id) {
             abort(404);
         }
@@ -335,7 +361,7 @@ class WorkOrderController
             ], 422);
         }
 
-        return new \App\Modules\Production\Resources\WorkOrderOutputResource(
+        return new WorkOrderOutputResource(
             $updated->load(['recorder:id,name,role_id', 'defects.defectType']),
         );
     }

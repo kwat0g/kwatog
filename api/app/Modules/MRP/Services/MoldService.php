@@ -30,6 +30,7 @@ class MoldService
     {
         $q = Mold::query()
             ->with('product:id,part_number,name,unit_of_measure')
+            ->with('asset:id,asset_code,name')
             ->withCount('compatibleMachines');
 
         TrashedFilter::apply($q, $filters);
@@ -64,6 +65,7 @@ class MoldService
         return $m->load([
             'product:id,part_number,name,unit_of_measure',
             'compatibleMachines:id,machine_code,name,tonnage',
+            'asset:id,asset_code,name',
         ]);
     }
 

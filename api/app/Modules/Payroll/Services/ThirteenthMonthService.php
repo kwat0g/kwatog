@@ -297,7 +297,6 @@ class ThirteenthMonthService
                         ->whereIn('prior_period.status', [PayrollPeriodStatus::Finalized->value, PayrollPeriodStatus::Disbursed->value])
                         ->sum('prior.withholding_tax');
                     $correctionDelta = Money::sub($annualTaxDue, $priorWithheld);
-                    if (Money::lt($correctionDelta, '0')) $correctionDelta = Money::zero();
 
                     $payroll = Payroll::create([
                         'payroll_period_id' => $period->id,

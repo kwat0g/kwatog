@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\AccountType;
+use App\Common\Exceptions\BusinessRuleException;
 
 /**
  * The configured GL control accounts, and the COA classification each one is
@@ -66,8 +67,15 @@ final class AccountingAccountPolicyService
         'accounting.accounts.sss_employer_expense_code' => AccountType::Expense,
         'accounting.accounts.philhealth_employer_expense_code' => AccountType::Expense,
         'accounting.accounts.pagibig_employer_expense_code' => AccountType::Expense,
-        'accounting.accounts.payroll_cash_code' => AccountType::Asset,
-    ];
+         'accounting.accounts.payroll_cash_code' => AccountType::Asset,
+         'accounting.accounts.loan_disbursement_receivable_code' => AccountType::Asset,
+         'accounting.accounts.loan_disbursement_cash_code' => AccountType::Asset,
+         'accounting.accounts.loan_disbursement_interest_income_code' => AccountType::Revenue,
+         'accounting.accounts.loan_repayment_cash_code' => AccountType::Asset,
+         'accounting.accounts.loan_repayment_receivable_code' => AccountType::Asset,
+         'accounting.accounts.loan_write_off_expense_code' => AccountType::Expense,
+         'accounting.accounts.loan_write_off_receivable_code' => AccountType::Asset,
+     ];
 
     public function __construct(
         private readonly SettingsService $settings,
@@ -110,6 +118,7 @@ final class AccountingAccountPolicyService
      */
     public function controlAccountId(string $code): int
     {
+        $this->assertNoConflictingMappings();
         $type = $this->typeFor($code);
 
         return $type === null
@@ -119,11 +128,40 @@ final class AccountingAccountPolicyService
 
     public function controlAccountIdForSetting(string $settingKey): int
     {
+        $this->assertNoConflictingMappings();
         $code = $this->settings->requiredString($settingKey);
         $type = self::SETTING_TYPES[$settingKey] ?? null;
 
         return $type === null
             ? $this->postingAccounts->configuredIdByCode($code)
             : $this->postingAccounts->configuredIdByCode($code, $type);
+    }
+
+    /**
+     * A code may serve multiple same-type roles, but never roles requiring
+     * different classifications. Code-keyed resolution cannot safely choose
+     * between those requirements, so fail before a journal is built.
+     */
+    private function assertNoConflictingMappings(): void
+    {
+        $byCode = [];
+        foreach (self::SETTING_TYPES as $settingKey => $type) {
+            $code = $this->settings->get($settingKey);
+            if (! is_string($code) || $code === '') {
+                continue;
+            }
+            $byCode[$code][$settingKey] = $type;
+        }
+
+        foreach ($byCode as $code => $mappings) {
+            $types = array_unique(array_map(static fn (AccountType $type): string => $type->value, $mappings));
+            if (count($types) > 1) {
+                throw new BusinessRuleException(sprintf(
+                    'Account code %s is configured for incompatible control-account types: %s.',
+                    $code,
+                    implode(', ', $types),
+                ));
+            }
+        }
     }
 }

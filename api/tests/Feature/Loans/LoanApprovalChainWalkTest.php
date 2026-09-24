@@ -16,6 +16,7 @@ use App\Modules\Loans\Services\LoanService;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -39,6 +40,7 @@ class LoanApprovalChainWalkTest extends TestCase
 
         $this->seed([
             RolePermissionSeeder::class,
+            ChartOfAccountsSeeder::class,
             PositionSeeder::class,
             WorkflowSeeder::class,
         ]);
@@ -148,6 +150,23 @@ class LoanApprovalChainWalkTest extends TestCase
 
         $this->assertTrue(app(LoanAccessPolicy::class)->canView($vp, $loan->fresh()));
         $this->assertTrue(app(LoanAccessPolicy::class)->canDecide($vp, $loan->fresh()));
+    }
+
+    public function test_chain_participant_loses_row_visibility_after_loan_leaves_approval(): void
+    {
+        $requester = Employee::factory()->create();
+        $loan = $this->pendingLoanFor($requester, 'cash_advance');
+        $vp = $this->userWithRole('vice_president');
+        $policy = app(LoanAccessPolicy::class);
+
+        $this->assertTrue($policy->canView($vp, $loan));
+        $loan->forceFill(['status' => LoanStatus::Active->value])->save();
+
+        $this->assertFalse($policy->canView($vp, $loan->fresh()));
+        $this->assertNotContains(
+            $loan->id,
+            $policy->visibleTo(EmployeeLoan::query(), $vp)->pluck('id')->all(),
+        );
     }
 
     public function test_vp_cannot_approve_before_their_step(): void

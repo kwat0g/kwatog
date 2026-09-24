@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\SearchOperator;
@@ -16,6 +17,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OvertimeService
 {
@@ -60,41 +62,44 @@ class OvertimeService
         }
         $threshold = (int) $thresholdValue;
 
-        if (! $a->time_in || ! $a->time_out) {
-            return null;
-        }
-
         $a->loadMissing('shift');
         $shift = $a->shift;
-        if (! $shift) {
-            return null; // no shift → cannot anchor end time
+        $hours = null;
+        $reason = null;
+        if ($shift && $a->time_in && $a->time_out) {
+            $date = \Carbon\CarbonImmutable::parse((string) $a->date);
+            $endTime = $shift->end_time instanceof \Carbon\CarbonInterface
+                ? $shift->end_time->format('H:i:s')
+                : (string) $shift->end_time;
+            $startTime = $shift->start_time instanceof \Carbon\CarbonInterface
+                ? $shift->start_time->format('H:i:s')
+                : (string) $shift->start_time;
+
+            $shiftStart = \Carbon\CarbonImmutable::parse($date->toDateString().' '.$startTime);
+            $shiftEnd = \Carbon\CarbonImmutable::parse($date->toDateString().' '.$endTime);
+            if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
+                $shiftEnd = $shiftEnd->addDay();
+            }
+
+            $timeIn = \Carbon\CarbonImmutable::parse($a->time_in);
+            $timeOut = \Carbon\CarbonImmutable::parse($a->time_out);
+            // The paired CSV and manual form anchor HH:mm to the attendance
+            // date. DTR already rolls an inverted night-shift punch forward;
+            // do the same before comparing it with the next-morning shift end.
+            if ($timeOut->lessThanOrEqualTo($timeIn)) {
+                $timeOut = $timeOut->addDay();
+            }
+
+            $extra = $this->extraMinutesPastShiftEnd(
+                $shiftEnd->toDateTimeString(),
+                $timeOut->toDateTimeString(),
+            );
+            if ($extra >= $threshold) {
+                $maximumMinutes = $this->settings->requiredInt('attendance.ot.maximum_minutes', 1);
+                $hours = round(min($extra, $maximumMinutes) / 60, 1);
+                $reason = "Auto-detected from biometric punch (worked {$extra} minutes past shift end).";
+            }
         }
-
-        // Build the shift-end anchor on the attendance date.
-        $date = \Carbon\CarbonImmutable::parse((string) $a->date);
-        $endTime = $shift->end_time instanceof \Carbon\CarbonInterface
-            ? $shift->end_time->format('H:i:s')
-            : (string) $shift->end_time;
-        $startTime = $shift->start_time instanceof \Carbon\CarbonInterface
-            ? $shift->start_time->format('H:i:s')
-            : (string) $shift->start_time;
-
-        $shiftEnd = \Carbon\CarbonImmutable::parse($date->toDateString() . ' ' . $endTime);
-        $shiftStart = \Carbon\CarbonImmutable::parse($date->toDateString() . ' ' . $startTime);
-        if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
-            $shiftEnd = $shiftEnd->addDay();
-        }
-
-        $extra = $this->extraMinutesPastShiftEnd(
-            $shiftEnd->toDateTimeString(),
-            \Carbon\CarbonImmutable::parse($a->time_out)->toDateTimeString(),
-        );
-        if ($extra < $threshold) {
-            return null;
-        }
-
-        $hours = round($extra / 60, 1);
-        $reason = "Auto-detected from biometric punch (worked {$extra} minutes past shift end).";
 
         try {
             return DB::transaction(function () use ($a, $hours, $reason): ?OvertimeRequest {
@@ -106,11 +111,37 @@ class OvertimeService
                     ->lockForUpdate()
                     ->first();
                 if ($existing) {
-                    if (! $existing->is_auto_detected || $existing->status !== OvertimeStatus::Rejected) {
+                    if (! $existing->is_auto_detected) {
                         return null;
                     }
-                    if (bccomp((string) $existing->hours_requested, (string) $hours, 1) === 0
-                        && (string) $existing->reason === $reason) {
+
+                    if ($hours === null) {
+                        if ($existing->status === OvertimeStatus::Pending) {
+                            $existing->fill([
+                                'approved_by' => null,
+                                'approved_at' => null,
+                                'rejection_reason' => 'Corrected punches no longer meet the overtime detection threshold.',
+                            ]);
+                            $existing->status = OvertimeStatus::Rejected;
+                            $existing->save();
+                        }
+
+                        return null;
+                    }
+
+                    $unchanged = bccomp((string) $existing->hours_requested, (string) $hours, 1) === 0
+                        && (string) $existing->reason === $reason;
+                    if ($existing->status === OvertimeStatus::Pending) {
+                        if (! $unchanged) {
+                            $existing->update([
+                                'hours_requested' => $hours,
+                                'reason' => $reason,
+                            ]);
+                        }
+
+                        return $existing;
+                    }
+                    if ($existing->status !== OvertimeStatus::Rejected || $unchanged) {
                         return null;
                     }
 
@@ -132,6 +163,10 @@ class OvertimeService
                     app(OutboxService::class)->record(new OvertimeRequestSubmitted($existing));
 
                     return $existing;
+                }
+
+                if ($hours === null) {
+                    return null;
                 }
 
                 $ot = OvertimeRequest::create([
@@ -281,7 +316,7 @@ class OvertimeService
      * Per-row try/catch so one bad row doesn't abort the batch.
      *
      * @param array<int, int> $otIds raw integer IDs (post HashID decode)
-     * @return array{approved: array<int, OvertimeRequest>, failed: array<int, array{id:int, reason:string}>}
+     * @return array{approved: array<int, OvertimeRequest>, failed: array<int, array{id:string, reason:string}>}
      */
     public function bulkApprove(array $otIds, User $approver, ?string $remarks = null): array
     {
@@ -292,12 +327,23 @@ class OvertimeService
             try {
                 $ot = OvertimeRequest::query()->find($id);
                 if (! $ot) {
-                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    $failed[] = ['id' => app('hashids')->encode($id), 'reason' => 'Not found.'];
                     continue;
                 }
                 $approved[] = $this->approve($ot, $approver, $remarks);
             } catch (\Throwable $e) {
-                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+                $reason = $e instanceof BusinessRuleException || $e instanceof ForbiddenActionException
+                    ? $e->getMessage()
+                    : 'An unexpected error stopped this request. It has been logged for support.';
+                if (! ($e instanceof BusinessRuleException || $e instanceof ForbiddenActionException)) {
+                    Log::error('Bulk overtime approval failed unexpectedly.', [
+                        'overtime_request_id' => $id,
+                        'exception' => $e::class,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+
+                $failed[] = ['id' => app('hashids')->encode($id), 'reason' => $reason];
             }
         }
 
@@ -439,7 +485,10 @@ class OvertimeService
                 OvertimeStatus::cases(),
             ),
             'minimum_hours'      => (float) $this->settings->requiredInt('attendance.ot.minimum_minutes', 0) / 60,
-            'maximum_hours'      => $this->settings->requiredFloat('attendance.ot.admin_max_hours', 0),
+            'maximum_hours'      => min(
+                $this->settings->requiredFloat('attendance.ot.admin_max_hours', 0),
+                $this->settings->requiredInt('attendance.ot.maximum_minutes', 1) / 60,
+            ),
             'request_min_hours'  => $this->settings->requiredFloat('attendance.ot.request_min_hours', 0),
             'request_future_days'=> $this->settings->requiredInt('attendance.ot.request_future_days', 0),
             'request_past_days'  => $this->settings->requiredInt('attendance.ot.request_past_days', 0),

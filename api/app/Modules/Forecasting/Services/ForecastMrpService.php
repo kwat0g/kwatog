@@ -7,6 +7,7 @@ namespace App\Modules\Forecasting\Services;
 use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\MRP\Exceptions\MissingBomException;
 use App\Modules\MRP\Services\BomService;
 
 /**
@@ -49,7 +50,7 @@ class ForecastMrpService
             ->get()
             ->groupBy('product_id');
 
-        $grossPerItem = [];   // item_id => float gross requirement
+        $grossPerItem = [];   // item_id => decimal gross requirement
         $products = [];
 
         foreach ($forecastsByProduct as $rows) {
@@ -62,34 +63,44 @@ class ForecastMrpService
                 $rows = collect([$total]);
             }
 
-            $qty = 0.0;
+            // Decimal-safe accumulation: quantities arrive as decimal strings
+            // (decimal(12,2)) and float addition drifts — 0.10 + 0.20 becomes
+            // 0.30000000000000004, which the BOM explosion then multiplies.
+            $qty = '0.00';
             foreach ($rows as $fc) {
-                $qty += (float) $fc->forecasted_quantity;
+                $qty = bcadd($qty, (string) $fc->forecasted_quantity, 2);
             }
+            // BomService currently accepts a float at the MRP module boundary;
+            // keep all Forecasting accumulation and report values decimal-safe.
+            $finishedQuantity = (float) $qty;
 
             $product = $rows->first()->product;
             $hasBom = false;
             try {
-                $exploded = $this->bom->explode((int) $rows->first()->product_id, $qty);
+                $exploded = $this->bom->explode((int) $rows->first()->product_id, $finishedQuantity);
                 $hasBom = $exploded->isNotEmpty();
                 foreach ($exploded as $row) {
                     $iid = (int) $row['item_id'];
-                    $grossPerItem[$iid] = ($grossPerItem[$iid] ?? 0.0) + (float) $row['gross_quantity'];
+                    $grossPerItem[$iid] = bcadd(
+                        $grossPerItem[$iid] ?? '0.000',
+                        (string) $row['gross_quantity'],
+                        3,
+                    );
                 }
-            } catch (\Throwable $e) {
+            } catch (MissingBomException $e) {
                 // No active BOM — product is flagged has_bom=false in the report.
             }
 
             $products[] = [
                 'product_id'          => $product?->hash_id,
                 'product_name'        => $product?->name,
-                'forecasted_quantity' => number_format($qty, 2, '.', ''),
+                'forecasted_quantity' => bcadd($qty, '0', 2),
                 'has_bom'             => $hasBom,
             ];
         }
 
         $materials = $this->netRequirements($grossPerItem);
-        $shortages = array_values(array_filter($materials, fn ($m) => (float) $m['net_shortage'] > 0));
+        $shortages = array_values(array_filter($materials, fn ($m) => bccomp((string) $m['net_shortage'], '0', 3) > 0));
 
         return [
             'period'         => ['year' => $year, 'month' => $month],
@@ -102,7 +113,7 @@ class ForecastMrpService
     /**
      * Net gross requirements against current on-hand (less reserved) + safety stock.
      *
-     * @param array<int, float> $grossPerItem
+     * @param array<int, string> $grossPerItem
      * @return array<int, array<string, mixed>>
      */
     private function netRequirements(array $grossPerItem): array
@@ -129,28 +140,34 @@ class ForecastMrpService
             $item = $items->get($itemId);
             if (! $item) continue;
 
-            $onHand   = (float) ($stock->get($itemId)->on_hand ?? 0);
-            $reserved = (float) ($stock->get($itemId)->reserved ?? 0);
-            $safety   = (float) $item->safety_stock;
-            $available = max(0.0, $onHand - $reserved);
+            $onHand = (string) ($stock->get($itemId)->on_hand ?? '0.000');
+            $reserved = (string) ($stock->get($itemId)->reserved ?? '0.000');
+            $safety = (string) ($item->safety_stock ?? '0.000');
+            $available = bcsub($onHand, $reserved, 3);
+            if (bccomp($available, '0', 3) < 0) {
+                $available = '0.000';
+            }
 
             // Net shortage = gross + safety buffer - available.
-            $netShortage = max(0.0, $gross + $safety - $available);
+            $netShortage = bcsub(bcadd((string) $gross, $safety, 3), $available, 3);
+            if (bccomp($netShortage, '0', 3) < 0) {
+                $netShortage = '0.000';
+            }
 
             $out[] = [
                 'item_id'        => $item->hash_id,
                 'item_code'      => $item->code,
                 'item_name'      => $item->name,
-                'gross_required' => number_format($gross, 3, '.', ''),
-                'on_hand'        => number_format($onHand, 3, '.', ''),
-                'safety_stock'   => number_format($safety, 3, '.', ''),
-                'net_shortage'   => number_format($netShortage, 3, '.', ''),
+                'gross_required' => bcadd((string) $gross, '0', 3),
+                'on_hand'        => bcadd($onHand, '0', 3),
+                'safety_stock'   => bcadd($safety, '0', 3),
+                'net_shortage'   => bcadd($netShortage, '0', 3),
                 'lead_time_days' => (int) ($item->lead_time_days ?? 0),
             ];
         }
 
         // Surface biggest shortages first.
-        usort($out, fn ($a, $b) => (float) $b['net_shortage'] <=> (float) $a['net_shortage']);
+        usort($out, fn ($a, $b) => bccomp((string) $b['net_shortage'], (string) $a['net_shortage'], 3));
 
         return $out;
     }

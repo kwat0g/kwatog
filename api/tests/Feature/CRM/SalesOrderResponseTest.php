@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderResponseStatus;
 use App\Modules\CRM\Enums\SalesOrderResponseType;
+use App\Modules\CRM\Mail\CustomerSalesOrderDecisionMail;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -51,9 +55,9 @@ class SalesOrderResponseTest extends TestCase
     {
         $so = SalesOrder::factory()->create([
             'customer_id' => $customer->id,
-            'subtotal'    => '0.00',
-            'vat_amount'  => '0.00',
-            'total_amount'=> '0.00',
+            'subtotal' => '0.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '0.00',
         ]);
         $so->forceFill([
             'status' => $status,
@@ -66,13 +70,13 @@ class SalesOrderResponseTest extends TestCase
     private function makeLine(SalesOrder $so, string $quantity, string $unitPrice): SalesOrderItem
     {
         return SalesOrderItem::create([
-            'sales_order_id'     => $so->id,
-            'product_id'         => Product::factory()->create()->id,
-            'quantity'           => $quantity,
-            'unit_price'         => $unitPrice,
-            'total'              => Money::mul($quantity, $unitPrice),
+            'sales_order_id' => $so->id,
+            'product_id' => Product::factory()->create()->id,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'total' => Money::mul($quantity, $unitPrice),
             'quantity_delivered' => 0,
-            'delivery_date'      => now()->addDays(7)->toDateString(),
+            'delivery_date' => now()->addDays(7)->toDateString(),
         ]);
     }
 
@@ -92,9 +96,9 @@ class SalesOrderResponseTest extends TestCase
         $so = $this->makeSo($customer);
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'                   => 'accept',
+            'type' => 'accept',
             'proposed_delivery_date' => '2026-10-15',
-            'notes'                  => 'We accept these terms.',
+            'notes' => 'We accept these terms.',
         ]);
 
         $this->assertSame(SalesOrderResponseType::Accept, $response->response_type);
@@ -112,12 +116,12 @@ class SalesOrderResponseTest extends TestCase
         $line = $this->makeLine($so, '100.00', '10.00');
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
-                'proposed_quantity'   => '120.00',
+                'proposed_quantity' => '120.00',
                 'proposed_unit_price' => '9.50',
-                'reason'              => 'Better volume.',
+                'reason' => 'Better volume.',
             ]],
         ]);
 
@@ -140,7 +144,7 @@ class SalesOrderResponseTest extends TestCase
         $so = $this->makeSo($customer);
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'decline',
+            'type' => 'decline',
             'notes' => 'Cannot proceed at this price.',
         ]);
 
@@ -154,7 +158,7 @@ class SalesOrderResponseTest extends TestCase
         $other = Customer::factory()->create();
         $so = $this->makeSo($other);
 
-        $this->expectException(\App\Common\Exceptions\ForbiddenActionException::class);
+        $this->expectException(ForbiddenActionException::class);
 
         $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
     }
@@ -165,7 +169,7 @@ class SalesOrderResponseTest extends TestCase
         $so = SalesOrder::factory()->create(['customer_id' => $customer->id]);
         $so->forceFill(['status' => 'draft', 'customer_confirmation_requested_at' => null])->save();
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('This sales order is not open to customer response.');
 
         $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
@@ -178,17 +182,17 @@ class SalesOrderResponseTest extends TestCase
         $line = $this->makeLine($so, '100.00', '10.00');
 
         $first = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
-                'proposed_quantity'   => '90.00',
+                'proposed_quantity' => '90.00',
             ]],
         ]);
         $second = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
-                'proposed_quantity'   => '110.00',
+                'proposed_quantity' => '110.00',
             ]],
         ]);
 
@@ -218,10 +222,10 @@ class SalesOrderResponseTest extends TestCase
         // Only line A is proposed, so a subtotal computed from response items
         // alone would be wrong — it must be summed across ALL order lines.
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $lineA->hash_id,
-                'proposed_quantity'   => '120.00',
+                'proposed_quantity' => '120.00',
                 'proposed_unit_price' => '9.50',
             ]],
         ]);
@@ -250,7 +254,7 @@ class SalesOrderResponseTest extends TestCase
         $this->assertSame('2396.80', (string) $fresh->total_amount);
         $this->assertSame('draft', $fresh->status->value, 'Accepting a proposal must not confirm the order.');
 
-        Mail::assertQueued(\App\Modules\CRM\Mail\CustomerSalesOrderDecisionMail::class, function ($mail) use ($so) {
+        Mail::assertQueued(CustomerSalesOrderDecisionMail::class, function ($mail) use ($so) {
             return $mail->decision === 'accept' && (int) $mail->salesOrder->id === (int) $so->id;
         });
     }
@@ -259,16 +263,16 @@ class SalesOrderResponseTest extends TestCase
     {
         // A tiny AR balance consumes the credit line once the proposal raises
         // this order's value.
-        \App\Modules\Accounting\Models\Invoice::factory()->create([
+        Invoice::factory()->create([
             'customer_id' => ($customer = Customer::factory()->create(['credit_limit' => '500.00']))->id,
-            'status'      => 'finalized',
-            'balance'     => '0.00',
+            'status' => 'finalized',
+            'balance' => '0.00',
         ]);
         $so = $this->makeSo($customer);
         $line = $this->makeLine($so, '10.00', '100.00');
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
                 'proposed_unit_price' => '200.00', // 10 × 200 = 2000 > 500
@@ -297,10 +301,10 @@ class SalesOrderResponseTest extends TestCase
         $line = $this->makeLine($so, '100.00', '10.00');
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
-                'proposed_quantity'   => '90.00',
+                'proposed_quantity' => '90.00',
             ]],
         ]);
 
@@ -319,14 +323,18 @@ class SalesOrderResponseTest extends TestCase
     {
         $customer = Customer::factory()->create();
         $so = $this->makeSo($customer);
+        // A customer accept is stored already-accepted. Resolving it again with
+        // `accept` is the documented idempotent replay; any OTHER decision on a
+        // non-pending row must still be refused.
         $response = $this->svc->respond($so, (int) $customer->id, null, ['type' => 'accept']);
+        $this->assertSame(SalesOrderResponseStatus::Accepted, $response->status);
 
         $approver = $this->userWithRole('sales_officer');
 
-        $this->expectException(\App\Common\Exceptions\BusinessRuleException::class);
+        $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('Only a pending customer response can be resolved.');
 
-        $this->svc->resolve($response, $approver, 'accept');
+        $this->svc->resolve($response, $approver, 'reject');
     }
 
     /* ─── Internal endpoints ─────────────────────────────────────── */
@@ -365,7 +373,7 @@ class SalesOrderResponseTest extends TestCase
         $line = $this->makeLine($so, '10.00', '100.00');
 
         $response = $this->svc->respond($so, (int) $customer->id, null, [
-            'type'  => 'propose',
+            'type' => 'propose',
             'items' => [[
                 'sales_order_item_id' => $line->hash_id,
                 'proposed_unit_price' => '120.00',
@@ -401,7 +409,7 @@ class SalesOrderResponseTest extends TestCase
         $customer = Customer::factory()->create();
         $so = SalesOrder::factory()->create([
             'customer_id' => $customer->id,
-            'status'      => 'draft',
+            'status' => 'draft',
         ]);
         $this->makeLine($so, '5.00', '10.00');
 

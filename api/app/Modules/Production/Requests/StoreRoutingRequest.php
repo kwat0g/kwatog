@@ -25,28 +25,28 @@ class StoreRoutingRequest extends FormRequest
     protected function hashIdFields(): array
     {
         return [
-            'product_id'              => Product::class,
+            'product_id' => Product::class,
             'operations.*.machine_id' => Machine::class,
-            'operations.*.mold_id'    => Mold::class,
+            'operations.*.mold_id' => Mold::class,
         ];
     }
 
     public function rules(): array
     {
         $rules = [
-            'notes'                          => ['nullable', 'string', 'max:1000'],
-            'operations'                     => ['required', 'array', 'min:1'],
-            'operations.*.sequence'          => ['required', 'integer', 'distinct', 'min:1'],
-            'operations.*.operation_name'    => ['required', 'string', 'max:100'],
-            'operations.*.work_center'       => ['nullable', 'string', 'max:100'],
-            'operations.*.machine_id'        => [
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'operations' => ['required', 'array', 'min:1'],
+            'operations.*.sequence' => ['required', 'integer', 'distinct', 'min:1'],
+            'operations.*.operation_name' => ['required', 'string', 'max:100'],
+            'operations.*.work_center' => ['nullable', 'string', 'max:100'],
+            'operations.*.machine_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('machines', 'id')->where(fn ($query) => $query
                     ->whereNull('deleted_at')
                     ->whereIn('status', [MachineStatus::Idle->value, MachineStatus::Running->value])),
             ],
-            'operations.*.mold_id'           => [
+            'operations.*.mold_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('molds', 'id')->where(fn ($query) => $query
@@ -58,8 +58,8 @@ class StoreRoutingRequest extends FormRequest
             'operations.*.labor_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
             'operations.*.machine_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
             'operations.*.overhead_rate_per_hour' => ['nullable', 'decimal:0,4', 'min:0', 'max:99999999999.9999'],
-            'operations.*.description'       => ['nullable', 'string', 'max:500'],
-            'operations.*.qc_required'       => ['nullable', 'boolean'],
+            'operations.*.description' => ['nullable', 'string', 'max:500'],
+            'operations.*.qc_required' => ['nullable', 'boolean'],
         ];
 
         // product_id is required on store, not on update.

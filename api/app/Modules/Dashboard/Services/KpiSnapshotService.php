@@ -615,6 +615,7 @@ class KpiSnapshotService
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
 
         $total = (int) DB::table('work_orders')
+            ->whereNull('deleted_at')
             ->whereIn('status', [
                 WorkOrderStatus::Completed->value,
                 WorkOrderStatus::Closed->value,
@@ -629,6 +630,7 @@ class KpiSnapshotService
         }
 
         $completed = (int) DB::table('work_orders')
+            ->whereNull('deleted_at')
             ->whereIn('status', [
                 WorkOrderStatus::Completed->value,
                 WorkOrderStatus::Closed->value,
@@ -636,6 +638,6 @@ class KpiSnapshotService
             ->whereBetween('actual_end', [$from, $to])
             ->count();
 
-        return round(($completed / $total) * 100, 2);
+        return min(100.0, round(($completed / $total) * 100, 2));
     }
 }

@@ -250,13 +250,4 @@ class SpcService
             'usl'       => $usl,
         ];
     }
-
-    private function stdDev(array $values): float
-    {
-        $n = count($values);
-        if ($n < 2) return 0;
-        $mean = array_sum($values) / $n;
-        $variance = array_sum(array_map(fn ($v) => ($v - $mean) ** 2, $values)) / ($n - 1);
-        return sqrt($variance);
-    }
 }

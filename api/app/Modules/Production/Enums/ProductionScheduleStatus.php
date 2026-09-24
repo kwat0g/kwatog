@@ -6,10 +6,10 @@ namespace App\Modules\Production\Enums;
 
 enum ProductionScheduleStatus: string
 {
-    case Pending    = 'pending';
-    case Confirmed  = 'confirmed';
+    case Pending = 'pending';
+    case Confirmed = 'confirmed';
     case Superseded = 'superseded';
-    case Executed   = 'executed';
+    case Executed = 'executed';
 
     public static function values(): array
     {

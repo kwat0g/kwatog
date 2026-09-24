@@ -22,13 +22,13 @@ class WorkOrderMaterial extends Model
     ];
 
     protected $casts = [
-        'bom_quantity'           => 'decimal:3',
-        'standard_unit_cost'     => 'decimal:4',
-        'standard_cost'          => 'decimal:2',
+        'bom_quantity' => 'decimal:3',
+        'standard_unit_cost' => 'decimal:4',
+        'standard_cost' => 'decimal:2',
         'actual_quantity_issued' => 'decimal:3',
-        'actual_cost'            => 'decimal:2',
-        'cost_variance'          => 'decimal:2',
-        'variance'               => 'decimal:3',
+        'actual_cost' => 'decimal:2',
+        'cost_variance' => 'decimal:2',
+        'variance' => 'decimal:3',
     ];
 
     public function workOrder(): BelongsTo

@@ -8,6 +8,8 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -16,6 +18,10 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
@@ -77,12 +83,28 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
     /** An inspected customer RMA: 10 requested, 8 physically returned. */
     private function inspectedRma(User $by, Customer $c, Invoice $inv, Item $item): ReturnRequest
     {
+        $product = Product::create([
+            'part_number' => 'PT-RS-'.substr(uniqid(), -5),
+            'name' => 'Restock returned product',
+            'revenue_account_id' => Account::query()->where('code', '4010')->value('id'),
+        ]);
+        $item->update([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood,
+        ]);
+        $salesOrder = \App\Modules\CRM\Models\SalesOrder::factory()->create([
+            'customer_id' => $c->id,
+            'status' => 'invoiced',
+            'created_by' => $by->id,
+        ]);
+        $inv->forceFill(['sales_order_id' => $salesOrder->id])->save();
         $rma = ReturnRequest::create([
             'rma_number'  => 'RMA-RS-' . substr(uniqid(), -5),
             'type'        => 'customer_return',
             'status'      => ReturnRequestStatus::Inspected->value,
             'customer_id' => $c->id,
             'invoice_id'  => $inv->id,
+            'sales_order_id' => $salesOrder->id,
             'reason_code' => 'defective',
             'return_date' => now()->toDateString(),
             'created_by'  => $by->id,
@@ -99,6 +121,7 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
 
         $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
+            'product_id'        => $product->id,
             'item_id'           => $item->id,
             'quantity'          => 10,
             'returned_quantity' => 8,
@@ -107,6 +130,7 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
             'source_invoice_item_id' => $invoiceLine->id,
         ]);
 
+        $invoiceLine->update(['product_id' => $product->id]);
         $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $movement = app(StockMovementService::class)->move(new StockMovementInput(
@@ -123,6 +147,21 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
             'quarantine_location_id' => $quarantine->id,
             'quarantine_movement_id' => $movement->id,
             'quarantine_status' => 'held',
+        ]);
+
+        Inspection::create([
+            'inspection_number' => 'QC-RS-'.substr(uniqid(), -8),
+            'stage' => InspectionStage::CustomerReturn->value,
+            'status' => InspectionStatus::Passed->value,
+            'product_id' => $product->id,
+            'entity_type' => InspectionEntityType::ReturnRequest->value,
+            'entity_id' => $rma->id,
+            'batch_quantity' => 8,
+            'sample_size' => 8,
+            'accept_count' => 8,
+            'reject_count' => 0,
+            'defect_count' => 0,
+            'inspector_id' => $by->id,
         ]);
 
         return $rma->load('items');

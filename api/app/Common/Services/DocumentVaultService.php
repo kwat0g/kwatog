@@ -207,6 +207,8 @@ class DocumentVaultService
             throw new RuntimeException("Vault blob missing: {$doc->file_path}");
         }
 
+        $this->assertChecksum($doc, hash('sha256', (string) $contents));
+
         return (string) $contents;
     }
 
@@ -220,6 +222,12 @@ class DocumentVaultService
         if ($size > self::MAX_BYTES) {
             abort(413, 'This document exceeds the configured delivery limit.');
         }
+        $checksum = $disk->checksum($doc->file_path, ['checksum_algo' => 'sha256']);
+        if (! is_string($checksum)) {
+            throw new RuntimeException("Unable to verify vault blob: {$doc->file_path}");
+        }
+        $this->assertChecksum($doc, $checksum);
+
         $stream = $disk->readStream($doc->file_path);
         if (! is_resource($stream)) {
             abort(404, 'This document is no longer available.');
@@ -254,6 +262,14 @@ class DocumentVaultService
                 'Document exceeds the %d MiB vault limit.',
                 (int) (self::MAX_BYTES / 1024 / 1024),
             ));
+        }
+    }
+
+    private function assertChecksum(Document $doc, string $actual): void
+    {
+        $expected = (string) $doc->checksum_sha256;
+        if ($expected !== '' && ! hash_equals($expected, $actual)) {
+            throw new RuntimeException("Vault blob checksum mismatch: {$doc->file_path}");
         }
     }
 

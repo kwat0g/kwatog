@@ -187,6 +187,12 @@ class CoCService
                 'COC_INSPECTION_NOT_PASSED',
             );
         }
+        if (! $inspection->isMakerChecked()) {
+            throw new InspectionCertificateException(
+                'CoC requires a checked outgoing inspection.',
+                'COC_INSPECTION_NOT_CHECKED',
+            );
+        }
 
         $this->assertEvidenceSupportsCertificate($inspection);
     }

@@ -410,4 +410,37 @@ class BomCostingTest extends TestCase
 
         $this->assertSame('27.50', (string) $bom->fresh()->total_cost);
     }
+
+    public function test_new_bom_version_uses_highest_version_including_trashed_rows(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create();
+        $row = [[
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1.0000',
+            'unit' => 'pcs',
+        ]];
+
+        $this->service->create($product->id, $row);
+        $versionTwo = $this->service->create($product->id, $row);
+        $versionTwo->forceFill(['is_active' => false])->save();
+        $this->service->delete($versionTwo);
+
+        $newVersion = $this->service->create($product->id, $row);
+
+        $this->assertSame(3, $newVersion->version);
+    }
+
+    public function test_bom_service_rejects_scientific_notation_quantity_input(): void
+    {
+        $product = Product::factory()->create();
+        $material = Item::factory()->create();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->service->create($product->id, [[
+            'item_id' => $material->id,
+            'quantity_per_unit' => '1e3',
+            'unit' => 'pcs',
+        ]]);
+    }
 }

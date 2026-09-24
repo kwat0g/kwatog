@@ -116,7 +116,11 @@ class SupplierRfqController
 
     public function downloadDocument(Request $request, RequestForQuote $rfq, RfqDocument $document)
     {
-        abort_unless((int) $document->request_for_quote_id === (int) $rfq->id && $document->vendor_id === null && $document->document_type === 'requirement_document', 404);
+        try {
+            $document = $this->quotes->documentForSupplier($this->user($request)->vendor_id, $rfq, $document);
+        } catch (BusinessRuleException) {
+            abort(404, 'RFQ document not found.');
+        }
         abort_unless(Storage::disk('local')->exists($document->file_path), 404);
 
         return Storage::disk('local')->download($document->file_path, $document->original_filename);

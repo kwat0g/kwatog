@@ -10,6 +10,8 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\MaterialIssueSlip;
+use App\Modules\Inventory\Models\MaterialIssueSlipItem;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
@@ -165,15 +167,35 @@ class QuarantineMrbTest extends TestCase
 
     public function test_picking_excludes_quarantine_stock(): void
     {
-        // The ONLY stock sits in a quarantine location.
+        // Quarantine and inactive bins are never suggested; active good stock is.
         $this->stock($this->quarantineLoc->id, '80');
+        $this->stock($this->sourceLoc->id, '20');
+        $inactive = WarehouseLocation::factory()->create(['is_active' => false]);
+        $this->stock($inactive->id, '40');
+        $actor = $this->userWith('warehouse_staff');
+        $slip = MaterialIssueSlip::create([
+            'slip_number' => 'MIS-PICK-'.substr(uniqid(), -5),
+            'issued_date' => now()->toDateString(),
+            'issued_by' => $actor->id,
+            'created_by' => $actor->id,
+            'status' => 'issued',
+            'total_value' => '0.00',
+        ]);
+        MaterialIssueSlipItem::create([
+            'material_issue_slip_id' => $slip->id,
+            'item_id' => $this->item->id,
+            'location_id' => $this->quarantineLoc->id,
+            'quantity_issued' => '10.000',
+            'unit_cost' => '1.0000',
+            'total_cost' => '10.00',
+        ]);
 
-        $result = app(PickingListService::class)->generateForWorkOrder(1, [[
-            'item_id'  => $this->item->id,
-            'quantity' => '10',
-        ]]);
+        $result = app(PickingListService::class)->generateForMis($slip->id);
 
-        $this->assertSame([], $result['lines'][0]['suggestions']);
+        $this->assertSame([$this->sourceLoc->id], array_column(
+            array_column($result['lines'][0]['suggestions'], 'location'),
+            'id',
+        ));
     }
 
     // ── 4. release(rework) → good location, status Released ─────────────────────
@@ -235,9 +257,9 @@ class QuarantineMrbTest extends TestCase
 
         $this->assertSame(MrbStatus::Scrapped, $mrb->status);
         $this->assertSame('scrap', $mrb->disposition);
-        // F-07: scrap removes from the source (quarantine), does NOT transfer
-        // to scrap-zone. release_location_id is the source location.
-        $this->assertSame($this->quarantineLoc->id, $mrb->release_location_id);
+        // Scrap is written off from quarantine; the resolved scrap location is
+        // retained as the physical disposition trace, not as on-hand stock.
+        $this->assertSame($this->scrapLoc->id, $mrb->release_location_id);
 
         $quar  = StockLevel::where('item_id', $this->item->id)->where('location_id', $this->quarantineLoc->id)->first();
         $scrap = StockLevel::where('item_id', $this->item->id)->where('location_id', $this->scrapLoc->id)->first();

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CalibrationFormPage from './form';
 import { calibrationApi } from '@/api/quality/calibration';
+import { localIsoDate } from '@/lib/formatDate';
 
 vi.mock('@/api/quality/calibration', () => ({
   calibrationApi: {
@@ -13,11 +14,11 @@ vi.mock('@/api/quality/calibration', () => ({
   },
 }));
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localIsoDate();
 function offsetDate(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localIsoDate(d);
 }
 
 function renderForm(path: string) {

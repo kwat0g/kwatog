@@ -23,6 +23,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Modules\Purchasing\Services\OpenSupplyService;
 
 /**
  * Task A8 — For items marked is_critical = true with a single preferred
@@ -41,6 +42,7 @@ class AutoPurchaseOrderService
         private readonly TaxPolicyService $taxPolicy,
         private readonly SettingsService $settings,
         private readonly BusinessPolicyService $businessPolicy,
+        private readonly OpenSupplyService $openSupply,
     ) {}
 
     public function createForCriticalShortage(Item $item): ?PurchaseOrder
@@ -55,7 +57,10 @@ class AutoPurchaseOrderService
                 ->where('item_id', $item->id)
                 ->sum('quantity');
             $reorder = (float) $item->reorder_point;
-            if ($onHand >= $reorder || $reorder <= 0) return null;
+            // Net in-transit supply from open POs to position.
+            $inTransit = (float) $this->openSupply->inTransitBaseQuantity($item->id);
+            $position = $onHand + $inTransit;
+            if ($position >= $reorder || $reorder <= 0) return null;
 
             // Exactly one preferred supplier. Lock the choice together with the
             // item so concurrent replenishment workers cannot create two auto-POs
@@ -82,7 +87,7 @@ class AutoPurchaseOrderService
                 ->exists();
             if ($hasOpenAuto) return null;
 
-            $qty = $reorder + (float) $item->safety_stock - $onHand;
+            $qty = $reorder + (float) $item->safety_stock - $position;
             if ($qty <= 0) return null;
             $quantity = number_format($qty, 2, '.', '');
             $price = (string) ($supplier->last_price ?? $item->standard_cost ?? '0.00');

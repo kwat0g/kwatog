@@ -98,7 +98,7 @@ Route::get('/health', function (Request $request) {
     return response()->json($body, $healthy ? 200 : 503);
 });
 
-Route::middleware(['auth:sanctum'])
+Route::middleware(['auth:sanctum', 'permission:business_policies.view'])
     ->get('/business-policies', BusinessPolicyController::class);
 
 /* ─── Alerts (Task A2) — cross-module so registered here ─────────── */

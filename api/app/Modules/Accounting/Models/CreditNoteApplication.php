@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Common\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CreditNoteApplication extends Model
 {
-    use HasHashId;
+    use HasHashId, HasAuditLog;
 
     protected $fillable = ['credit_note_id', 'invoice_id', 'bill_id', 'amount', 'created_by'];
 

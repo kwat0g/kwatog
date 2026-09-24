@@ -6,12 +6,12 @@ namespace App\Modules\Production\Enums;
 
 enum WoOperationStatus: string
 {
-    case Pending    = 'pending';
-    case Setup      = 'setup';
+    case Pending = 'pending';
+    case Setup = 'setup';
     case InProgress = 'in_progress';
-    case Paused     = 'paused';
-    case Completed  = 'completed';
-    case Skipped    = 'skipped';
+    case Paused = 'paused';
+    case Completed = 'completed';
+    case Skipped = 'skipped';
 
     public static function values(): array
     {
@@ -21,12 +21,12 @@ enum WoOperationStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Pending    => 'Pending',
-            self::Setup      => 'Setup',
+            self::Pending => 'Pending',
+            self::Setup => 'Setup',
             self::InProgress => 'In Progress',
-            self::Paused     => 'Paused',
-            self::Completed  => 'Completed',
-            self::Skipped    => 'Skipped',
+            self::Paused => 'Paused',
+            self::Completed => 'Completed',
+            self::Skipped => 'Skipped',
         };
     }
 }

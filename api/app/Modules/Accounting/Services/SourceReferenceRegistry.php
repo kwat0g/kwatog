@@ -26,6 +26,8 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\Loans\Models\EmployeeLoan;
+use App\Modules\Loans\Models\LoanPayment;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -60,7 +62,10 @@ final class SourceReferenceRegistry
         'work_order' => ['model' => WorkOrder::class],
         'work_order_output' => ['model' => WorkOrderOutput::class],
         'return_request' => ['model' => ReturnRequest::class],
-        'maintenance_work_order' => ['model' => MaintenanceWorkOrder::class],
+         'maintenance_work_order' => ['model' => MaintenanceWorkOrder::class],
+         'loan_disbursement' => ['model' => EmployeeLoan::class],
+         'loan_write_off' => ['model' => EmployeeLoan::class],
+         'loan_manual_repayment' => ['model' => LoanPayment::class],
         // Existing writers use these model class names as their type.
         Asset::class => ['model' => Asset::class],
         Clearance::class => ['model' => Clearance::class],

@@ -28,8 +28,8 @@ class Complaint8dSlaTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
 
-        // Seed recipient pool used by the service (quality + qc_inspector).
-        foreach (['qc_inspector', 'quality'] as $slug) {
+        // Seed recipient pool used by the service (production_manager + qc_inspector).
+        foreach (['qc_inspector', 'production_manager'] as $slug) {
             $roleId = Role::query()->where('slug', $slug)->value('id');
             if ($roleId) {
                 User::factory()->create(['role_id' => $roleId, 'is_active' => true]);
@@ -204,5 +204,26 @@ class Complaint8dSlaTest extends TestCase
             'status' => 'pending',
             'attempts' => 1,
         ]);
+    }
+
+    public function test_notification_roles_setting_references_only_seeded_role_slugs(): void
+    {
+        $raw = DB::table('settings')
+            ->where('key', 'crm.complaint_8d.notification_roles')
+            ->value('value');
+        $this->assertNotNull($raw);
+
+        $roles = json_decode((string) $raw, true);
+        $this->assertIsArray($roles);
+        $this->assertNotEmpty($roles);
+
+        $seededRoleSlugs = Role::query()->pluck('slug')->all();
+        foreach ($roles as $roleSlug) {
+            $this->assertContains(
+                $roleSlug,
+                $seededRoleSlugs,
+                "The 8D notification role setting contains invalid role slug '{$roleSlug}'.",
+            );
+        }
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Assets\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\HashId;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\AccountingAccountPolicyService;
@@ -49,7 +50,7 @@ class DepreciationService
     ) {}
 
     /**
-     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int}
+     * @return array{posted_count:int, total_amount:string, journal_entry_id:?string}
      */
     public function runForMonth(int $year, int $month, User $by, bool $allowBackfill = false): array
     {
@@ -80,7 +81,7 @@ class DepreciationService
                     return [
                         'posted_count' => (int) $run->posted_count,
                         'total_amount' => (string) $run->total_amount,
-                        'journal_entry_id' => (int) $run->journal_entry_id,
+                        'journal_entry_id' => $this->journalHash($run->journal_entry_id),
                     ];
                 }
 
@@ -108,9 +109,10 @@ class DepreciationService
 
             if ($rows === []) {
                 // A zero-value period has no journal identity to reconcile.
-                // Do not retain an empty run marker that could mask a later
-                // asset acquisition/backfill for the same period.
-                $run->delete();
+                // Keep the period marker as a durable zero-work outcome. A
+                // later supplemental backfill still sees journal_entry_id null
+                // and can add rows for a late asset.
+                $run->forceFill(['posted_count' => 0, 'total_amount' => Money::zero()])->save();
 
                 return ['posted_count' => 0, 'total_amount' => Money::zero(), 'journal_entry_id' => null];
             }
@@ -126,7 +128,7 @@ class DepreciationService
             return [
                 'posted_count' => count($rows),
                 'total_amount' => $totalAmount,
-                'journal_entry_id' => $je?->id,
+                'journal_entry_id' => $this->journalHash($je?->id),
             ];
         });
     }
@@ -137,7 +139,7 @@ class DepreciationService
      * deliberate and chronological instead of silently using a current
      * accumulated balance for an arbitrary historical month.
      *
-     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int, processed_periods:int}
+     * @return array{posted_count:int, total_amount:string, journal_entry_id:?string, processed_periods:int}
      */
     public function runBackfillTo(int $year, int $month, User $by): array
     {
@@ -502,7 +504,7 @@ class DepreciationService
      * this repair posted.
      *
      * @param array<int, array{asset:Asset, amount:string, accumulated_after:string}> $pending
-     * @return array{posted_count:int, total_amount:string, journal_entry_id:?int}
+     * @return array{posted_count:int, total_amount:string, journal_entry_id:?string}
      */
     private function postSupplementalRows(array $pending, int $year, int $month, CarbonImmutable $periodEnd, User $by): array
     {
@@ -516,7 +518,7 @@ class DepreciationService
         return [
             'posted_count' => count($pending),
             'total_amount' => $totalAmount,
-            'journal_entry_id' => $je?->id,
+            'journal_entry_id' => $this->journalHash($je?->id),
         ];
     }
 
@@ -609,5 +611,10 @@ class DepreciationService
         if ($target->gte(CarbonImmutable::now()->startOfMonth())) {
             throw new BusinessRuleException('Depreciation can only be posted for a completed period.');
         }
+    }
+
+    private function journalHash(?int $id): ?string
+    {
+        return $id === null ? null : HashId::encode($id);
     }
 }

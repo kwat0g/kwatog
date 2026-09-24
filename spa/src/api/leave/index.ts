@@ -72,12 +72,18 @@ function leaveRequestFormData(data: CreateLeaveRequestData): FormData {
 }
 
 export const leaveRequestsApi = {
- options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; half_day_periods: Array<{ value: string; label: string }> } }>('/leaves/requests/options').then((r) => r.data.data),
+  options: (params?: { from?: string; to?: string }) =>
+  client.get<{ data: {
+    statuses: Array<{ value: string; label: string }>;
+    half_day_periods: Array<{ value: string; label: string }>;
+    holiday_dates: string[];
+  } }>('/leaves/requests/options', { params }).then((r) => r.data.data),
  list: (params?: LeaveListParams) =>
  client.get<PaginatedResponse<LeaveRequest>>('/leaves/requests', { params }).then((r) => r.data),
- show: (id: string) =>
- client.get<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}`).then((r) => r.data.data),
- create: (data: CreateLeaveRequestData) =>
+  show: (id: string) =>
+  client.get<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}`).then((r) => r.data.data),
+  documentUrl: (id: string) => `/api/v1/leaves/requests/${id}/document`,
+  create: (data: CreateLeaveRequestData) =>
  client.post<ApiSuccess<LeaveRequest>>('/leaves/requests', leaveRequestFormData(data)).then((r) => r.data.data),
  approveDept: (id: string, remarks?: string) =>
  client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/approve-dept`, { remarks }).then((r) => r.data.data),

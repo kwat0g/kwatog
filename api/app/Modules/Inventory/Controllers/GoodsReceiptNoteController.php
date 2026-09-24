@@ -11,8 +11,10 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Requests\AcceptGrnRequest;
 use App\Modules\Inventory\Requests\FinalizeGrnRequest;
 use App\Modules\Inventory\Requests\RejectGrnRequest;
+use App\Modules\Inventory\Requests\RejectGrnRemainderRequest;
 use App\Modules\Inventory\Requests\StoreGrnRequest;
 use App\Modules\Inventory\Resources\GoodsReceiptNoteResource;
+use App\Modules\Inventory\Resources\ReceivablePurchaseOrderResource;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
@@ -58,7 +60,7 @@ class GoodsReceiptNoteController
     public function options(): JsonResponse
     {
         return response()->json(['data' => [
-            'statuses' => array_map(static fn (GrnStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))], GrnStatus::cases()),
+            'statuses' => array_map(static fn (GrnStatus $status): array => ['value' => $status->value, 'label' => $status->label()], GrnStatus::cases()),
             'default_qc_result' => (string) $this->settings->get('inventory.grn.default_qc_result', ''),
         ]]);
     }
@@ -66,6 +68,30 @@ class GoodsReceiptNoteController
     public function show(GoodsReceiptNote $grn): GoodsReceiptNoteResource
     {
         return new GoodsReceiptNoteResource($this->service->show($grn));
+    }
+
+    /**
+     * List receivable purchase orders (warehouse staff don't hold purchasing.view permission).
+     * Thin wrapper for warehouse staff to discover POs they can receive against.
+     */
+    public function receivablePurchaseOrders(): JsonResponse
+    {
+        return response()->json(['data' => ReceivablePurchaseOrderResource::collection($this->service->receivablePurchaseOrders())]);
+    }
+
+    /**
+     * Show a single receivable PO with its items and vendor.
+     * Thin wrapper gated on inventory.grn.create; throws 422 if PO is not receivable.
+     */
+    public function receivablePurchaseOrder(PurchaseOrder $purchaseOrder): JsonResponse
+    {
+        try {
+            $po = $this->service->receivablePurchaseOrder($purchaseOrder);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return response()->json(['data' => new ReceivablePurchaseOrderResource($po)]);
     }
 
     /** Retry a failed GRN → Quality incoming-QC handoff without changing receipt facts. */
@@ -78,6 +104,18 @@ class GoodsReceiptNoteController
         }
     }
 
+    /** Retry an accepted GRN's idempotent GL post after ledger recovery. */
+    public function retryGl(GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    {
+        try {
+            $grn = $this->service->retryGlHandoff($grn);
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return new GoodsReceiptNoteResource($this->service->show($grn));
+    }
+
     public function store(StoreGrnRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -85,7 +123,11 @@ class GoodsReceiptNoteController
         $po = PurchaseOrder::findOrFail($poId);
         try {
             $grn = $this->service->create($po, $data['items'],
-                ['received_date' => $data['received_date'] ?? null, 'remarks' => $data['remarks'] ?? null],
+                [
+                    'received_date' => $data['received_date'] ?? null,
+                    'remarks' => $data['remarks'] ?? null,
+                    'idempotency_key' => $request->idempotencyKey(),
+                ],
                 $request->user());
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -145,6 +187,16 @@ class GoodsReceiptNoteController
         return new GoodsReceiptNoteResource($this->service->show($result));
     }
 
+    public function rejectRemainder(RejectGrnRemainderRequest $request, GoodsReceiptNote $grn): GoodsReceiptNoteResource
+    {
+        try {
+            $result = $this->service->rejectRemainder($grn, $request->validated()['reason'], $request->user());
+        } catch (BusinessRuleException $e) {
+            abort(422, $e->getMessage());
+        }
+        return new GoodsReceiptNoteResource($this->service->show($result));
+    }
+
     /**
      * CA2 — Single-screen receiving: GRN + QC inspection + inventory in one call.
      */
@@ -158,9 +210,11 @@ class GoodsReceiptNoteController
         // `numeric` stored 10.00005 as 10.0001 and accepted '1e3' as a ₱1000
         // price. `decimal:0,N` + a column-matching max is the same shape
         // StoreGrnRequest already uses.
+        $request->merge(['idempotency_key' => $request->header('Idempotency-Key')]);
         $data = $request->validate([
+            'idempotency_key'                    => ['nullable', 'string', 'max:128', 'regex:/^[A-Za-z0-9._:-]+$/D'],
             'purchase_order_id'                  => ['required', 'string'],
-            'received_date'                      => ['nullable', 'date'],
+            'received_date'                      => ['nullable', 'date', 'before_or_equal:today'],
             'remarks'                            => ['nullable', 'string'],
             'items'                              => ['required', 'array', 'min:1'],
             'items.*.purchase_order_item_id'     => ['required', 'string'],
@@ -211,6 +265,7 @@ class GoodsReceiptNoteController
                 [
                     'received_date' => $data['received_date'] ?? null,
                     'remarks'       => $data['remarks'] ?? null,
+                    'idempotency_key' => $data['idempotency_key'] ?? null,
                 ],
                 $data['qc'],
                 $request->user(),

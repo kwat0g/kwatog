@@ -18,8 +18,9 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { localIsoDate } from '@/lib/formatDate';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localIsoDate();
 
 // Mirrors StoreCalibrationRecordRequest + CalibrationService::assertDateOrder.
 // ISO `YYYY-MM-DD` strings compare correctly lexicographically.

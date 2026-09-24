@@ -76,10 +76,31 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $this->assertSame(MachineStatus::Idle, $machine->fresh()->status);
         $row = MachineDowntime::query()->where('maintenance_order_id', $wo->id)->firstOrFail();
         $this->assertNotNull($row->end_time);
-        // Ledger-derived duration wins for the row; the tech-entered value
-        // stays on the MWO.
+        // The same ledger interval is the source for both the row and MWO.
         $this->assertSame(40, $row->duration_minutes);
-        $this->assertSame(45, $wo->fresh()->downtime_minutes);
+        $this->assertSame(40, $wo->fresh()->downtime_minutes);
+    }
+
+    public function test_complete_does_not_double_count_overlapping_mwo_downtime_rows(): void
+    {
+        $machine = Machine::factory()->create(['status' => MachineStatus::Idle->value]);
+        $wo = $this->machineMwo(MaintenanceWorkOrderStatus::Open, $machine);
+        $this->svc->start($wo, $this->tech);
+
+        $row = MachineDowntime::query()->where('maintenance_order_id', $wo->id)->firstOrFail();
+        $start = now()->subMinutes(40);
+        $row->update(['start_time' => $start]);
+        MachineDowntime::create([
+            'machine_id' => $machine->id,
+            'maintenance_order_id' => $wo->id,
+            'start_time' => $start,
+            'category' => MachineDowntimeCategory::PlannedMaintenance->value,
+            'description' => 'Duplicate interval regression',
+        ]);
+
+        $this->svc->complete($wo, ['downtime_minutes' => 999], $this->tech);
+
+        $this->assertSame(40, $wo->fresh()->downtime_minutes);
     }
 
     public function test_cancel_closes_downtime_row(): void
@@ -206,7 +227,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         Event::assertDispatched(MachineStatusChanged::class, fn (MachineStatusChanged $e): bool => $e->machine->id === $machine2->id && $e->from === 'maintenance' && $e->to === 'idle');
     }
 
-    public function test_breakdown_downtime_row_is_closed_by_restoration_listener_after_corrective_mwo_completes(): void
+    public function test_corrective_mwo_reuses_and_closes_the_breakdown_downtime_row(): void
     {
         $machine = Machine::factory()->create(['status' => MachineStatus::Breakdown->value]);
         $breakdown = MachineDowntime::create([
@@ -231,7 +252,7 @@ class MaintenanceWorkOrderMachineDowntimeTest extends TestCase
         $maintenanceRow = MachineDowntime::query()
             ->where('maintenance_order_id', $wo->id)
             ->firstOrFail();
-        $this->assertSame(MachineDowntimeCategory::PlannedMaintenance, $maintenanceRow->category);
+        $this->assertSame(MachineDowntimeCategory::Breakdown, $maintenanceRow->category);
         $this->assertNotNull($maintenanceRow->end_time);
     }
 

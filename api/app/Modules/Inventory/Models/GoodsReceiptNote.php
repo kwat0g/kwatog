@@ -37,6 +37,7 @@ class GoodsReceiptNote extends Model
         'qc_inspection_id', 'accepted_by', 'accepted_at',
         'incoming_qc_handoff_status', 'incoming_qc_handoff_message', 'incoming_qc_handoff_at',
         'rejected_reason', 'remarks', 'journal_entry_id',
+        'idempotency_key', 'idempotency_fingerprint', 'idempotency_response',
     ];
 
     protected $casts = [
@@ -45,6 +46,8 @@ class GoodsReceiptNote extends Model
         'status'        => GrnStatus::class,
         'incoming_qc_handoff_status' => IncomingQcHandoffStatus::class,
         'incoming_qc_handoff_at' => 'datetime',
+        'remainder_rejected_at' => 'datetime',
+        'idempotency_response' => 'array',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -75,6 +78,11 @@ class GoodsReceiptNote extends Model
     public function acceptor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'accepted_by');
+    }
+
+    public function remainderRejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'remainder_rejected_by');
     }
 
     public function qcInspection(): BelongsTo

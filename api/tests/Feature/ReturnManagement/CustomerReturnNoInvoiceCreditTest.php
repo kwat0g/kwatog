@@ -9,9 +9,17 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Quality\Enums\InspectionParameterType;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -50,8 +58,37 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
     {
         $by = $this->user();
         $customer = Customer::create(['name' => 'No-Invoice RMA Customer', 'payment_terms_days' => 30]);
-        $item = Item::factory()->create();
-        $source = SalesOrderItem::factory()->create();
+        $product = Product::create([
+            'part_number' => 'PT-NOINV-'.substr(uniqid(), -5),
+            'name' => 'No-invoice returned product',
+        ]);
+        $item = Item::factory()->create([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood->value,
+        ]);
+        $spec = InspectionSpec::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $by->id,
+        ]);
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Return condition',
+            'parameter_type' => InspectionParameterType::Visual->value,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => SalesOrderStatus::PartiallyDelivered,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '10.000',
+            'unit_price' => '100.00',
+        ]);
         $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $quarantine = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
         $destination = WarehouseLocation::factory()->create();
@@ -61,6 +98,7 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
             'type'        => ReturnRequestType::CustomerReturn->value,
             'status'      => ReturnRequestStatus::Approved->value,
             'customer_id' => $customer->id,
+            'sales_order_id' => $salesOrder->id,
             // Deliberately no invoice: the SO line is the only provenance.
             'invoice_id'  => null,
             'reason_code' => 'defective',
@@ -69,6 +107,7 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
         ]);
         $line = ReturnRequestItem::create([
             'return_request_id'          => $rma->id,
+            'product_id'                 => $product->id,
             'item_id'                    => $item->id,
             'source_sales_order_item_id' => $source->id,
             'quantity'                   => '10.000',
@@ -80,6 +119,10 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
         $service = app(ReturnRequestService::class);
         $received = $service->receive($rma, [$line->id => '8.000'], $quarantine->id, $by);
         $inspected = $service->inspect($received, 'Eight units returned.', $by);
+        Inspection::query()
+            ->where('entity_type', 'return_request')
+            ->where('entity_id', $rma->id)
+            ->update(['status' => 'passed', 'completed_at' => now()]);
         $disposed = $service->dispose($inspected, [[
             'item_id'     => $line->hash_id,
             'disposition' => 'restock',

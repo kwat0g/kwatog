@@ -18,7 +18,7 @@ class PauseWorkOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reason'   => ['required', 'string', 'max:200'],
+            'reason' => ['required', 'string', 'max:200'],
             'category' => ['required', Rule::in(MachineDowntimeCategory::values())],
         ];
     }

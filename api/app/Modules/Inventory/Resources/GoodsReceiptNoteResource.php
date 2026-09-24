@@ -21,6 +21,18 @@ class GoodsReceiptNoteResource extends JsonResource
             'rejected_reason' => $this->rejected_reason,
             'remarks'         => $this->remarks,
             'accepted_at'     => optional($this->accepted_at)->toIso8601String(),
+            'remainder_rejected_at' => optional($this->remainder_rejected_at)->toIso8601String(),
+            'remainder_rejected_reason' => $this->remainder_rejected_reason,
+            'remainder_rejected_by' => $this->whenLoaded('remainderRejectedBy', fn () => $this->remainderRejectedBy ? [
+                'id'   => $this->remainderRejectedBy->hash_id,
+                'name' => $this->remainderRejectedBy->name,
+            ] : null),
+            'can_reject_remainder' => $this->status === \App\Modules\Inventory\Enums\GrnStatus::PartialAccepted
+                && $this->remainder_rejected_at === null
+                && $this->relationLoaded('items')
+                && $this->items->some(
+                    fn ($row) => bccomp((string) $row->quantity_received, (string) $row->quantity_accepted, 3) > 0
+                ),
             'incoming_qc_handoff' => [
                 'status' => $this->incoming_qc_handoff_status?->value,
                 'status_label' => $this->incoming_qc_handoff_status?->label(),

@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Middleware;
 
 use App\Common\Services\SettingsService;
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,8 +17,8 @@ class CheckPortalPasswordExpiry
 
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user('customer_portal');
-        if (! $user instanceof CustomerPortalUser) {
+        $user = $request->user('customer_portal') ?? $request->user('supplier_portal');
+        if (! $user instanceof CustomerPortalUser && ! $user instanceof SupplierPortalUser) {
             return $next($request);
         }
 
@@ -26,6 +27,8 @@ class CheckPortalPasswordExpiry
         if (in_array($request->path(), [
             'api/v1/b2b/customer/me',
             'api/v1/b2b/customer/change-password',
+            'api/v1/b2b/supplier/me',
+            'api/v1/b2b/supplier/change-password',
         ], true)) {
             return $next($request);
         }

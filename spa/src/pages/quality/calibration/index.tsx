@@ -18,6 +18,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { CalibrationRecord, CalibrationStatus } from '@/types/quality';
+import { localIsoDate } from '@/lib/formatDate';
 
 const STATUS_VARIANT: Record<CalibrationStatus, ChipVariant> = {
  active: 'success',
@@ -32,7 +33,7 @@ export default function CalibrationListPage() {
  const { can } = usePermission();
  const [filters, setFilters] = useUrlFilters<CalibrationListParams>({ page: 1, per_page: 25 });
  const [recording, setRecording] = useState<CalibrationRecord | null>(null);
- const [recordDate, setRecordDate] = useState(() => new Date().toISOString().slice(0, 10));
+ const [recordDate, setRecordDate] = useState(() => localIsoDate());
  const [recordDateError, setRecordDateError] = useState<string | undefined>();
 
  const query = useQuery({
@@ -83,7 +84,7 @@ export default function CalibrationListPage() {
       icon={<LuCalendarClock size={13} />}
       onClick={() => {
        setRecording(r);
-       setRecordDate(new Date().toISOString().slice(0, 10));
+       setRecordDate(localIsoDate());
        setRecordDateError(undefined);
       }}
      >
@@ -164,7 +165,7 @@ export default function CalibrationListPage() {
      label="Calibration date"
      type="date"
      value={recordDate}
-     max={new Date().toISOString().slice(0, 10)}
+     max={localIsoDate()}
      onChange={(event) => {
       setRecordDate(event.target.value);
       setRecordDateError(undefined);

@@ -41,6 +41,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Input } from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/cn';
+import { localIsoDate } from '@/lib/formatDate';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
 
@@ -50,18 +51,18 @@ interface Window {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function isoOffset(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return localIsoDate(d);
 }
 
 function startOfMonthIso(): string {
   const d = new Date();
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), 1)).toISOString().slice(0, 10);
+  return localIsoDate(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 function presetWindow(p: Preset): Window {

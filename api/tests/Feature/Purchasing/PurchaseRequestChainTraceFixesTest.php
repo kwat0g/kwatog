@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Listeners\VerifyCoaOnIncomingQcPass;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Services\GrnService;
 use App\Modules\MRP\Enums\MrpPlanStatus;
@@ -22,6 +23,7 @@ use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Quality\Events\InspectionPassed;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -130,6 +132,11 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         // create() already staged a draft per-line inspection (F-06 sync
         // path); complete it as PASSED the way the inspector's verdict would.
         $this->completeLineInspection($grn, 'passed');
+        $inspection = \App\Modules\Quality\Models\Inspection::query()
+            ->where('stage', 'incoming')
+            ->where('grn_item_id', $grn->items()->firstOrFail()->id)
+            ->firstOrFail();
+        app(VerifyCoaOnIncomingQcPass::class)->handle(new InspectionPassed($inspection));
 
         $qcUser = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
@@ -145,6 +152,11 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         $grn = $this->makeReceivedGrn(['coa_document_path' => null]);
 
         $this->completeLineInspection($grn, 'passed');
+        $inspection = \App\Modules\Quality\Models\Inspection::query()
+            ->where('stage', 'incoming')
+            ->where('grn_item_id', $grn->items()->firstOrFail()->id)
+            ->firstOrFail();
+        app(VerifyCoaOnIncomingQcPass::class)->handle(new InspectionPassed($inspection));
 
         $qcUser = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'qc_inspector')->value('id'),
@@ -248,9 +260,13 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
             ->where('stage', 'incoming')
             ->where('grn_item_id', $grn->items->first()->id)
             ->firstOrFail();
+        // Maker-checker: a verdict only counts once a second person checked it.
         $inspection->forceFill([
             'status' => $status,
             'completed_at' => now(),
+            'inspector_id' => User::factory()->create()->id,
+            'reviewed_by' => User::factory()->create()->id,
+            'reviewed_at' => now(),
         ])->save();
     }
 }

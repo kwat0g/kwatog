@@ -9,6 +9,7 @@ use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Requests\ApplyCreditNoteRequest;
 use App\Modules\Accounting\Requests\StoreCreditNoteRequest;
+use App\Modules\Accounting\Requests\VoidCreditNoteRequest;
 use App\Modules\Accounting\Resources\CreditNoteResource;
 use App\Modules\Accounting\Services\CreditNoteService;
 use Illuminate\Http\JsonResponse;
@@ -57,5 +58,16 @@ class CreditNoteController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new CreditNoteResource($this->service->show($creditNote->fresh()));
+    }
+
+    public function void(CreditNote $creditNote, VoidCreditNoteRequest $request): JsonResponse|CreditNoteResource
+    {
+        try {
+            $cn = $this->service->void($creditNote, $request->user(), (string) $request->validated('reason'));
+        } catch (BusinessRuleException|ClosedPeriodException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new CreditNoteResource($cn);
     }
 }

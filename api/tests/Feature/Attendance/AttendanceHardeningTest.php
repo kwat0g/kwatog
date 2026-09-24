@@ -20,7 +20,9 @@ use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\Department;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,6 +125,29 @@ class AttendanceHardeningTest extends TestCase
         ]);
     }
 
+    public function test_computed_payroll_inputs_stay_frozen_after_employee_transfer(): void
+    {
+        $employee = Employee::factory()->create();
+        $period = $this->lockedPeriod($employee, PayrollPeriodStatus::Computed, '2026-04-01', '2026-04-15');
+        Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+            'employee_id' => $employee->id,
+        ]);
+        $newDepartment = Department::create(['name' => 'Transfer destination', 'code' => 'TRN']);
+        $employee->forceFill(['department_id' => $newDepartment->id])->save();
+        $attendance = Attendance::create([
+            'employee_id' => $employee->id,
+            'date' => '2026-04-10',
+            'remarks' => 'computed source',
+        ]);
+
+        $this->assertRule(
+            fn () => app(AttendanceService::class)->update($attendance, ['remarks' => 'changed after compute']),
+            'Attendance for 2026-04-10 is locked by payroll period',
+        );
+        $this->assertSame('computed source', $attendance->fresh()->remarks);
+    }
+
     public function test_paired_csv_import_allows_correction_in_a_voided_payroll_period(): void
     {
         $employee = Employee::factory()->create();
@@ -171,6 +196,83 @@ class AttendanceHardeningTest extends TestCase
             'overlaps an existing future assignment',
         );
         $this->assertSame(1, EmployeeShiftAssignment::where('employee_id', $future->id)->count());
+    }
+
+    public function test_inactive_shift_cannot_be_assigned_to_an_employee(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('Inactive shift');
+        $shift->update(['is_active' => false]);
+
+        $this->assertRule(
+            fn () => app(ShiftAssignmentService::class)->assignToEmployee(
+                $employee->id,
+                $shift->id,
+                '2026-05-01',
+            ),
+            'Only active shifts can be assigned.',
+        );
+        $this->assertDatabaseMissing('employee_shift_assignments', [
+            'employee_id' => $employee->id,
+            'shift_id' => $shift->id,
+        ]);
+    }
+
+    public function test_shift_with_an_open_assignment_cannot_be_deactivated(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('Assigned shift');
+        $effectiveDate = now()->addDay()->toDateString();
+        app(ShiftAssignmentService::class)->assignToEmployee($employee->id, $shift->id, $effectiveDate);
+
+        $this->assertRule(
+            fn () => app(ShiftService::class)->update($shift, ['is_active' => false]),
+            'Cannot deactivate a shift with current or future employee assignments.',
+        );
+        $this->assertTrue((bool) $shift->fresh()->is_active);
+    }
+
+    public function test_shift_time_change_recomputes_unlocked_attendance_rows(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('Recomputed shift');
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-15',
+            'time_in' => '2026-06-15 08:00:00',
+            'time_out' => '2026-06-15 16:30:00',
+            'shift_id' => $shift->id,
+        ]);
+        $this->assertSame('7.50', (string) $attendance->regular_hours);
+
+        app(ShiftService::class)->update($shift, ['end_time' => '16:00']);
+
+        $this->assertSame('7.00', (string) $attendance->fresh()->regular_hours);
+        $this->assertSame(0, (int) $attendance->fresh()->undertime_minutes);
+    }
+
+    public function test_holiday_creation_recomputes_unlocked_attendance_rows(): void
+    {
+        $employee = Employee::factory()->create();
+        $shift = $this->shift('Holiday recalculation shift');
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2030-06-17',
+            'time_in' => '2030-06-17 08:00:00',
+            'time_out' => '2030-06-17 17:00:00',
+            'shift_id' => $shift->id,
+        ]);
+        $this->assertSame('1.00', (string) $attendance->day_type_rate);
+
+        app(HolidayService::class)->create([
+            'name' => 'Added after DTR import',
+            'date' => '2030-06-17',
+            'type' => 'regular',
+            'is_recurring' => false,
+        ]);
+
+        $this->assertSame('regular', (string) $attendance->fresh()->holiday_type);
+        $this->assertSame('2.00', (string) $attendance->fresh()->day_type_rate);
     }
 
     public function test_holidays_are_unique_by_active_date_and_shift_updates_merge_times(): void
