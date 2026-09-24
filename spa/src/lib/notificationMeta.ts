@@ -1,4 +1,5 @@
 import { IconType } from '@/lib/icons';
+import { formatDate } from '@/lib/formatDate';
 /**
  * Sprint P4 — per-notification-type metadata for the bell dropdown
  * and notifications page (icon + group bucket).
@@ -254,5 +255,5 @@ export function timeAgo(iso: string): string {
  if (h < 24) return `${h}h ago`;
  const d = Math.floor(h / 24);
  if (d < 7) return `${d}d ago`;
- return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
