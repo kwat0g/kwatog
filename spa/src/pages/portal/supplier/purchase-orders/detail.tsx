@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { StatCard } from '@/components/ui/StatCard';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiGrid } from '@/components/dashboard/DashboardShell';
@@ -175,7 +176,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setEditingShipmentId(null);
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
     },
-    onError: () => toast.error('Failed to save shipment.'),
+    onError: (error) => reportMutationError(error, 'Could not save shipment details.'),
   });
 
   const uploadDocMut = useMutation({
@@ -193,7 +194,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setUploadNotes('');
       refetchDocs();
     },
-    onError: () => toast.error('Failed to upload document.'),
+    onError: (error) => reportMutationError(error, 'Could not upload the shipping document.'),
   });
 
   const submitInvoiceMut = useMutation({
