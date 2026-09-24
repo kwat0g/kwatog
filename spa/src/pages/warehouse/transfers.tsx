@@ -7,6 +7,7 @@ import { LuCircleCheck, LuPlus, LuCircleX } from '@/lib/icons';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { transferOrderApi } from '@/api/inventory/warehouseWms';
+import { itemsApi } from '@/api/inventory/items';
 import { warehouseApi } from '@/api/inventory/warehouse';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -23,6 +24,7 @@ import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import { focusRingInset } from '@/lib/focus';
+import { useDebounce } from '@/hooks/useDebounce';
 import type { TransferOrder } from '@/types/warehouse';
 import type { WarehouseLocation } from '@/types/inventory';
 
@@ -47,6 +49,8 @@ export default function TransferOrdersPage() {
  const [showCreateModal, setShowCreateModal] = useState(false);
  const [executeTarget, setExecuteTarget] = useState<TransferOrder | null>(null);
  const [cancelTarget, setCancelTarget] = useState<TransferOrder | null>(null);
+ const [itemSearch, setItemSearch] = useState('');
+ const debouncedItemSearch = useDebounce(itemSearch, 300);
 
  const { data: transfers, isLoading, isError, refetch } = useQuery({
  queryKey: ['inventory', 'transfer-orders'],
@@ -62,6 +66,12 @@ export default function TransferOrdersPage() {
  const { data: locations } = useQuery({
  queryKey: ['inventory', 'warehouse', 'tree'],
  queryFn: () => warehouseApi.tree(),
+ });
+
+ const { data: itemResults } = useQuery({
+ queryKey: ['inventory', 'items', 'transfer-selector', debouncedItemSearch],
+ queryFn: () => itemsApi.list({ per_page: 25, is_active: true, search: debouncedItemSearch || undefined }),
+ enabled: showCreateModal,
  });
 
  const allLocations: WarehouseLocation[] = (locations ?? []).flatMap((w) =>
@@ -216,11 +226,17 @@ export default function TransferOrdersPage() {
  ))}
  </Select>
  <Input
- label="Item ID" required
- placeholder="Paste item ID or select from search"
- {...createForm.register('item_id')}
- error={createForm.formState.errors.item_id?.message}
+ label="Find item"
+ value={itemSearch}
+ onChange={(event) => setItemSearch(event.target.value)}
+ placeholder="Search item code or name"
  />
+ <Select label="Item" required {...createForm.register('item_id')} error={createForm.formState.errors.item_id?.message}>
+ <option value="">— Select item —</option>
+ {(itemResults?.data ?? []).map((item) => (
+ <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
+ ))}
+ </Select>
  <Input
  label="Quantity" required
  {...createForm.register('quantity')}
