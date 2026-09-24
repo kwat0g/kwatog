@@ -33,17 +33,21 @@ export function useBadges(): {
     let disposed = false;
     let teardown: (() => void) | undefined;
 
-    void getEcho().then((echo) => {
-      if (disposed) return;
-      const channel = echo.private('badges');
-      channel.listen('.BadgesChanged', () => {
-        queryClient.invalidateQueries({ queryKey: ['sidebar', 'badges'] });
+    void getEcho()
+      .then((echo) => {
+        if (disposed) return;
+        const channel = echo.private('badges');
+        channel.listen('.BadgesChanged', () => {
+          queryClient.invalidateQueries({ queryKey: ['sidebar', 'badges'] });
+        });
+        teardown = () => {
+          channel.stopListening('.BadgesChanged');
+          echo.leave('private-badges');
+        };
+      })
+      .catch((error: unknown) => {
+        console.error('Real-time badge updates are unavailable.', error);
       });
-      teardown = () => {
-        channel.stopListening('.BadgesChanged');
-        echo.leave('private-badges');
-      };
-    });
 
     return () => {
       disposed = true;

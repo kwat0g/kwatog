@@ -21,19 +21,24 @@ export function useEcho<T = unknown>(
     let disposed = false;
     let teardown: (() => void) | undefined;
 
-    void getEcho().then((echo) => {
-      if (disposed) return;
-      const sub = echo.private(channel);
-      sub.listen(event, handler as (e: unknown) => void);
-      teardown = () => {
-        try {
-          sub.stopListening(event);
-        } catch {
-          // ignore: channel was already gone (e.g. in HMR teardown)
-        }
-        echo.leave(channel);
-      };
-    });
+    void getEcho()
+      .then((echo) => {
+        if (disposed) return;
+        const sub = echo.private(channel);
+        sub.listen(event, handler as (e: unknown) => void);
+        teardown = () => {
+          try {
+            sub.stopListening(event);
+          } catch {
+            // ignore: channel was already gone (e.g. in HMR teardown)
+          }
+          echo.leave(channel);
+        };
+      })
+      .catch((error: unknown) => {
+        // Real-time is optional; polling/query refetches remain the fallback.
+        console.error('Real-time updates are unavailable.', error);
+      });
 
     return () => {
       disposed = true;
