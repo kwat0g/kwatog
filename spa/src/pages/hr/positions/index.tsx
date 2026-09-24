@@ -176,7 +176,7 @@ export default function PositionsPage() {
  <EmptyState
  icon="alert-circle"
  title="Failed to load positions"
- description="Something went wrong. Please try again."
+ description="The position list could not be loaded. Check your connection and try again."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}
