@@ -211,7 +211,7 @@ export default function CreateComplaintPage() {
 
  <FormActions>
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>Cancel</Button>
- <Button variant="primary" type="submit" loading={submit.isPending}>
+ <Button variant="primary" type="submit" loading={submit.isPending} disabled={submit.isPending}>
  {submit.isPending ? 'Opening...' : 'Open complaint'}
  </Button>
  </FormActions>

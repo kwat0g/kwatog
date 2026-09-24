@@ -105,7 +105,7 @@ export default function EditMaintenanceSchedulePage() {
 
  <FormActions>
  <Button type="button" variant="secondary" onClick={() => navigate(`/maintenance/schedules/${id}`)}>Cancel</Button>
- <Button type="submit" variant="primary" loading={mutation.isPending}>
+ <Button type="submit" variant="primary" loading={mutation.isPending} disabled={mutation.isPending}>
  {mutation.isPending ? 'Saving…' : 'Save changes'}
  </Button>
  </FormActions>

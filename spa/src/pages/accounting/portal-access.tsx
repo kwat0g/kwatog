@@ -232,7 +232,7 @@ function SuppliersSection() {
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-      <Button type="submit" variant="primary" loading={inviteMutation.isPending}>Send invitation</Button>
+      <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>
      </ModalFooter>
     </form>
    </Modal>
@@ -378,7 +378,7 @@ function CustomersSection() {
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-      <Button type="submit" variant="primary" loading={inviteMutation.isPending}>Send invitation</Button>
+      <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>
      </ModalFooter>
     </form>
    </Modal>

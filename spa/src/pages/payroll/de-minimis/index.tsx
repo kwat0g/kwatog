@@ -161,7 +161,7 @@ export function DeMinimisManager() {
             </div>
             <ModalFooter>
               <Button variant="secondary" onClick={() => setShowCreate(false)} disabled={createMutation.isPending}>Cancel</Button>
-              <Button type="submit" variant="primary" loading={createMutation.isPending}>Record</Button>
+              <Button type="submit" variant="primary" loading={createMutation.isPending} disabled={createMutation.isPending}>Record</Button>
             </ModalFooter>
           </form>
         </Modal>
