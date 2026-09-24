@@ -23,6 +23,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { formatPeso } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 
 export default function MaintenanceWorkOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
       toast.success('Work order started.');
     },
-    onError: () => toast.error('Failed to start.'),
+    onError: (error) => reportMutationError(error, 'Could not start the work order.'),
   });
   const completeMutation = useMutation({
     mutationFn: () =>
@@ -76,7 +77,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       toast.success('Work order completed.');
       setCompleteOpen(false);
     },
-    onError: () => toast.error('Failed to complete.'),
+    onError: (error) => reportMutationError(error, 'Could not complete the work order.'),
   });
   const cancelMutation = useMutation({
     mutationFn: (reason: string) => workOrdersApi.cancel(id, reason),
@@ -85,7 +86,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       toast.success('Work order cancelled.');
       setCancelOpen(false);
     },
-    onError: () => toast.error('Failed to cancel.'),
+    onError: (error) => reportMutationError(error, 'Could not cancel the work order.'),
   });
   const assignMutation = useMutation({
     mutationFn: () => workOrdersApi.assign(id, assigneeId),
@@ -94,7 +95,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
       toast.success('Work order assigned.');
     },
-    onError: () => toast.error('Failed to assign.'),
+    onError: (error) => reportMutationError(error, 'Could not assign the work order.'),
   });
 
   if (isLoading) return <SkeletonDetail />;
