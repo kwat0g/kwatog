@@ -23,6 +23,7 @@ import { formatDateIso } from '@/lib/formatDate';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { reportMutationError } from '@/lib/formErrors';
 export default function InspectionSpecsListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -45,7 +46,7 @@ export default function InspectionSpecsListPage() {
       toast.success('Inspection spec archived');
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to archive inspection spec'),
+    onError: (error) => reportMutationError(error, 'Could not archive the inspection specification.'),
   });
   const restoreMutation = useMutation({
     mutationFn: (id: string) => inspectionSpecsApi.restore(id),
@@ -53,7 +54,7 @@ export default function InspectionSpecsListPage() {
       toast.success('Inspection spec restored');
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to restore inspection spec'),
+    onError: (error) => reportMutationError(error, 'Could not restore the inspection specification.'),
   });
 
   const columns: Column<InspectionSpec>[] = [
