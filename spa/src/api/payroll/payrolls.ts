@@ -6,6 +6,7 @@ export interface PayrollListParams extends ListParams {
  period_id?: string;
  employee_id?: string;
  failed_only?: boolean;
+ search?: string;
 }
 
 export const payrollsApi = {

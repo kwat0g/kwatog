@@ -7,6 +7,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { adjustmentsApi } from '@/api/payroll/adjustments';
+import { payrollsApi } from '@/api/payroll/payrolls';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -18,6 +19,7 @@ import type { ApiValidationError } from '@/types';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { useDebounce } from '@/hooks/useDebounce';
 const schema = z.object({
  original_payroll_id: z.string().min(1, 'Source payroll is required'),
  type: z.string().min(1, 'Adjustment type is required'),
@@ -32,9 +34,15 @@ export default function CreatePayrollAdjustmentPage() {
  const qc = useQueryClient();
  const location = useLocation() as { state?: { original_payroll_id?: string; employee?: { full_name?: string; employee_no?: string } } };
  const [submitting, setSubmitting] = useState(false);
+ const [payrollSearch, setPayrollSearch] = useState('');
+ const debouncedPayrollSearch = useDebounce(payrollSearch, 300);
  const { data: adjustmentOptions } = useQuery({
  queryKey: ['payroll-adjustments', 'options'],
  queryFn: () => adjustmentsApi.options(),
+ });
+ const { data: payrolls } = useQuery({
+ queryKey: ['payrolls', 'adjustment-source', debouncedPayrollSearch],
+ queryFn: () => payrollsApi.list({ per_page: 25, search: debouncedPayrollSearch || undefined }),
  });
 
   const form = useForm<FormValues>({
@@ -86,13 +94,26 @@ export default function CreatePayrollAdjustmentPage() {
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Adjustment</legend>
  <div className="grid grid-cols-2 gap-3">
  <Input
- label="Source payroll ID"
+ label="Find source payroll"
+ value={payrollSearch}
+ onChange={(event) => setPayrollSearch(event.target.value)}
+ placeholder="Search employee name or number"
+ disabled={!!location.state?.original_payroll_id}
+ />
+ <Select
+ label="Source payroll"
+ required
  {...register('original_payroll_id')}
  error={errors.original_payroll_id?.message}
  disabled={!!location.state?.original_payroll_id}
- required
- className="font-mono"
- />
+ >
+ <option value="">— Select payroll —</option>
+ {(payrolls?.data ?? []).map((payroll) => (
+ <option key={payroll.id} value={payroll.id}>
+ {payroll.employee?.full_name ?? 'Unknown employee'} ({payroll.employee?.employee_no ?? '—'}) · {payroll.period_start ?? '—'} to {payroll.period_end ?? '—'}
+ </option>
+ ))}
+ </Select>
  <Select label="Type" required {...register('type')} error={errors.type?.message}>
  <option value="">— Select —</option>
  {(adjustmentOptions?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
