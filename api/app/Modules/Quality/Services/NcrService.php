@@ -549,7 +549,10 @@ class NcrService
     {
         try {
             return app(\App\Modules\Production\Services\WorkOrderService::class);
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            Log::warning('Production work-order service could not be resolved for NCR disposition.', [
+                'exception' => $exception,
+            ]);
             return null;
         }
     }
