@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services;
 
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Last-known progress snapshot for an in-flight compute run.
@@ -50,9 +51,10 @@ class PayrollProgressTracker
 
         try {
             Cache::put($this->key($period), $snapshot, self::TTL_SECONDS);
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
             // A cache outage must never break a payroll run — the bar just
             // falls back to the row counts the resource already exposes.
+            Log::warning('Payroll progress cache write failed.', ['exception' => $exception, 'period_id' => $period->getKey()]);
         }
 
         return $snapshot;
@@ -65,7 +67,8 @@ class PayrollProgressTracker
     {
         try {
             $snapshot = Cache::get($this->key($period));
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            Log::warning('Payroll progress cache read failed.', ['exception' => $exception, 'period_id' => $period->getKey()]);
             return null;
         }
 
@@ -76,8 +79,9 @@ class PayrollProgressTracker
     {
         try {
             Cache::forget($this->key($period));
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
             // Best-effort — a stale entry expires on its own via the TTL.
+            Log::warning('Payroll progress cache invalidation failed.', ['exception' => $exception, 'period_id' => $period->getKey()]);
         }
     }
 }
