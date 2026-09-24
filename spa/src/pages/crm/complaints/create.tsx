@@ -49,27 +49,27 @@ export default function CreateComplaintPage() {
 
  const customers = useQuery({
  queryKey: ['accounting', 'customers', 'complaint-lookup', debouncedCustomerSearch],
- queryFn: () => customersApi.list({
+ queryFn: ({ signal }) => customersApi.list({
  per_page: 100,
  is_active: true,
  search: debouncedCustomerSearch || undefined,
- }),
+ }, signal),
  });
  const products = useQuery({
  queryKey: ['crm', 'products', 'complaint-lookup', debouncedProductSearch],
- queryFn: () => productsApi.list({
+ queryFn: ({ signal }) => productsApi.list({
  is_active: true,
  per_page: 100,
  search: debouncedProductSearch || undefined,
- }),
+ }, signal),
  });
  const salesOrders = useQuery({
   queryKey: ['crm', 'sales-orders', 'complaint-lookup', selectedCustomerId, debouncedSalesOrderSearch],
-  queryFn: () => salesOrdersApi.list({
+  queryFn: ({ signal }) => salesOrdersApi.list({
    customer_id: selectedCustomerId,
    search: debouncedSalesOrderSearch || undefined,
    per_page: 100,
-  }),
+  }, signal),
  enabled: Boolean(selectedCustomerId),
  });
  const complaintOptions = useQuery({

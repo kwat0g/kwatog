@@ -141,11 +141,11 @@ export default function RoutingEditorPage() {
  // silently showing the first page and hiding the rest.
  const products = useQuery({
  queryKey: ['crm', 'products', 'routing-lookup', debouncedProductSearch],
- queryFn: () => productsApi.list({
+ queryFn: ({ signal }) => productsApi.list({
  per_page: LOOKUP_PAGE_SIZE,
  is_active: 'true',
  search: debouncedProductSearch || undefined,
- }),
+ }, signal),
  enabled: !isEdit,
  });
  const machines = useQuery({

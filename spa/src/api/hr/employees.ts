@@ -77,8 +77,8 @@ export interface EmployeeStatusCounts {
 export const employeesApi = {
   options: () =>
     client.get<{ data: EmployeeOptions }>('/hr/employees/options').then((r) => r.data.data),
-  list: (params?: EmployeeListParams) =>
-    client.get<PaginatedResponse<Employee>>('/hr/employees', { params }).then((r) => r.data),
+  list: (params?: EmployeeListParams, signal?: AbortSignal) =>
+    client.get<PaginatedResponse<Employee>>('/hr/employees', { params, signal }).then((r) => r.data),
 
   statusCounts: (params?: Omit<EmployeeListParams, 'status'>) =>
     client
