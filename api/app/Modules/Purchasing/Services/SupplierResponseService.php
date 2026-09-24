@@ -16,6 +16,7 @@ use App\Common\Support\Money;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Policies\SupplierPoCapabilities;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderResponseType;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -46,18 +47,6 @@ use Illuminate\Support\Facades\Mail;
  */
 class SupplierResponseService
 {
-    /**
-     * PO statuses the supplier may respond to. A received/closed/cancelled
-     * PO is no longer negotiable, and a draft/pending/approved PO has not
-     * been transmitted yet.
-     */
-    private const RESPONDABLE_STATUSES = [
-        PurchaseOrderStatus::Sent,
-        PurchaseOrderStatus::Acknowledged,
-        PurchaseOrderStatus::SupplierProposed,
-        PurchaseOrderStatus::SupplierDeclined,
-    ];
-
     public function __construct(
         private readonly ApprovalService $approvals,
         private readonly BusinessPolicyService $businessPolicy,
@@ -82,9 +71,6 @@ class SupplierResponseService
             if ((int) $row->vendor_id !== $vendorId) {
                 throw new ForbiddenActionException('This purchase order belongs to another supplier.');
             }
-            if (! in_array($row->status, self::RESPONDABLE_STATUSES, true)) {
-                throw new BusinessRuleException('This purchase order is not open to supplier response.');
-            }
 
             $type = PurchaseOrderResponseType::tryFrom((string) $data['type']);
             if ($type === null) {
@@ -94,6 +80,8 @@ class SupplierResponseService
             // Supplier accept is terminal for the portal side. A browser
             // retry must return the existing decision instead of creating a
             // second response and notification for the same PO/vendor cycle.
+            // This check happens BEFORE the capability gate so a replay of an
+            // accepted response works even if the PO's status has moved on.
             if ($type === PurchaseOrderResponseType::Accept) {
                 $existing = PurchaseOrderResponse::query()
                     ->where('purchase_order_id', $row->id)
@@ -105,6 +93,17 @@ class SupplierResponseService
                 if ($existing) {
                     return $existing->load('items');
                 }
+            }
+
+            // The same matrix the portal renders as capabilities, re-checked
+            // under the row lock.
+            if (! SupplierPoCapabilities::canRespond($row, $type)) {
+                throw new BusinessRuleException(match (true) {
+                    $row->status === PurchaseOrderStatus::Acknowledged => 'This purchase order has already been accepted.',
+                    $row->status === PurchaseOrderStatus::SupplierDeclined && $type === PurchaseOrderResponseType::Decline => 'You have already declined this purchase order; OGAMI is reviewing it.',
+                    $row->status === PurchaseOrderStatus::SupplierDeclined => 'OGAMI has already acted on your decline; this purchase order is no longer open to a response.',
+                    default => 'This purchase order is not open to supplier response.',
+                });
             }
 
             // A re-submission replaces the prior pending reply. The old row is

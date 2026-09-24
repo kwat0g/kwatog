@@ -36,11 +36,16 @@ class StoreDeliveryScheduleRequest extends FormRequest
                     $fail('Invalid purchase order.');
                 }
             }],
-            'month'                => ['required', 'date_format:Y-m'],
+            'month'                => ['required', 'date_format:Y-m', function (string $attr, mixed $val, \Closure $fail) {
+                if ($val < now()->format('Y-m')) {
+                    $fail('Delivery schedules must be for current month or later.');
+                }
+            }],
             'lines'                => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_item_id' => ['required', 'string'],
             'lines.*.product_name' => ['nullable', 'string', 'max:255'],
-            'lines.*.quantity'     => ['required', 'numeric', 'min:0.01'],
+            // Strings from the SPA, numbers from API clients; the regex bounds both.
+            'lines.*.quantity'     => ['required', 'regex:/^\d+(\.\d{1,2})?$/'],
             'lines.*.notes'        => ['nullable', 'string', 'max:500'],
         ];
     }

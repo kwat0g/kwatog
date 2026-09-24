@@ -59,7 +59,17 @@ export default function SupplierInvoiceDetailPage() {
             'Invoice'
           )
         }
-        subtitle={invoice?.date ? formatDate(invoice.date) : undefined}
+        subtitle={
+          invoice
+            ? [
+                invoice.supplier_invoice_number ? `Your invoice ${invoice.supplier_invoice_number}` : null,
+                invoice.goods_receipt_note ? `Receipt ${invoice.goods_receipt_note.grn_number}` : null,
+                invoice.date ? formatDate(invoice.date) : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
         backTo="/portal/supplier/invoices"
         backLabel="Invoices"
         actions={invoice ? (
@@ -127,6 +137,8 @@ export default function SupplierInvoiceDetailPage() {
                       <tr className={theadTrCls}>
                         <Th>Date</Th>
                         <Th>Method</Th>
+                        <Th>Reference</Th>
+                        <Th>Status</Th>
                         <Th align="right">Amount</Th>
                       </tr>
                     </thead>
@@ -135,6 +147,14 @@ export default function SupplierInvoiceDetailPage() {
                         <tr key={p.id} className={trCls}>
                           <Td className="text-muted">{p.payment_date ? formatDate(p.payment_date) : '—'}</Td>
                           <Td className="capitalize">{p.payment_method_label ?? p.payment_method}</Td>
+                          <Td mono className="text-muted">{p.reference_number ?? '—'}</Td>
+                          <Td>
+                            {p.status ? (
+                              <Chip variant={chipVariantForStatus(p.status)}>{p.status_label ?? p.status}</Chip>
+                            ) : (
+                              '—'
+                            )}
+                          </Td>
                           <Td align="right" mono>{formatPeso(p.amount)}</Td>
                         </tr>
                       ))}

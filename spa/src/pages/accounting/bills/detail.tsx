@@ -381,6 +381,36 @@ export default function BillDetailPage() {
                 <dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt>
                 <dd>{bill.is_vatable ? 'Yes' : 'No'}</dd>
               </div>
+              {bill.supplier_invoice_number && (
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">
+                    Supplier invoice
+                  </dt>
+                  <dd className="font-mono">
+                    {bill.supplier_invoice_number}
+                    {bill.supplier_invoice_date && (
+                      <span className="text-muted"> · {formatDate(bill.supplier_invoice_date)}</span>
+                    )}
+                  </dd>
+                  {bill.supplier_invoice_attachment && (
+                    <button
+                      type="button"
+                      className="text-accent hover:underline text-xs mt-0.5"
+                      onClick={() =>
+                        void downloadAuthenticatedFile(
+                          billsApi.supplierInvoiceUrl(bill.id, bill.supplier_invoice_attachment!.id),
+                          {
+                            filename: bill.supplier_invoice_attachment!.original_filename,
+                            errorMessage: 'Failed to download the supplier invoice.',
+                          },
+                        )
+                      }
+                    >
+                      {bill.supplier_invoice_attachment.original_filename}
+                    </button>
+                  )}
+                </div>
+              )}
               {bill.purchase_order && (
                 <div>
                   <dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">

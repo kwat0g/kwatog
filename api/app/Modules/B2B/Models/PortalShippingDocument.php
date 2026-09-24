@@ -15,6 +15,11 @@ class PortalShippingDocument extends Model
 {
     use HasFactory, HasHashId;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\PortalShippingDocumentFactory::new();
+    }
+
     protected $fillable = [
         'purchase_order_id',
         'bill_id',

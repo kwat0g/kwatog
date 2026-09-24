@@ -1,8 +1,10 @@
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { LuChevronDown } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
-import { DataTable, type Column } from '@/components/ui/DataTable';
+import { type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -25,6 +27,22 @@ export default function SupplierDeliveriesPage() {
   });
 
   const columns: Column<SupplierDeliverySummary>[] = [
+    {
+      key: 'expand',
+      header: '',
+      cell: (r) =>
+        r.lines && r.lines.length > 0 ? (
+          <button
+            onClick={() => setExpandedRowId(expandedRowId === r.id ? null : r.id)}
+            className="p-1 hover:bg-subtle rounded"
+          >
+            <LuChevronDown
+              size={16}
+              className={`transition-transform ${expandedRowId === r.id ? 'rotate-180' : ''}`}
+            />
+          </button>
+        ) : null,
+    },
     {
       key: 'grn_number',
       header: 'GRN #',
@@ -73,6 +91,8 @@ export default function SupplierDeliveriesPage() {
     },
   ];
 
+  const [expandedRowId, setExpandedRowId] = React.useState<string | null>(null);
+
   return (
     <div>
       <PageHeader
@@ -104,22 +124,114 @@ export default function SupplierDeliveriesPage() {
       )}
 
       {data && (
-        <div className="px-5 py-4">
-          <DataTable
-            tableKey="portal-supplier-deliveries"
-            columns={columns}
-            data={data.data}
-            meta={data.meta}
-            onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
-            onPageSizeChange={(per_page) => setFilters((current) => ({ ...current, per_page, page: 1 }))}
-            emptyState={
-              <EmptyState
-                icon="truck"
-                title="No deliveries"
-                description="Goods receipts against your purchase orders will appear here."
-              />
-            }
-          />
+        <div className="px-5 py-4 space-y-4">
+          {data.data.length === 0 ? (
+            <EmptyState
+              icon="truck"
+              title="No deliveries"
+              description="Goods receipts against your purchase orders will appear here."
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-subtle">
+                    {columns.map((col) => (
+                      <th
+                        key={col.key}
+                        className="px-4 py-2 text-left font-medium text-muted text-2xs uppercase tracking-wider"
+                      >
+                        {col.header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.data.map((delivery) => (
+                    <React.Fragment key={delivery.id}>
+                      <tr className="border-b border-subtle hover:bg-subtle transition-colors">
+                        {columns.map((col) => (
+                          <td key={col.key} className="px-4 py-3">
+                            {col.cell(delivery)}
+                          </td>
+                        ))}
+                      </tr>
+                      {expandedRowId === delivery.id && delivery.lines && delivery.lines.length > 0 && (
+                        <tr className="border-b border-subtle bg-subtle/50">
+                          <td colSpan={columns.length} className="px-4 py-3">
+                            <div className="space-y-3">
+                              <h4 className="font-medium text-xs uppercase tracking-wider text-muted">
+                                Line items
+                              </h4>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-default/50">
+                                      <th className="px-3 py-2 text-left font-medium text-muted">Item code</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted">Item name</th>
+                                      <th className="px-3 py-2 text-right font-medium text-muted">Received</th>
+                                      <th className="px-3 py-2 text-right font-medium text-muted">Accepted</th>
+                                      <th className="px-3 py-2 text-right font-medium text-muted">Rejected</th>
+                                      <th className="px-3 py-2 text-left font-medium text-muted">Remarks</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {delivery.lines.map((line, idx) => (
+                                      <tr key={idx} className="border-b border-default/30">
+                                        <td className="px-3 py-2 font-mono text-muted">{line.item_code}</td>
+                                        <td className="px-3 py-2">{line.item_name}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{line.quantity_received}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{line.quantity_accepted}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{line.quantity_rejected}</td>
+                                        <td className="px-3 py-2 text-secondary text-xs">
+                                          {line.remarks || '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {delivery.rejection_reason && (
+                                <div className="text-xs border-t border-default/50 pt-2 mt-2">
+                                  <span className="font-medium text-muted">Rejection reason: </span>
+                                  <span className="text-secondary">{delivery.rejection_reason}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+              <div className="flex items-center justify-between text-sm text-muted mt-4">
+                <div>
+                  Page {data.meta.current_page} of {data.meta.last_page} ({data.meta.total} total)
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!data.links.prev}
+                    onClick={() => setFilters((current) => ({ ...current, page: (current.page ?? 1) - 1 }))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!data.links.next}
+                    onClick={() => setFilters((current) => ({ ...current, page: (current.page ?? 1) + 1 }))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

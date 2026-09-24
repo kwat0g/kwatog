@@ -13,7 +13,7 @@ import {
   LuThumbsDown,
 } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { PortalShippingDocument, RespondToPurchaseOrderPayload } from '@/types/b2b';
+import type { PortalShippingDocument, RespondToPurchaseOrderPayload, PortalShipment } from '@/types/b2b';
 import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType } from '@/types/purchasing';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -80,6 +80,7 @@ export default function SupplierPurchaseOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [showShipmentForm, setShowShipmentForm] = useState(false);
+  const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -108,7 +109,7 @@ export default function SupplierPurchaseOrderDetailPage() {
 
   const [billNumber, setBillNumber] = useState('');
   const [billDate, setBillDate] = useState('');
-  const [billDueDate, setBillDueDate] = useState('');
+  const [grnId, setGrnId] = useState('');
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [billRemarks, setBillRemarks] = useState('');
 
@@ -164,20 +165,27 @@ export default function SupplierPurchaseOrderDetailPage() {
   });
 
   const shipmentMut = useMutation({
-    mutationFn: () =>
-      supplierPortalApi.updateShipment(id!, {
+    mutationFn: () => {
+      const payload = {
         shipped_date: shippedDate || undefined,
         carrier: carrier.trim() || undefined,
         tracking_number: trackingNumber.trim() || undefined,
         estimated_arrival: estimatedArrival || undefined,
         notes: shipmentNotes.trim() || undefined,
-      }),
+      };
+      if (editingShipmentId) {
+        return supplierPortalApi.updateShipmentById(id!, editingShipmentId, payload);
+      } else {
+        return supplierPortalApi.createShipment(id!, payload);
+      }
+    },
     onSuccess: () => {
-      toast.success('Shipment details updated.');
+      toast.success(editingShipmentId ? 'Shipment details updated.' : 'Shipment added.');
       setShowShipmentForm(false);
+      setEditingShipmentId(null);
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
     },
-    onError: () => toast.error('Failed to update shipment.'),
+    onError: () => toast.error('Failed to save shipment.'),
   });
 
   const uploadDocMut = useMutation({
@@ -203,7 +211,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       const form = new FormData();
       form.append('bill_number', billNumber);
       form.append('date', billDate);
-      if (billDueDate) form.append('due_date', billDueDate);
+      form.append('goods_receipt_note_id', grnId);
       if (invoiceFile) form.append('file', invoiceFile);
       if (billRemarks) form.append('remarks', billRemarks);
       return supplierPortalApi.submitInvoice(id!, form);
@@ -213,7 +221,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setShowInvoiceForm(false);
       setBillNumber('');
       setBillDate('');
-      setBillDueDate('');
+      setGrnId('');
       setInvoiceFile(null);
       setBillRemarks('');
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
@@ -234,10 +242,13 @@ export default function SupplierPurchaseOrderDetailPage() {
 
   // The API owns the lifecycle policy and publishes capabilities with the PO.
   // Keep the client as a renderer of that contract, not a second state machine.
-  const canRespond = po?.capabilities.can_respond ?? false;
+  const canAccept = po?.capabilities.can_accept ?? false;
+  const canPropose = po?.capabilities.can_propose ?? false;
+  const canDecline = po?.capabilities.can_decline ?? false;
   const canUpdateShipment = po?.capabilities.can_update_shipment ?? false;
   const canUploadDocument = po?.capabilities.can_upload_document ?? false;
   const canSubmitInvoice = po?.capabilities.can_submit_invoice ?? false;
+  const canScheduleDelivery = po?.capabilities.can_schedule_delivery ?? false;
 
   const openAccept = () => {
     setAcceptDate(po?.expected_delivery_date ?? '');
@@ -296,13 +307,32 @@ export default function SupplierPurchaseOrderDetailPage() {
     });
   };
 
-  const openShipmentForm = () => {
-    setShippedDate(po?.shipment?.shipped_date ?? '');
-    setCarrier(po?.shipment?.carrier ?? '');
-    setTrackingNumber(po?.shipment?.tracking_number ?? '');
-    setEstimatedArrival(po?.shipment?.estimated_arrival ?? '');
-    setShipmentNotes(po?.shipment?.notes ?? '');
-    setShowShipmentForm((open) => !open);
+  const openInvoiceForm = () => {
+    // Receipts arrive oldest-first; invoice them in the order they landed.
+    if (!showInvoiceForm) {
+      setGrnId(po?.goods_receipt_notes?.find((grn) => grn.can_invoice)?.id ?? '');
+    }
+    setShowInvoiceForm(!showInvoiceForm);
+  };
+
+  const openAddShipmentForm = () => {
+    setShippedDate('');
+    setCarrier('');
+    setTrackingNumber('');
+    setEstimatedArrival('');
+    setShipmentNotes('');
+    setEditingShipmentId(null);
+    setShowShipmentForm(true);
+  };
+
+  const openEditShipmentForm = (shipment: PortalShipment) => {
+    setShippedDate(shipment.shipped_date ?? '');
+    setCarrier(shipment.carrier ?? '');
+    setTrackingNumber(shipment.tracking_number ?? '');
+    setEstimatedArrival(shipment.estimated_arrival ?? '');
+    setShipmentNotes(shipment.notes ?? '');
+    setEditingShipmentId(shipment.id);
+    setShowShipmentForm(true);
   };
 
   return (
@@ -334,46 +364,48 @@ export default function SupplierPurchaseOrderDetailPage() {
               >
                 PDF
               </Button>
-              {canRespond && (
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<LuCircleCheck size={14} />}
-                    onClick={openAccept}
-                    disabled={respondMut.isPending}
-                    loading={respondMut.isPending && acceptOpen}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<LuPencil size={14} />}
-                    onClick={openPropose}
-                    disabled={respondMut.isPending}
-                  >
-                    Propose changes
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<LuThumbsDown size={14} />}
-                    onClick={() => setDeclineOpen(true)}
-                    disabled={respondMut.isPending}
-                  >
-                    Decline
-                  </Button>
-                </>
+              {canAccept && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<LuCircleCheck size={14} />}
+                  onClick={openAccept}
+                  disabled={respondMut.isPending}
+                  loading={respondMut.isPending && acceptOpen}
+                >
+                  Accept
+                </Button>
+              )}
+              {canPropose && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuPencil size={14} />}
+                  onClick={openPropose}
+                  disabled={respondMut.isPending}
+                >
+                  Propose changes
+                </Button>
+              )}
+              {canDecline && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuThumbsDown size={14} />}
+                  onClick={() => setDeclineOpen(true)}
+                  disabled={respondMut.isPending}
+                >
+                  Decline
+                </Button>
               )}
               {canUpdateShipment && (
                 <Button
                   variant="secondary"
                   size="sm"
                   icon={<LuTruck size={14} />}
-                  onClick={openShipmentForm}
+                  onClick={openAddShipmentForm}
                 >
-                  Update shipment
+                  Add shipment
                 </Button>
               )}
               {canUploadDocument && (
@@ -391,9 +423,18 @@ export default function SupplierPurchaseOrderDetailPage() {
                   variant="secondary"
                   size="sm"
                   icon={<LuSend size={14} />}
-                  onClick={() => setShowInvoiceForm(!showInvoiceForm)}
+                  onClick={openInvoiceForm}
                 >
                   Submit invoice
+                </Button>
+              )}
+              {canScheduleDelivery && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.location.href = '/portal/supplier/delivery-schedules'}
+                >
+                  Schedule delivery
                 </Button>
               )}
             </div>
@@ -422,6 +463,27 @@ export default function SupplierPurchaseOrderDetailPage() {
 
         {!isLoading && !isError && po && (
           <>
+            {(po.status === 'sent' || po.status === 'supplier_proposed') && (
+              <Panel>
+                <p className="text-sm text-secondary">
+                  Accept this purchase order to update shipments, upload documents and schedule deliveries.
+                </p>
+              </Panel>
+            )}
+            {po.status === 'supplier_declined' && !canAccept && !canPropose && !canDecline && (
+              <Panel>
+                <p className="text-sm text-secondary">
+                  You declined this order. OGAMI is reviewing it.
+                </p>
+              </Panel>
+            )}
+            {po.status === 'cancelled' && (
+              <Panel>
+                <p className="text-sm text-secondary">
+                  OGAMI cancelled this purchase order. No further deliveries or invoices should be made against it.
+                </p>
+              </Panel>
+            )}
             {po.capabilities.can_reconfirm_rfq && po.rfq_reconfirmation && (
               <Panel title="RFQ terms reconfirmation">
                 <p className="text-sm text-muted">
@@ -565,50 +627,54 @@ export default function SupplierPurchaseOrderDetailPage() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Panel title="Shipment">
-                {po.shipment ? (
-                  <dl className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
-                    <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                        Shipped date
-                      </dt>
-                      <dd className="font-mono">
-                        {po.shipment.shipped_date ? formatDate(po.shipment.shipped_date) : '—'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                        Carrier
-                      </dt>
-                      <dd>{po.shipment.carrier ?? '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                        Tracking number
-                      </dt>
-                      <dd className="font-mono">{po.shipment.tracking_number ?? '—'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                        Estimated arrival
-                      </dt>
-                      <dd className="font-mono">
-                        {po.shipment.estimated_arrival
-                          ? formatDate(po.shipment.estimated_arrival)
-                          : '—'}
-                      </dd>
-                    </div>
-                    {po.shipment.notes && (
-                      <div className="col-span-2">
-                        <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
-                          Notes
-                        </dt>
-                        <dd>{po.shipment.notes}</dd>
-                      </div>
-                    )}
-                  </dl>
+              <Panel title="Shipments" meta={String(po.shipments?.length ?? 0)} noPadding>
+                {po.shipments && po.shipments.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className={tableCls}>
+                      <thead>
+                        <tr className={theadTrCls}>
+                          <Th>Shipped date</Th>
+                          <Th>Carrier</Th>
+                          <Th>Tracking</Th>
+                          <Th>ETA</Th>
+                          <Th>Updated</Th>
+                          {canUpdateShipment && <Th align="right">Action</Th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {po.shipments.map((shipment) => (
+                          <tr key={shipment.id} className={trCls}>
+                            <Td mono className="text-muted">
+                              {shipment.shipped_date ? formatDate(shipment.shipped_date) : '—'}
+                            </Td>
+                            <Td>{shipment.carrier ?? '—'}</Td>
+                            <Td mono className="text-muted">
+                              {shipment.tracking_number ?? '—'}
+                            </Td>
+                            <Td mono className="text-muted">
+                              {shipment.estimated_arrival ? formatDate(shipment.estimated_arrival) : '—'}
+                            </Td>
+                            <Td mono className="text-muted text-xs">
+                              {shipment.updated_at ? formatDate(shipment.updated_at) : '—'}
+                            </Td>
+                            {canUpdateShipment && (
+                              <Td align="right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openEditShipmentForm(shipment)}
+                                >
+                                  Edit
+                                </Button>
+                              </Td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
-                  <p className="text-sm text-muted">No shipment details submitted yet.</p>
+                  <p className="text-sm text-muted px-4 py-2">No shipments yet.</p>
                 )}
               </Panel>
 
@@ -644,7 +710,7 @@ export default function SupplierPurchaseOrderDetailPage() {
             </div>
 
             {showShipmentForm && canUpdateShipment && (
-              <Panel title="Update shipment information">
+              <Panel title={editingShipmentId ? 'Edit shipment' : 'Add shipment'}>
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -691,7 +757,10 @@ export default function SupplierPurchaseOrderDetailPage() {
                       type="button"
                       variant="secondary"
                       size="sm"
-                      onClick={() => setShowShipmentForm(false)}
+                      onClick={() => {
+                        setShowShipmentForm(false);
+                        setEditingShipmentId(null);
+                      }}
                     >
                       Cancel
                     </Button>
@@ -701,7 +770,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                       size="sm"
                       loading={shipmentMut.isPending}
                     >
-                      Save shipment
+                      {editingShipmentId ? 'Save changes' : 'Add shipment'}
                     </Button>
                   </div>
                 </form>
@@ -775,7 +844,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                   }}
                   className="flex flex-col gap-3"
                 >
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
                       label="Your invoice #"
                       required
@@ -791,12 +860,19 @@ export default function SupplierPurchaseOrderDetailPage() {
                       value={billDate}
                       onChange={(e) => setBillDate(e.target.value)}
                     />
-                    <Input
-                      label="Due date (optional)"
-                      type="date"
-                      value={billDueDate}
-                      onChange={(e) => setBillDueDate(e.target.value)}
-                    />
+                    <Select
+                      label="Goods receipt note"
+                      required
+                      value={grnId}
+                      onChange={(e) => setGrnId(e.target.value)}
+                    >
+                      <option value="">— Select GRN —</option>
+                      {(po.goods_receipt_notes ?? []).filter(g => g.can_invoice).map((grn) => (
+                        <option key={grn.id} value={grn.id}>
+                          {grn.grn_number} · Received {grn.received_date ? formatDate(grn.received_date) : '—'}
+                        </option>
+                      ))}
+                    </Select>
                   </div>
                   <FileInput
                     label="Attach invoice file (optional)"
@@ -810,8 +886,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                     rows={2}
                   />
                   <p className="text-2xs text-muted">
-                    Bill items will be auto-populated from the PO line items. A draft bill will be
-                    created in Accounts Payable for review.
+                    Due date follows your payment terms; VAT follows the purchase order.
                   </p>
                   <div className="flex justify-end gap-2 pt-2 border-t border-default">
                     <Button
@@ -827,7 +902,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                       variant="primary"
                       size="sm"
                       icon={<LuSend size={14} />}
-                      disabled={!billNumber || !billDate}
+                      disabled={!billNumber || !billDate || !grnId}
                       loading={submitInvoiceMut.isPending}
                     >
                       Submit invoice
@@ -847,6 +922,8 @@ export default function SupplierPurchaseOrderDetailPage() {
                         <Th>Description</Th>
                         <Th align="right">Ordered</Th>
                         <Th align="right">Received</Th>
+                        <Th align="right">Accepted</Th>
+                        <Th align="right">Remaining</Th>
                         <Th align="right">Unit Price</Th>
                         <Th align="right">Total</Th>
                       </tr>
@@ -863,6 +940,12 @@ export default function SupplierPurchaseOrderDetailPage() {
                           </Td>
                           <Td align="right" mono>
                             {item.quantity_received}
+                          </Td>
+                          <Td align="right" mono>
+                            {item.quantity_accepted}
+                          </Td>
+                          <Td align="right" mono>
+                            {item.quantity_remaining}
                           </Td>
                           <Td align="right" mono>
                             {formatPeso(item.unit_price)}
@@ -892,6 +975,8 @@ export default function SupplierPurchaseOrderDetailPage() {
                       <tr className={theadTrCls}>
                         <Th>GRN #</Th>
                         <Th>Received Date</Th>
+                        <Th>Status</Th>
+                        <Th>Invoice</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -900,6 +985,18 @@ export default function SupplierPurchaseOrderDetailPage() {
                           <Td mono>{grn.grn_number}</Td>
                           <Td className="text-muted">
                             {grn.received_date ? formatDate(grn.received_date) : '—'}
+                          </Td>
+                          <Td>
+                            <Chip variant={chipVariantForStatus(grn.status)}>
+                              {grn.status_label ?? grn.status.replace(/_/g, ' ')}
+                            </Chip>
+                          </Td>
+                          <Td className="text-muted text-sm">
+                            {grn.supplier_invoice_number ? (
+                              <>Invoiced as {grn.supplier_invoice_number}</>
+                            ) : (
+                              'Not invoiced'
+                            )}
                           </Td>
                         </tr>
                       ))}
@@ -916,6 +1013,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                     <thead>
                       <tr className={theadTrCls}>
                         <Th>Bill #</Th>
+                        <Th>Supplier Invoice #</Th>
                         <Th align="right">Amount</Th>
                         <Th align="right">Paid</Th>
                         <Th align="right">Balance</Th>
@@ -928,6 +1026,9 @@ export default function SupplierPurchaseOrderDetailPage() {
                         <tr key={bill.id} className={trCls}>
                           <Td mono className="text-accent">
                             {bill.bill_number}
+                          </Td>
+                          <Td mono className="text-muted">
+                            {bill.supplier_invoice_number ?? '—'}
                           </Td>
                           <Td align="right" mono>
                             {formatPeso(bill.total_amount)}

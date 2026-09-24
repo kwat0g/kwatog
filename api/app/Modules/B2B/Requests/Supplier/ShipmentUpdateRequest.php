@@ -16,10 +16,10 @@ class ShipmentUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'shipped_date'      => ['nullable', 'date'],
+            'shipped_date'      => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
             'carrier'           => ['nullable', 'string', 'max:100'],
             'tracking_number'   => ['nullable', 'string', 'max:100'],
-            'estimated_arrival' => ['nullable', 'date'],
+            'estimated_arrival' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:today'],
             'notes'             => ['nullable', 'string', 'max:500'],
         ];
     }

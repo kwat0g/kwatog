@@ -96,6 +96,8 @@ class BillService
     {
         return $bill->load([
             'vendor',
+            // The supplier's own invoice file, when they submitted one through the portal.
+            'portalShippingDocuments' => static fn ($q) => $q->where('document_type', 'supplier_invoice'),
             'items.expenseAccount:id,code,name',
             'payments.cashAccount:id,code,name',
             'payments.journalEntry:id,entry_number,status',

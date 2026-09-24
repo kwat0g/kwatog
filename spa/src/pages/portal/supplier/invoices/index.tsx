@@ -29,9 +29,16 @@ export default function SupplierInvoicesPage() {
 
   const columns: Column<SupplierBillSummary>[] = [
     {
+      key: 'supplier_invoice_number',
+      header: 'Your invoice #',
+      cell: (r) => (
+        <span className="font-mono font-medium text-accent">{r.supplier_invoice_number ?? '—'}</span>
+      ),
+    },
+    {
       key: 'bill_number',
-      header: 'Invoice #',
-      cell: (r) => <span className="font-mono font-medium text-accent">{r.bill_number}</span>,
+      header: 'OGAMI bill #',
+      cell: (r) => <span className="font-mono text-muted">{r.bill_number}</span>,
     },
     {
       key: 'date',

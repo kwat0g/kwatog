@@ -40,13 +40,13 @@ export default function SupplierDashboardPage() {
             <StatCard
               label="Open POs"
               value={data.open_po_count}
-              helper="Pending fulfillment"
+              helper="Awaiting your response or in progress"
               linkTo="/portal/supplier/purchase-orders"
             />
             <StatCard
-              label="Pending Deliveries"
+              label="Awaiting Delivery"
               value={data.pending_delivery_count}
-              helper="Awaited deliveries"
+              helper="Accepted POs with quantity to deliver"
               linkTo="/portal/supplier/deliveries"
             />
             <StatCard

@@ -38,6 +38,7 @@ use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\B2B\Events\SupplierInvoiceSubmitted;
 use App\Modules\B2B\Listeners\EmailSupplierOnInvoiceSubmitted;
+use App\Modules\B2B\Listeners\EmailSupplierOnPurchaseOrderCancelled;
 use App\Modules\B2B\Services\SupplierPortalDispatchGateway;
 use App\Modules\CRM\Events\ComplaintNcrRequested;
 use App\Modules\CRM\Events\CustomerComplaintUpdated;
@@ -353,6 +354,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(PurchaseOrderSubmitted::class, [NotifyOnPurchaseOrderSubmitted::class, 'handle']);
         Event::listen(PurchaseOrderApproved::class, [PrepareSupplierDispatch::class,           'handle']);
         Event::listen(PurchaseOrderCancelled::class, [CloseSupplierDispatchOnPurchaseOrderCancelled::class, 'handle']);
+        Event::listen(PurchaseOrderCancelled::class, [EmailSupplierOnPurchaseOrderCancelled::class, 'handle']);
         Event::listen(PurchaseOrderSent::class, [CreateDraftGrnOnPoSent::class,           'handle']);
         // T3.3.C — Supplier deterioration alert (score drop >= 20 vs prior month).
         Event::listen(SupplierPerformanceComputed::class, [AlertOnSupplierDeterioration::class, 'handle']);

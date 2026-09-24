@@ -26,6 +26,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { GrnSupplierDocumentsPanel } from './components/GrnSupplierDocumentsPanel';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
@@ -522,6 +523,7 @@ export default function GrnDetailPage() {
             })}
           />
         </Panel>
+        {data.purchase_order && <GrnSupplierDocumentsPanel grnId={data.id} />}
         <Panel title="Header">
           <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-y-3 gap-x-6 text-sm">
             <div>

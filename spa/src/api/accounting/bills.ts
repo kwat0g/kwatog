@@ -33,4 +33,6 @@ export const billsApi = {
  voidPayment: (billId: string, paymentId: string, data: { void_date?: string; reason: string; replacement_payment_id?: string }) =>
  client.post<ApiSuccess<BillPayment>>(`/bills/${billId}/payments/${paymentId}/void`, data).then((r) => r.data.data),
  pdfUrl: (id: string) => `/api/v1/bills/${id}/pdf`,
+ supplierInvoiceUrl: (id: string, documentId: string) =>
+ `/api/v1/bills/${id}/supplier-invoice-attachment/${documentId}`,
 };

@@ -49,7 +49,10 @@ export interface PortalPoSummary {
 
 export interface PortalPoCapabilities {
  can_acknowledge: boolean;
- /** Supplier may accept / propose / decline the PO. */
+ can_accept: boolean;
+ can_propose: boolean;
+ can_decline: boolean;
+ /** Legacy: true if any of can_accept, can_propose, can_decline is true */
  can_respond: boolean;
  can_update_shipment: boolean;
  can_upload_document: boolean;
@@ -77,32 +80,45 @@ export interface PortalPoItem {
  name: string;
  quantity_ordered: string;
  quantity_received: string;
+ quantity_accepted: string;
+ quantity_remaining: string;
+ quantity_schedulable: string | null;
  unit_price: string;
  total_price: string;
+}
+
+export interface PortalShipment {
+ id: string;
+ shipped_date: string | null;
+ carrier: string | null;
+ tracking_number: string | null;
+ estimated_arrival: string | null;
+ notes: string | null;
+ updated_at: string | null;
+}
+
+export interface PortalPoGrn {
+ id: string;
+ grn_number: string;
+ received_date: string | null;
+ status: string;
+ status_label: string;
+ supplier_invoice_number: string | null;
+ can_invoice: boolean;
 }
 
 export interface PortalPoDetail extends PortalPoSummary {
  capabilities: PortalPoCapabilities;
  /** Most recent response this supplier submitted. */
  latest_response: PurchaseOrderResponse | null;
- shipment?: {
-  id: string;
-  shipped_date: string | null;
-  carrier: string | null;
-  tracking_number: string | null;
-  estimated_arrival: string | null;
-  notes: string | null;
-  updated_at: string | null;
- } | null;
+ shipment?: PortalShipment | null;
+ shipments: PortalShipment[];
  items: PortalPoItem[];
- goods_receipt_notes: Array<{
- id: string;
- grn_number: string;
- received_date: string | null;
- }>;
+ goods_receipt_notes: PortalPoGrn[];
   bills: Array<{
  id: string;
  bill_number: string;
+ supplier_invoice_number: string | null;
  total_amount: string;
  paid_amount: string;
  balance: string;
@@ -113,13 +129,24 @@ export interface PortalPoDetail extends PortalPoSummary {
   rfq_reconfirmation?: { id: string; status: string; requested_at: string | null; quote_valid_until: string | null } | null;
 }
 
+export interface SupplierDeliveryLine {
+ item_code: string;
+ item_name: string;
+ quantity_received: string;
+ quantity_accepted: string;
+ quantity_rejected: string;
+ remarks?: string;
+}
+
 export interface SupplierDeliverySummary {
  id: string;
  grn_number: string;
  received_date: string | null;
  status: string;
  status_label: string;
+ rejection_reason: string | null;
  purchase_order: { id: string; po_number: string } | null;
+ lines?: SupplierDeliveryLine[];
 }
 
 // ── Customer portal: Sales Order types ────────────────
@@ -262,7 +289,11 @@ export interface PortalInvoiceDetail extends PortalInvoiceSummary {
 
 export interface SupplierBillSummary {
  id: string;
+ /** OGAMI's accounts-payable number. */
  bill_number: string;
+ /** The supplier's own invoice number, once they have submitted one. */
+ supplier_invoice_number: string | null;
+ supplier_invoice_date: string | null;
  date: string | null;
  total_amount: string;
  balance: string;
@@ -279,12 +310,16 @@ export interface SupplierBillDetail extends SupplierBillSummary {
  unit_price: string;
  total: string;
  }>;
+ goods_receipt_note?: { id: string; grn_number: string } | null;
  payments: Array<{
  id: string;
  amount: string;
  payment_date: string | null;
  payment_method: string;
  payment_method_label?: string;
+ reference_number: string | null;
+ status: string | null;
+ status_label: string | null;
  }>;
 }
 
@@ -498,9 +533,25 @@ export interface DeliverySchedule {
  lines: DeliveryScheduleLine[];
  purchase_order?: { id: string; po_number: string } | null;
  reject_reason?: string | null;
+ cancel_reason?: string | null;
  reviewed_at?: string | null;
+ cancelled_at?: string | null;
+ can_cancel?: boolean;
  created_at: string;
  updated_at: string;
+}
+
+export interface SchedulablePoOption {
+ id: string;
+ po_number: string;
+ items: Array<{
+  id: string;
+  part_number: string;
+  name: string;
+  quantity_ordered: string;
+  quantity_received: string;
+  quantity_schedulable: string;
+ }>;
 }
 
 // ── Internal B2B delivery schedule review ────────────

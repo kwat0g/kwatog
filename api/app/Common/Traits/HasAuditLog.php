@@ -6,6 +6,8 @@ namespace App\Common\Traits;
 
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
@@ -112,16 +114,29 @@ trait HasAuditLog
     /** @return array{0:?int,1:string} */
     private static function auditActor(): array
     {
-        $id = Auth::id();
-        if ($id !== null && User::query()->whereKey($id)->exists()) {
-            return [(int) $id, 'user'];
+        $user = Auth::user();
+
+        // Decide by the authenticated model's class, not by its id. Under a
+        // portal guard Auth::id() is a supplier_portal_users / customer_portal_users
+        // key, and the old "does a users row with this id exist" check then
+        // credited the supplier's action to whichever employee shared the number.
+        if ($user instanceof User) {
+            return [(int) $user->id, 'user'];
+        }
+
+        // users.id cannot hold a portal key; the actor type says who acted.
+        if ($user instanceof SupplierPortalUser) {
+            return [null, 'supplier_portal'];
+        }
+        if ($user instanceof CustomerPortalUser) {
+            return [null, 'customer_portal'];
         }
 
         // Do not lazily provision a user from inside an Eloquent model event.
         // A missing setting/role can raise a database error that leaves the
-        // caller's PostgreSQL transaction aborted even when caught. System and
-        // portal actions are represented explicitly by actor_type with a
-        // nullable user_id instead.
+        // caller's PostgreSQL transaction aborted even when caught. System
+        // actions are represented explicitly by actor_type with a nullable
+        // user_id instead.
         return [null, 'system'];
     }
 

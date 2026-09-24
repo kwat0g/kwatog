@@ -16,6 +16,7 @@ use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\B2B\Models\SupplierShipment;
+use App\Modules\B2B\Services\SupplierInvoiceService;
 use App\Modules\B2B\Services\SupplierPortalService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -89,6 +90,15 @@ class SupplierPortalServiceTest extends TestCase
         return $po->refresh();
     }
 
+    /** Shipments, documents and schedules need an ACCEPTED PO with quantity still to deliver. */
+    private function makeAcceptedPo(Vendor $vendor): PurchaseOrder
+    {
+        $po = $this->makePo($vendor, 'acknowledged');
+        $this->makePoItem($po);
+
+        return $po;
+    }
+
     private function makePoItem(PurchaseOrder $po, string $quantity = '500.00'): PurchaseOrderItem
     {
         return PurchaseOrderItem::create([
@@ -140,7 +150,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $user = $this->makePortalUser($vendor);
         $item = Item::factory()->create();
-        $purchaseOrder = $this->makePo($vendor, 'sent');
+        $purchaseOrder = $this->makePo($vendor, 'acknowledged');
         $purchaseOrderItem = PurchaseOrderItem::create([
             'purchase_order_id' => $purchaseOrder->id,
             'item_id' => $item->id,
@@ -406,10 +416,10 @@ class SupplierPortalServiceTest extends TestCase
         $this->assertSame('2026-08-01', $sent->confirmed_delivery_date->toDateString());
         $this->assertSame('2026-07-20', $sent->expected_delivery_date->toDateString());
 
-        // (c) The supplier note is appended, never replacing internal remarks.
-        $this->assertStringContainsString('Internal purchasing note.', $sent->remarks);
-        $this->assertStringContainsString('Supplier: Confirmed, will ship on time.', $sent->remarks);
-        $this->assertNotSame('Confirmed, will ship on time.', $sent->remarks);
+        // (c) The supplier note is recorded on the accepted response purchasing
+        //     reviews, and internal remarks are left untouched.
+        $this->assertSame('Internal purchasing note.', $sent->remarks);
+        $this->assertSame('Confirmed, will ship on time.', $sent->latestResponse()->value('notes'));
     }
 
     public function test_acknowledge_po_forbidden_for_other_vendor(): void
@@ -453,7 +463,7 @@ class SupplierPortalServiceTest extends TestCase
         $user = $this->makePortalUser($vendor);
         $item = Item::factory()->create();
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
-        $po->forceFill(['status' => 'sent'])->save();
+        $po->forceFill(['status' => 'acknowledged'])->save();
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
             'item_id' => $item->id,
@@ -484,15 +494,15 @@ class SupplierPortalServiceTest extends TestCase
         $this->actAs($user);
         $payload = [
             'bill_number' => 'SUP-INV-001',
-            'date' => '2026-08-10',
-            'is_vatable' => false,
+            'date' => now()->toDateString(),
         ];
 
         $first = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload);
         $first->assertStatus(201)
-            ->assertJsonPath('data.status', 'draft');
+            ->assertJsonPath('data.status', 'draft')
+            ->assertJsonPath('data.supplier_invoice_number', 'SUP-INV-001');
 
-        $bill = Bill::query()->where('vendor_id', $vendor->id)->where('bill_number', 'SUP-INV-001')->firstOrFail();
+        $bill = Bill::query()->where('vendor_id', $vendor->id)->where('supplier_invoice_number', 'SUP-INV-001')->firstOrFail();
         $this->assertSame('draft', $bill->status->value);
         $this->assertNull($bill->journal_entry_id);
         $this->assertSame($item->id, $bill->items()->firstOrFail()->item_id);
@@ -502,7 +512,7 @@ class SupplierPortalServiceTest extends TestCase
             ->assertJsonPath('data.id', $bill->hash_id);
         $this->assertSame(1, Bill::query()
             ->where('vendor_id', $vendor->id)
-            ->where('bill_number', 'SUP-INV-001')
+            ->where('supplier_invoice_number', 'SUP-INV-001')
             ->count());
     }
 
@@ -510,7 +520,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makePo($vendor, 'acknowledged');
         $poItem = $this->makePoItem($po, '2.00');
         $grn = $this->makeAcceptedGrn($po, $vendor, $poItem, '2.00');
         $autoBill = app(BillService::class)->createDraftForGrn($grn, User::factory()->create());
@@ -520,8 +530,7 @@ class SupplierPortalServiceTest extends TestCase
         $this->actAs($user);
         $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
             'bill_number' => 'SUP-INV-AUTO-REUSE',
-            'date' => '2026-08-10',
-            'is_vatable' => false,
+            'date' => now()->toDateString(),
         ]);
 
         $response->assertStatus(201)
@@ -533,7 +542,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makePo($vendor, 'acknowledged');
         $poItem = $this->makePoItem($po, '2.00');
 
         // A receipt that is still pending QC does not satisfy the precondition.
@@ -546,8 +555,7 @@ class SupplierPortalServiceTest extends TestCase
         $this->actAs($user);
         $payload = [
             'bill_number' => 'SUP-INV-GRN-GATE',
-            'date' => '2026-08-10',
-            'is_vatable' => false,
+            'date' => now()->toDateString(),
         ];
 
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", $payload)
@@ -576,14 +584,13 @@ class SupplierPortalServiceTest extends TestCase
         });
 
         try {
-            app(SupplierPortalService::class)->submitInvoice(
+            app(SupplierInvoiceService::class)->submitInvoice(
                 $vendor->id,
                 $user->id,
                 $purchaseOrder,
                 [
                     'bill_number' => 'SUP-INV-EVENT-FAILURE',
-                    'date' => '2026-08-10',
-                    'is_vatable' => false,
+                    'date' => now()->toDateString(),
                 ],
                 UploadedFile::fake()->createWithContent('supplier-invoice.pdf', '%PDF-event-failure%'),
             );
@@ -594,7 +601,7 @@ class SupplierPortalServiceTest extends TestCase
 
         $bill = Bill::query()
             ->where('vendor_id', $vendor->id)
-            ->where('bill_number', 'SUP-INV-EVENT-FAILURE')
+            ->where('supplier_invoice_number', 'SUP-INV-EVENT-FAILURE')
             ->firstOrFail();
         $document = PortalShippingDocument::query()->where('bill_id', $bill->id)->firstOrFail();
 
@@ -631,14 +638,13 @@ class SupplierPortalServiceTest extends TestCase
 
         $failed = false;
         try {
-            app(SupplierPortalService::class)->submitInvoice(
+            app(SupplierInvoiceService::class)->submitInvoice(
                 $vendor->id,
                 $user->id,
                 $purchaseOrder,
                 [
                     'bill_number' => 'SUP-INV-TRANSACTION-FAILURE',
-                    'date' => '2026-08-10',
-                    'is_vatable' => false,
+                    'date' => now()->toDateString(),
                 ],
                 UploadedFile::fake()->createWithContent('supplier-invoice.pdf', $contents),
             );
@@ -649,7 +655,7 @@ class SupplierPortalServiceTest extends TestCase
         $this->assertTrue($failed, 'The injected document uniqueness failure should be rethrown.');
         $this->assertDatabaseMissing('bills', [
             'vendor_id' => $vendor->id,
-            'bill_number' => 'SUP-INV-TRANSACTION-FAILURE',
+            'supplier_invoice_number' => 'SUP-INV-TRANSACTION-FAILURE',
         ]);
         $this->assertSame(1, PortalShippingDocument::query()
             ->where('purchase_order_id', $purchaseOrder->id)
@@ -674,14 +680,13 @@ class SupplierPortalServiceTest extends TestCase
         });
 
         try {
-            app(SupplierPortalService::class)->submitInvoice(
+            app(SupplierInvoiceService::class)->submitInvoice(
                 $vendor->id,
                 $user->id,
                 $purchaseOrder,
                 [
                     'bill_number' => 'SUP-INV-AUDIT-FAILURE',
-                    'date' => '2026-08-10',
-                    'is_vatable' => false,
+                    'date' => now()->toDateString(),
                 ],
                 UploadedFile::fake()->createWithContent('supplier-invoice.pdf', '%PDF-audit-failure%'),
             );
@@ -692,7 +697,7 @@ class SupplierPortalServiceTest extends TestCase
 
         $bill = Bill::query()
             ->where('vendor_id', $vendor->id)
-            ->where('bill_number', 'SUP-INV-AUDIT-FAILURE')
+            ->where('supplier_invoice_number', 'SUP-INV-AUDIT-FAILURE')
             ->firstOrFail();
         $document = PortalShippingDocument::query()->where('bill_id', $bill->id)->firstOrFail();
 
@@ -711,14 +716,14 @@ class SupplierPortalServiceTest extends TestCase
 
         // A fully valid PO for invoicing, so the conflict is the only reason the
         // submission can fail (status and accepted-GRN gates both satisfied).
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makePo($vendor, 'acknowledged');
         $poItem = $this->makePoItem($po, '1.00');
         $this->makeAcceptedGrn($po, $vendor, $poItem, '1.00');
 
         $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
         $existing = $this->createBill($vendor->id);
         $existing->forceFill([
-            'bill_number' => 'SUP-INV-CONFLICT',
+            'supplier_invoice_number' => 'SUP-INV-CONFLICT',
             'purchase_order_id' => $otherPo->id,
         ])->save();
 
@@ -726,14 +731,13 @@ class SupplierPortalServiceTest extends TestCase
 
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
             'bill_number' => 'SUP-INV-CONFLICT',
-            'date' => '2026-08-10',
-            'is_vatable' => false,
+            'date' => now()->toDateString(),
         ])->assertStatus(422)->assertJsonPath('code', 'bill_creation_failed');
 
         $this->assertSame($otherPo->id, $existing->fresh()->purchase_order_id);
         $this->assertSame(1, Bill::query()
             ->where('vendor_id', $vendor->id)
-            ->where('bill_number', 'SUP-INV-CONFLICT')
+            ->where('supplier_invoice_number', 'SUP-INV-CONFLICT')
             ->count());
     }
 
@@ -743,35 +747,34 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makeAcceptedPo($vendor);
         $requiredDate = $po->expected_delivery_date->toDateString();
 
         $this->actAs($user);
 
         $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
-            'shipped_date' => '2026-07-10',
+            'shipped_date' => now()->subDay()->toDateString(),
             'carrier' => 'Maersk',
             'tracking_number' => 'MAEU1234567',
-            'estimated_arrival' => '2026-07-15',
+            'estimated_arrival' => now()->addDays(5)->toDateString(),
             'notes' => 'Container sealed at origin.',
         ]);
 
         $response->assertOk();
 
-        // The supplier's ETA lands on `confirmed_delivery_date`. OGAMI's required
-        // date (`expected_delivery_date`) is the scorecard reference and must not
-        // be movable by the supplier.
-        $this->assertSame('2026-07-15', $po->fresh()->confirmed_delivery_date->toDateString());
+        // An ETA is a forecast, not an agreement: neither OGAMI's required date
+        // nor the agreed (confirmed) date moves when the supplier reports one.
+        $this->assertNull($po->fresh()->confirmed_delivery_date);
         $this->assertSame($requiredDate, $po->fresh()->expected_delivery_date->toDateString());
 
         // Shipment state is a structured row, not free text appended to the PO
         // remarks: receiving and logistics have to be able to query the current
         // carrier/tracking value, and a retry must not contradict history.
         $shipment = SupplierShipment::query()->where('purchase_order_id', $po->id)->firstOrFail();
-        $this->assertSame('2026-07-10', $shipment->shipped_date->toDateString());
+        $this->assertSame(now()->subDay()->toDateString(), $shipment->shipped_date->toDateString());
         $this->assertSame('Maersk', $shipment->carrier);
         $this->assertSame('MAEU1234567', $shipment->tracking_number);
-        $this->assertSame('2026-07-15', $shipment->estimated_arrival->toDateString());
+        $this->assertSame(now()->addDays(5)->toDateString(), $shipment->estimated_arrival->toDateString());
         $this->assertSame('Container sealed at origin.', $shipment->notes);
         $this->assertSame($user->id, $shipment->portal_user_id);
         $this->assertSame(1, $shipment->updates()->count());
@@ -781,7 +784,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makeAcceptedPo($vendor);
 
         $this->actAs($user);
         $url = "/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update";
@@ -939,13 +942,14 @@ class SupplierPortalServiceTest extends TestCase
         }
 
         // And the fields it does expose are the opaque/portal-safe ones. A sent
-        // PO may be acknowledged and shipment-updated, but invoicing stays off
-        // until an accepted GRN exists — matching the service guard exactly.
+        // PO may be answered; fulfilment waits for acceptance and invoicing for
+        // an accepted GRN — matching the service guards exactly.
         $this->assertSame($po->hash_id, $row['id']);
         $this->assertArrayHasKey('capabilities', $row);
-        $this->assertTrue($row['capabilities']['can_update_shipment']);
+        $this->assertTrue($row['capabilities']['can_accept']);
         $this->assertTrue($row['capabilities']['can_acknowledge']);
-        $this->assertTrue($row['capabilities']['can_schedule_delivery']);
+        $this->assertFalse($row['capabilities']['can_update_shipment']);
+        $this->assertFalse($row['capabilities']['can_schedule_delivery']);
         $this->assertFalse($row['capabilities']['can_submit_invoice']);
     }
 
@@ -1078,6 +1082,7 @@ class SupplierPortalServiceTest extends TestCase
         $row = $response->json('data.0');
         $this->assertSame([
             'id', 'grn_number', 'received_date', 'status', 'status_label', 'purchase_order',
+            'rejection_reason', 'lines',
         ], array_keys($row));
         $this->assertSame($ownDelivery->hash_id, $row['id']);
         $this->assertSame($ownDelivery->grn_number, $row['grn_number']);
@@ -1166,14 +1171,14 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makePo($vendor, 'acknowledged');
         $poItem = $this->makePoItem($po);
 
         $this->actAs($user);
 
         $payload = [
             'purchase_order_id' => $po->hash_id,
-            'month' => '2026-08',
+            'month' => now()->format('Y-m'),
             'lines' => [['purchase_order_item_id' => $poItem->hash_id, 'quantity' => 500]],
         ];
 
@@ -1250,8 +1255,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
-        $po->forceFill(['status' => 'sent'])->save();
+        $po = $this->makeAcceptedPo($vendor);
         $this->actAs($user);
         Storage::fake('local');
 
@@ -1277,7 +1281,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makeAcceptedPo($vendor);
         $this->actAs($user);
         Storage::fake('local');
 
@@ -1311,7 +1315,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makeAcceptedPo($vendor);
         $this->actAs($user);
         Storage::fake('local');
 
@@ -1349,8 +1353,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
-        $po->forceFill(['status' => 'sent'])->save();
+        $po = $this->makeAcceptedPo($vendor);
         // Create fixtures before acting as the portal user: HasAuditLog reads
         // Auth::id() (the portal guard after Sanctum::actingAs) and would hit
         // the audit_logs.users FK for portal-user ids.
@@ -1384,7 +1387,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $po = $this->makePo($vendor, 'sent');
+        $po = $this->makeAcceptedPo($vendor);
 
         $this->actAs($user);
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [

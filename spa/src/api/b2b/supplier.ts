@@ -4,6 +4,7 @@ import type {
  SupplierDashboardData,
  PortalPoSummary,
  PortalPoDetail,
+ PortalShipment,
  SupplierBillSummary,
  SupplierBillDetail,
  SupplierDeliverySummary,
@@ -16,6 +17,7 @@ import type {
  PortalSupplierListingInput,
  PortalBulkListingResult,
  RespondToPurchaseOrderPayload,
+ SchedulablePoOption,
 } from '@/types/b2b';
 import type { PaginatedResponse } from '@/types';
 import type { BusinessPolicies } from '@/api/businessPolicies';
@@ -110,8 +112,13 @@ export const supplierPortalApi = {
   },
 
  // ── Shipments ──────────────────────────────────────
- updateShipment: async (poId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {
- const { data } = await portalClient.post<{ message: string }>(`/b2b/supplier/purchase-orders/${poId}/shipment-update`, form);
+ createShipment: async (poId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {
+ const { data } = await portalClient.post<{ data: PortalShipment; message: string }>(`/b2b/supplier/purchase-orders/${poId}/shipments`, form);
+ return data;
+ },
+
+ updateShipmentById: async (poId: string, shipmentId: string, form: { shipped_date?: string; carrier?: string; tracking_number?: string; estimated_arrival?: string; notes?: string }) => {
+ const { data } = await portalClient.put<{ data: PortalShipment; message: string }>(`/b2b/supplier/purchase-orders/${poId}/shipments/${shipmentId}`, form);
  return data;
  },
 
@@ -139,17 +146,27 @@ export const supplierPortalApi = {
  },
 
  // ── Delivery Schedules ──────────────────────────────
- listDeliverySchedules: async (params?: { page?: number; per_page?: number }) => {
+ listDeliverySchedules: async (params?: { page?: number; per_page?: number; status?: string; purchase_order_id?: string }) => {
  const { data } = await portalClient.get<PaginatedResponse<DeliverySchedule>>('/b2b/supplier/delivery-schedules', { params });
  return data;
+ },
+
+ getEligiblePurchaseOrders: async () => {
+ const { data } = await portalClient.get<{ data: SchedulablePoOption[] }>('/b2b/supplier/delivery-schedules/purchase-orders');
+ return data.data;
  },
 
  createDeliverySchedule: async (form: {
  purchase_order_id: string;
  month: string;
- lines: Array<{ purchase_order_item_id: string; product_name?: string; quantity: number; notes?: string }>;
+ lines: Array<{ purchase_order_item_id: string; product_name?: string; quantity: string; notes?: string }>;
  }) => {
  const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>('/b2b/supplier/delivery-schedules', form);
+ return data;
+ },
+
+ cancelDeliverySchedule: async (id: string, reason: string) => {
+ const { data } = await portalClient.post<{ data: DeliverySchedule; message: string }>(`/b2b/supplier/delivery-schedules/${id}/cancel`, { reason });
  return data;
  },
 

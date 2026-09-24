@@ -29,11 +29,15 @@ class DeliverySchedule extends Model
         'reviewed_by',
         'reviewed_at',
         'reject_reason',
+        'cancelled_at',
+        'cancel_reason',
+        'cancelled_by_portal_user_id',
     ];
 
     protected $casts = [
         'status' => DeliveryScheduleStatus::class,
         'reviewed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'lines' => 'array',
     ];
 
@@ -55,6 +59,11 @@ class DeliverySchedule extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function cancelledByPortalUser(): BelongsTo
+    {
+        return $this->belongsTo(SupplierPortalUser::class, 'cancelled_by_portal_user_id');
     }
 
     /**

@@ -87,6 +87,7 @@ export default function SupplierPurchaseOrdersPage() {
         { value: 'partially_received', label: 'Partially received' },
         { value: 'received', label: 'Received' },
         { value: 'closed', label: 'Closed' },
+        { value: 'cancelled', label: 'Cancelled' },
       ],
     },
   ];

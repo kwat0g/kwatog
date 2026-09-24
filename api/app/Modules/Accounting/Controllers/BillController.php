@@ -20,7 +20,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\B2B\Models\PortalShippingDocument;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class BillController
 {
@@ -160,5 +162,24 @@ class BillController
         }
 
         return (new BillPaymentResource($payment))->response()->setStatusCode(200);
+    }
+
+    /**
+     * Download a portal shipping document (supplier-submitted invoice).
+     */
+    public function downloadSupplierInvoice(Bill $bill, PortalShippingDocument $document): mixed
+    {
+        // Only the supplier's invoice attached to THIS bill; shipping documents
+        // have their own PO-scoped download.
+        abort_if((int) $document->bill_id !== (int) $bill->id || $document->document_type !== 'supplier_invoice', 404);
+
+        if (! Storage::disk('local')->exists($document->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        return Storage::disk('local')->download(
+            $document->file_path,
+            $document->original_filename
+        );
     }
 }

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LuPlus, LuX } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { DeliverySchedule, PortalPoSummary } from '@/types/b2b';
+import type { DeliverySchedule } from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -12,16 +12,23 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
-import { formatDate } from '@/lib/formatDate';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
+import { formatDate, localIsoDate } from '@/lib/formatDate';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 
 type ScheduleFilters = { page: number; per_page: number };
-type ScheduleLineForm = { purchase_order_item_id: string; quantity: number; notes: string };
+type ScheduleLineForm = { purchase_order_item_id: string; quantity: string; notes: string };
 type ScheduleForm = { purchase_order_id: string; month: string; lines: ScheduleLineForm[] };
 
-const emptyLine = (itemId = ''): ScheduleLineForm => ({ purchase_order_item_id: itemId, quantity: 0, notes: '' });
+const emptyLine = (itemId = ''): ScheduleLineForm => ({ purchase_order_item_id: itemId, quantity: '', notes: '' });
+// Manila calendar month, not UTC: the API rejects months before the current one.
+const currentMonth = () => localIsoDate().slice(0, 7);
+
+function isValidQuantity(val: string): boolean {
+  return /^\d+(\.\d{1,2})?$/.test(val);
+}
 
 export default function SupplierDeliverySchedulesPage() {
   const queryClient = useQueryClient();
@@ -29,9 +36,10 @@ export default function SupplierDeliverySchedulesPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ScheduleForm>({
     purchase_order_id: '',
-    month: new Date().toISOString().slice(0, 7),
+    month: currentMonth(),
     lines: [emptyLine()],
   });
+  const [cancelingScheduleId, setCancelingScheduleId] = useState<string | null>(null);
   const initializedPo = useRef<string | null>(null);
 
   const schedules = useQuery({
@@ -39,39 +47,40 @@ export default function SupplierDeliverySchedulesPage() {
     queryFn: () => supplierPortalApi.listDeliverySchedules(filters),
     placeholderData: (previous) => previous,
   });
-  const purchaseOrders = useQuery({
-    queryKey: ['portal', 'supplier', 'schedule-po-options'],
-    queryFn: () => supplierPortalApi.listPos({ per_page: 100 }),
+
+  const eligiblePos = useQuery({
+    queryKey: ['portal', 'supplier', 'eligible-pos'],
+    queryFn: () => supplierPortalApi.getEligiblePurchaseOrders(),
     enabled: showForm,
   });
-  const selectedPo = useQuery({
-    queryKey: ['portal', 'supplier', 'schedule-po', form.purchase_order_id],
-    queryFn: () => supplierPortalApi.getPo(form.purchase_order_id),
-    enabled: showForm && !!form.purchase_order_id,
-  });
+
+  const selectedPo = eligiblePos.data?.find((po) => po.id === form.purchase_order_id);
 
   useEffect(() => {
-    const po = selectedPo.data;
-    if (!po || initializedPo.current === po.id) return;
-    initializedPo.current = po.id;
-    setForm((current) => ({ ...current, lines: po.items.map((item) => emptyLine(item.id)) }));
-  }, [selectedPo.data]);
+    if (!selectedPo || initializedPo.current === selectedPo.id) return;
+    initializedPo.current = selectedPo.id;
+    // Pre-fill with first item that has schedulable qty > 0
+    const firstSchedulableItem = selectedPo.items.find((item) => parseFloat(item.quantity_schedulable) > 0);
+    setForm((current) => ({ ...current, lines: [emptyLine(firstSchedulableItem?.id ?? '')] }));
+  }, [selectedPo]);
 
   const submit = useMutation({
     mutationFn: () => supplierPortalApi.createDeliverySchedule({
       purchase_order_id: form.purchase_order_id,
       month: form.month,
-      lines: form.lines.map((line) => ({
-        purchase_order_item_id: line.purchase_order_item_id,
-        quantity: line.quantity,
-        notes: line.notes || undefined,
-      })),
+      lines: form.lines
+        .filter((line) => line.purchase_order_item_id && line.quantity)
+        .map((line) => ({
+          purchase_order_item_id: line.purchase_order_item_id,
+          quantity: line.quantity,
+          notes: line.notes || undefined,
+        })),
     }),
     onSuccess: () => {
       toast.success('Delivery schedule submitted.');
       setShowForm(false);
       initializedPo.current = null;
-      setForm({ purchase_order_id: '', month: new Date().toISOString().slice(0, 7), lines: [emptyLine()] });
+      setForm({ purchase_order_id: '', month: currentMonth(), lines: [emptyLine()] });
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'delivery-schedules'] });
     },
     onError: (error: Error & { response?: { data?: { message?: string } } }) => {
@@ -79,33 +88,80 @@ export default function SupplierDeliverySchedulesPage() {
     },
   });
 
-  // Use the schedule-specific capability, not can_update_shipment. They happen
- // to share a status set today; reusing the wrong flag silently breaks if the
- // two ever diverge.
- const selectablePos: PortalPoSummary[] = (purchaseOrders.data?.data ?? []).filter((po) => po.capabilities?.can_schedule_delivery === true);
+  const cancel = useMutation({
+    mutationFn: ({ scheduleId, reason }: { scheduleId: string; reason: string }) =>
+      supplierPortalApi.cancelDeliverySchedule(scheduleId, reason),
+    onSuccess: () => {
+      toast.success('Delivery schedule cancelled.');
+      setCancelingScheduleId(null);
+      queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'delivery-schedules'] });
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+      toast.error(error.response?.data?.message ?? 'Could not cancel the delivery schedule.');
+    },
+  });
 
   const selectPo = (id: string) => {
     initializedPo.current = null;
     setForm((current) => ({ ...current, purchase_order_id: id, lines: [emptyLine()] }));
   };
 
-  const updateLine = (index: number, field: keyof ScheduleLineForm, value: string | number) => {
+  const updateLine = (index: number, field: keyof ScheduleLineForm, value: string) => {
     setForm((current) => ({
       ...current,
-      lines: current.lines.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line),
+      lines: current.lines.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, [field]: value } : line
+      ),
+    }));
+  };
+
+  const addLine = () => {
+    if (!selectedPo) return;
+    // Find first item not already chosen with schedulable > 0
+    const usedIds = new Set(form.lines.map((l) => l.purchase_order_item_id));
+    const nextItem = selectedPo.items.find(
+      (item) => !usedIds.has(item.id) && parseFloat(item.quantity_schedulable) > 0
+    );
+    setForm((current) => ({
+      ...current,
+      lines: [...current.lines, emptyLine(nextItem?.id ?? '')],
     }));
   };
 
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.purchase_order_id || !form.month || form.lines.length === 0 || form.lines.some((line) => !line.purchase_order_item_id || line.quantity <= 0)) {
-      toast.error('Choose a purchase-order item and enter a positive quantity for every line.');
+    if (
+      !form.purchase_order_id ||
+      !form.month ||
+      form.lines.length === 0 ||
+      form.lines.some((line) => !line.purchase_order_item_id || !line.quantity || !isValidQuantity(line.quantity))
+    ) {
+      toast.error('Choose a purchase-order item and enter a valid quantity for every line.');
       return;
     }
+
+    // Validate quantities against schedulable amounts
+    const errors: string[] = [];
+    form.lines.forEach((line, index) => {
+      const item = selectedPo?.items.find((i) => i.id === line.purchase_order_item_id);
+      if (!item) return;
+      const schedulable = parseFloat(item.quantity_schedulable);
+      const qty = parseFloat(line.quantity);
+      if (qty > schedulable) {
+        errors.push(`Line ${index + 1} (${item.name}) exceeds schedulable quantity (max ${item.quantity_schedulable})`);
+      }
+    });
+
+    if (errors.length > 0) {
+      toast.error(errors[0]);
+      return;
+    }
+
     submit.mutate();
   };
 
   const schedulesData: DeliverySchedule[] = schedules.data?.data ?? [];
+  const hasEligiblePos = (eligiblePos.data ?? []).some((po) => po.items.some((item) => parseFloat(item.quantity_schedulable) > 0));
 
   return (
     <div>
@@ -124,6 +180,8 @@ export default function SupplierDeliverySchedulesPage() {
             size="sm"
             icon={showForm ? <LuX size={14} /> : <LuPlus size={14} />}
             onClick={() => setShowForm((open) => !open)}
+            disabled={!showForm && !hasEligiblePos}
+            title={!hasEligiblePos ? 'Accept a purchase order with undelivered quantity to schedule deliveries' : undefined}
           >
             {showForm ? 'Cancel' : 'New schedule'}
           </Button>
@@ -135,14 +193,31 @@ export default function SupplierDeliverySchedulesPage() {
           <Panel title="New delivery schedule">
             <form onSubmit={submitForm} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Select label="Purchase order" required value={form.purchase_order_id} onChange={(event) => selectPo(event.target.value)}>
+                <Select
+                  label="Purchase order"
+                  required
+                  value={form.purchase_order_id}
+                  onChange={(event) => selectPo(event.target.value)}
+                >
                   <option value="">Select PO…</option>
-                  {selectablePos.map((po) => <option key={po.id} value={po.id}>{po.po_number}</option>)}
+                  {(eligiblePos.data ?? []).map((po) => (
+                    <option key={po.id} value={po.id}>
+                      {po.po_number}
+                    </option>
+                  ))}
                 </Select>
-                <Input label="Month" type="month" required value={form.month} onChange={(event) => setForm((current) => ({ ...current, month: event.target.value }))} />
+                <Input
+                  label="Month"
+                  type="month"
+                  required
+                  value={form.month}
+                  min={currentMonth()}
+                  onChange={(event) => setForm((current) => ({ ...current, month: event.target.value }))}
+                />
               </div>
-              {selectedPo.isLoading && <SkeletonTable columns={3} rows={2} />}
-              {selectedPo.data && (
+
+              {eligiblePos.isLoading && <SkeletonTable columns={3} rows={2} />}
+              {selectedPo && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-muted">PO line items</span>
@@ -151,47 +226,96 @@ export default function SupplierDeliverySchedulesPage() {
                       variant="ghost"
                       size="sm"
                       icon={<LuPlus size={12} />}
-                      onClick={() => setForm((current) => ({ ...current, lines: [...current.lines, emptyLine(selectedPo.data?.items[0]?.id ?? '')] }))}
+                      onClick={() => addLine()}
                     >
                       Add line
                     </Button>
                   </div>
-                  {form.lines.map((line, index) => (
-                    <div
-                      key={`${line.purchase_order_item_id}-${index}`}
-                      className="grid gap-2 rounded-md border border-default bg-surface p-2 sm:grid-cols-[minmax(0,1fr)_6rem_minmax(8rem,12rem)_auto] sm:items-start"
-                    >
-                      <Select fieldSize="sm" aria-label="Purchase-order item" value={line.purchase_order_item_id} onChange={(event) => updateLine(index, 'purchase_order_item_id', event.target.value)}>
-                        <option value="">Select item…</option>
-                        {selectedPo.data.items.map((item) => <option key={item.id} value={item.id}>{item.part_number} — {item.name}</option>)}
-                      </Select>
-                      <Input fieldSize="sm" type="number" step="0.01" min="0.01" placeholder="Qty" aria-label="Quantity" className="font-mono tabular-nums" containerClassName="min-w-0 sm:w-24" value={line.quantity || ''} onChange={(event) => updateLine(index, 'quantity', Number(event.target.value) || 0)} />
-                      <Input fieldSize="sm" type="text" placeholder="Notes" aria-label="Notes" containerClassName="min-w-0 sm:w-32" value={line.notes} onChange={(event) => updateLine(index, 'notes', event.target.value)} maxLength={500} />
-                      {form.lines.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          iconOnly
-                          icon={<LuX size={14} />}
-                          onClick={() => setForm((current) => ({ ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) }))}
-                          aria-label="Remove line"
-                          className="justify-self-end text-muted hover:text-danger-fg sm:justify-self-auto"
+                  {form.lines.map((line, index) => {
+                    const item = selectedPo.items.find((i) => i.id === line.purchase_order_item_id);
+                    const isItemSelected = !!item;
+                    const usedIds = new Set(form.lines.map((l, i) => (i !== index ? l.purchase_order_item_id : null)));
+
+                    return (
+                      <div
+                        key={`${line.purchase_order_item_id}-${index}`}
+                        className="grid gap-2 rounded-md border border-default bg-surface p-2 sm:grid-cols-[minmax(0,1fr)_6rem_minmax(8rem,12rem)_auto] sm:items-start"
+                      >
+                        <div>
+                          <Select
+                            fieldSize="sm"
+                            aria-label="Purchase-order item"
+                            value={line.purchase_order_item_id}
+                            onChange={(event) => updateLine(index, 'purchase_order_item_id', event.target.value)}
+                          >
+                            <option value="">Select item…</option>
+                            {selectedPo.items.map((poItem) => (
+                              <option
+                                key={poItem.id}
+                                value={poItem.id}
+                                disabled={usedIds.has(poItem.id)}
+                              >
+                                {poItem.part_number} — {poItem.name}
+                              </option>
+                            ))}
+                          </Select>
+                          {isItemSelected && (
+                            <div className="mt-1 text-xs text-muted">
+                              Schedulable: <span className="font-mono">{item.quantity_schedulable}</span>
+                            </div>
+                          )}
+                        </div>
+                        <Input
+                          fieldSize="sm"
+                          type="text"
+                          placeholder="Qty"
+                          aria-label="Quantity"
+                          className="font-mono tabular-nums"
+                          containerClassName="min-w-0 sm:w-24"
+                          value={line.quantity}
+                          onChange={(event) => updateLine(index, 'quantity', event.target.value)}
+                          pattern="^\d+(\.\d{1,2})?$"
                         />
-                      )}
-                    </div>
-                  ))}
+                        <Input
+                          fieldSize="sm"
+                          type="text"
+                          placeholder="Notes"
+                          aria-label="Notes"
+                          containerClassName="min-w-0 sm:w-32"
+                          value={line.notes}
+                          onChange={(event) => updateLine(index, 'notes', event.target.value)}
+                          maxLength={500}
+                        />
+                        {form.lines.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            iconOnly
+                            icon={<LuX size={14} />}
+                            onClick={() => setForm((current) => ({ ...current, lines: current.lines.filter((_, i) => i !== index) }))}
+                            aria-label="Remove line"
+                            className="justify-self-end text-muted hover:text-danger-fg sm:justify-self-auto"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               <div className="flex justify-end gap-2 pt-2 border-t border-default">
-                <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button type="submit" variant="primary" size="sm" loading={submit.isPending}>Submit schedule</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" size="sm" loading={submit.isPending}>
+                  Submit schedule
+                </Button>
               </div>
             </form>
           </Panel>
         )}
 
-        {schedules.isLoading && !schedules.data && <SkeletonTable columns={3} rows={6} />}
+        {schedules.isLoading && !schedules.data && <SkeletonTable columns={4} rows={6} />}
 
         {schedules.isError && (
           <EmptyState
@@ -223,30 +347,59 @@ export default function SupplierDeliverySchedulesPage() {
                     <Chip variant={chipVariantForStatus(schedule.status)}>
                       {schedule.status_label ?? schedule.status}
                     </Chip>
-                    <span>Submitted {formatDate(schedule.created_at)}</span>
+                    <span className="text-sm">Submitted {formatDate(schedule.created_at)}</span>
                   </span>
                 }
                 noPadding
               >
-                <div className="overflow-x-auto">
-                  <table className={tableCls}>
-                    <thead>
-                      <tr className={theadTrCls}>
-                        <Th>Product</Th>
-                        <Th align="right">Qty</Th>
-                        <Th>Notes</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {schedule.lines.map((line, index) => (
-                        <tr key={index} className={trCls}>
-                          <Td>{line.product_name}</Td>
-                          <Td align="right" mono className="font-medium">{line.quantity}</Td>
-                          <Td className="text-muted">{line.notes ?? '—'}</Td>
+                <div className="space-y-3">
+                  {(schedule.reject_reason || schedule.cancel_reason) && (
+                    <div className="border-b border-default px-4 pt-3">
+                      {schedule.reject_reason && (
+                        <div className="text-sm">
+                          <span className="font-medium text-orange-fg">Rejection reason:</span> {schedule.reject_reason}
+                        </div>
+                      )}
+                      {schedule.cancel_reason && (
+                        <div className="text-sm">
+                          <span className="font-medium text-slate-fg">Cancellation reason:</span> {schedule.cancel_reason}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <table className={tableCls}>
+                      <thead>
+                        <tr className={theadTrCls}>
+                          <Th>Product</Th>
+                          <Th align="right">Qty</Th>
+                          <Th>Notes</Th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {schedule.lines.map((line, index) => (
+                          <tr key={index} className={trCls}>
+                            <Td>{line.product_name}</Td>
+                            <Td align="right" mono className="font-medium">
+                              {line.quantity}
+                            </Td>
+                            <Td className="text-muted">{line.notes ?? '—'}</Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {schedule.can_cancel && (
+                    <div className="flex justify-end gap-2 border-t border-default px-4 py-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setCancelingScheduleId(schedule.id)}
+                      >
+                        Cancel schedule
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Panel>
             ))}
@@ -262,6 +415,23 @@ export default function SupplierDeliverySchedulesPage() {
           />
         )}
       </div>
+
+      <ReasonDialog
+        isOpen={!!cancelingScheduleId}
+        title="Cancel delivery schedule"
+        description="The quantity on this schedule becomes available to schedule again. OGAMI is notified if it had already acknowledged the plan."
+        reasonLabel="Reason for cancellation"
+        confirmLabel="Cancel schedule"
+        cancelLabel="Keep schedule"
+        variant="danger"
+        onConfirm={(reason) => {
+          if (cancelingScheduleId) {
+            cancel.mutate({ scheduleId: cancelingScheduleId, reason });
+          }
+        }}
+        onClose={() => setCancelingScheduleId(null)}
+        pending={cancel.isPending}
+      />
     </div>
   );
 }

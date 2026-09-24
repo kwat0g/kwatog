@@ -184,9 +184,16 @@ class PurchaseOrder extends Model
         return $this->hasOne(SupplierOrderDispatch::class);
     }
 
+    /** The supplier's most recent shipment. */
     public function supplierShipment(): HasOne
     {
-        return $this->hasOne(SupplierShipment::class);
+        return $this->hasOne(SupplierShipment::class)->latestOfMany();
+    }
+
+    /** Every shipment the supplier reported against this PO, newest first. */
+    public function supplierShipments(): HasMany
+    {
+        return $this->hasMany(SupplierShipment::class)->orderByDesc('id');
     }
 
     public function approver(): BelongsTo

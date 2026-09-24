@@ -95,6 +95,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/{bill}/payments/{payment}/void', [BillController::class, 'voidPayment'])
             ->middleware('permission:accounting.bills.void_payment');
         Route::get('/{bill}/pdf', [PdfController::class,  'bill'])->middleware('permission:accounting.bills.view');
+        Route::get('/{bill}/supplier-invoice-attachment/{document}', [BillController::class, 'downloadSupplierInvoice'])
+            ->middleware('permission:accounting.bills.view');
     });
 
     /* ─── Customers + Invoices + Collections ─────────── */

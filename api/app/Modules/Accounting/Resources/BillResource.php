@@ -12,10 +12,13 @@ class BillResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'             => $this->hash_id,
-            'bill_number'    => $this->bill_number,
-            'date'           => optional($this->date)->toDateString(),
-            'due_date'       => optional($this->due_date)->toDateString(),
+            'id'                      => $this->hash_id,
+            'bill_number'             => $this->bill_number,
+            'supplier_invoice_number' => $this->supplier_invoice_number,
+            'supplier_invoice_date'   => optional($this->supplier_invoice_date)->toDateString(),
+            'supplier_invoice_submitted_at' => optional($this->supplier_invoice_submitted_at)->toIso8601String(),
+            'date'                    => optional($this->date)->toDateString(),
+            'due_date'                => optional($this->due_date)->toDateString(),
             'is_vatable'     => (bool) $this->is_vatable,
             'withholding_tax_type' => $this->withholding_tax_type?->value,
             'ewt_rate'       => (string) ($this->ewt_rate ?? '0.0000'),
@@ -82,6 +85,12 @@ class BillResource extends JsonResource
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),
             'items'          => BillItemResource::collection($this->whenLoaded('items')),
+            // Supplier-submitted invoice attachment.
+            'supplier_invoice_attachment' => $this->whenLoaded('portalShippingDocuments', function (): ?array {
+                $document = $this->portalShippingDocuments->firstWhere('document_type', 'supplier_invoice');
+
+                return $document ? ['id' => $document->hash_id, 'original_filename' => $document->original_filename] : null;
+            }),
             // Each payment needs its bill to project a pending payment's EWT.
             'payments'       => BillPaymentResource::collection($this->whenLoaded('payments', fn () => $this->payments->each(
                 fn ($payment) => $payment->setRelation('bill', $this->resource),

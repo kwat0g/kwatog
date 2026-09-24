@@ -29,6 +29,7 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { ShortClosePoModal } from './components/ShortClosePoModal';
+import { SupplierActivityPanel } from './components/SupplierActivityPanel';
 import { ChainHeader, ApprovalTimeline, LinkedRecords } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -664,6 +665,9 @@ export default function PurchaseOrderDetailPage() {
                 )}
               </div>
             </Panel>
+          )}
+          {!['draft', 'pending_approval', 'approved'].includes(data.status) && (
+            <SupplierActivityPanel purchaseOrderId={data.id} />
           )}
           <Panel title="Line items">
             <div className="overflow-x-auto">

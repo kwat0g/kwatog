@@ -18,7 +18,9 @@ class SupplierBillResource extends JsonResource
         return [
             'id' => $this->hash_id,
             'bill_number' => $this->bill_number,
+            'supplier_invoice_number' => $this->supplier_invoice_number,
             'date' => optional($this->date)->toDateString(),
+            'supplier_invoice_date' => optional($this->supplier_invoice_date)->toDateString(),
             'due_date' => optional($this->due_date)->toDateString(),
             'is_vatable' => (bool) $this->is_vatable,
             'subtotal' => (string) $this->subtotal,
@@ -33,6 +35,10 @@ class SupplierBillResource extends JsonResource
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id' => $this->purchaseOrder->hash_id,
                 'po_number' => $this->purchaseOrder->po_number,
+            ] : null),
+            'goods_receipt_note' => $this->whenLoaded('goodsReceiptNote', fn () => $this->goodsReceiptNote ? [
+                'id' => $this->goodsReceiptNote->hash_id,
+                'grn_number' => $this->goodsReceiptNote->grn_number,
             ] : null),
             'vendor' => $this->whenLoaded('vendor', fn () => $this->vendor ? [
                 'id' => $this->vendor->hash_id,

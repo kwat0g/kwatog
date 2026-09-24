@@ -34,23 +34,26 @@ class Bill extends Model
     ];
 
     protected $casts = [
-        'date'                     => 'date',
-        'due_date'                 => 'date',
-        'is_vatable'               => 'boolean',
-        'withholding_tax_type'     => \App\Modules\Accounting\Enums\WithholdingTaxType::class,
-        'ewt_rate'                 => 'decimal:4',
-        'ewt_amount'               => 'decimal:2',
-        'subtotal'                 => 'decimal:2',
-        'vat_amount'               => 'decimal:2',
-        'total_amount'             => 'decimal:2',
-        'amount_paid'              => 'decimal:2',
-        'balance'                  => 'decimal:2',
-        'status'                   => BillStatus::class,
-        'has_variances'            => 'boolean',
-        'three_way_match_snapshot' => 'array',
-        'three_way_overridden'     => 'boolean',
-        'three_way_overridden_at'  => 'datetime', 'exception_approved_at' => 'datetime',
-        'cancelled_at'             => 'datetime',
+        'date'                         => 'date',
+        'due_date'                     => 'date',
+        'is_vatable'                   => 'boolean',
+        'withholding_tax_type'         => \App\Modules\Accounting\Enums\WithholdingTaxType::class,
+        'ewt_rate'                     => 'decimal:4',
+        'ewt_amount'                   => 'decimal:2',
+        'subtotal'                     => 'decimal:2',
+        'vat_amount'                   => 'decimal:2',
+        'total_amount'                 => 'decimal:2',
+        'amount_paid'                  => 'decimal:2',
+        'balance'                      => 'decimal:2',
+        'status'                       => BillStatus::class,
+        'has_variances'                => 'boolean',
+        'three_way_match_snapshot'     => 'array',
+        'three_way_overridden'         => 'boolean',
+        'three_way_overridden_at'      => 'datetime',
+        'exception_approved_at'        => 'datetime',
+        'cancelled_at'                 => 'datetime',
+        'supplier_invoice_date'        => 'date',
+        'supplier_invoice_submitted_at' => 'datetime',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -93,6 +96,12 @@ class Bill extends Model
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    /** Portal shipping documents (e.g. supplier-submitted invoices). */
+    public function portalShippingDocuments(): HasMany
+    {
+        return $this->hasMany(\App\Modules\B2B\Models\PortalShippingDocument::class);
     }
 
     public function creator(): BelongsTo

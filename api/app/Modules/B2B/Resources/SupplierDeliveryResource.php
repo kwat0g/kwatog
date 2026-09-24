@@ -26,6 +26,16 @@ class SupplierDeliveryResource extends JsonResource
                 'id' => $this->purchaseOrder->hash_id,
                 'po_number' => $this->purchaseOrder->po_number,
             ] : null,
+            // The rejection reason is recorded once per receipt, not per line.
+            'rejection_reason' => $this->rejected_reason,
+            'lines' => $this->whenLoaded('items', fn () => $this->items->map(static fn ($line): array => [
+                'item_code' => $line->item?->code ?? '—',
+                'item_name' => $line->item?->name ?? '—',
+                'quantity_received' => (string) $line->quantity_received,
+                'quantity_accepted' => (string) $line->quantity_accepted,
+                'quantity_rejected' => bcsub((string) $line->quantity_received, (string) $line->quantity_accepted, 3),
+                'remarks' => $line->remarks,
+            ])->values()->all()),
         ];
     }
 }

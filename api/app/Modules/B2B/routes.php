@@ -6,10 +6,14 @@ use App\Common\Controllers\BusinessPolicyController;
 use App\Modules\B2B\Controllers\CustomerAuthController;
 use App\Modules\B2B\Controllers\CustomerPortalController;
 use App\Modules\B2B\Controllers\InternalDeliveryScheduleController;
+use App\Modules\B2B\Controllers\InternalSupplierActivityController;
 use App\Modules\B2B\Controllers\PortalAccessController;
 use App\Modules\B2B\Controllers\SupplierAuthController;
 use App\Modules\B2B\Controllers\SupplierListingPortalController;
+use App\Modules\B2B\Controllers\SupplierDeliveryScheduleController;
+use App\Modules\B2B\Controllers\SupplierInvoiceController;
 use App\Modules\B2B\Controllers\SupplierPortalController;
+use App\Modules\B2B\Controllers\SupplierShipmentController;
 use App\Modules\B2B\Controllers\SupplierRfqController;
 use App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware;
 use App\Modules\B2B\Middleware\CheckPortalPasswordExpiry;
@@ -47,19 +51,23 @@ Route::prefix('b2b/supplier')->group(function () {
             Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
             Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo'])->middleware('throttle:sensitive');
             Route::post('purchase-orders/{purchaseOrder}/respond', [SupplierPortalController::class, 'respondToPo'])->middleware('throttle:sensitive');
-            Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment'])->middleware('throttle:sensitive');
-            Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments'])->middleware('throttle:sensitive');
-            Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
-            Route::get('purchase-orders/shipping-documents/options', [SupplierPortalController::class, 'shippingDocumentOptions']);
-            Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierPortalController::class, 'submitInvoice'])->middleware('throttle:sensitive');
-            Route::get('shipping-documents/{id}/download', [SupplierPortalController::class, 'downloadShippingDocument']);
+            Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierShipmentController::class, 'updateShipment'])->middleware('throttle:sensitive');
+            Route::post('purchase-orders/{purchaseOrder}/shipments', [SupplierShipmentController::class, 'storeShipment'])->middleware('throttle:sensitive');
+            Route::put('purchase-orders/{purchaseOrder}/shipments/{supplierShipment}', [SupplierShipmentController::class, 'updateShipmentById'])->middleware('throttle:sensitive');
+            Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierShipmentController::class, 'uploadShippingDocuments'])->middleware('throttle:sensitive');
+            Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierShipmentController::class, 'shippingDocuments']);
+            Route::get('purchase-orders/shipping-documents/options', [SupplierShipmentController::class, 'shippingDocumentOptions']);
+            Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierInvoiceController::class, 'submitInvoice'])->middleware('throttle:sensitive');
+            Route::get('shipping-documents/{id}/download', [SupplierShipmentController::class, 'downloadShippingDocument']);
             Route::get('invoices', [SupplierPortalController::class, 'invoices']);
             Route::get('invoices/{invoice}', [SupplierPortalController::class, 'invoiceDetail']);
             Route::get('invoices/{invoice}/pdf', [SupplierPortalController::class, 'invoicePdf']);
             Route::get('deliveries', [SupplierPortalController::class, 'deliveries']);
             Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
-            Route::get('delivery-schedules', [SupplierPortalController::class, 'deliverySchedules']);
-            Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule'])->middleware('throttle:sensitive');
+            Route::get('delivery-schedules', [SupplierDeliveryScheduleController::class, 'deliverySchedules']);
+            Route::get('delivery-schedules/purchase-orders', [SupplierDeliveryScheduleController::class, 'eligiblePurchaseOrders']);
+            Route::post('delivery-schedules', [SupplierDeliveryScheduleController::class, 'storeDeliverySchedule'])->middleware('throttle:sensitive');
+            Route::post('delivery-schedules/{deliverySchedule}/cancel', [SupplierDeliveryScheduleController::class, 'cancel'])->middleware('throttle:sensitive');
             // Supplier Item Listings — supplier-submitted offers, reviewed by Purchasing.
             Route::get('item-catalog', [SupplierListingPortalController::class, 'catalog']);
             Route::get('item-listings', [SupplierListingPortalController::class, 'index']);
@@ -128,6 +136,18 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'featu
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
         Route::post('delivery-schedules/{deliverySchedule}/reject', [InternalDeliveryScheduleController::class, 'reject'])
             ->middleware(['permission:b2b.portal_access.manage', 'throttle:sensitive']);
+    });
+
+/* ─── Internal: what suppliers reported through the portal ───────── */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'feature:b2b_portals'])
+    ->prefix('b2b')
+    ->group(function (): void {
+        Route::get('purchase-orders/{purchaseOrder}/supplier-activity', [InternalSupplierActivityController::class, 'purchaseOrderActivity'])
+            ->middleware('permission:purchasing.view');
+        Route::get('goods-receipt-notes/{goodsReceiptNote}/supplier-documents', [InternalSupplierActivityController::class, 'grnSupplierDocuments'])
+            ->middleware('permission:inventory.view');
+        // Gated in the controller: purchasing row scope OR inventory receiving.
+        Route::get('supplier-documents/{id}/download', [InternalSupplierActivityController::class, 'downloadDocument']);
     });
 
 /* ─── Customer Portal ─────────────────────────────────────────── */

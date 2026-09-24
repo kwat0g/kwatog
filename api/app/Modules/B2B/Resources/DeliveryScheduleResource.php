@@ -62,11 +62,14 @@ class DeliveryScheduleResource extends JsonResource
                 'po_number' => $this->purchaseOrder->po_number,
             ] : null),
             'reject_reason'  => $this->reject_reason,
+            'cancel_reason'  => $this->cancel_reason,
             'reviewed_at'    => optional($this->reviewed_at)->toIso8601String(),
+            'cancelled_at'   => optional($this->cancelled_at)->toIso8601String(),
             'reviewed_by'    => $this->whenLoaded('reviewer', fn () => $this->reviewer ? [
                 'id'   => $this->reviewer->hash_id,
                 'name' => $this->reviewer->name,
             ] : null),
+            'can_cancel'     => $this->vendor_id && ($this->status === DeliveryScheduleStatus::Submitted || $this->status === DeliveryScheduleStatus::Acknowledged) ? true : false,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),
         ];

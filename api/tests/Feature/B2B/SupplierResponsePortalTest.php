@@ -238,13 +238,24 @@ class SupplierResponsePortalTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
         $this->makePo($vendor, 'sent');
-        $this->makePo($vendor, 'supplier_declined');
+        // A decline still awaiting OGAMI's decision may be retracted.
+        $declined = $this->makePo($vendor, 'supplier_declined');
+        PurchaseOrderResponse::create([
+            'purchase_order_id' => $declined->id,
+            'vendor_id'         => $vendor->id,
+            'response_type'     => 'decline',
+            'status'            => 'pending',
+            'responded_at'      => now(),
+        ]);
+        // Accepted already: nothing left to respond to.
+        $accepted = $this->makePo($vendor, 'acknowledged');
 
         $this->actAs($user);
 
-        $rows = $this->getJson('/api/v1/b2b/supplier/purchase-orders')->assertOk()->json('data');
-        $this->assertCount(2, $rows);
-        foreach ($rows as $row) {
+        $rows = collect($this->getJson('/api/v1/b2b/supplier/purchase-orders')->assertOk()->json('data'))->keyBy('id');
+        $this->assertCount(3, $rows);
+        $this->assertFalse($rows[$accepted->hash_id]['capabilities']['can_respond']);
+        foreach ($rows->except($accepted->hash_id) as $row) {
             $this->assertTrue($row['capabilities']['can_respond']);
             $this->assertArrayHasKey('can_acknowledge', $row['capabilities']);
             $this->assertArrayHasKey('can_update_shipment', $row['capabilities']);
@@ -340,7 +351,9 @@ class SupplierResponsePortalTest extends TestCase
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
         $item = Item::factory()->create();
-        $po = $this->makePo($vendor, 'sent');
+        // Goods have landed, so the PO is receiving; VAT follows the PO.
+        $po = $this->makePo($vendor, 'partially_received');
+        $po->forceFill(['is_vatable' => false])->save();
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
             'item_id'           => $item->id,
@@ -374,12 +387,11 @@ class SupplierResponsePortalTest extends TestCase
         $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/submit-invoice", [
             'bill_number' => 'SUP-INV-GRN-QTY',
             'date'        => '2026-08-10',
-            'is_vatable'  => false,
         ])->assertStatus(201);
 
         $bill = \App\Modules\Accounting\Models\Bill::query()
             ->where('vendor_id', $vendor->id)
-            ->where('bill_number', 'SUP-INV-GRN-QTY')
+            ->where('supplier_invoice_number', 'SUP-INV-GRN-QTY')
             ->firstOrFail();
 
         $line = $bill->items()->firstOrFail();

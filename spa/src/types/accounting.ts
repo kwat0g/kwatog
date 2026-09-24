@@ -166,6 +166,11 @@ export interface BillPayment {
 export interface Bill {
   id: string;
   bill_number: string;
+  /** The supplier's own invoice reference, set when they submit through the portal. */
+  supplier_invoice_number?: string | null;
+  supplier_invoice_date?: string | null;
+  supplier_invoice_submitted_at?: string | null;
+  supplier_invoice_attachment?: { id: string; original_filename: string } | null;
   date: string;
   due_date: string;
   is_vatable: boolean;

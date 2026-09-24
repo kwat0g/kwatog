@@ -9,6 +9,8 @@ enum DeliveryScheduleStatus: string
     case Submitted    = 'submitted';
     case Acknowledged = 'acknowledged';
     case Rejected     = 'rejected';
+    // Withdrawn by the supplier. Frees the quantity for a new schedule.
+    case Cancelled    = 'cancelled';
 
     public static function values(): array
     {
@@ -21,6 +23,7 @@ enum DeliveryScheduleStatus: string
             self::Submitted    => 'Submitted',
             self::Acknowledged => 'Acknowledged',
             self::Rejected     => 'Rejected',
+            self::Cancelled    => 'Cancelled',
         };
     }
 }

@@ -186,6 +186,7 @@ final class NotificationCatalog
                 ['key' => 'supplier_listing_submitted', 'label' => 'Supplier listing submitted', 'description' => 'A supplier submitted an item listing through the B2B portal and it needs purchasing review.'],
                 ['key' => 'return.shipped_to_vendor', 'label' => 'Returned goods shipped to vendor', 'description' => 'Supplier-returned goods were shipped back to the vendor. Purchasing should track the shipment and follow up on the credit.'],
                 ['key' => 'supplier.po_responded', 'label' => 'Supplier purchase order response', 'description' => 'A supplier responded to a purchase order confirmation request.'],
+                ['key' => 'supplier.schedule_cancelled', 'label' => 'Supplier cancelled a delivery schedule', 'description' => 'A supplier withdrew a delivery plan that purchasing had already acknowledged.'],
                 ['key' => 'portal.order_awaiting_review', 'label' => 'Portal order awaiting review', 'description' => 'A self-service order submission is waiting for internal review.'],
                 ['key' => 'purchasing.rfq_published', 'label' => 'RFQ published', 'description' => 'A supplier RFQ was published to invited suppliers.'],
                 ['key' => 'purchasing.rfq_extended', 'label' => 'RFQ deadline extended', 'description' => 'A supplier RFQ deadline was extended.'],

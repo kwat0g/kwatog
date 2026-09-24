@@ -501,6 +501,8 @@ class SupplierPortalCrossTenantTest extends TestCase
     public function test_uploaded_files_get_random_names_outside_the_public_root_and_reject_bad_mime(): void
     {
         ['a' => $a] = $this->twoTenants();
+        // Documents are accepted once the supplier has accepted the PO.
+        $a['po']->forceFill(['status' => 'acknowledged'])->save();
         Storage::fake('local');
         $this->actAs($a['user']);
 

@@ -17,6 +17,11 @@ class SupplierShipment extends Model
 {
     use HasFactory, HasHashId;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\SupplierShipmentFactory::new();
+    }
+
     protected $fillable = [
         'purchase_order_id',
         'portal_user_id',
