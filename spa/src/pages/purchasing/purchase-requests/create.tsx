@@ -29,6 +29,7 @@ import { localIsoDate } from '@/lib/formatDate';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+// eslint-disable-next-line react-refresh/only-export-components
 export const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().trim().min(2, 'Description is required.').max(200),

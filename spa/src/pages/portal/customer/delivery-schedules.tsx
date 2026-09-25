@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { formatDate } from '@/lib/formatDate';
+import { formatDate, localIsoDate } from '@/lib/formatDate';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
@@ -21,7 +21,7 @@ const MONTH_OPTIONS: string[] = [];
 const now = new Date();
 for (let i = 0; i < 6; i++) {
   const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-  MONTH_OPTIONS.push(d.toISOString().slice(0, 7));
+  MONTH_OPTIONS.push(localIsoDate(d).slice(0, 7));
 }
 
 export default function DeliverySchedulesPage() {
