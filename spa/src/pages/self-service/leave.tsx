@@ -69,6 +69,7 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 // Leave credits use the Mon–Sat working-day calendar, excluding holidays.
+// eslint-disable-next-line react-refresh/only-export-components
 export function businessDaysBetween(
   start: string,
   end: string,

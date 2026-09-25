@@ -1,4 +1,5 @@
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { localIsoDate } from '../src/lib/formatDate';
 
 const PASSWORD = 'password';
 
@@ -40,7 +41,9 @@ async function createAndApprovePr(browser: Browser): Promise<{ context: BrowserC
     const productOptions = await product.locator('option').evaluateAll((nodes) => nodes.map((node) => ({ value: node.value, text: node.textContent ?? '' })));
     await product.selectOption(productOptions.find((option) => option.text.includes('WB-002'))?.value ?? productOptions.find((option) => option.value !== '')!.value);
     await sales.page.locator('input[name="items.0.quantity"]').fill('5000');
-    await sales.page.locator('input[name="items.0.delivery_date"]').fill(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 30);
+    await sales.page.locator('input[name="items.0.delivery_date"]').fill(localIsoDate(deliveryDate));
     await sales.page.getByRole('button', { name: 'Save & confirm', exact: true }).click();
     await sales.page.waitForURL(/\/crm\/sales-orders\/[^/]+$/, { timeout: 30_000 });
     await expect(sales.page.getByText('Confirmed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
