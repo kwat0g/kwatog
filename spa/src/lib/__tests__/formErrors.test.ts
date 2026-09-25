@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { applyServerValidationErrors } from '../formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '../formErrors';
 import type { UseFormSetError } from 'react-hook-form';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -43,9 +43,20 @@ describe('applyServerValidationErrors', () => {
  type: 'server',
  message: 'The email has already been taken.',
  });
- expect(toast.error).toHaveBeenCalledWith(
- 'The server flagged some fields. Please review and try again.',
- );
+ expect(toast.error).toHaveBeenCalledWith('The email has already been taken.');
+ });
+
+ it('names the invalid field for client-side required errors', () => {
+  const handler = onFormInvalid<{ name: string; quantity: string }>({ name: 'Name', quantity: 'Quantity' });
+  handler({
+   name: { type: 'required', message: 'Required' },
+   quantity: { type: 'validate', message: 'Must be greater than zero' },
+  } as never);
+
+  expect(toast.error).toHaveBeenCalledWith(
+   'Please fix the following:\n• Name is required.\n• Quantity: Must be greater than zero',
+   { duration: 6000 },
+  );
  });
 
  it('maps multiple field errors to form fields', () => {
