@@ -47,6 +47,8 @@ export function usePermissionSync() {
         echo.leave(`user.${user.id}`);
         echo.leave('settings');
       };
+    }).catch((error: unknown) => {
+      console.error('Real-time permission updates are unavailable.', error);
     });
 
     return () => {

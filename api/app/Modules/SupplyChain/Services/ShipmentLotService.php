@@ -36,6 +36,7 @@ class ShipmentLotService
 
         return DB::transaction(function () use ($delivery, $data, $by) {
             $delivery = Delivery::query()->lockForUpdate()->findOrFail($delivery->id);
+            $delivery->loadMissing('items');
             $existing = ShipmentLot::query()
                 ->where('delivery_id', $delivery->id)
                 ->lockForUpdate()
@@ -51,6 +52,22 @@ class ShipmentLotService
                     (new WorkOrder())->decodeHashId($hashId)
                 ))
                 ->values();
+
+            $deliveryLineIds = $delivery->items
+                ->pluck('sales_order_item_id')
+                ->filter()
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+            $lineageMismatch = $workOrders->contains(
+                fn (WorkOrder $workOrder): bool =>
+                    (int) $workOrder->sales_order_id !== (int) $delivery->sales_order_id
+                    || ! in_array((int) $workOrder->sales_order_item_id, $deliveryLineIds, true),
+            );
+            if ($lineageMismatch) {
+                throw new BusinessRuleException(
+                    'Every work-order batch must belong to one of the delivery sales-order lines.'
+                );
+            }
 
             $missing = $workOrders->filter(fn (WorkOrder $wo) => empty($wo->batch_number));
             if ($missing->isNotEmpty()) {

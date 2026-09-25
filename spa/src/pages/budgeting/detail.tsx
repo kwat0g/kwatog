@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -16,6 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
+import { reportMutationError } from '@/lib/formErrors';
 import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck, LuPencil } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -74,7 +74,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget submitted for approval.');
       setConfirmSubmit(false);
     },
-    onError: (error) => reportMutationError(error, 'Failed to submit budget.'),
+    onError: (error) => reportMutationError(error, 'Could not submit the budget for approval.'),
   });
 
   const approveMutation = useMutation({
@@ -84,7 +84,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget approved and activated.');
       setConfirmApprove(false);
     },
-    onError: (error) => reportMutationError(error, 'Failed to approve budget.'),
+    onError: (error) => reportMutationError(error, 'Could not approve the budget.'),
   });
 
   const closeMutation = useMutation({
@@ -94,7 +94,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget closed.');
       setConfirmClose(false);
     },
-    onError: (error) => reportMutationError(error, 'Failed to close budget.'),
+    onError: (error) => reportMutationError(error, 'Could not close the budget.'),
   });
 
   if (isLoading) return <SkeletonDetail />;

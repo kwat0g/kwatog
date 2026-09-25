@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -24,6 +23,7 @@ import type { LeaveType } from '@/types/leave';
 
 import { QueryErrorState } from '@/components/ui/QueryErrorState';
 import { showUndoToast } from '@/lib/undoToast';
+import { reportMutationError } from '@/lib/formErrors';
 const schema = z.object({
  name: z.string().min(1, 'Required').max(100),
  code: z.string().min(1, 'Required').max(10).regex(/^[A-Z0-9_]+$/, 'Uppercase letters, digits, or underscores'),
@@ -81,14 +81,14 @@ export function LeaveTypesManager() {
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type created.'); setShowCreate(false); reset(); },
  onError: (e: AxiosError<ApiValidationError>) => {
  if (e.response?.status === 422 && e.response.data.errors) Object.entries(e.response.data.errors).forEach(([, msgs]) => toast.error(msgs[0]));
- else toast.error('Failed to create leave type.');
+ else reportMutationError(e, 'Could not create the leave type.');
  },
  });
 
  const updateMutation = useMutation({
  mutationFn: ({ id, d }: { id: string; d: FormValues }) => leaveTypesApi.update(id, toPayload(d)),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type updated.'); setEditTarget(null); },
- onError: (error) => reportMutationError(error, 'Failed to update leave type.'),
+ onError: (error) => reportMutationError(error, 'Could not update the leave type.'),
  });
 
  const deleteMutation = useMutation({
@@ -105,7 +105,7 @@ export function LeaveTypesManager() {
  const restoreMutation = useMutation({
  mutationFn: (id: string) => leaveTypesApi.restore(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type restored.'); setScope('active'); },
- onError: (error) => reportMutationError(error, 'Failed to restore leave type.'),
+ onError: (error) => reportMutationError(error, 'Could not restore the leave type.'),
  });
 
  const openEdit = (lt: LeaveType) => {

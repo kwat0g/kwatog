@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import type { PayrollAdjustment } from '@/types/payroll';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
@@ -74,7 +74,7 @@ export default function PayrollAdjustmentsPage() {
       qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
       setConfirmApprove(null);
     },
-    onError: (error) => reportMutationError(error, 'Failed to approve adjustment.'),
+    onError: (error) => reportMutationError(error, 'Could not approve the payroll adjustment.'),
   });
   const rejectMutation = useMutation({
     mutationFn: ({ id, remarks }: { id: string; remarks: string }) =>
@@ -85,7 +85,7 @@ export default function PayrollAdjustmentsPage() {
       setRejectTarget(null);
       setRejectRemarks('');
     },
-    onError: (error) => reportMutationError(error, 'Failed to reject adjustment.'),
+    onError: (error) => reportMutationError(error, 'Could not reject the payroll adjustment.'),
   });
 
   const filterConfig: FilterConfig[] = [

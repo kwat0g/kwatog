@@ -35,11 +35,17 @@ class TaxPolicyService
 
     public function isVatRegistered(): bool
     {
-        try {
-            $status = trim((string) $this->settings->get('company.vat_status'));
-            return strcasecmp($status, 'VAT Registered') === 0 && $this->vatRate() !== null;
-        } catch (\Throwable) {
+        $status = trim((string) $this->settings->get('company.vat_status'));
+        if (strcasecmp($status, 'VAT Registered') !== 0) {
             return false;
         }
+
+        // A registered company without a configured rate is a configuration
+        // failure, not a non-taxable company. Let the business-rule exception
+        // reach Laravel's handler so the request is reported and the caller
+        // receives a truthful validation response.
+        $this->requiredVatRate();
+
+        return true;
     }
 }

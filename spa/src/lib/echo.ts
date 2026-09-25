@@ -84,6 +84,13 @@ let instance: Promise<EchoClient> | null = null;
  * promise, so only one connection is ever opened.
  */
 export function getEcho(): Promise<EchoClient> {
-  if (!instance) instance = buildEcho();
+  if (!instance) {
+    instance = buildEcho().catch((error: unknown) => {
+      // Do not cache a rejected lazy-load promise: a later mount can retry
+      // after a transient network or chunk-loading failure.
+      instance = null;
+      throw error;
+    });
+  }
   return instance;
 }

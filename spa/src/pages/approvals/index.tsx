@@ -129,7 +129,7 @@ export default function ApprovalsBoardPage() {
         <EmptyState
           icon="alert-circle"
           title="Failed to load approvals"
-          description="Something went wrong."
+          description="The approval queue could not be loaded. Check your connection and try again."
           action={
             <Button variant="secondary" onClick={() => refetch()}>
               Retry

@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 import type { StockAdjustment } from '@/types/inventory';
 
 const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'neutral'> = {
@@ -61,7 +61,7 @@ export default function StockAdjustmentsPage() {
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
  },
- onError: (error) => reportMutationError(error, 'Failed to approve adjustment.'),
+ onError: (error) => reportMutationError(error, 'Could not approve the stock adjustment.'),
  });
 
  const columns: Column<StockAdjustment>[] = [

@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
+import { localIsoDate } from '@/lib/formatDate';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
@@ -62,7 +63,7 @@ export default function CreateWorkOrderPage() {
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const today = new Date().toISOString().slice(0, 16);
+ const today = `${localIsoDate()}T00:00`;
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),

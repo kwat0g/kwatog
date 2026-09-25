@@ -1,4 +1,5 @@
 import { IconType } from '@/lib/icons';
+import { formatDate } from '@/lib/formatDate';
 /**
  * Sprint P4 — per-notification-type metadata for the bell dropdown
  * and notifications page (icon + group bucket).
@@ -88,7 +89,8 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'auto_po_pending': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
  'purchasing.supplier_deterioration': { icon: LuTrendingDown, group: 'alerts', label: 'Purchasing' },
  'supplier_listing_submitted': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
- 'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
+  'supplier.dispatch_action_required': { icon: LuTruck, group: 'alerts', label: 'Purchasing' },
+  'supplier.schedule_cancelled': { icon: LuCalendar, group: 'alerts', label: 'Purchasing' },
   'return.shipped_to_vendor': { icon: LuTruck, group: 'system', label: 'Returns' },
   'supplier.po_responded': { icon: LuPackage, group: 'approvals', label: 'Purchasing' },
   'portal.order_awaiting_review': { icon: LuFileText, group: 'approvals', label: 'Portal' },
@@ -246,5 +248,5 @@ export function timeAgo(iso: string): string {
  if (h < 24) return `${h}h ago`;
  const d = Math.floor(h / 24);
  if (d < 7) return `${d}d ago`;
- return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }

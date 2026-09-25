@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuRefreshCw } from '@/lib/icons';
@@ -11,6 +10,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { usePermission } from '@/hooks/usePermission';
 import type { SupplierPerformance } from '@/types/supplierPerformance';
+import { reportMutationError } from '@/lib/formErrors';
 
 function fmtPct(v: string | null): string {
   return v === null ? '—' : `${Number(v).toFixed(1)}%`;
@@ -51,7 +51,7 @@ export default function SupplierPerformancePage() {
       toast.success('Performance recomputed.');
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'supplier-performance', id] });
     },
-    onError: (error) => reportMutationError(error, 'Failed to recompute.'),
+    onError: (error) => reportMutationError(error, 'Could not recompute supplier performance.'),
   });
 
   const renderHeader = (d?: SupplierPerformance) => (
@@ -104,7 +104,7 @@ export default function SupplierPerformancePage() {
         <EmptyState
           icon="alert-circle"
           title="Failed to load performance"
-          description="Something went wrong."
+          description="Supplier performance could not be loaded. Check your connection and try again."
           action={
             <Button variant="secondary" onClick={() => refetch()}>
               Retry

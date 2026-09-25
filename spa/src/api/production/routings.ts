@@ -15,8 +15,8 @@ export interface RoutingListParams extends ListParams {
 }
 
 export const routingsApi = {
- list: (params?: RoutingListParams) =>
- client.get<PaginatedResponse<ProductRouting>>('/production/routings', { params }).then((r) => r.data),
+ list: (params?: RoutingListParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<ProductRouting>>('/production/routings', { params, signal }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<ProductRouting>>(`/production/routings/${id}`).then((r) => r.data.data),
  create: (data: Record<string, unknown>) =>

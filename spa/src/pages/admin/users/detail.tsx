@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
@@ -11,6 +10,7 @@ import type { AdminUserDetail } from '@/types/admin';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { PermissionOverrides } from './_components/PermissionOverrides';
 import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { reportMutationError } from '@/lib/formErrors';
 
 type ProfileDraft = { name: string; email: string };
 
@@ -47,7 +47,7 @@ export default function AdminUserDetailPage() {
  setTempPasswordModal(r.temp_password);
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  },
- onError: (error) => reportMutationError(error, 'Failed to reset password.'),
+ onError: (error) => reportMutationError(error, 'Could not reset the password.'),
  });
 
  const deactivate = useMutation({
@@ -58,7 +58,7 @@ export default function AdminUserDetailPage() {
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: (error) => reportMutationError(error, 'Failed to deactivate.'),
+ onError: (error) => reportMutationError(error, 'Could not deactivate the account.'),
  });
 
  const activate = useMutation({
@@ -68,7 +68,7 @@ export default function AdminUserDetailPage() {
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: (error) => reportMutationError(error, 'Failed to activate.'),
+ onError: (error) => reportMutationError(error, 'Could not activate the account.'),
  });
 
  const unlock = useMutation({
@@ -78,7 +78,7 @@ export default function AdminUserDetailPage() {
  setConfirm(null);
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  },
- onError: (error) => reportMutationError(error, 'Failed to unlock.'),
+ onError: (error) => reportMutationError(error, 'Could not unlock the account.'),
  });
 
  const changeRole = useMutation({

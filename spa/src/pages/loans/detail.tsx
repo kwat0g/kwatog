@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +19,7 @@ import { fromApprovalRecords } from '@/lib/approvals';
 import { formatPercent, formatPeso } from '@/lib/formatNumber';
 import { toCentavos } from '@/lib/money';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function LoanDetailPage() {
@@ -38,17 +38,17 @@ export default function LoanDetailPage() {
  const approve = useMutation({
  mutationFn: () => loansApi.approve(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Approved.'); },
- onError: (error) => reportMutationError(error, 'Approve failed.'),
+ onError: (error) => reportMutationError(error, 'Could not approve the loan.'),
  });
  const rejectMut = useMutation({
  mutationFn: () => loansApi.reject(id, reason),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
- onError: (error) => reportMutationError(error, 'Reject failed.'),
+ onError: (error) => reportMutationError(error, 'Could not reject the loan.'),
  });
  const cancel = useMutation({
  mutationFn: () => loansApi.cancel(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Cancelled.'); },
- onError: (error) => reportMutationError(error, 'Cancel failed.'),
+ onError: (error) => reportMutationError(error, 'Could not cancel the loan.'),
  });
 
  if (isLoading) return <SkeletonDetail />;

@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useParams, Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +12,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type { MrpMaterialDiagnostic, MrpPlanDiagnostic, MrpPlanWarningDiagnostic } from '@/types/mrp';
 
@@ -37,7 +37,7 @@ export default function MrpPlanDetailPage() {
  qc.setQueryData(['mrp', 'plans', 'detail', id], plan);
  toast.success(`Re-ran MRP — new version v${plan.version}.`);
  },
- onError: (error) => reportMutationError(error, 'Failed to re-run MRP. Review the run history for recovery details.'),
+ onError: (error) => reportMutationError(error, 'Could not re-run MRP. Review the run history for recovery details.'),
  });
 
  const summary = useMemo(() => {

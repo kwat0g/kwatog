@@ -43,11 +43,11 @@ export default function CreateLoanPage() {
 
  const { data: employeesResp } = useQuery({
  queryKey: ['hr', 'employees', 'active', debouncedEmployeeSearch],
- queryFn: () => employeesApi.list({
+ queryFn: ({ signal }) => employeesApi.list({
  per_page: 100,
  status: 'active',
  search: debouncedEmployeeSearch || undefined,
- }),
+ }, signal),
  });
  const employees = employeesResp?.data ?? [];
 

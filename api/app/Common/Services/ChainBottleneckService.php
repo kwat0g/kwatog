@@ -6,6 +6,7 @@ namespace App\Common\Services;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -568,11 +569,12 @@ class ChainBottleneckService
                 ['failed'],
             );
             $summary['available'] = true;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             // The dashboard must remain usable during a rolling migration or
             // a temporary metadata-table outage. `unavailable` is surfaced to
             // operators by automationSummary() instead of turning this API
             // into another outage.
+            Log::warning('Chain bottleneck outbox summary unavailable.', ['exception' => $exception]);
         }
 
         return $summary;
@@ -650,8 +652,9 @@ class ChainBottleneckService
                 $summary['outcomes']['available'] = true;
             }
             $summary['available'] = true;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             // See outboxAutomationSummary().
+            Log::warning('Chain bottleneck listener summary unavailable.', ['exception' => $exception]);
         }
 
         return $summary;
@@ -697,9 +700,10 @@ class ChainBottleneckService
                 ['pending', 'portal_available', 'manual_required', 'failed'],
             );
             $summary['available'] = true;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             // Keep the dashboard available during a rolling migration or
             // temporary dispatch-table outage.
+            Log::warning('Chain bottleneck supplier dispatch summary unavailable.', ['exception' => $exception]);
         }
 
         return $summary;
@@ -724,10 +728,11 @@ class ChainBottleneckService
                 DB::table('failed_jobs')->min('failed_at'),
             );
             $summary['available'] = true;
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             // See outboxAutomationSummary(). A missing or temporarily
             // unavailable queue table must be visible as unavailable, not as
             // a false healthy zero.
+            Log::warning('Chain bottleneck failed-job summary unavailable.', ['exception' => $exception]);
         }
 
         return $summary;
@@ -768,7 +773,8 @@ class ChainBottleneckService
 
         try {
             return Carbon::parse((string) $raw)->toIso8601String();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Chain bottleneck timestamp lookup failed.', ['exception' => $exception, 'table' => $table]);
             return null;
         }
     }
@@ -816,7 +822,8 @@ class ChainBottleneckService
         }
         try {
             return $raw instanceof Carbon ? $raw : Carbon::parse((string) $raw);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Chain bottleneck count lookup failed.', ['exception' => $exception, 'table' => $table]);
             return null;
         }
     }

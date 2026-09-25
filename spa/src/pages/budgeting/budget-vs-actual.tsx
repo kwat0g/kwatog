@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { Chip } from '@/components/ui/Chip';
 import { cn } from '@/lib/cn';
 import { formatPeso, formatCompactCurrency } from '@/lib/formatNumber';
+import { formatDateTime } from '@/lib/formatDate';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -97,7 +98,7 @@ export default function BudgetVsActualPage() {
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted border border-default rounded-md px-3 py-2">
           <Chip variant={syncRun.status === 'completed' ? 'success' : syncRun.status === 'failed' ? 'danger' : 'warning'}>{syncRun.status}</Chip>
           <span>{syncRun.processed_lines} / {syncRun.total_lines} lines</span>
-          {syncRun.completed_at && <span>Last completed {new Date(syncRun.completed_at).toLocaleString()}</span>}
+          {syncRun.completed_at && <span>Last completed {formatDateTime(syncRun.completed_at)}</span>}
           {syncRun.last_error && <span className="text-danger-fg">{syncRun.last_error}</span>}
         </div>
       )}
