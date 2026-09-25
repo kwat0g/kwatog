@@ -271,6 +271,12 @@ WO), **outgoing** (one per good output batch of a WO).
 - **Outgoing** uses AQL 0.65 Level II per ANSI/ASQ Z1.4: lots up to 280 →
   20 pieces, accept 0; 281–1,200 → 80 pieces, accept 1; larger lots follow
   the same table.
+- All samples sit in one **Measurements** table. **Pass N open manual checks**
+  marks every undecided visual check as Pass; dimensions must still be
+  measured, and nothing is final until you save and complete.
+- The *In-process / Outgoing QC required* notice opens the inspection itself
+  (a completion that produced several batches opens the work order, which
+  lists them).
 - An outgoing (or GRN incoming) result needs a **second person** to check it.
   Everyone who may review is notified, and the review shows in their
   *Action Center*; the inspector cannot review their own result.

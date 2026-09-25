@@ -274,7 +274,8 @@ draft → in_progress → passed | failed
 
 **How to test:**
 1. After starting the WO, go to `/quality/inspections`
-2. Find the auto-created in-process inspection (linked to the WO)
+2. Find the auto-created in-process inspection (linked to the WO); the
+   "In-process QC required" notice opens it directly
 3. The inspection spec auto-loads measurement parameters from the product's spec.
    In-process QC samples a small fixed number of pieces off the running line
    (`quality.in_process.sample_size`, default 5, never more than the WO
@@ -315,7 +316,10 @@ accept 3; larger lots follow the same table. The plan lives in the
 
 **How to test:**
 1. After WO completes, go to `/quality/inspections`
-2. Find the auto-created outgoing inspection
+2. Find the auto-created outgoing inspection; the "Outgoing QC required"
+   notice opens it (or the WO, when one completion produced several batches).
+   Measurements are one table grouped by sample, and "Pass N open manual
+   checks" fills the undecided visual checks in one click
 3. Note: sample size is calculated from batch quantity using AQL tables
 4. Record actual measurements for each critical dimension
 5. Complete the inspection. An outgoing result is maker-checked: it goes to

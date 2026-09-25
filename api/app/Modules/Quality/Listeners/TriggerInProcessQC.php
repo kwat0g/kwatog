@@ -50,7 +50,8 @@ class TriggerInProcessQC implements ShouldQueue
             // lock the authoritative row before creating cross-module QC work.
             // Paused/completed/closed are compatible successors of a start;
             // cancellation (or a stale pre-start state) is not.
-            $wo = DB::transaction(function () use ($event): ?WorkOrder {
+            $created = null;
+            $wo = DB::transaction(function () use ($event, &$created): ?WorkOrder {
                 $lockedWo = WorkOrder::query()
                     ->with('creator')
                     ->lockForUpdate()
@@ -99,7 +100,7 @@ class TriggerInProcessQC implements ShouldQueue
                     // Use the InspectionService to create a properly scaffolded
                     // inspection while the WO lock is still held. The service
                     // loads the active spec and seeds measurement rows.
-                    $this->inspections->create([
+                    $created = $this->inspections->create([
                         'stage'          => InspectionStage::InProcess->value,
                         'product_id'     => (int) $productId,
                         'batch_quantity' => $batchQty,
@@ -136,7 +137,8 @@ class TriggerInProcessQC implements ShouldQueue
                 app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [
                     'title'       => 'In-process QC required',
                     'message'     => "In-process QC required for WO {$wo->wo_number}.",
-                    'link_to'     => "/production/work-orders/{$wo->hash_id}",
+                    // Open the inspection itself; the WO page is one more click.
+                    'link_to'     => $created ? "/quality/inspections/{$created->hash_id}" : "/production/work-orders/{$wo->hash_id}",
                     'entity_type' => 'work_order',
                     'entity_id'   => $wo->hash_id,
                     'wo_number'   => $wo->wo_number,

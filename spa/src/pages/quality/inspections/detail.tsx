@@ -1,7 +1,7 @@
 /**
  * Sprint 7 — Task 60 — Inspection detail / measurement-recording page.
  *
- * The page groups the seeded measurements by sample_index. The inspector
+ * The page lists the seeded measurements in one table, grouped by sample_index. The inspector
  * fills in measured_value (auto pass/fail for dimensional/functional via
  * tolerance window) or toggles is_pass (visual checks). Save patches the
  * batch; Complete finalises the inspection (passed/failed by AQL plan).
@@ -237,7 +237,7 @@ export default function InspectionDetailPage() {
     );
   }
 
-  // Group measurements by sample_index for a per-sample card.
+  // Group measurements by sample_index; each sample is one row group.
   const grouped: Record<number, InspectionMeasurement[]> = {};
   for (const m of data.measurements ?? []) {
     (grouped[m.sample_index] ??= []).push(m);
@@ -252,6 +252,20 @@ export default function InspectionDetailPage() {
 
   const updateDraft = (mId: string, patch: Partial<RowDraft>) => {
     setDrafts((s) => ({ ...s, [mId]: { ...s[mId], ...patch, dirty: true } }));
+  };
+
+  // Visual / functional checks with no tolerance window that nobody has
+  // decided yet. Filling them is a shortcut only: the inspector still saves,
+  // completes, and an outgoing result still goes to its checker.
+  const pendingManualIds = (data.measurements ?? [])
+    .filter((m) => !isNumericMeasurement(m) && drafts[m.id]?.is_pass === null)
+    .map((m) => m.id);
+  const passPendingManualChecks = () => {
+    setDrafts((s) => {
+      const next = { ...s };
+      for (const mId of pendingManualIds) next[mId] = { ...next[mId], is_pass: true, dirty: true };
+      return next;
+    });
   };
 
   return (
@@ -440,26 +454,39 @@ export default function InspectionDetailPage() {
                 </dl>
               </Panel>
 
-              {sampleIndices.map((idx) => (
-                <Panel
-                  key={idx}
-                  title={`Sample #${idx}`}
-                  meta={`${grouped[idx].length} parameter${grouped[idx].length === 1 ? '' : 's'}`}
-                  noPadding
-                >
-                  <table className={tableCls}>
-                    <thead>
-                      <tr className={theadTrCls}>
-                        <Th>Parameter</Th>
-                        <Th align="right">Nominal</Th>
-                        <Th align="right">Tolerance</Th>
-                        <Th align="right">Measured</Th>
-                        <Th align="center">Pass</Th>
-                        <Th>Notes</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grouped[idx].map((m) => {
+              <Panel
+                title="Measurements"
+                meta={`${sampleIndices.length} sample${sampleIndices.length === 1 ? '' : 's'}`}
+                actions={
+                  !isTerminal && pendingManualIds.length > 0 ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<LuCheck size={14} />}
+                      onClick={passPendingManualChecks}
+                    >
+                      Pass {pendingManualIds.length} open manual check
+                      {pendingManualIds.length === 1 ? '' : 's'}
+                    </Button>
+                  ) : null
+                }
+                noPadding
+              >
+                <table className={tableCls}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th>Sample</Th>
+                      <Th>Parameter</Th>
+                      <Th align="right">Nominal</Th>
+                      <Th align="right">Tolerance</Th>
+                      <Th align="right">Measured</Th>
+                      <Th align="center">Pass</Th>
+                      <Th>Notes</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleIndices.flatMap((idx) =>
+                      grouped[idx].map((m, position) => {
                         const draft = drafts[m.id];
                         if (!draft) return null;
                         const hasTolerance = isNumericMeasurement(m);
@@ -468,6 +495,11 @@ export default function InspectionDetailPage() {
                           : '—';
                         return (
                           <tr key={m.id} className={trCls}>
+                            {position === 0 && (
+                              <Td rowSpan={grouped[idx].length} mono className="align-top">
+                                #{idx}
+                              </Td>
+                            )}
                             <Td>
                               <div className="flex items-center gap-2">
                                 <span>{m.parameter_name}</span>
@@ -561,11 +593,11 @@ export default function InspectionDetailPage() {
                             </Td>
                           </tr>
                         );
-                      })}
-                    </tbody>
-                  </table>
-                </Panel>
-              ))}
+                      }),
+                    )}
+                  </tbody>
+                </table>
+              </Panel>
             </>
           )}
         </div>

@@ -51,7 +51,8 @@ class TriggerOutgoingQC implements ShouldQueue
             // lock the authoritative row before creating cross-module QC work.
             // Closed is a compatible successor of completed; cancellation is
             // not, because it invalidates the shipment-quality obligation.
-            $wo = DB::transaction(function () use ($event): ?WorkOrder {
+            $created = [];
+            $wo = DB::transaction(function () use ($event, &$created): ?WorkOrder {
                 $lockedWo = WorkOrder::query()
                     ->with('creator')
                     ->lockForUpdate()
@@ -117,7 +118,7 @@ class TriggerOutgoingQC implements ShouldQueue
                     }
 
                     try {
-                        $this->inspections->create([
+                        $created[] = $this->inspections->create([
                             'stage' => InspectionStage::Outgoing->value,
                             'product_id' => (int) $productId,
                             'batch_quantity' => $batchQty,
@@ -162,7 +163,10 @@ class TriggerOutgoingQC implements ShouldQueue
                 app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [
                     'title' => 'Outgoing QC required',
                     'message' => "Outgoing QC required for WO {$wo->wo_number}.",
-                    'link_to' => "/production/work-orders/{$wo->hash_id}",
+                    // One batch: open its inspection. Several: the WO page lists them all.
+                    'link_to' => count($created) === 1
+                        ? "/quality/inspections/{$created[0]->hash_id}"
+                        : "/production/work-orders/{$wo->hash_id}",
                     'entity_type' => 'work_order',
                     'entity_id' => $wo->hash_id,
                     'wo_number' => $wo->wo_number,
