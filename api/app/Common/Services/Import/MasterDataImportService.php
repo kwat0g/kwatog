@@ -14,6 +14,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Imports\EmployeeImporter;
 use App\Modules\Inventory\Imports\ItemImporter;
 use App\Modules\Purchasing\Imports\ApprovedSupplierImporter;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -83,7 +84,7 @@ class MasterDataImportService
     {
         $class = self::REGISTRY[$entityType] ?? null;
         if (! $class) {
-            throw new RuntimeException("Unknown import entity '{$entityType}'. Supported: ".implode(', ', $this->entityTypes()));
+            throw new BusinessRuleException("Unknown import entity '{$entityType}'. Supported: ".implode(', ', $this->entityTypes()));
         }
         return app($class);
     }
@@ -94,9 +95,26 @@ class MasterDataImportService
             return $exception->getMessage();
         }
 
-        report($exception);
+        if ($exception instanceof QueryException) {
+            // Constraint violations can be caused by row data (for example,
+            // a duplicate arriving after pre-validation). Other database
+            // failures are infrastructure errors and must reach the API's
+            // sanitized 500 handler instead of becoming a row-level 422.
+            if (str_starts_with((string) $exception->getCode(), '23')) {
+                return 'This row conflicts with existing data. Check for duplicate codes or references.';
+            }
 
-        return 'This row could not be imported due to a data error.';
+            throw $exception;
+        }
+
+        // Importers use RuntimeException for deliberate row-validation copy.
+        // Preserve that message, but do not disguise unrelated exceptions as
+        // invalid user data.
+        if ($exception instanceof RuntimeException) {
+            return $exception->getMessage();
+        }
+
+        throw $exception;
     }
 
     /**
@@ -221,13 +239,13 @@ class MasterDataImportService
         try {
             $header = fgetcsv($stream);
             if (! $header) {
-                throw new RuntimeException('Empty CSV — no header row.');
+                throw new BusinessRuleException('Empty CSV — no header row.');
             }
             $header = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
 
             $missing = array_diff($importer->requiredColumns(), $header);
             if ($missing) {
-                throw new RuntimeException('Missing required column(s): '.implode(', ', $missing));
+                throw new BusinessRuleException('Missing required column(s): '.implode(', ', $missing));
             }
 
             $rows = [];
