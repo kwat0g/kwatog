@@ -52,6 +52,7 @@ export default function PositionsPage() {
  const [modalOpen, setModalOpen] = useState(false);
  const [editing, setEditing] = useState<Position | null>(null);
  const [pendingRestore, setPendingRestore] = useState<Position | null>(null);
+ const [pendingDelete, setPendingDelete] = useState<Position | null>(null);
  const [selectedId, setSelectedId] = useState<string | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
@@ -217,7 +218,7 @@ export default function PositionsPage() {
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}
@@ -254,6 +255,9 @@ export default function PositionsPage() {
   confirmLabel="Restore"
   pending={restoreMutation.isPending}
   />
+ )}
+ {pendingDelete && (
+  <ConfirmDialog isOpen onClose={() => setPendingDelete(null)} onConfirm={() => deleteMutation.mutate(pendingDelete.id)} title="Delete position?" description={<>Delete <span className="font-medium">{pendingDelete.title}</span>? Existing employee assignments may prevent deletion.</>} confirmLabel="Delete" pending={deleteMutation.isPending} />
  )}
  </div>
  );

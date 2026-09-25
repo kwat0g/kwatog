@@ -74,6 +74,7 @@ export default function DepartmentsPage() {
  const [editingId, setEditingId] = useState<string | null>(null);
  const [modalOpen, setModalOpen] = useState(false);
  const [pendingRestore, setPendingRestore] = useState<Department | null>(null);
+ const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
 
  const { data: rows = [], isLoading, isError, refetch } = useQuery({
@@ -239,7 +240,7 @@ export default function DepartmentsPage() {
   Restore
   </Button>
   ) : (
-  <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>
+  <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>
   Delete
   </Button>
   )}
@@ -274,6 +275,9 @@ export default function DepartmentsPage() {
   confirmLabel="Restore"
   pending={restoreMutation.isPending}
   />
+ )}
+ {pendingDelete && (
+  <ConfirmDialog isOpen onClose={() => setPendingDelete(null)} onConfirm={() => deleteMutation.mutate(pendingDelete.id)} title="Delete department?" description={<>Delete <span className="font-medium">{pendingDelete.name}</span>? Existing employee and position assignments may prevent deletion.</>} confirmLabel="Delete" pending={deleteMutation.isPending} />
  )}
  </div>
  );
