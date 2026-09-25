@@ -222,7 +222,7 @@ export default function DeliverySchedulesPage() {
                  )}
                  {s.reviewed_at && !s.reject_reason && (
                    <p className="border-t border-default px-3 py-2 text-2xs text-muted">
-                     Acknowledged {new Date(s.reviewed_at).toLocaleDateString()}
+                     Acknowledged {formatDate(s.reviewed_at)}
                    </p>
                  )}
                </Panel>
