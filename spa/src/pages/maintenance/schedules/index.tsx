@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { MaintenanceSchedule } from '@/types/maintenance';
+import { reportMutationError } from '@/lib/formErrors';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 export default function MaintenanceSchedulesListPage() {
@@ -34,8 +35,8 @@ const [filters, setFilters] = useUrlFilters<ScheduleListParams>({ page: 1, per_p
   await schedulesApi.destroy(scheduleId);
   qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
   toast.success('Schedule archived.');
-  } catch {
-  toast.error('Failed to archive schedule.');
+  } catch (error) {
+  reportMutationError(error, 'Could not archive the maintenance schedule.');
   } finally {
   setDeleteTarget(null);
   }
@@ -46,8 +47,8 @@ const [filters, setFilters] = useUrlFilters<ScheduleListParams>({ page: 1, per_p
   await schedulesApi.restore(scheduleId);
   qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
   toast.success('Schedule restored.');
-  } catch {
-  toast.error('Failed to restore schedule.');
+  } catch (error) {
+  reportMutationError(error, 'Could not restore the maintenance schedule.');
   } finally {
   setRestoreTarget(null);
   }

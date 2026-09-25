@@ -14,6 +14,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 
 export default function MaintenanceScheduleDetailPage() {
  const { id = '' } = useParams<{ id: string }>();
@@ -36,8 +37,8 @@ await schedulesApi.destroy(id);
   qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
   toast.success('Schedule archived.');
   navigate('/maintenance/schedules');
- } catch {
- toast.error('Failed to delete schedule.');
+ } catch (error) {
+ reportMutationError(error, 'Could not archive the maintenance schedule.');
  setDeleting(false);
  }
  };
