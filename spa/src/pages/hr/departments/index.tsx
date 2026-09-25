@@ -170,7 +170,7 @@ export default function DepartmentsPage() {
  <EmptyState
  icon="alert-circle"
  title="Failed to load departments"
- description="Something went wrong. Try again."
+ description="The department list could not be loaded. Check your connection and try again."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}
