@@ -16,6 +16,7 @@ import { Modal, ModalFooter } from '@/components/ui/Modal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermission } from '@/hooks/usePermission';
+import { useDebounce } from '@/hooks/useDebounce';
 import { formatPeso } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
@@ -60,6 +61,8 @@ export function DeMinimisManager() {
   const { can } = usePermission();
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const debouncedEmployeeSearch = useDebounce(employeeSearch, 300);
   const [scope, setScope] = useState<ArchiveScope>('active');
   const [filters, setFilters] = useUrlFilters<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
 
@@ -71,8 +74,8 @@ export function DeMinimisManager() {
   });
 
   const { data: employees } = useQuery({
-    queryKey: ['hr', 'employees', 'active'],
-    queryFn: () => employeesApi.list({ per_page: 500, status: 'active' }),
+    queryKey: ['hr', 'employees', 'active', debouncedEmployeeSearch],
+    queryFn: () => employeesApi.list({ per_page: 25, status: 'active', search: debouncedEmployeeSearch || undefined }),
   });
 
   const { data: benefitTypes = [] } = useQuery<BenefitTypeOption[]>({
@@ -158,10 +161,16 @@ export function DeMinimisManager() {
       {showCreate && (
         <Modal isOpen onClose={() => setShowCreate(false)} title="Record de minimis benefit">
           <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-3 py-2">
+            <Input
+              label="Find employee"
+              value={employeeSearch}
+              onChange={(event) => setEmployeeSearch(event.target.value)}
+              placeholder="Search name or employee number"
+            />
             <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
               <option value="">— Select Employee —</option>
               {employees?.data?.map((e) => (
-                <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                <option key={e.id} value={e.id}>{e.first_name} {e.last_name} ({e.employee_no})</option>
               ))}
             </Select>
             <Select label="Benefit type" required {...register('benefit_type')} error={errors.benefit_type?.message}>
