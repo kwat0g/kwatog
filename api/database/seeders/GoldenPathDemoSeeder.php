@@ -57,6 +57,8 @@ use Throwable;
  */
 class GoldenPathDemoSeeder extends Seeder
 {
+    private int $failedSections = 0;
+
     public function run(): void
     {
         $this->section('batch numbers (ADV3)', fn () => $this->seedBatchNumbers());
@@ -74,7 +76,11 @@ class GoldenPathDemoSeeder extends Seeder
         $this->section('stock card openings', fn () => $this->seedStockOpeningBalances());
         $this->section('dynamic route fixtures', fn () => $this->seedDynamicRouteFixtures());
 
-        $this->command?->info('Golden-path demo seed complete.');
+        $this->command?->info(
+            $this->failedSections === 0
+                ? 'Golden-path demo seed complete.'
+                : "Golden-path demo seed finished with {$this->failedSections} failed section(s) — see the [failed] lines above."
+        );
     }
 
     /**
@@ -149,8 +155,13 @@ class GoldenPathDemoSeeder extends Seeder
         try {
             $fn();
         } catch (Throwable $e) {
+            // Sections are independent showcase fixtures — one failing must
+            // not abort the sections after it (a credit-note account glitch
+            // used to kill the forecast opt-in and stock-opening backfills,
+            // leaving those screens empty with no hint why). Log and go on;
+            // the summary line at the end reports the count honestly.
+            $this->failedSections++;
             $this->command?->error("  [$label] failed: ".$e->getMessage());
-            throw $e;
         }
     }
 
@@ -496,7 +507,16 @@ class GoldenPathDemoSeeder extends Seeder
      */
     private function hardenHeroTrace(): void
     {
-        $wo = WorkOrder::whereNotNull('batch_number')->orderBy('id')->first();
+        // The hero trace must end in a passed OUTGOING QC linked to the WO, so
+        // prefer a batch-numbered WO whose product actually has an active
+        // inspection spec — the first batch WO may build a product without one
+        // (specs cover a subset of the catalog), which silently dropped the
+        // flagship traceability fixture.
+        $wo = WorkOrder::whereNotNull('batch_number')
+            ->whereIn('product_id', DB::table('inspection_specs')->where('is_active', true)->select('product_id'))
+            ->orderBy('id')
+            ->first()
+            ?? WorkOrder::whereNotNull('batch_number')->orderBy('id')->first();
         if (! $wo) {
             $this->command?->warn('  No batch WO; skipping hero trace.');
 
@@ -1008,9 +1028,15 @@ class GoldenPathDemoSeeder extends Seeder
             return;
         }
 
-        // A revenue/sales-returns account for the credit line.
-        $account = Account::where('type', 'revenue')->orderBy('id')->first()
-            ?? Account::orderBy('id')->first();
+        // A revenue/sales-returns account for the credit line. Must be a LEAF:
+        // with the full COA seeded, `4000` (Sales Revenue) sorts first but is a
+        // header account, and PostingAccountResolver refuses postings to it.
+        $account = Account::query()
+            ->where('type', 'revenue')
+            ->whereNotIn('id', Account::query()->select('parent_id')->whereNotNull('parent_id'))
+            ->orderBy('id')
+            ->first()
+            ?? Account::where('type', 'revenue')->orderBy('id')->first();
 
         /** @var CreditNoteService $svc */
         $svc = app(CreditNoteService::class);

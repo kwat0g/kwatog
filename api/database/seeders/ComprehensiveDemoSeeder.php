@@ -46,6 +46,36 @@ class ComprehensiveDemoSeeder extends Seeder
         // graph.
         $this->truncateAll();
 
+        // truncateAll() runs TRUNCATE ... RESTART IDENTITY CASCADE. CASCADE
+        // follows FK references OUT of the demo-graph tables and silently
+        // wipes the Order-to-Cash chain DemoDataSeeder just built:
+        // sales_orders references return_cases (part of the demo graph), so
+        // sales_orders, sales_order_items, mrp_plans, work_orders and
+        // customer_complaints are all cascade children of `deliveries` and
+        // get truncated with it. This seeder's own invoice and delivery steps
+        // then found no confirmed sales orders and self-skipped — leaving a
+        // demo whose showcase chain was empty.
+        //
+        // A scoped reset is impossible: sales_orders <-> return_cases is a
+        // true FK cycle, and PostgreSQL refuses to TRUNCATE a referenced
+        // table (even an empty one) outside the statement or without CASCADE.
+        // Rebuilding is the only correct option. These seeders are idempotent
+        // and count-guarded, so re-running them here re-creates exactly the
+        // cascade-wiped rows (and only those — every other section keeps its
+        // guard): the Order-to-Cash chain plus the machines/molds/BOM master
+        // data MRP needs to plan work orders.
+        foreach ([
+            \Database\Seeders\MachineSeeder::class,
+            \Database\Seeders\MoldSeeder::class,
+            \Database\Seeders\MoldCompatibilitySeeder::class,
+            \Database\Seeders\BomSeeder::class,
+            \Database\Seeders\DemoDataSeeder::class,
+        ] as $seederClass) {
+            $seeder = new $seederClass();
+            $seeder->setCommand($this->command);
+            $seeder->run();
+        }
+
         $this->seedPayroll();
         $this->seedInvoices();
         $this->seedBills();
