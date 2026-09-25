@@ -17,6 +17,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
 import type { ListParams } from '@/types';
 
@@ -97,6 +98,7 @@ export function DeMinimisManager() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => client.delete(`/de-minimis/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['de-minimis'] }); toast.success('Benefit archived.'); },
+    onError: (error) => reportMutationError(error, 'Could not archive the benefit.'),
   });
 
   const restoreMutation = useMutation({
@@ -116,7 +118,19 @@ export function DeMinimisManager() {
         scope === 'only' ? (
           <Button variant="ghost" size="xs" icon={<LuArchiveRestore size={12} />} onClick={(e) => { e.stopPropagation(); restoreMutation.mutate(r.id); }} />
         ) : (
-          <Button variant="ghost" size="xs" icon={<LuTrash2 size={12} />} onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(r.id); }} />
+          <Button
+            variant="ghost"
+            size="xs"
+            icon={<LuTrash2 size={12} />}
+            aria-label={`Archive ${r.benefit_type_label} benefit`}
+            disabled={deleteMutation.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`Archive the ${r.benefit_type_label} benefit for ${r.employee?.full_name ?? 'this employee'}?`)) {
+                deleteMutation.mutate(r.id);
+              }
+            }}
+          />
         )
       ),
     },
