@@ -1,7 +1,7 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { reportMutationError } from '@/lib/formErrors';
 import {
   LuBuilding2,
   LuCalendar,
@@ -218,7 +218,7 @@ export default function SettingsPage() {
         await refreshAuth();
       }
     },
-    onError: (error) => reportMutationError(error, 'Could not save setting.'),
+    onError: (error) => reportMutationError(error, 'Could not save the setting.'),
   });
 
   const groups = useMemo(() => {

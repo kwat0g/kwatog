@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -17,6 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { QualityPlanParameter } from '@/types/inventory';
@@ -67,7 +67,7 @@ export default function ItemQualityPlansPage() {
  queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
  queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
  },
- onError: (error) => reportMutationError(error, 'Could not publish the quality plan.'),
+ onError: (error) => reportMutationError(error, 'Could not publish the quality-plan revision.'),
  });
 
  const deactivate = useMutation({

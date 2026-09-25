@@ -1,4 +1,3 @@
-import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +21,7 @@ import type { PayrollPeriod } from '@/types/payroll';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { reportMutationError } from '@/lib/formErrors';
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
  switch (status) {
  case 'finalized': return 'success';
@@ -219,7 +219,7 @@ function ThirteenthMonthModal({
  onClose();
  navigate(`/payroll/periods/${period.id}`);
  },
- onError: (error) => reportMutationError(error, 'Failed to create 13th-month period.'),
+ onError: (error) => reportMutationError(error, 'Could not create the 13th-month payroll period.'),
  });
 
  return (
