@@ -8,8 +8,8 @@ export interface ProductListParams extends ListParams {
 }
 
 export const productsApi = {
- list: (params?: ProductListParams) =>
- client.get<PaginatedResponse<Product>>('/crm/products', { params }).then((r) => r.data),
+ list: (params?: ProductListParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<Product>>('/crm/products', { params, signal }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<Product>>(`/crm/products/${id}`).then((r) => r.data.data),
  create: (data: CreateProductData) =>

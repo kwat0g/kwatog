@@ -18,8 +18,8 @@ export interface SalesOrderListParams extends ListParams {
 
 export const salesOrdersApi = {
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string; next_statuses: Array<{ value: string; label: string }> }> } }>('/crm/sales-orders/options').then((r) => r.data.data),
- list: (params?: SalesOrderListParams) =>
- client.get<PaginatedResponse<SalesOrder>>('/crm/sales-orders', { params }).then((r) => r.data),
+ list: (params?: SalesOrderListParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<SalesOrder>>('/crm/sales-orders', { params, signal }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<SalesOrder>>(`/crm/sales-orders/${id}`).then((r) => r.data.data),
  create: (data: CreateSalesOrderData) =>

@@ -39,7 +39,7 @@ export default function CustomerPlaceOrderPage() {
 
   const { data: catalog, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'catalog', debouncedSearch],
-    queryFn: () => customerPortalApi.listCatalog({ search: debouncedSearch || undefined }),
+    queryFn: ({ signal }) => customerPortalApi.listCatalog({ search: debouncedSearch || undefined }, signal),
     placeholderData: (prev) => prev,
   });
 
