@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Dashboard;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Enums\RenderKind;
@@ -17,6 +18,7 @@ use Database\Seeders\DashboardRoleLayoutSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class DashboardWidgetDataTest extends TestCase
@@ -73,6 +75,27 @@ class DashboardWidgetDataTest extends TestCase
         $this->assertSame('7.50', $data['self.dtr_today']['value']);
         $this->assertSame('hours', $data['self.dtr_today']['kind']);
         $this->assertArrayNotHasKey('finance.cash_position', $data);
+    }
+
+    public function test_unavailable_widget_logs_the_original_exception_and_keeps_the_safe_fallback(): void
+    {
+        $exception = new \RuntimeException('Settings database connection failed.');
+        $settings = \Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('requiredInt')->once()->andThrow($exception);
+        $this->app->instance(SettingsService::class, $settings);
+        Log::spy();
+
+        $user = User::factory()->create();
+        $summary = app(DashboardWidgetDataService::class)
+            ->summaries(['production.active_wo'], $user)['production.active_wo'];
+
+        $this->assertFalse($summary['available']);
+        $this->assertSame('Live data source unavailable.', $summary['helper']);
+        Log::shouldHaveReceived('error')->once()->withArgs(
+            static fn (string $message, array $context): bool => $message === 'Dashboard widget data source failed.'
+                && ($context['widget'] ?? null) === 'production.active_wo'
+                && ($context['exception'] ?? null) === $exception,
+        );
     }
 
     /**

@@ -28,6 +28,7 @@ use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Dashboard\Support\WidgetScope;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -51,7 +52,11 @@ class DashboardWidgetDataService
                     ['key' => $key, 'available' => true, 'updated_at' => now()->toIso8601String()],
                     $this->summary($key, $user),
                 );
-            } catch (Throwable) {
+            } catch (Throwable $exception) {
+                Log::error('Dashboard widget data source failed.', [
+                    'widget' => $key,
+                    'exception' => $exception,
+                ]);
                 $result[$key] = [
                     'key' => $key, 'value' => null, 'kind' => 'number',
                     'helper' => 'Live data source unavailable.',
