@@ -7,8 +7,8 @@ export interface CustomerListParams extends ListParams {
 }
 
 export const customersApi = {
- list: (params?: CustomerListParams) =>
- client.get<PaginatedResponse<Customer>>('/customers', { params }).then((r) => r.data),
+ list: (params?: CustomerListParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<Customer>>('/customers', { params, signal }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<Customer>>(`/customers/${id}`).then((r) => r.data.data),
  create: (data: CreateCustomerData) =>

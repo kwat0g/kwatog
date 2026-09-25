@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { LuArchiveRestore, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { onFormInvalid } from '@/lib/formErrors';
+import { onFormInvalid, reportMutationError } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
