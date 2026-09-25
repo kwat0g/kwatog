@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -50,7 +51,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   });
   setDeleteTarget(null);
   },
-  onError: () => toast.error('Failed to archive training.'),
+  onError: (error) => reportMutationError(error, 'Failed to archive training.'),
  });
 
  const restoreMutation = useMutation({
@@ -61,7 +62,7 @@ const [deleteTarget, setDeleteTarget] = useState<Training | null>(null);
   setRestoreTarget(null);
   setScope('active');
   },
-  onError: () => toast.error('Failed to restore training.'),
+  onError: (error) => reportMutationError(error, 'Failed to restore training.'),
  });
 
  const columns = [

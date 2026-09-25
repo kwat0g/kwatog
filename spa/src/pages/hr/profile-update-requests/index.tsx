@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -78,7 +79,7 @@ export default function ProfileUpdateRequestsPage() {
  setConfirm(null);
  queryClient.invalidateQueries({ queryKey: ['hr', 'profile-update-requests'] });
  },
- onError: () => toast.error('Failed to update request.'),
+ onError: (error) => reportMutationError(error, 'Failed to update request.'),
  });
 
  const filterConfig: FilterConfig[] = [

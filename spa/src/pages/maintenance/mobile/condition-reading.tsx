@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conditionReadingsApi } from '@/api/maintenance/conditionReadings';
@@ -72,7 +73,7 @@ export default function MobileConditionReading() {
  queryClient.invalidateQueries({ queryKey: ['maintenance', 'health-snapshot', machineId] });
  queryClient.invalidateQueries({ queryKey: ['maintenance', 'condition-readings'] });
  },
- onError: () => toast.error('Failed to record reading.'),
+ onError: (error) => reportMutationError(error, 'Failed to record reading.'),
  });
 
  const canSubmit = machineId && metric && source && parseFloat(value) >= 0 && !isNaN(parseFloat(value));

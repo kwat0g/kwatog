@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { LuRotateCcw } from '@/lib/icons';
@@ -57,7 +58,7 @@ export default function DashboardDefaultPage() {
  toast.success('Dashboard reset to your role default.');
  queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
  },
- onError: () => toast.error('Failed to reset layout.'),
+ onError: (error) => reportMutationError(error, 'Failed to reset layout.'),
  });
 
  const subtitle = canSeeFinance

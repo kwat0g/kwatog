@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /**
  * Task SS1 — Self-service overtime requests.
  *
@@ -147,7 +148,7 @@ export default function SelfServiceOvertimePage() {
       toast.success('Overtime request cancelled.');
       queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
     },
-    onError: () => toast.error('Failed to cancel request.'),
+    onError: (error) => reportMutationError(error, 'Failed to cancel request.'),
   });
 
   const restore = useMutation({
@@ -156,7 +157,7 @@ export default function SelfServiceOvertimePage() {
       toast.success('Overtime request restored and resubmitted.');
       queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
     },
-    onError: () => toast.error('Only a request you cancelled can be restored.'),
+    onError: (error) => reportMutationError(error, 'Only a request you cancelled can be restored.'),
   });
 
   return (

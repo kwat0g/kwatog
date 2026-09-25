@@ -61,12 +61,12 @@ export default function LeavesPage() {
  const approveDept = useMutation({
  mutationFn: (id: string) => leaveRequestsApi.approveDept(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
- onError: () => toast.error('Approval failed.'),
+ onError: (error) => reportMutationError(error, 'Approval failed.'),
  });
  const approveHR = useMutation({
  mutationFn: (id: string) => leaveRequestsApi.approveHR(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
- onError: () => toast.error('Approval failed.'),
+ onError: (error) => reportMutationError(error, 'Approval failed.'),
  });
  const rejectMut = useMutation({
  mutationFn: ({ id, reason }: { id: string; reason: string }) => leaveRequestsApi.reject(id, reason),
@@ -75,7 +75,7 @@ export default function LeavesPage() {
  toast.success('Rejected.');
  setActionTarget(null); setRejectReason('');
  },
- onError: () => toast.error('Reject failed.'),
+ onError: (error) => reportMutationError(error, 'Reject failed.'),
  });
 
  // ─── Bulk approve ───────────────────────────────────────────────

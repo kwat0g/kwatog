@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -48,7 +49,7 @@ export default function DeliverySchedulesPage() {
       setLines([{ product_name: '', quantity: 0, notes: '' }]);
       queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'delivery-schedules'] });
     },
-    onError: () => toast.error('Failed to submit delivery schedule.'),
+    onError: (error) => reportMutationError(error, 'Failed to submit delivery schedule.'),
   });
 
   const addLine = () => setLines([...lines, { product_name: '', quantity: 0, notes: '' }]);

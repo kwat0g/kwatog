@@ -254,7 +254,7 @@ function OverviewTab({ employee }: { employee: any }) {
       qc.invalidateQueries({ queryKey: ['hr', 'employee', employee.id] });
       toast.success('Photo updated.');
     },
-    onError: () => toast.error('Failed to upload photo.'),
+    onError: (error) => reportMutationError(error, 'Failed to upload photo.'),
   });
   const deletePhotoMutation = useMutation({
     mutationFn: () => employeesApi.deletePhoto(employee.id),
@@ -513,7 +513,7 @@ function DocumentsTab({ employee }: { employee: any }) {
       toast.success('Document uploaded.');
       setShowUpload(false);
     },
-    onError: () => toast.error('Failed to upload document.'),
+    onError: (error) => reportMutationError(error, 'Failed to upload document.'),
   });
 
   const deleteMutation = useMutation({
@@ -523,7 +523,7 @@ function DocumentsTab({ employee }: { employee: any }) {
       qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
       toast.success('Document deleted.');
     },
-    onError: () => toast.error('Failed to delete document.'),
+    onError: (error) => reportMutationError(error, 'Failed to delete document.'),
   });
 
   const handleUpload = () => {
@@ -890,7 +890,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
       toast.success('Training completed.');
       setCompleteTarget(null);
     },
-    onError: () => toast.error('Failed to complete training.'),
+    onError: (error) => reportMutationError(error, 'Failed to complete training.'),
   });
 
   const cancelMutation = useMutation({
@@ -899,7 +899,7 @@ function TrainingsTab({ employeeId }: { employeeId: string }) {
       qc.invalidateQueries({ queryKey: ['employee-trainings', employeeId] });
       toast.success('Training cancelled.');
     },
-    onError: () => toast.error('Failed to cancel training.'),
+    onError: (error) => reportMutationError(error, 'Failed to cancel training.'),
   });
 
   if (isLoading) return <SkeletonPanel />;
@@ -1058,7 +1058,7 @@ function AssignTrainingModal({ employeeId, onClose }: { employeeId: string; onCl
       toast.success('Training assigned.');
       onClose();
     },
-    onError: () => toast.error('Failed to assign training.'),
+    onError: (error) => reportMutationError(error, 'Failed to assign training.'),
   });
   return (
     <Modal isOpen onClose={onClose} title="Assign training">
@@ -1120,7 +1120,7 @@ function SkillsTab({ employeeId }: { employeeId: string }) {
       qc.invalidateQueries({ queryKey: ['employee-skills', employeeId] });
       toast.success('Skill removed.');
     },
-    onError: () => toast.error('Failed to remove skill.'),
+    onError: (error) => reportMutationError(error, 'Failed to remove skill.'),
   });
 
   if (isLoading) return <SkeletonPanel />;

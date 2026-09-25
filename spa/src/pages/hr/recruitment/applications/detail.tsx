@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -70,7 +71,7 @@ export default function ApplicationDetailPage() {
  toast.success('Application advanced.');
  queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
  },
- onError: () => toast.error('Failed to advance.'),
+ onError: (error) => reportMutationError(error, 'Failed to advance.'),
  });
 
  const rejectMutation = useMutation({
@@ -80,7 +81,7 @@ export default function ApplicationDetailPage() {
  setShowRejectDialog(false);
  queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
  },
- onError: () => toast.error('Failed to reject.'),
+ onError: (error) => reportMutationError(error, 'Failed to reject.'),
  });
 
  const interviewMutation = useMutation({
@@ -92,7 +93,7 @@ export default function ApplicationDetailPage() {
  setInterviewData({ scheduled_at: '', location: '', interviewer_name: '' });
  queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
  },
- onError: () => toast.error('Failed to schedule interview.'),
+ onError: (error) => reportMutationError(error, 'Failed to schedule interview.'),
  });
 
  const interviewOutcomeMutation = useMutation({
@@ -102,7 +103,7 @@ export default function ApplicationDetailPage() {
    toast.success('Interview outcome saved.');
    queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
   },
-  onError: () => toast.error('Failed to save interview outcome.'),
+  onError: (error) => reportMutationError(error, 'Failed to save interview outcome.'),
  });
 
  const noteMutation = useMutation({
@@ -112,7 +113,7 @@ export default function ApplicationDetailPage() {
  setNoteBody('');
  queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
  },
- onError: () => toast.error('Failed to add note.'),
+ onError: (error) => reportMutationError(error, 'Failed to add note.'),
  });
 
  if (isLoading) return <SkeletonDetail />;
