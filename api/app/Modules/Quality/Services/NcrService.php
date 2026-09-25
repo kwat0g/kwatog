@@ -469,7 +469,7 @@ class NcrService
                 && $locked->product_id
                 && $locked->affected_quantity > 0) {
                 $insp = Inspection::find($locked->inspection_id);
-                if ($insp && $insp->stage === InspectionStage::Outgoing) {
+                if ($insp && $insp->stage === InspectionStage::Outgoing && ! $this->mrpReplansOutput($insp)) {
                     $wo = $this->createRequiredWorkOrder([
                         'product_id'      => $locked->product_id,
                         'quantity_target' => $locked->affected_quantity,
@@ -490,7 +490,7 @@ class NcrService
                 && $locked->product_id
                 && $locked->affected_quantity > 0) {
                 $insp = Inspection::find($locked->inspection_id);
-                if ($insp && $insp->stage === InspectionStage::Outgoing) {
+                if ($insp && $insp->stage === InspectionStage::Outgoing && ! $this->mrpReplansOutput($insp)) {
                     $wo = $this->createRequiredWorkOrder([
                         'product_id'      => $locked->product_id,
                         'quantity_target' => (int) $locked->affected_quantity,
@@ -542,6 +542,17 @@ class NcrService
             ])->save();
             return $this->show($locked);
         });
+    }
+
+    /**
+     * A failed batch from an order line is MRP's to replace: MRP subtracts
+     * failed outgoing output from the line and re-plans the shortfall as soon
+     * as the result is final (QueueMrpOnOutgoingInspectionFailed). A second WO
+     * from NCR close, often days later after the CAPA, doubled the production.
+     */
+    private function mrpReplansOutput(Inspection $inspection): bool
+    {
+        return (bool) $inspection->workOrderOutput?->workOrder?->coversSalesOrderLine();
     }
 
     /** Lazy resolve to keep the Quality module bootable without Production. */

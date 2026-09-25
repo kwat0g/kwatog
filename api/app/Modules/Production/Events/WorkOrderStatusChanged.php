@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -16,7 +17,7 @@ use Illuminate\Queue\SerializesModels;
  * dashboard, the WO detail page, and the schedule view all reflect status
  * changes without a manual refetch.
  */
-class WorkOrderStatusChanged implements ShouldBroadcast
+class WorkOrderStatusChanged implements ShouldBroadcast, ToleratesNewerModelState
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

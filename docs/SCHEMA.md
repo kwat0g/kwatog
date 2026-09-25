@@ -318,6 +318,7 @@ id, delivery_id (FK deliveries), product_id (FK products), quantity (decimal 10,
 
 ### work_orders
 id, wo_number (string 20 unique), product_id (FK products), sales_order_id (FK sales_orders nullable), machine_id (FK machines nullable), mold_id (FK molds nullable), quantity_target (decimal 10,0), quantity_produced (decimal 10,0 default 0), quantity_good (decimal 10,0 default 0), quantity_rejected (decimal 10,0 default 0), scrap_rate (decimal 5,2 default 0), planned_start (datetime), planned_end (datetime), actual_start (datetime nullable), actual_end (datetime nullable), status (string 20: planned/confirmed/in_progress/paused/completed/closed), pause_reason (string nullable), priority (int default 0), created_by (FK users), created_at, updated_at
+quantity_target is the GOOD quantity the order needs: output recording caps quantity_good at it and rejects do not consume it. A WO cannot move to completed with quantity_good = 0.
 
 ### work_order_materials
 id, work_order_id (FK work_orders), item_id (FK items), bom_quantity (decimal 15,3), actual_quantity_issued (decimal 15,3 default 0), variance (decimal 15,3 default 0)
@@ -400,12 +401,14 @@ id, spec_id (FK inspection_specs), parameter_name (string 100), parameter_type (
 
 ### inspections
 id, inspection_number (string 32), stage (string 20: incoming/in_process/outgoing/supplier_return/customer_return), status (string 20: draft/in_progress/awaiting_review/passed/failed/cancelled), proposed_result (string 10 nullable: passed/failed), entity_type/entity_id (polymorphic gated record), product_id/item_id, batch_quantity, accepted_quantity, sample_size, accept_count, reject_count, defect_count, inspector_id (maker FK users nullable), reviewed_by (checker FK users nullable), reviewed_at, review_remarks, started_at, completed_at, notes, created_at, updated_at. Incoming and outgoing terminal results require a different checker; in-process results remain single-actor.
+Sampling: outgoing uses the `quality.aql.sample_plan` setting (ANSI/ASQ Z1.4 Table II-A, AQL 0.65 Level II, arrows pre-resolved — lots ≤280 sample 20 Ac0, 281–1,200 sample 80 Ac1; aligned by 0563). In-process uses `quality.in_process.sample_size` (default 5, 0562), never more than batch_quantity. A result entering awaiting_review notifies every holder of `quality.inspections.review` except the maker and appears in their Action Center (`quality:inspection-review:{hash}`).
 
 ### inspection_measurements
 id, inspection_id (FK inspections), spec_item_id (FK inspection_spec_items), measured_value (decimal 10,4 nullable), result (string 10: pass/fail), remarks (string nullable)
 
 ### non_conformance_reports
 id, ncr_number (string 20 unique), source (string 20: incoming/in_process/outgoing/customer), inspection_id (FK inspections nullable), complaint_id (FK customer_complaints nullable), product_id (FK products), severity (string 20), description (text), affected_quantity (int), disposition (string 20: scrap/rework/use_as_is/return_to_supplier), root_cause (text nullable), status (string 30), replacement_wo_id (FK work_orders nullable), created_at, updated_at
+replacement_wo_id / rework_wo_id stay null when the failed outgoing batch came from a root work order on a sales-order line (`WorkOrder::coversSalesOrderLine()`): MRP subtracts the failed output and re-plans that order when the result is final, so it is the one owner of that replacement. NCR close creates the WO only for stock batches.
 
 ### ncr_actions
 id, ncr_id (FK non_conformance_reports), action_type (string 30: corrective/preventive), description (text), responsible_person (string 100), due_date (date), completed_at (date nullable), status (string 20)

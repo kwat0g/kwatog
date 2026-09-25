@@ -597,6 +597,10 @@ class RolePermissionSeeder extends Seeder
                         // is decided by SeparationService's per-department gate.
                         'hr.separation.view',
                         'hr.clearance.sign',
+                        // O2C 2026-09-25 — the auto-invoice failure notice and
+                        // bottleneck link to the delivery, where Retry invoice
+                        // lives. Finance holds the retry but could not open it.
+                        'supply_chain.deliveries.view',
                     ],
                 ),
             ],
@@ -899,6 +903,12 @@ class RolePermissionSeeder extends Seeder
                         // this is the manage counterpart so the page's actions
                         // are not dead for every seeded role.
                         'supply_chain.fleet.manage',
+                        // O2C 2026-09-25 — ImpEx owns outbound dispatch: assign
+                        // the van and driver, move the shipment, and confirm it
+                        // on a signed DR. These existed with no business holder,
+                        // so every delivery needed the IT admin.
+                        'supply_chain.deliveries.create',
+                        'supply_chain.deliveries.confirm',
                         'purchasing.view',
                     ],
                 ),

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuCheck, LuFileText, LuX } from '@/lib/icons';
+import { LuCheck, LuFileText, LuInfo, LuX } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -67,7 +67,10 @@ export default function CustomerDeliveryDetailPage() {
       toast.error(e.response?.data?.message ?? 'Failed to confirm delivery.'),
   });
 
-  const canConfirm = delivery?.status === 'delivered';
+  // The server decides: a delivered shipment is confirmable only once our
+  // driver has uploaded a proof of delivery.
+  const canConfirm = delivery?.can_confirm === true;
+  const awaitingProof = delivery?.status === 'delivered' && !canConfirm;
 
  return (
     <div>
@@ -124,6 +127,15 @@ export default function CustomerDeliveryDetailPage() {
 
         {!isLoading && !isError && delivery && (
           <>
+            {awaitingProof && (
+              <div className="text-sm text-muted px-4 py-3 bg-subtle rounded-md border border-default flex items-start gap-2">
+                <LuInfo size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  Awaiting our driver&apos;s proof of delivery. You can confirm receipt once the
+                  signed delivery receipt or photo has been uploaded.
+                </span>
+              </div>
+            )}
             {showConfirm && (
               <Panel title="Confirm receipt">
                 <form

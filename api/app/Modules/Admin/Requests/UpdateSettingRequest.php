@@ -389,6 +389,7 @@ class UpdateSettingRequest extends FormRequest
             'quality.aql.sample_plan' => ['value' => ['required', 'array']],
             'quality.incoming.default_checklist' => ['value' => ['required', 'array', 'min:1']],
             'quality.incoming.measured_pieces' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],
+            'quality.in_process.sample_size' => ['value' => ['required', 'integer', 'min:1', 'max:1000']],
             'mrp.bom.max_explode_depth' => ['value' => ['required', 'integer', 'min:1', 'max:100']],
             'landing.section_copy' => ['value' => ['required', 'array']],
             'landing.pii_retention_months' => ['value' => ['required', 'integer', 'min:1']],

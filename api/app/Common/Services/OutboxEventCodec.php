@@ -6,6 +6,7 @@ namespace App\Common\Services;
 
 use App\Common\Events\ChainStepAdvanced;
 use App\Common\Events\PermissionOverrideChanged;
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Accounting\Events\BudgetActualsSyncRequested;
 use App\Modules\Assets\Events\MonthlyDepreciationRequested;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
@@ -290,10 +291,13 @@ class OutboxEventCodec
         // current row without checking it turns a stale retry/replay into a
         // false event containing a later state. Old rows without a marker are
         // still readable; all newly encoded rows include it.
+        // A fact event (ToleratesNewerModelState) accepts a newer row: its
+        // listeners re-read and guard on current state.
         if (array_key_exists('version', $value) && $value['version'] !== null) {
             $publishedAt = Carbon::parse((string) $value['version']);
             $currentAt = Carbon::parse((string) $model->getRawOriginal('updated_at'));
-            if (! $publishedAt->equalTo($currentAt)) {
+            $toleratesNewer = $parameter->getDeclaringClass()?->implementsInterface(ToleratesNewerModelState::class) ?? false;
+            if (! $publishedAt->equalTo($currentAt) && ! ($toleratesNewer && $currentAt->greaterThan($publishedAt))) {
                 throw new RuntimeException("Outbox model {$class}#{$value['id']} changed after publication.");
             }
         }

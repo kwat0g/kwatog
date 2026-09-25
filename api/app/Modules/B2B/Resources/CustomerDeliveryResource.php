@@ -23,6 +23,12 @@ class CustomerDeliveryResource extends JsonResource
             'delivered_at' => optional($this->delivered_at)?->toISOString(),
             'confirmed_at' => optional($this->confirmed_at)?->toISOString(),
             'receiver_name' => $this->receiver_name,
+            // Mirrors DeliveryService::confirm(): a delivered shipment needs a
+            // proof of delivery before it can be confirmed. Only the detail
+            // loads proofs, so the flag is absent from the list.
+            'can_confirm' => $this->whenLoaded('proofs', fn () => (
+                $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status)
+            ) === DeliveryStatus::Delivered && $this->proofs->isNotEmpty()),
             'sales_order' => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id' => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,

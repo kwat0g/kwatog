@@ -217,9 +217,14 @@ planned → confirmed → in_progress ⟷ paused → completed → closed
 3. Click **Start** → status = `in_progress`
    - **AUTO-TRIGGER:** `WorkOrderStatusChanged` event fires → **In-Process QC auto-created** (see Step 5)
 4. Record output: enter good quantity, reject quantity, select mold
+   - The WO target is the number of **good** pieces the order needs. Rejects
+     are recorded (with their defect breakdown) but do not use up the target:
+     a 150-piece WO with 3 rejects still records 150 good.
    - Mold shot count auto-increments (alerts at 80% of max shots)
    - Scrap rate calculated automatically
 5. Click **Complete** → status = `completed`
+   - Refused while the WO has no good output (nothing to inspect or ship).
+     A WO that will produce nothing is paused and cancelled instead.
    - **AUTO-TRIGGER:** `WorkOrderCompleted` event fires → **Outgoing QC auto-created** (see Step 6)
 
 **Finished-goods inventory handoff:** Each positive-good output also stages a
@@ -270,7 +275,10 @@ draft → in_progress → passed | failed
 **How to test:**
 1. After starting the WO, go to `/quality/inspections`
 2. Find the auto-created in-process inspection (linked to the WO)
-3. The inspection spec auto-loads measurement parameters from the product's spec
+3. The inspection spec auto-loads measurement parameters from the product's spec.
+   In-process QC samples a small fixed number of pieces off the running line
+   (`quality.in_process.sample_size`, default 5, never more than the WO
+   target); the lot itself is gated later by outgoing AQL.
 4. Record measurements — enter actual values for each dimension
 5. Complete the inspection:
    - **Passed:** All measurements within tolerance, defects ≤ accept count → production continues
@@ -288,7 +296,13 @@ draft → in_progress → passed | failed
 
 **What it is:** Final quality gate before goods can be delivered. Uses AQL (Acceptable Quality Level) 0.65, Inspection Level II statistical sampling.
 
-**Trigger:** Automatically created when Work Order is completed (via `TriggerOutgoingQC` listener). Only triggers if the WO is linked to a Sales Order (not for internal/rework WOs).
+**Trigger:** Automatically created when Work Order is completed (via `TriggerOutgoingQC` listener), one inspection per good output batch. Only triggers if the WO is linked to a Sales Order or born from an NCR.
+
+**Sampling plan (ANSI/ASQ Z1.4 Table II-A, AQL 0.65, Level II):** lots up to
+280 → 20 pieces, accept 0 (lots under 20 are inspected 100%); 281–1,200 →
+80 pieces, accept 1; 1,201–3,200 → 125, accept 2; 3,201–10,000 → 200,
+accept 3; larger lots follow the same table. The plan lives in the
+`quality.aql.sample_plan` setting (aligned by migration 0563).
 
 **Where in the app:** `/quality/inspections` (filtered by stage = "Outgoing")
 
@@ -304,7 +318,10 @@ draft → in_progress → passed | failed
 2. Find the auto-created outgoing inspection
 3. Note: sample size is calculated from batch quantity using AQL tables
 4. Record actual measurements for each critical dimension
-5. Complete the inspection:
+5. Complete the inspection. An outgoing result is maker-checked: it goes to
+   `awaiting_review`, every holder of `quality.inspections.review` other
+   than the inspector is notified, and the review appears in their **Action
+   Center**. A second person then passes or fails it.
    - **Passed:**
      - **AUTO-TRIGGER:** Delivery auto-drafted (via `CreateDeliveryDraftOnQcPass` listener)
      - Certificate of Conformance (CoC) available for download
@@ -312,7 +329,11 @@ draft → in_progress → passed | failed
    - **Failed:**
      - NCR auto-created
      - **Delivery is blocked** — goods cannot ship until quality issue resolved
-     - May need to rework (new WO) or scrap
+     - If the batch came from a sales-order line, **MRP re-plans that order
+       at once** (`QueueMrpOnOutgoingInspectionFailed`) and creates the
+       replacement WO. MRP is the one owner of replacement production for
+       order lines; NCR close only creates a replacement/rework WO for stock
+       batches.
 
 ---
 
@@ -339,14 +360,17 @@ scheduled → loading → in_transit → delivered → confirmed
 ```
 
 **How to test:**
+Dispatch is owned by the **ImpEx officer** (`supply_chain.deliveries.create`
+/ `.confirm`); warehouse staff see the schedule read-only.
+
 1. Go to `/supply-chain/deliveries`, find the auto-drafted delivery
-2. Assign a vehicle from the fleet (`/supply-chain/fleet`)
-3. Advance through statuses:
-   - `scheduled` → `loading` (warehouse picks and loads)
-   - `loading` → `in_transit` (truck leaves factory)
-   - `in_transit` → `delivered` (goods arrive at customer site)
-4. Upload delivery receipt photo
-5. Confirm delivery (`POST .../confirm`):
+2. Assign a vehicle and driver
+3. Advance through statuses (`scheduled` → `loading` → `in_transit` → `delivered`)
+4. The driver uploads the signed DR or a photo from **My Deliveries**
+   (`/driver`). A proof of delivery is required before anyone can confirm.
+5. Confirm delivery — the customer does it in the portal
+   (`/portal/customer/deliveries/{id}`, the button appears once a proof
+   exists), or ImpEx does it internally on a signed DR (`POST .../confirm`):
    - **AUTO-TRIGGERS (all in `DeliveryService::confirm()`):**
      - SO status auto-updates to `delivered` (or `partially_delivered` if not all items)
      - **Draft Invoice auto-created** for the SO when the Accounting handoff succeeds
@@ -1376,12 +1400,13 @@ This is the complete map of events and what they automatically trigger. Understa
 
 | Event | Listener | What Happens |
 |-------|----------|--------------|
-| `SalesOrderConfirmed` | `NotifyOnSalesOrderConfirmed` | Notifies production, PPC team |
+| `SalesOrderConfirmed` | `NotifyOnSalesOrderConfirmed` | Notifies production, PPC team (skipped if the order was cancelled before delivery) |
 | `WorkOrderStatusChanged` (→ in_progress) | `TriggerInProcessQC` | Auto-creates in-process inspection |
 | `WorkOrderCompleted` | `TriggerOutgoingQC` | Auto-creates outgoing inspection |
 | `WorkOrderCompleted` | `NotifyOnWorkOrderCompleted` | Notifies QC team |
 | `ProductionReceiptRequested` | `CreateProductionReceiptOnOutputRequested` | Retries only the failed good-output → finished-goods receipt handoff; records completed/manual-required outcome |
 | `InspectionPassed` (outgoing) | `CreateDeliveryDraftOnQcPass` | Auto-drafts delivery + notifies warehouse |
+| `InspectionFailed` (outgoing, SO-bound batch) | `QueueMrpOnOutgoingInspectionFailed` | Re-plans that sales order so MRP creates the replacement WO |
 | `DeliveryConfirmed` | `NotifyFinanceOnDeliveryConfirmed` | Notifies finance to invoice |
 | `DeliveryConfirmed` | (inside DeliveryService) | Attempts draft invoice creation and updates SO status |
 | `DeliveryInvoiceRequested` | `CreateDraftInvoiceOnDeliveryInvoiceRequested` | Replays only the failed delivery → invoice handoff; records completed/manual-required outcome |
@@ -1481,10 +1506,12 @@ WO completed → Outgoing inspection auto-created → inspector measures
 → Inspection fails (defects > AQL accept count)
 → NCR auto-created
 → Delivery is NOT auto-drafted (blocked)
-→ NCR disposition:
-  a) rework → new WO created for rework → re-inspect
-  b) scrap → material lost, new WO from scratch
-  c) use_as_is → accept with customer approval, delivery proceeds
+→ MRP re-plans the sales order immediately and creates the replacement WO
+→ NCR disposition records what happens to the failed parts:
+  a) rework / b) scrap → for a sales-order batch no extra WO is created
+     (MRP already replaced the quantity); for a stock batch NCR close
+     creates the replacement/rework WO
+  c) use_as_is → accept with customer approval
 ```
 
 **How to test:** Complete a WO → in outgoing QC, fail the inspection → verify no delivery created → create NCR disposition → rework via new WO → re-inspect.

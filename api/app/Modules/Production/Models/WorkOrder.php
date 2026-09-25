@@ -76,6 +76,16 @@ class WorkOrder extends Model
         return $this->belongsTo(SalesOrderItem::class);
     }
 
+    /**
+     * A root work order bound to an order line. MRP counts its good output
+     * against that line and re-plans any shortfall — including a batch that
+     * failed outgoing QC — so it is the one owner of replacement production.
+     */
+    public function coversSalesOrderLine(): bool
+    {
+        return $this->sales_order_item_id !== null && $this->parent_wo_id === null;
+    }
+
     public function machine(): BelongsTo
     {
         return $this->belongsTo(Machine::class);

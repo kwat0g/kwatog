@@ -41,6 +41,16 @@ describe('role-aligned sidebar permissions', () => {
  expect(isNavItemVisible(item('/payroll/statutory'), hr)).toBe(true);
  });
 
+ it('gives the driver a way to their own delivery run sheet', () => {
+ // O2C 2026-09-25 — the driver's proof photo unblocks the customer's
+ // confirmation, but the driver landed on an empty dashboard with no link.
+ const driver = { permissions: new Set(['supply_chain.driver.access']), features: allFeatures, roleSlug: 'driver' };
+ const warehouse = { permissions: new Set(['supply_chain.deliveries.view']), features: allFeatures, roleSlug: 'warehouse_staff' };
+
+ expect(isNavItemVisible(item('/driver'), driver)).toBe(true);
+ expect(isNavItemVisible(item('/driver'), warehouse)).toBe(false);
+ });
+
  it('keeps secondary pages out of the shared navigation sitemap', () => {
  const paths = new Set(SECTIONS.flatMap((section) => section.items).map((entry) => entry.to));
 

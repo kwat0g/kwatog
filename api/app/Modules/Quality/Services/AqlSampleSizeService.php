@@ -11,9 +11,10 @@ use App\Common\Services\SettingsService;
  * Sprint 7 — Task 60. ANSI/ASQ Z1.4 sample-size calculator at AQL 0.65,
  * General Inspection Level II — the level we use for outgoing batch QC.
  *
- * The table follows MIL-STD-105E (replaced by Z1.4 with identical layout).
- * For codes A-F at AQL 0.65 the standard arrows down to code G; we encode
- * that arrow by collapsing those rows directly to the G result.
+ * The table follows Z1.4 Table II-A. At AQL 0.65 the Ac0/Re1 plan sits at
+ * code F (n=20): codes A-E arrow down to F, G arrows up to F, and H arrows
+ * down to J (n=80, Ac1/Re2). The setting stores those arrows pre-resolved,
+ * with `code` naming the plan actually used (see 0563).
  */
 final class AqlSampleSizeService
 {

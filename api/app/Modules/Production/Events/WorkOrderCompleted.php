@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
  * WorkOrderStatusChanged (which fires for every transition) so consumers
  * can subscribe to "WO is done" specifically without filtering.
  */
-class WorkOrderCompleted
+class WorkOrderCompleted implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

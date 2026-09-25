@@ -99,6 +99,7 @@ use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\MRP\Events\MrpReplanRequested;
 use App\Modules\MRP\Listeners\QueueMrpOnReplanRequested;
 use App\Modules\MRP\Listeners\QueueMrpOnSalesOrderConfirmed;
+use App\Modules\MRP\Listeners\QueueMrpOnOutgoingInspectionFailed;
 use App\Modules\MRP\Listeners\QueueMrpOnStockMovementCompleted;
 use App\Modules\MRP\Models\MrpPlan;
 use App\Modules\Payroll\Events\PayrollComputationRequested;
@@ -302,6 +303,7 @@ class AppServiceProvider extends ServiceProvider
         // both demand planning and finite-capacity scheduling.
         Event::listen(SalesOrderConfirmed::class, [QueueMrpOnSalesOrderConfirmed::class, 'handle']);
         Event::listen(StockMovementCompleted::class, [QueueMrpOnStockMovementCompleted::class, 'handle']);
+        Event::listen(InspectionFailed::class, [QueueMrpOnOutgoingInspectionFailed::class, 'handle']);
         Event::listen(MrpReplanRequested::class, [QueueMrpOnReplanRequested::class, 'handle']);
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.

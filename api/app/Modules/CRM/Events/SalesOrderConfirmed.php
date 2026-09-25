@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\CRM\Models\SalesOrder;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -16,7 +17,7 @@ use Illuminate\Queue\SerializesModels;
  * the MRP engine runs. Drives a "new SO" pulse on the production dashboard
  * (Chain 1 stage breakdown) and the chain header on the SO detail page.
  */
-class SalesOrderConfirmed implements ShouldBroadcast
+class SalesOrderConfirmed implements ShouldBroadcast, ToleratesNewerModelState
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

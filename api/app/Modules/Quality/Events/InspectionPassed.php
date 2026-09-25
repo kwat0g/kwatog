@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Quality\Models\Inspection;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
  * resulting status is `passed`. Listeners filter by `stage` to scope to
  * incoming (P2P → AcceptGRNAndDraftBill) or outgoing (O2C → CreateDeliveryDraftOnQcPass).
  */
-class InspectionPassed
+class InspectionPassed implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

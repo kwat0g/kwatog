@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Listeners;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,12 @@ class NotifyOnSalesOrderConfirmed implements ShouldQueue
     {
         try {
             $so = $event->salesOrder->loadMissing('customer:id,name');
+
+            // The event carries the current row (ToleratesNewerModelState): an
+            // order cancelled before this ran must not be announced as confirmed.
+            if ($so->status === SalesOrderStatus::Cancelled) {
+                return;
+            }
 
             $roles = array_values(array_filter((array) $this->settings->get('crm.sales_order_confirmed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()

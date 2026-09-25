@@ -168,6 +168,7 @@ final class NotificationCatalog
                 ['key' => 'production.wo_completed', 'label' => 'Work order completed', 'description' => 'A production work order has finished. Outgoing QC is next.'],
                 ['key' => 'chain.outgoing_qc_required', 'label' => 'Outgoing QC required', 'description' => 'A finished work order needs AQL sampling before it can ship.'],
                 ['key' => 'quality.inspection_failed', 'label' => 'QC inspection failed', 'description' => 'A quality inspection failed. An NCR may be required.'],
+                ['key' => 'quality.inspection_awaiting_review', 'label' => 'QC result awaiting review', 'description' => 'An inspector finished a result that needs a second person to check it before it is final.'],
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
                 ['key' => 'chain.delivery_confirmed', 'label' => 'Delivery confirmed', 'description' => 'A delivery has been confirmed and an invoice draft was created.'],
                 ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],

@@ -416,6 +416,17 @@ export const SECTIONS: NavSection[] = [
         badgeKey: 'deliveries',
       },
       {
+        // The driver's own run sheet (status + proof photo). Drivers hold no
+        // other module read, so without this they landed on an empty
+        // dashboard with no way to reach the page that unblocks the
+        // customer's confirmation.
+        to: '/driver',
+        label: 'My Deliveries',
+        icon: LuTruck,
+        feature: 'supply_chain',
+        permission: 'supply_chain.driver.access',
+      },
+      {
         to: '/supply-chain/shipments',
         label: 'Inbound Shipments',
         icon: DeliveryIcon,

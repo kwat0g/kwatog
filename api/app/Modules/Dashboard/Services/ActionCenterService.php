@@ -59,6 +59,10 @@ class ActionCenterService
         // quality splits inspections/NCRs like Quality/routes.php, deliveries
         // accept the narrow deliveries slug like SupplyChain/routes.php.
         $this->append($items, $failedSources, 'inspections', fn () => $this->inspectionItems(), $user, ['quality.inspections.view']);
+        // A result awaiting its checker gates the outgoing lot's delivery.
+        // Inspections carry no row scope; the review route's own permission is
+        // the gate, and the maker never sees their own result as work.
+        $this->append($items, $failedSources, 'inspection_reviews', fn () => $this->inspectionReviewItems($user), $user, ['quality.inspections.review']);
         $this->append($items, $failedSources, 'ncrs', fn () => $this->ncrItems(), $user, ['quality.ncr.view']);
         $this->append($items, $failedSources, 'maintenance', fn () => $this->maintenanceItems(), $user, ['maintenance.view']);
         $this->append($items, $failedSources, 'production', fn () => $this->productionItems(), $user, ['production.work_orders.view']);
@@ -244,6 +248,34 @@ class ActionCenterService
                     createdAt: $inspection->created_at?->toIso8601String(),
                     updatedAt: $inspection->updated_at?->toIso8601String(), dueAt: null,
                     overdue: $age >= $slaHours,
+                    owner: $inspection->inspector?->name,
+                );
+            })->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function inspectionReviewItems(User $user): array
+    {
+        return Inspection::query()->with(['item:id,name', 'product:id,name', 'inspector:id,name'])
+            ->where('status', 'awaiting_review')
+            ->where('inspector_id', '!=', $user->id)
+            ->oldest('updated_at')->limit($this->sourceLimit())->get()
+            ->map(function (Inspection $inspection): array {
+                $stage = $this->enumValue($inspection->stage);
+                $subject = $inspection->item?->name ?? $inspection->product?->name ?? 'inspection lot';
+
+                return $this->item(
+                    id: 'quality:inspection-review:'.$inspection->hash_id,
+                    category: 'quality', kind: 'inspection_review',
+                    title: 'Review '.$this->humanize($stage).' inspection result',
+                    description: $subject.' · proposed '.$this->enumValue($inspection->proposed_result),
+                    reference: $inspection->inspection_number,
+                    priority: 'high',
+                    status: $this->humanize($this->enumValue($inspection->status)),
+                    link: '/quality/inspections/'.$inspection->hash_id,
+                    createdAt: $inspection->created_at?->toIso8601String(),
+                    updatedAt: $inspection->updated_at?->toIso8601String(), dueAt: null,
+                    overdue: false,
                     owner: $inspection->inspector?->name,
                 );
             })->all();

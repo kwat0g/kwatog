@@ -621,6 +621,15 @@ class WorkOrderService
                     "Work order {$lockedWo->wo_number} cannot be completed because some routing operations are still pending or in progress."
                 );
             }
+            // A completed WO hands its good output to outgoing QC. With no
+            // good output there is nothing to inspect or ship, and a completed
+            // WO can no longer record output, so the order line was left short
+            // behind a status that claimed the work was done.
+            if ((int) $lockedWo->quantity_good < 1) {
+                throw new BusinessRuleException(
+                    "Work order {$lockedWo->wo_number} has no good output to complete. Record its output, or pause and cancel it."
+                );
+            }
 
             $produced = (int) $lockedWo->quantity_produced;
             $rejected = (int) $lockedWo->quantity_rejected;

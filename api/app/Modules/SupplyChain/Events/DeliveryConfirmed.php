@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
  * invoice handoff succeeds; a separate DeliveryInvoiceRequested event is
  * emitted when Accounting recovery is required.
  */
-class DeliveryConfirmed
+class DeliveryConfirmed implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 

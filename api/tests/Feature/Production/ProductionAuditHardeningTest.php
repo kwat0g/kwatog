@@ -31,6 +31,7 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderDefect;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WoOperationService;
+use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -170,6 +171,11 @@ class ProductionAuditHardeningTest extends TestCase
         $mold = $this->mold();
 
         $wo = $this->startedWo($machine, $mold);
+        app(WorkOrderOutputService::class)->record($wo, [
+            'good_count' => 100,
+            'reject_count' => 0,
+            'defects' => [],
+        ], $this->user->id, 'audit-hardening-complete-output-'.$wo->id);
 
         // Machine enters breakdown/maintenance
         $machine->update([
@@ -201,6 +207,11 @@ class ProductionAuditHardeningTest extends TestCase
             'qty_completed' => 0,
             'qty_scrapped' => 0,
         ]);
+        app(WorkOrderOutputService::class)->record($wo, [
+            'good_count' => 100,
+            'reject_count' => 0,
+            'defects' => [],
+        ], $this->user->id, 'audit-hardening-routing-output-'.$wo->id);
 
         try {
             $this->service->complete($wo);

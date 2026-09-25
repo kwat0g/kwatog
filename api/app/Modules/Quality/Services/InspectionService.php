@@ -7,6 +7,7 @@ namespace App\Modules\Quality\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
 use App\Common\Services\OutboxService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
@@ -436,15 +437,24 @@ class InspectionService
             return $this->show($existing);
         }
 
-        // AQL plan only applies to outgoing. Incoming + in-process default to
-        // 100% inspection of the batch; the inspector may override the
-        // sample size by patching the row before recording measurements.
+        // AQL plan only applies to outgoing. In-process takes a small fixed
+        // sample (quality.in_process.sample_size); other manual stages default
+        // to 100% inspection of the batch.
         if ($stage === InspectionStage::Outgoing) {
             $plan = AqlSampleSizeService::forBatch($batchQty);
             $sample = $plan['sample_size'];
             $code = $plan['code'];
             $accept = $plan['accept'];
             $reject = $plan['reject'];
+        } elseif ($stage === InspectionStage::InProcess) {
+            // In-process QC samples a few pieces off the running line; the lot
+            // itself is gated later by outgoing AQL. A 100% sample of the WO
+            // target meant hundreds of rows before any output existed and, past
+            // the full-sampling cap, no in-process inspection at all.
+            $sample = min($batchQty, $this->settings->requiredInt('quality.in_process.sample_size', 1, 1000));
+            $code = null;
+            $accept = 0;
+            $reject = 1;
         } else {
             $sample = $this->boundedFullSampleSize($batchQty);
             $code = null;
@@ -859,6 +869,7 @@ class InspectionService
                     'completed_at' => null,
                     'inspector_id' => $lockedInspection->inspector_id ?? $by->id,
                 ])->save();
+                $this->notifyReviewers($lockedInspection, $by);
 
                 return $this->show($lockedInspection->fresh());
             }
@@ -919,6 +930,35 @@ class InspectionService
 
             return $this->finalizeTerminal($lockedInspection, $targetStatus, $by);
         });
+    }
+
+    /**
+     * A result awaiting its checker blocks everything downstream (an outgoing
+     * lot cannot be drafted for delivery), so the people who may check it are
+     * told. Recipients are whoever holds the review route's permission, minus
+     * the maker, who is refused at review time anyway.
+     */
+    private function notifyReviewers(Inspection $inspection, User $by): void
+    {
+        $makers = array_values(array_unique(array_filter([(int) $by->id, (int) $inspection->inspector_id])));
+        $reviewers = User::query()
+            ->where('is_active', true)
+            ->whereNotIn('id', $makers)
+            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'quality.inspections.review'))
+            ->get();
+
+        $stage = $inspection->stage instanceof \BackedEnum ? $inspection->stage->value : (string) $inspection->stage;
+        $proposed = $inspection->proposed_result instanceof \BackedEnum
+            ? $inspection->proposed_result->value
+            : (string) $inspection->proposed_result;
+        app(NotificationService::class)->send($reviewers, 'quality.inspection_awaiting_review', [
+            'title' => "Inspection {$inspection->inspection_number} awaits your review",
+            'message' => ucfirst(str_replace('_', '-', $stage))." inspection proposes {$proposed}."
+                .' A second person must check it before the result is final.',
+            'link_to' => "/quality/inspections/{$inspection->hash_id}",
+            'entity_type' => 'inspection',
+            'entity_id' => $inspection->hash_id,
+        ]);
     }
 
     private function finalizeTerminal(Inspection $inspection, InspectionStatus $targetStatus, User $by, ?int $defects = null): Inspection

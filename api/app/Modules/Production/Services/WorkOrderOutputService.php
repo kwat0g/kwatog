@@ -197,8 +197,11 @@ class WorkOrderOutputService
                 throw new BusinessRuleException('Only in-progress work orders can record output.');
             }
 
-            if (($fresh->quantity_produced + $total) > $fresh->quantity_target) {
-                throw new BusinessRuleException("Recording this output would exceed the work order target quantity ({$fresh->quantity_target}).");
+            // The target is the GOOD quantity the order needs (MRP sizes it that
+            // way). Rejects are scrap made on the way there, so they must not
+            // use it up: a 150-piece WO with 3 rejects still has to deliver 150.
+            if (($fresh->quantity_good + $good) > $fresh->quantity_target) {
+                throw new BusinessRuleException("Recording this output would exceed the work order target of {$fresh->quantity_target} good pieces.");
             }
 
             // Generate batch code: {wo}-B{seq}.

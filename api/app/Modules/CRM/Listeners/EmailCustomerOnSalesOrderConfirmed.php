@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Listeners;
 
 use App\Common\Services\EmailDeliveryFailureNotifier;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Mail\CustomerSalesOrderConfirmedMail;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,6 +22,12 @@ class EmailCustomerOnSalesOrderConfirmed implements ShouldQueue
             'customer',
             'items.product',
         ]);
+
+        // The event carries the current row (ToleratesNewerModelState): never
+        // email a confirmation for an order cancelled before this ran.
+        if ($salesOrder->status === SalesOrderStatus::Cancelled) {
+            return;
+        }
 
         $fallback = app(EmailDeliveryFailureNotifier::class);
         $context = [

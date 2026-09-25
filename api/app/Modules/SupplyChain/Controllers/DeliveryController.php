@@ -67,9 +67,17 @@ class DeliveryController
         ]);
     }
 
+    /**
+     * The one forward step a plain status change may take. Confirmation is
+     * its own action (proof, invoice, SO reconciliation) and the status route
+     * refuses it, so offering it here rendered a button that always failed.
+     */
     private static function nextStatus(DeliveryStatus $status): ?DeliveryStatus
     {
         foreach (DeliveryStatus::cases() as $candidate) {
+            if (in_array($candidate, [DeliveryStatus::Confirmed, DeliveryStatus::Cancelled], true)) {
+                continue;
+            }
             if ($status->canTransitionTo($candidate)) return $candidate;
         }
         return null;

@@ -515,7 +515,7 @@ export default function WorkOrderDetailPage() {
                 <dd className="col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
                 <dt className="text-muted">Target / Produced</dt>
                 <dd className="col-span-2 font-mono tabular-nums">
-                  {formatInt(data.quantity_produced)} / {formatInt(data.quantity_target)}
+                  {formatInt(data.quantity_target)} / {formatInt(data.quantity_produced)}
                 </dd>
                 <dt className="text-muted">Good / Reject</dt>
                 <dd className="col-span-2 font-mono tabular-nums">

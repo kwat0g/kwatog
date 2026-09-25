@@ -348,6 +348,8 @@ export interface PortalDeliveryDetail extends PortalDeliverySummary {
  receiver_name?: string | null;
  confirmed_at?: string | null;
  driver?: { id: string; name: string } | null;
+ /** Server rule: delivered AND a proof of delivery has been uploaded. */
+ can_confirm?: boolean;
 }
 
 export interface PortalCoCSummary {

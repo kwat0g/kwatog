@@ -136,13 +136,15 @@ class ActionCenterTaskService
     /** @return array<int, string> */
     private function qualityPermissions(string $key): array
     {
-        if (preg_match('/^quality:(inspection|ncr):[^:]+$/', $key, $matches) !== 1) {
+        if (preg_match('/^quality:(inspection|inspection-review|ncr):[^:]+$/', $key, $matches) !== 1) {
             throw new BusinessRuleException('Unknown action-center item.');
         }
 
-        return $matches[1] === 'inspection'
-            ? ['quality.inspections.view']
-            : ['quality.ncr.view'];
+        return match ($matches[1]) {
+            'inspection' => ['quality.inspections.view'],
+            'inspection-review' => ['quality.inspections.review'],
+            default => ['quality.ncr.view'],
+        };
     }
 
     /**
@@ -164,6 +166,8 @@ class ActionCenterTaskService
             str_starts_with($key, 'alert:') => Alert::query()->active()->whereKey($id)->exists(),
             str_starts_with($key, 'quality:inspection:') => Inspection::query()
                 ->whereIn('status', ['draft', 'in_progress'])->whereKey($id)->exists(),
+            str_starts_with($key, 'quality:inspection-review:') => Inspection::query()
+                ->where('status', 'awaiting_review')->whereKey($id)->exists(),
             str_starts_with($key, 'quality:ncr:') => NonConformanceReport::query()
                 ->whereNotIn('status', ['closed', 'cancelled'])->whereKey($id)->exists(),
             str_starts_with($key, 'maintenance:work-order:') => MaintenanceWorkOrder::query()

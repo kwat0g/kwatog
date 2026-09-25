@@ -220,6 +220,17 @@ The detail page renders a **ChainHeader** showing
 `Order Entered → MRP Planned → In Production → QC → Delivered → Invoiced`.
 The right panel **LinkedRecords** lists every related document.
 
+### 10.3 Delivery and customer confirmation
+
+A delivery is drafted automatically for each batch that passes outgoing QC.
+The **ImpEx officer** dispatches it: *Supply Chain → Outbound Deliveries →
+{delivery}*, assign the van and driver, then move it to Loading, In Transit
+and Delivered. The driver uploads the signed DR or a photo from *My
+Deliveries*; a proof of delivery is required before anyone can confirm. The
+customer then confirms receipt in the portal (the button appears once the
+proof is there), or ImpEx confirms on a signed DR. Confirmation drafts the
+invoice for Finance to finalize and collect.
+
 ## 11. MRP & Production
 
 ### 11.1 MRP plan review
@@ -236,8 +247,12 @@ WO detail. PPC Head confirms the schedule before shifts start.
 ### 11.3 Recording output
 
 *Production → Work Orders → record-output* (per shift). Enter good and
-reject counts plus defect breakdown. Live updates flow to dashboards over
-the `production.wo.{id}` channel.
+reject counts plus defect breakdown. The WO target is the number of **good**
+pieces the order needs; rejects are recorded but do not use it up. Live
+updates flow to dashboards over the `production.wo.{id}` channel.
+
+**Complete** needs at least one good piece. A WO that will produce nothing
+is paused and cancelled instead.
 
 ## 12. Quality & NCR
 
@@ -249,13 +264,26 @@ functional parameters with tolerances; mark critical parameters.
 ### 12.2 Recording an inspection
 
 Three stages — **incoming** (attached to GRN), **in-process** (attached to
-WO), **outgoing** (attached to delivery). Outgoing uses AQL 0.65 Level II
-sampling computed from batch quantity.
+WO), **outgoing** (one per good output batch of a WO).
+
+- **In-process** samples a few pieces off the running line (default 5,
+  *Admin → Settings → In-process QC Sample Size*).
+- **Outgoing** uses AQL 0.65 Level II per ANSI/ASQ Z1.4: lots up to 280 →
+  20 pieces, accept 0; 281–1,200 → 80 pieces, accept 1; larger lots follow
+  the same table.
+- An outgoing (or GRN incoming) result needs a **second person** to check it.
+  Everyone who may review is notified, and the review shows in their
+  *Action Center*; the inspector cannot review their own result.
 
 ### 12.3 NCR & 8D
 
 Failed inspections auto-open an NCR. Customer complaints can also open
 NCRs and have an **8D Report** tab on the complaint detail.
+
+When a batch made for a sales order fails outgoing QC, MRP re-plans that
+order straight away and creates the replacement work order. Closing the NCR
+does not create a second one; it only creates a replacement or rework WO for
+batches made for stock.
 
 ## 13. Maintenance
 
