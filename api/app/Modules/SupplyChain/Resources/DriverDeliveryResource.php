@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\SupplyChain\Resources;
 
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryAttemptReason;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,10 @@ class DriverDeliveryResource extends JsonResource
         $status = $this->status instanceof DeliveryStatus
             ? $this->status
             : DeliveryStatus::tryFrom((string) $this->status);
+        $hasAttemptOutcome = $this->relationLoaded('attemptOutcome') && $this->attemptOutcome !== null;
+        $canReportAttempt = $status === DeliveryStatus::InTransit
+            && ! $hasAttemptOutcome
+            && (int) $this->driver_id === (int) $request->user()?->id;
 
         return [
             'id' => $this->hash_id,
@@ -58,12 +63,30 @@ class DriverDeliveryResource extends JsonResource
                 'uploaded_at' => optional($proof->created_at)?->toISOString(),
             ])->all()),
             'proof_count' => $this->whenLoaded('proofs', fn () => $this->proofs->count()),
+            'can_report_attempt_outcome' => $canReportAttempt,
+            'attempt_outcome_reasons' => ($canReportAttempt || ($hasAttemptOutcome && ! $this->attemptOutcome->reconciled_at)) ? DeliveryAttemptReason::options() : [],
+            'attempt_outcome' => $hasAttemptOutcome
+                ? (new DeliveryAttemptOutcomeResource($this->attemptOutcome))->resolve($request)
+                : null,
+            'items' => $this->whenLoaded('items', fn () => $this->items->map(static function ($item): array {
+                $product = $item->salesOrderItem?->product;
+
+                return [
+                    'id' => $item->hash_id,
+                    'quantity' => (string) $item->quantity,
+                    'unit_of_measure' => $product?->unit_of_measure,
+                    'product' => $product ? [
+                        'part_number' => $product->part_number,
+                        'name' => $product->name,
+                    ] : null,
+                ];
+            })->values()->all()),
         ];
     }
 
     private function nextStatus(?DeliveryStatus $status): ?string
     {
-        if (! $status) {
+        if (! $status || $status === DeliveryStatus::ReturnPending) {
             return null;
         }
 

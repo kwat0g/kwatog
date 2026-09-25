@@ -77,6 +77,10 @@ class DriverDeliveryService
             'proofs' => static fn ($query) => $query->select([
                 'id', 'delivery_id', 'proof_type', 'file_name', 'created_at',
             ])->orderByDesc('created_at'),
+            'items.salesOrderItem.product:id,part_number,name,unit_of_measure',
+            'attemptOutcome.reporter:id,name',
+            'attemptOutcome.returnRequest:id,rma_number,status',
+            'attemptOutcome.items.deliveryItem',
         ]);
     }
 

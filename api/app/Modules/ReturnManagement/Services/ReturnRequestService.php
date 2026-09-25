@@ -48,6 +48,9 @@ use App\Modules\ReturnManagement\Events\ReturnInspectionRequested;
 use App\Modules\ReturnManagement\Events\ReturnRequestUpdated;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\ReturnManagement\Models\ReturnReceipt;
+use App\Modules\ReturnManagement\Models\ReturnReceiptItem;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnRequestSourceAllocation;
 use App\Modules\ReturnManagement\Support\ReturnRequestStateMachine;
 use App\Common\Services\ApprovalService;
@@ -91,8 +94,32 @@ class ReturnRequestService
     /**
      * Create a new RMA request.
      */
-    public function create(array $data, User $by): ReturnRequest
+    private ?int $creatingForCase = null;
+
+    public function availableForCase(string $kind, int $sourceId): string
     {
+        return $this->remainingSourceQuantity($kind, $sourceId);
+    }
+
+    public function create(array $data, User $by, ?\App\Modules\ReturnManagement\Models\ReturnCase $case = null): ReturnRequest
+    {
+        if ($case !== null) {
+            if ($case->resolution?->value === 'no_action') {
+                throw new BusinessRuleException('A return request cannot be created for a case resolved with no action.');
+            }
+
+            return DB::transaction(function () use ($data, $by, $case) {
+                $previous = $this->creatingForCase;
+                $this->creatingForCase = (int) $case->id;
+                try {
+                    $rma = $this->create($data, $by);
+                    $case->forceFill(['return_request_id' => $rma->id])->save();
+                    return $rma;
+                } finally {
+                    $this->creatingForCase = $previous;
+                }
+            });
+        }
         return DB::transaction(function () use ($data, $by) {
             if (($data['type'] ?? null) === ReturnRequestType::SupplierReturn->value
                 && (bool) ($data['finance_only'] ?? false)) {
@@ -125,6 +152,172 @@ class ReturnRequestService
             $rma->load('items');
             return $rma;
         });
+    }
+
+    /**
+     * Record goods physically counted back from a failed delivery. This is a
+     * trusted lifecycle bridge: unlike a customer RMA, the goods were never
+     * accepted, so no customer credit is created and no ordinary source
+     * allocation is reserved. Every line and inventory receipt remains bound
+     * to the exact immutable dispatch movement it recovers.
+     *
+     */
+    public function createTruckReturnFromAttemptOutcome(
+        \App\Modules\SupplyChain\Models\DeliveryAttemptOutcome $outcome,
+        User $by,
+        int $quarantineLocationId,
+        string $receiptRequestKey,
+        string $receiptFingerprint,
+        string $varianceReason = '',
+    ): ReturnRequest {
+        return DB::transaction(function () use ($outcome, $by, $quarantineLocationId, $receiptRequestKey, $receiptFingerprint, $varianceReason): ReturnRequest {
+            $lockedOutcome = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcome::query()
+                ->with(['delivery.salesOrder', 'items.deliveryItem.salesOrderItem.product', 'items.movements.stockMovement'])
+                ->lockForUpdate()
+                ->findOrFail($outcome->id);
+            $replay = ReturnReceipt::query()->where('request_key', $receiptRequestKey)->first();
+            if ($replay) {
+                $existing = ReturnRequest::query()->with('items')->findOrFail($replay->return_request_id);
+                if ((int) $existing->delivery_attempt_outcome_id !== (int) $lockedOutcome->id
+                    || ! hash_equals((string) $replay->payload_fingerprint, $receiptFingerprint)) {
+                    throw new BusinessRuleException('This recovery request was already used for a different receipt.');
+                }
+                return $existing;
+            }
+            $delivery = $lockedOutcome->delivery;
+            if (! $delivery?->salesOrder?->customer_id) {
+                throw new BusinessRuleException('The truck return needs the original delivery customer and sales-order lineage.');
+            }
+            $location = WarehouseLocation::query()->with('zone.warehouse')->findOrFail($quarantineLocationId);
+            $this->assertLocationUsable($location, WarehouseZoneType::Quarantine, 'Truck-return goods must enter an active quarantine location.');
+
+            $receipt = ReturnRequest::create([
+                'rma_number' => $this->nextRmaNumber(),
+                'type' => ReturnRequestType::CustomerReturn,
+                'status' => ReturnRequestStatus::Received,
+                'finance_only' => false,
+                'sales_order_id' => $delivery->sales_order_id,
+                'customer_id' => $delivery->salesOrder->customer_id,
+                'reason_code' => 'failed_delivery_truck_return',
+                'reason_description' => 'Goods physically returned to the depot after an unsuccessful delivery attempt.',
+                'internal_notes' => trim(($lockedOutcome->notes ? $lockedOutcome->notes."\n" : '')
+                    .'Driver reason: '.$lockedOutcome->reason_code->label()
+                    .(trim($varianceReason) !== '' ? "\nDepot variance: ".trim($varianceReason) : '')),
+                'return_date' => now()->toDateString(),
+                'delivery_attempt_outcome_id' => $lockedOutcome->id,
+                'created_by' => $by->id,
+                'received_at' => now(),
+            ]);
+
+            $returnReceipt = ReturnReceipt::create([
+                'return_request_id' => $receipt->id,
+                'request_key' => $receiptRequestKey,
+                'payload_fingerprint' => $receiptFingerprint,
+                'final_receipt' => true,
+                'quarantine_location_id' => $location->id,
+                'received_by' => $by->id,
+                'received_at' => now(),
+            ]);
+
+            foreach ($lockedOutcome->items as $outcomeItem) {
+                $deliveryItem = $outcomeItem->deliveryItem;
+                $damagedRemaining = (string) $outcomeItem->truck_return_damaged_quantity;
+                foreach ($outcomeItem->movements as $outcomeMovement) {
+                    $alreadyReceived = (string) ReturnRequestItem::query()
+                        ->where('delivery_attempt_outcome_movement_id', $outcomeMovement->id)->sum('returned_quantity');
+                    $quantity = bcsub((string) ($outcomeMovement->received_quantity ?? '0.000'), $alreadyReceived, 3);
+                    if (bccomp($quantity, '0', 3) <= 0) {
+                        continue;
+                    }
+                    $issue = $outcomeMovement->stockMovement;
+                    if (! $issue || $issue->movement_type !== StockMovementType::Delivery
+                        || (int) $issue->item_id < 1
+                        || bccomp($quantity, (string) $issue->quantity, 3) > 0) {
+                        throw new BusinessRuleException('The depot return no longer matches its original delivery issue movement.');
+                    }
+                    $product = $deliveryItem->salesOrderItem?->product;
+                    if (! $product) {
+                        throw new BusinessRuleException('A returned delivery item is missing its product and Quality lineage.');
+                    }
+
+                    $damagedForIssue = bccomp($damagedRemaining, '0', 3) > 0
+                        ? (bccomp($damagedRemaining, $quantity, 3) < 0 ? $damagedRemaining : $quantity)
+                        : '0.000';
+                    $condition = bccomp($damagedForIssue, $quantity, 3) === 0
+                        ? 'damaged'
+                        : (bccomp($damagedForIssue, '0', 3) > 0 ? 'used' : 'new');
+
+                    $unitPrice = (string) $deliveryItem->unit_price;
+                    $item = ReturnRequestItem::create([
+                        'return_request_id' => $receipt->id,
+                        'product_id' => $product->id,
+                        'item_id' => $issue->item_id,
+                        'quantity' => $quantity,
+                        'returned_quantity' => $quantity,
+                        'receipt_recorded' => true,
+                        'unit_price' => Money::round2($unitPrice),
+                        'original_unit_price' => Money::round2($unitPrice),
+                        'total' => Money::mul($quantity, $unitPrice),
+                        'reason' => 'Depot receipt from failed delivery '.$delivery->delivery_number
+                            .(bccomp($damagedForIssue, '0', 3) > 0 ? "; {$damagedForIssue} of this source allocation was reported damaged." : ''),
+                        'condition' => $condition,
+                        'source_delivery_item_id' => $deliveryItem->id,
+                        'delivery_attempt_outcome_movement_id' => $outcomeMovement->id,
+                        'lot_number' => $issue->lot_number,
+                        'quarantine_location_id' => $location->id,
+                        'quarantine_status' => 'held',
+                    ]);
+
+                    $unitCost = (string) $issue->unit_cost;
+                    $totalCost = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)->deliveryReturnCost($item, $quantity);
+                    $movement = $this->stockMovements->move(new StockMovementInput(
+                        type: StockMovementType::DeliveryReturn,
+                        itemId: (int) $issue->item_id,
+                        toLocationId: (int) $location->id,
+                        quantity: $quantity,
+                        unitCost: $unitCost,
+                        referenceType: 'stock_movement',
+                        referenceId: (int) $issue->id,
+                        remarks: "Truck return RMA {$receipt->rma_number}; original delivery issue #{$issue->id}",
+                        createdBy: $by->id,
+                        lotNumber: $issue->lot_number,
+                        expiryDate: $issue->expiry_date?->toDateString(),
+                        totalCostOverride: $totalCost,
+                        deliveryReturnItemId: (int) $item->id,
+                    ));
+
+                    $item->forceFill([
+                        'quarantine_movement_id' => $movement->id,
+                    ])->save();
+                    $returnReceipt->items()->create([
+                        'return_request_item_id' => $item->id,
+                        'quantity' => $quantity,
+                        'stock_movement_id' => $movement->id,
+                    ]);
+                    $damagedRemaining = bcsub($damagedRemaining, $damagedForIssue, 3);
+                }
+            }
+
+            $updated = $receipt->fresh()->load(['items', 'receipts.items']);
+            $recipients = User::query()->where('is_active', true)
+                ->whereHas('role.permissions', static fn ($query) => $query->whereIn('slug', [
+                    'return_management.inspect',
+                    'return_management.manage',
+                ]))
+                ->get();
+            if ($recipients->isNotEmpty()) {
+                $this->notifications->sendInApp($recipients, 'return.truck_return_received', [
+                    'title' => 'Truck return received — '.$updated->rma_number,
+                    'message' => 'The depot count is complete. Review the quarantined goods and stage Quality inspection.',
+                    'link_to' => '/return-management/'.$updated->hash_id,
+                    'entity_type' => 'return_request',
+                    'entity_id' => $updated->hash_id,
+                ], 'truck-return:'.$receipt->id.':received');
+            }
+            DB::afterCommit(static fn () => event(new ReturnRequestUpdated($updated, 'received')));
+
+            return $updated;
+        }, 3);
     }
 
     /**
@@ -184,18 +377,7 @@ class ReturnRequestService
             ->all();
         $itemMap = $this->finishedGoodItemIdMap($productIds);
 
-        $invoiceReserved = $this->activeAllocationsBySource(
-            'invoice_item',
-            $this->lineIdsFrom($invoiceModels->flatMap(fn (Invoice $invoice) => $invoice->items)),
-        );
-        $salesOrderReserved = $this->activeAllocationsBySource(
-            'sales_order_item',
-            $this->lineIdsFrom($salesOrderModels->flatMap(fn (SalesOrder $order) => $order->items)),
-        );
-        $deliveryReserved = $this->activeAllocationsBySource(
-            'delivery_item',
-            $this->lineIdsFrom($deliveryModels->flatMap(fn (Delivery $delivery) => $delivery->items)),
-        );
+        $remaining = fn (string $kind, int $id): string => $this->remainingSourceQuantity($kind, $id);
 
         $invoices = $invoiceModels
             ->map(fn (Invoice $invoice): array => [
@@ -207,7 +389,7 @@ class ReturnRequestService
                     'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
                     'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
                     'quantity' => (string) $line->quantity,
-                    'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $invoiceReserved[(int) $line->id] ?? '0'),
+                    'remaining_quantity' => $remaining('invoice_item', (int) $line->id),
                     'unit_price' => (string) $line->unit_price,
                     'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
                 ])->values(),
@@ -222,7 +404,7 @@ class ReturnRequestService
                     'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
                     'item_id' => isset($itemMap[(int) $line->product_id]) ? HashId::encode($itemMap[(int) $line->product_id]) : null,
                     'quantity' => (string) $line->quantity_delivered,
-                    'remaining_quantity' => $this->remainingOnLine((string) $line->quantity_delivered, $salesOrderReserved[(int) $line->id] ?? '0'),
+                    'remaining_quantity' => $remaining('sales_order_item', (int) $line->id),
                     'unit_price' => (string) $line->unit_price,
                     'label' => 'SO line '.$line->id,
                 ])->values(),
@@ -233,7 +415,7 @@ class ReturnRequestService
                 'id' => $delivery->hash_id,
                 'label' => $delivery->delivery_number,
                 'sales_order_id' => $delivery->sales_order_id ? HashId::encode((int) $delivery->sales_order_id) : null,
-                'lines' => $delivery->items->map(function ($line) use ($itemMap, $deliveryReserved): array {
+                'lines' => $delivery->items->map(function ($line) use ($itemMap, $remaining): array {
                     $productId = $line->salesOrderItem?->product_id;
 
                     return [
@@ -241,7 +423,7 @@ class ReturnRequestService
                         'product_id' => $productId ? HashId::encode((int) $productId) : null,
                         'item_id' => $productId && isset($itemMap[(int) $productId]) ? HashId::encode($itemMap[(int) $productId]) : null,
                         'quantity' => (string) $line->quantity,
-                        'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $deliveryReserved[(int) $line->id] ?? '0'),
+                        'remaining_quantity' => $remaining('delivery_item', (int) $line->id),
                         'unit_price' => (string) $line->unit_price,
                         'label' => 'Delivery line '.$line->id,
                     ];
@@ -269,7 +451,7 @@ class ReturnRequestService
      *
      * @param  array{items: array<int, array{quantity?: string, reason?: string|null, condition?: string|null, source_invoice_item_id?: int|string|null, source_sales_order_item_id?: int|string|null, source_delivery_item_id?: int|string|null}>, reason_code?: string|null, reason_description?: string|null, customer_notes?: string|null, return_date?: string|null}  $data
      */
-    public function createCustomerReturnFromPortal(int $customerId, array $data, ?User $by = null): ReturnRequest
+    public function createCustomerReturnFromPortal(int $customerId, array $data, ?User $by = null, ?\App\Modules\ReturnManagement\Models\ReturnCase $case = null): ReturnRequest
     {
         $by ??= app(SystemUserResolver::class)->user();
 
@@ -311,7 +493,7 @@ class ReturnRequestService
                 'source_sales_order_item_id'  => $line['source_sales_order_item_id'],
                 'source_delivery_item_id'     => $line['source_delivery_item_id'],
             ], $resolved),
-        ], $by);
+        ], $by, $case);
 
         $this->notifyCustomerReturnCreated($rma);
 
@@ -443,24 +625,6 @@ class ReturnRequestService
         $map = $this->finishedGoodItemIdMap([$productId]);
 
         return $map[$productId] ?? null;
-    }
-
-    /** @param iterable<object> $lines */
-    private function lineIdsFrom(iterable $lines): array
-    {
-        $ids = [];
-        foreach ($lines as $line) {
-            $ids[] = (int) $line->id;
-        }
-
-        return array_values(array_unique($ids));
-    }
-
-    private function remainingOnLine(string $documentQuantity, string $reserved): string
-    {
-        $left = bcsub(bcadd($documentQuantity, '0', 3), $reserved, 3);
-
-        return bccomp($left, '0', 3) > 0 ? $left : '0.000';
     }
 
     private function notifyCustomerReturnCreated(ReturnRequest $rma): void
@@ -743,9 +907,20 @@ class ReturnRequestService
     {
         return DB::transaction(function () use ($rma, $data, $by): ReturnRequest {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->assertNotTruckReturn($locked, 'edit');
             $this->ensureStatus($locked, ReturnRequestStatus::Draft);
-            if ((int) $locked->created_by !== (int) $by->id && ! $by->hasPermission('admin.roles.manage')) {
-                throw new BusinessRuleException('Only the draft creator or a system administrator can edit this return request.');
+            $creatorId = $locked->created_by !== null ? (int) $locked->created_by : null;
+            $systemUserId = $creatorId !== null && $creatorId !== (int) $by->id
+                ? app(SystemUserResolver::class)->id()
+                : null;
+            $isSystemAttributed = $creatorId === null || $creatorId === $systemUserId;
+            $isOwner = $creatorId === (int) $by->id;
+            $isCaseReturn = ReturnCase::query()->where('return_request_id', $locked->id)->exists();
+            $mayTriageSystemDraft = ($isSystemAttributed || $isCaseReturn) && $by->hasPermission('return_management.manage');
+            $isRoleAdministrator = $by->hasPermission('admin.roles.manage');
+
+            if (! $isOwner && ! $mayTriageSystemDraft && ! $isRoleAdministrator) {
+                throw new BusinessRuleException('Only the draft creator, a return manager for case or system-created drafts, or a system administrator can edit this return request.');
             }
             $effective = array_merge([
                 'type'                => $locked->type instanceof ReturnRequestType ? $locked->type->value : (string) $locked->type,
@@ -897,6 +1072,19 @@ class ReturnRequestService
         foreach ($rma->items as $line) {
             $item = $line->getAttributes();
             $this->assertCustomerProductItemMapping($rma, $item);
+            if ($line->delivery_attempt_outcome_movement_id !== null) {
+                $outcomeMovement = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement::query()
+                    ->with('outcomeItem.outcome')
+                    ->find((int) $line->delivery_attempt_outcome_movement_id);
+                $outcome = $outcomeMovement?->outcomeItem?->outcome;
+                if (! $outcome
+                    || (int) $rma->delivery_attempt_outcome_id !== (int) $outcome->id
+                    || $outcomeMovement->received_quantity === null
+                    || bccomp((string) $line->quantity, (string) $outcomeMovement->received_quantity, 3) > 0) {
+                    throw new BusinessRuleException('A truck-return RMA line must match its reconciled delivery issue movement and depot receipt.');
+                }
+                continue;
+            }
             $hasSource = collect([
                 $item['source_invoice_item_id'] ?? null,
                 $item['source_sales_order_item_id'] ?? null,
@@ -1101,7 +1289,10 @@ class ReturnRequestService
             }
         }
 
-        $sourcePrice = (string) $poItem->unit_price;
+        // RMA and GRN quantities are in item base units; PO prices are per
+        // purchase unit (e.g. ₱25/BAG for 5 KG/BAG).
+        $inventoryItem = $poItem->item;
+        $sourcePrice = $this->baseUnitReturnPrice($inventoryItem, (string) $poItem->unit_price, (string) $poItem->unit);
         if ($hasBill) {
             if (! $bill) {
                 throw new BusinessRuleException('A source bill line requires the RMA bill.');
@@ -1110,7 +1301,7 @@ class ReturnRequestService
             if ((int) $billItem->bill_id !== (int) $rma->bill_id || (int) $billItem->item_id !== (int) $item['item_id']) {
                 throw new BusinessRuleException('Supplier-return bill-line provenance does not match the RMA bill or item.');
             }
-            $sourcePrice = (string) $billItem->unit_price;
+            $sourcePrice = $this->baseUnitReturnPrice($inventoryItem, (string) $billItem->unit_price, (string) $billItem->unit);
         }
 
         return [
@@ -1119,6 +1310,34 @@ class ReturnRequestService
             'unit_price' => $sourcePrice,
             'limit' => (string) $grnItem->quantity_accepted,
         ];
+    }
+
+    private function baseUnitReturnPrice(Item $item, string $price, string $unit): string
+    {
+        $factor = $item->convertToBase('1', trim($unit) ?: null);
+        if (bccomp($factor, '0', 6) <= 0) {
+            throw new BusinessRuleException('Supplier-return source unit must convert to a positive base quantity.');
+        }
+
+        return Money::round2(bcdiv($price, $factor, 8));
+    }
+
+    /** Convert an RMA base-unit quantity back to the source PO purchase unit. */
+    private function baseQuantityToPurchaseUnit(Item $item, string $quantity, ?string $purchaseUnit): string
+    {
+        $factor = $item->convertToBase('1', $purchaseUnit);
+        if (bccomp($factor, '0', 6) <= 0) {
+            throw new BusinessRuleException('Supplier-return purchase unit must convert to a positive base quantity.');
+        }
+
+        $purchaseQuantity = bcdiv($quantity, $factor, 6);
+        $purchaseQuantityAtColumnScale = bcadd($purchaseQuantity, '0', 3);
+        $roundTripBaseQuantity = bcmul($purchaseQuantityAtColumnScale, $factor, 6);
+        if (bccomp($roundTripBaseQuantity, $quantity, 3) !== 0) {
+            throw new BusinessRuleException('Returned quantity cannot be represented in the source PO purchase unit at its supported precision.');
+        }
+
+        return $purchaseQuantityAtColumnScale;
     }
 
     /**
@@ -1181,7 +1400,133 @@ class ReturnRequestService
             })
             ->sum('quantity');
 
-        return bcsub($limit, $allocated, 3);
+        $claimReserved = match ($kind) {
+            'delivery_item' => app(ReturnCaseQuantityService::class)->reserved([$sourceId], [], $this->creatingForCase),
+            'grn_item' => app(ReturnCaseQuantityService::class)->reserved([], [$sourceId], $this->creatingForCase),
+            default => '0',
+        };
+        $remaining = bcsub(bcsub($limit, $allocated, 3), $claimReserved, 3);
+        if (in_array($kind, ['invoice_item', 'sales_order_item', 'delivery_item'], true)) {
+            foreach ($this->customerSourcePools($kind, $sourceId) as $pool) {
+                $poolRemaining = $this->customerPoolRemaining($pool, $excludeAllocationIds);
+                if (bccomp($poolRemaining, $remaining, 3) < 0) {
+                    $remaining = $poolRemaining;
+                }
+            }
+        }
+
+        return $remaining;
+    }
+
+    /**
+     * Physical pools: an SO/product is shared by all invoice, SO and delivery
+     * sources; an identified delivery/product additionally caps that shipment.
+     * Lock the common SO (or delivery for an SO-less invoice) before counting:
+     * two creates using different source kinds must serialize even when there
+     * are no allocation rows yet to lock.
+     *
+     * @return list<array{sales_order_id:?int,delivery_id:?int,product_id:int}>
+     */
+    private function customerSourcePools(string $kind, int $sourceId): array
+    {
+        $deliveryId = null;
+        if ($kind === 'invoice_item') {
+            $line = InvoiceItem::query()->with('invoice')->findOrFail($sourceId);
+            $productId = (int) $line->product_id;
+            $deliveryId = $line->invoice->delivery_id ? (int) $line->invoice->delivery_id : null;
+            $orderId = $line->invoice->sales_order_id ? (int) $line->invoice->sales_order_id : null;
+        } elseif ($kind === 'sales_order_item') {
+            $line = SalesOrderItem::query()->findOrFail($sourceId);
+            $productId = (int) $line->product_id;
+            $orderId = (int) $line->sales_order_id;
+        } else {
+            $line = DeliveryItem::query()->with('salesOrderItem')->findOrFail($sourceId);
+            $productId = (int) $line->salesOrderItem->product_id;
+            $orderId = (int) $line->salesOrderItem->sales_order_id;
+            $deliveryId = (int) $line->delivery_id;
+        }
+
+        if ($deliveryId && ! $orderId) {
+            $orderId = (int) Delivery::query()->findOrFail($deliveryId)->sales_order_id ?: null;
+        }
+        if ($orderId) {
+            $order = SalesOrder::withTrashed();
+            if (DB::transactionLevel() > 0) {
+                $order->lockForUpdate();
+            }
+            $order->findOrFail($orderId);
+        } elseif ($deliveryId && DB::transactionLevel() > 0) {
+            Delivery::query()->lockForUpdate()->findOrFail($deliveryId);
+        }
+
+        $pools = [];
+        if ($orderId) {
+            $pools[] = ['sales_order_id' => $orderId, 'delivery_id' => null, 'product_id' => $productId];
+        }
+        if ($deliveryId) {
+            $pools[] = ['sales_order_id' => null, 'delivery_id' => $deliveryId, 'product_id' => $productId];
+        }
+
+        return $pools;
+    }
+
+    /** @param array{sales_order_id:?int,delivery_id:?int,product_id:int} $pool */
+    private function customerPoolRemaining(array $pool, array $excludeAllocationIds): string
+    {
+        $orderId = $pool['sales_order_id'];
+        $deliveryId = $pool['delivery_id'];
+        $productId = $pool['product_id'];
+        $deliveryIds = $orderId
+            ? Delivery::query()->where('sales_order_id', $orderId)->pluck('id')->all()
+            : [$deliveryId];
+        $soLineIds = $orderId
+            ? SalesOrderItem::query()->where('sales_order_id', $orderId)->where('product_id', $productId)->pluck('id')->all()
+            : [];
+        $deliveryLineIds = DeliveryItem::query()
+            ->whereIn('delivery_id', $deliveryIds)
+            ->whereHas('salesOrderItem', fn ($q) => $q->where('product_id', $productId)
+                ->when($orderId, fn ($q) => $q->where('sales_order_id', $orderId)))
+            ->pluck('id')->all();
+        $invoiceIds = Invoice::query()
+            ->where(function ($q) use ($orderId, $deliveryIds): void {
+                if ($orderId) {
+                    $q->where('sales_order_id', $orderId)
+                        ->orWhere(fn ($q) => $q->whereNull('sales_order_id')->whereIn('delivery_id', $deliveryIds));
+                } else {
+                    $q->where('delivery_id', $deliveryIds[0]);
+                }
+            })
+            ->when($deliveryId, fn ($q) => $q->where('delivery_id', $deliveryId))
+            ->pluck('id')->all();
+        $invoiceLineIds = InvoiceItem::query()->whereIn('invoice_id', $invoiceIds)
+            ->where('product_id', $productId)->pluck('id')->all();
+
+        $limit = $orderId
+            ? (string) SalesOrderItem::query()->whereIn('id', $soLineIds)->sum('quantity_delivered')
+            : (string) DeliveryItem::query()->whereIn('id', $deliveryLineIds)
+                ->selectRaw('COALESCE(SUM(COALESCE(customer_received_quantity, quantity)), 0) AS quantity')->value('quantity');
+        if ($deliveryId) {
+            $limit = (string) DeliveryItem::query()->whereIn('id', $deliveryLineIds)
+                ->selectRaw('COALESCE(SUM(COALESCE(customer_received_quantity, quantity)), 0) AS quantity')->value('quantity');
+        }
+
+        $allocated = (string) ReturnRequestSourceAllocation::query()
+            ->join('return_request_items', 'return_request_items.id', '=', 'return_request_source_allocations.return_request_item_id')
+            ->join('return_requests', 'return_requests.id', '=', 'return_request_items.return_request_id')
+            ->whereNull('return_request_source_allocations.released_at')
+            ->whereNotIn('return_requests.status', [ReturnRequestStatus::Rejected->value, ReturnRequestStatus::Cancelled->value])
+            ->when($excludeAllocationIds !== [], fn ($q) => $q->whereNotIn('return_request_source_allocations.id', $excludeAllocationIds))
+            ->where(function ($q) use ($soLineIds, $invoiceLineIds, $deliveryLineIds): void {
+                $q->where(fn ($q) => $q->where('source_kind', 'invoice_item')->whereIn('source_id', $invoiceLineIds))
+                    ->orWhere(fn ($q) => $q->where('source_kind', 'delivery_item')->whereIn('source_id', $deliveryLineIds));
+                if ($soLineIds) {
+                    $q->orWhere(fn ($q) => $q->where('source_kind', 'sales_order_item')->whereIn('source_id', $soLineIds));
+                }
+            })
+            ->sum('return_request_source_allocations.quantity');
+
+        $claims = app(ReturnCaseQuantityService::class)->reserved($deliveryLineIds, [], $this->creatingForCase);
+        return bcsub(bcsub($limit, $allocated, 3), $claims, 3);
     }
 
     private function reserveSource(
@@ -1250,7 +1595,8 @@ class ReturnRequestService
         return match ($kind) {
             'invoice_item' => (string) InvoiceItem::query()->findOrFail($sourceId)->quantity,
             'sales_order_item' => (string) SalesOrderItem::query()->findOrFail($sourceId)->quantity_delivered,
-            'delivery_item' => (string) DeliveryItem::query()->findOrFail($sourceId)->quantity,
+            'delivery_item' => (string) (DeliveryItem::query()->findOrFail($sourceId)->customer_received_quantity
+                ?? DeliveryItem::query()->findOrFail($sourceId)->quantity),
             'grn_item' => (string) GrnItem::query()->findOrFail($sourceId)->quantity_accepted,
             default => throw new BusinessRuleException('Unsupported return source line.'),
         };
@@ -1331,6 +1677,7 @@ class ReturnRequestService
     {
         $updated = DB::transaction(function () use ($rma) {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->assertNotTruckReturn($locked, 'submit for approval');
             $this->ensureStatus($locked, ReturnRequestStatus::Draft);
             $locked->load('items');
             $this->refreshAuthoritativeLineContract($locked);
@@ -1377,6 +1724,7 @@ class ReturnRequestService
     {
         $updated = DB::transaction(function () use ($rma, $by, $remarks) {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->assertNotTruckReturn($locked, 'approve');
             $this->ensureStatus($locked, ReturnRequestStatus::PendingApproval);
 
             try {
@@ -1413,68 +1761,267 @@ class ReturnRequestService
     }
 
     /**
-     * Record receipt of returned goods (approved → received).
+     * Record one physical return installment. Partial receipts remain approved
+     * until the caller marks the last installment final.
      *
      * @param array<int, numeric-string> $receivedQtys keyed by return_request_items.id
      */
-    public function receive(ReturnRequest $rma, array $receivedQtys = [], ?int $quarantineLocationId = null, ?User $by = null): ReturnRequest
-    {
-        $updated = DB::transaction(function () use ($rma, $receivedQtys, $quarantineLocationId, $by) {
-            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
-            $this->ensureStatus($locked, ReturnRequestStatus::Approved);
-            $locked->load('items');
-            $this->states->transition($locked, ReturnRequestStatus::Received);
+    public function receive(
+        ReturnRequest $rma,
+        array $receivedQtys = [],
+        ?int $quarantineLocationId = null,
+        ?User $by = null,
+        bool $finalReceipt = true,
+        ?string $requestKey = null,
+    ): ReturnRequest {
+        $requestKey = $requestKey !== null ? strtolower(trim($requestKey)) : null;
+        $fingerprint = $this->receiptPayloadFingerprint($receivedQtys, $quarantineLocationId, $finalReceipt);
 
-            $locked->update([
-                'status'      => ReturnRequestStatus::Received,
+        [$updated, $wasRecorded] = DB::transaction(function () use (
+            $rma,
+            $receivedQtys,
+            $quarantineLocationId,
+            $by,
+            $finalReceipt,
+            $requestKey,
+            $fingerprint,
+        ): array {
+            $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $locked->load('items');
+
+            if ($requestKey !== null) {
+                $existing = ReturnReceipt::query()
+                    ->where('return_request_id', $locked->id)
+                    ->where('request_key', $requestKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    if (! hash_equals((string) $existing->payload_fingerprint, $fingerprint)) {
+                        throw new BusinessRuleException('This return receipt request key was already used with different quantities or options.');
+                    }
+
+                    return [$locked->fresh()->load(['items', 'receipts.items']), false];
+                }
+            }
+
+            // Preserve the old single-final-receipt API for clients that do not
+            // send an idempotency key. If its response is lost, only an exact
+            // replay of the original unkeyed final payload is accepted; a
+            // changed payload still cannot create a second physical receipt.
+            if ($requestKey === null && $finalReceipt && $locked->received_at !== null) {
+                $unkeyedFinal = ReturnReceipt::query()
+                    ->where('return_request_id', $locked->id)
+                    ->whereNull('request_key')
+                    ->where('final_receipt', true)
+                    ->orderBy('id')
+                    ->first();
+
+                if ($unkeyedFinal && hash_equals((string) $unkeyedFinal->payload_fingerprint, $fingerprint)) {
+                    return [$locked->fresh()->load(['items', 'receipts.items']), false];
+                }
+
+                throw new BusinessRuleException('A request key is required for partial or subsequent return receipts.');
+            }
+
+            $this->ensureStatus($locked, ReturnRequestStatus::Approved);
+            $hasPriorReceipt = $locked->receipts()->exists();
+            if ((! $finalReceipt || $hasPriorReceipt || $locked->received_at !== null) && $requestKey === null) {
+                throw new BusinessRuleException('A request key is required for partial or subsequent return receipts.');
+            }
+            if (! $finalReceipt && $receivedQtys === []) {
+                throw new BusinessRuleException('Partial receipts require explicit received quantities.');
+            }
+
+            $quantities = [];
+            $hasPositiveQuantity = false;
+            foreach ($locked->items as $item) {
+                $hasQuantity = array_key_exists($item->id, $receivedQtys);
+                $quantity = (string) ($hasQuantity
+                    ? $receivedQtys[$item->id]
+                    : (! $hasPriorReceipt && $finalReceipt ? $item->quantity : '0'));
+                if (! is_numeric($quantity) || bccomp($quantity, '0', 3) < 0) {
+                    throw new BusinessRuleException("Return line {$item->id} receipt quantity must be zero or greater.");
+                }
+
+                $quantity = bcadd($quantity, '0', 3);
+                $cumulative = bcadd((string) $item->returned_quantity, $quantity, 3);
+                if (bccomp($cumulative, (string) $item->quantity, 3) > 0) {
+                    throw new BusinessRuleException("Return line {$item->id} received quantity exceeds its remaining requested quantity.");
+                }
+
+                $quantities[(int) $item->id] = ['installment' => $quantity, 'cumulative' => $cumulative];
+                $hasPositiveQuantity = $hasPositiveQuantity || bccomp($quantity, '0', 3) > 0;
+            }
+
+            foreach ($receivedQtys as $lineId => $_quantity) {
+                if (! isset($quantities[(int) $lineId])) {
+                    throw new BusinessRuleException('A receipt quantity references a line outside this return request.');
+                }
+            }
+            if (! $finalReceipt && ! $hasPositiveQuantity) {
+                throw new BusinessRuleException('A partial receipt must include a positive quantity.');
+            }
+
+            // A case-linked physical return cannot be closed by a final
+            // receipt that is shorter than the verified defective quantity.
+            // Keep the transaction untouched and ask the operator to record
+            // this installment as partial so the remainder stays actionable.
+            if ($finalReceipt) {
+                $case = ReturnCase::query()->with('lines')->where('return_request_id', $locked->id)->first();
+                if ($case) {
+                    $requiredDefectTotal = $case->lines->reduce(
+                        fn (string $sum, $line): string => bcadd($sum, (string) ($line->verified_defective_quantity ?? '0.000'), 3),
+                        '0.000',
+                    );
+                    $receivedTotal = collect($quantities)->reduce(
+                        fn (string $sum, array $quantity): string => bcadd($sum, $quantity['cumulative'], 3),
+                        '0.000',
+                    );
+                    if (bccomp($requiredDefectTotal, '0', 3) > 0 && bccomp($receivedTotal, $requiredDefectTotal, 3) < 0) {
+                        throw new BusinessRuleException('This final receipt is below the verified defective quantity. Record it as a partial receipt and submit the remaining units.');
+                    }
+                    foreach ($locked->items as $item) {
+                        $caseLine = $case->lines->first(function ($line) use ($item): bool {
+                            return ($item->source_delivery_item_id && (int) $line->source_delivery_item_id === (int) $item->source_delivery_item_id)
+                                || ($item->source_po_item_id && (int) $line->source_po_item_id === (int) $item->source_po_item_id)
+                                || ($item->source_grn_item_id && (int) $line->source_grn_item_id === (int) $item->source_grn_item_id)
+                                || ($item->product_id && (int) $line->product_id === (int) $item->product_id && $item->item_id && (int) $line->item_id === (int) $item->item_id);
+                        });
+                        $requiredDefect = (string) ($caseLine?->verified_defective_quantity ?? '0.000');
+                        if (bccomp($requiredDefect, '0', 3) > 0
+                            && bccomp($quantities[(int) $item->id]['cumulative'], $requiredDefect, 3) < 0) {
+                            throw new BusinessRuleException('This final receipt is below the verified defective quantity. Record it as a partial receipt and submit the remaining units.');
+                        }
+                    }
+                }
+            }
+
+            $priorLocationId = ReturnReceipt::query()
+                ->where('return_request_id', $locked->id)
+                ->whereNotNull('quarantine_location_id')
+                ->orderBy('id')
+                ->value('quarantine_location_id');
+            if ($priorLocationId !== null && $quarantineLocationId !== null
+                && (int) $priorLocationId !== $quarantineLocationId) {
+                throw new BusinessRuleException('All installments for a return must use the same quarantine location.');
+            }
+            $effectiveLocationId = $priorLocationId !== null ? (int) $priorLocationId : $quarantineLocationId;
+            $hasStockableCustomerReceipt = $locked->type === ReturnRequestType::CustomerReturn
+                && $locked->items->contains(fn (ReturnRequestItem $item): bool => $item->item_id !== null
+                    && bccomp($quantities[(int) $item->id]['installment'], '0', 3) > 0);
+            if ($hasStockableCustomerReceipt && $effectiveLocationId === null) {
+                $effectiveLocationId = (int) $this->defaultReturnQuarantineLocation()->id;
+            }
+
+            $location = $effectiveLocationId !== null
+                ? WarehouseLocation::query()->with('zone')->findOrFail($effectiveLocationId)
+                : null;
+            if ($hasStockableCustomerReceipt && $location) {
+                $this->assertLocationUsable($location, WarehouseZoneType::Quarantine, 'Returned stock must be received into an active quarantine-zone location.');
+            }
+
+            if ($finalReceipt) {
+                $this->states->transition($locked, ReturnRequestStatus::Received);
+            }
+
+            $receipt = ReturnReceipt::create([
+                'return_request_id' => $locked->id,
+                'request_key' => $requestKey,
+                'payload_fingerprint' => $fingerprint,
+                'final_receipt' => $finalReceipt,
+                'quarantine_location_id' => $effectiveLocationId,
+                'received_by' => $by?->id ?? $locked->created_by,
                 'received_at' => now(),
             ]);
 
             foreach ($locked->items as $item) {
-                // A missing map entry means the operator accepted the documented
-                // full-quantity default. An explicit zero is different: it is a
-                // recorded no-return and must never fall back to the request.
-                $hasRecordedQuantity = array_key_exists($item->id, $receivedQtys);
-                $qty = (string) ($hasRecordedQuantity ? $receivedQtys[$item->id] : $item->quantity);
-                $updates = [
-                    'returned_quantity' => $qty,
-                    'receipt_recorded' => true,
-                ];
-                if ($locked->type === ReturnRequestType::CustomerReturn && $item->item_id && bccomp($qty, '0', 3) > 0) {
-                    if ($item->quarantine_movement_id) {
-                        throw new BusinessRuleException("Return line {$item->id} has already entered quarantine.");
+                $installment = $quantities[(int) $item->id]['installment'];
+                $cumulative = $quantities[(int) $item->id]['cumulative'];
+                $updates = ['returned_quantity' => $cumulative];
+                if ($finalReceipt || bccomp($installment, '0', 3) > 0) {
+                    // A zero quantity on the final receipt records that no more
+                    // goods are expected on this line.
+                    $updates['receipt_recorded'] = true;
+                }
+
+                $movementId = null;
+                if ($locked->type === ReturnRequestType::CustomerReturn
+                    && $item->item_id
+                    && bccomp($installment, '0', 3) > 0) {
+                    if (! $location) {
+                        throw new BusinessRuleException('A quarantine location is required for physically received customer goods.');
                     }
-                    $location = $quarantineLocationId
-                        ? WarehouseLocation::query()->with('zone')->findOrFail($quarantineLocationId)
-                        : $this->defaultReturnQuarantineLocation();
-                    $this->assertLocationUsable($location, WarehouseZoneType::Quarantine, 'Returned stock must be received into an active quarantine-zone location.');
-                    $movement = $this->stockMovements->move(new StockMovementInput(
+                    $movement = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)->receiveCustomerReturn(
+                        $item, $installment, (int) $location->id, $by ?? User::query()->findOrFail($locked->created_by),
+                    ) ?? $this->stockMovements->move(new StockMovementInput(
                         type: StockMovementType::AdjustmentIn,
                         itemId: (int) $item->item_id,
                         toLocationId: (int) $location->id,
-                        quantity: $qty,
+                        quantity: $installment,
                         referenceType: 'return_request',
                         referenceId: $locked->id,
                         remarks: "RMA {$locked->rma_number} line {$item->id}: quarantine receipt",
-                        createdBy: $by?->id ?? $rma->created_by,
+                        createdBy: $by?->id ?? $locked->created_by,
                     ));
-                    if ($item->lot_number) {
+                    if ($item->lot_number && $movement->movement_type === StockMovementType::AdjustmentIn) {
                         $this->stockMovements->stampLot($movement, $item->lot_number);
                     }
                     $updates['quarantine_location_id'] = $location->id;
-                    $updates['quarantine_movement_id'] = $movement->id;
+                    $updates['quarantine_movement_id'] = $item->quarantine_movement_id ?? $movement->id;
                     $updates['quarantine_status'] = 'held';
+                    $movementId = (int) $movement->id;
                 }
+
                 $item->update($updates);
-                $this->syncSourceAllocationQuantity($item, $qty);
+                $receipt->items()->create([
+                    'return_request_item_id' => $item->id,
+                    'quantity' => $installment,
+                    'stock_movement_id' => $movementId,
+                ]);
+
+                if ($finalReceipt) {
+                    $this->syncSourceAllocationQuantity($item, $cumulative);
+                }
             }
 
-            return $locked->fresh()->load('items');
+            $requestUpdates = [];
+            if ($finalReceipt) {
+                $requestUpdates['status'] = ReturnRequestStatus::Received;
+            }
+            if ($locked->received_at === null) {
+                $requestUpdates['received_at'] = now();
+            }
+            if ($requestUpdates !== []) {
+                $locked->update($requestUpdates);
+            }
+
+            return [$locked->fresh()->load(['items', 'receipts.items']), true];
         });
 
-        event(new ReturnRequestUpdated($updated, 'received'));
+        if ($wasRecorded) {
+            event(new ReturnRequestUpdated($updated, $finalReceipt ? 'received' : 'partial receipt recorded'));
+        }
 
         return $updated;
+    }
+
+    /** Stable, quantity-normalized idempotency fingerprint for one receipt call. */
+    private function receiptPayloadFingerprint(array $receivedQtys, ?int $quarantineLocationId, bool $finalReceipt): string
+    {
+        $quantities = [];
+        foreach ($receivedQtys as $lineId => $quantity) {
+            if (! is_numeric($quantity) || bccomp((string) $quantity, '0', 3) < 0) {
+                throw new BusinessRuleException('Received quantities must be zero or greater.');
+            }
+            $quantities[(int) $lineId] = bcadd((string) $quantity, '0', 3);
+        }
+        ksort($quantities);
+
+        return hash('sha256', json_encode([
+            'final_receipt' => $finalReceipt,
+            'quarantine_location_id' => $quarantineLocationId,
+            'received_quantities' => $quantities,
+        ], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -2031,7 +2578,7 @@ class ReturnRequestService
 
             $quantity = $this->settledQuantity($item);
             $grnItem = GrnItem::query()->with('grn')->lockForUpdate()->findOrFail($item->source_grn_item_id);
-            $poItem = PurchaseOrderItem::query()->lockForUpdate()->findOrFail($item->source_po_item_id);
+            $poItem = PurchaseOrderItem::query()->with('item')->lockForUpdate()->findOrFail($item->source_po_item_id);
 
             if ((int) $grnItem->purchase_order_item_id !== (int) $poItem->id
                 || (int) $poItem->purchase_order_id !== (int) $rma->purchase_order_id
@@ -2077,10 +2624,15 @@ class ReturnRequestService
 
             // A replacement is still owed for rejected goods, so this is
             // collected before the credit skip below.
+            $purchaseUnitQuantity = $this->baseQuantityToPurchaseUnit(
+                $poItem->item,
+                $quantity,
+                trim((string) $poItem->unit) ?: null,
+            );
             $replacementLines[] = [
                 'item_id'    => $item->item_id,
                 'description' => $poItem->description,
-                'quantity'   => $quantity,
+                'quantity'   => $purchaseUnitQuantity,
                 'unit'       => $poItem->unit,
                 'unit_price' => (string) $poItem->unit_price,
             ];
@@ -2163,8 +2715,14 @@ class ReturnRequestService
             if ($closeOriginal) {
                 // Verify that the original PO only owes the returned quantity.
                 // For each item on the original, check that undelivered = replaced qty.
-                foreach ($original->items()->get(['id', 'quantity', 'quantity_received']) as $line) {
-                    $owed = bcsub((string) $line->quantity, (string) $line->quantity_received, 3);
+                foreach ($original->items()->with('item')->get() as $line) {
+                    // PO quantities and prices use the purchase unit; receipt and
+                    // RMA quantities use the inventory item's base unit.
+                    $orderedBase = $line->item->convertToBase(
+                        (string) $line->quantity,
+                        trim((string) $line->unit) ?: null,
+                    );
+                    $owed = bcsub($orderedBase, (string) $line->quantity_received, 3);
                     // Treat negative as '0' (edge case: if a line somehow has more received than ordered)
                     $owed = bccomp($owed, '0', 3) >= 0 ? $owed : '0';
                     $replaced = $replacedByPoItem[(int) $line->id] ?? '0';
@@ -2210,11 +2768,18 @@ class ReturnRequestService
             return;
         }
 
-        // Decimal-safe: PO quantities are decimal, and a float comparison can
-        // classify a fully-received fractional PO as partially received (or the
-        // reverse) at the boundary. bccomp at 3 dp is the column's precision.
-        $ordered  = (string) $po->items()->sum('quantity');
-        $accepted = (string) $po->items()->sum('quantity_accepted');
+        // PO ordered quantities use the purchase unit, while accepted quantity
+        // is recorded in the inventory item's base unit. Compare both totals in
+        // base units so a 1 BAG PO (5 KG) remains partially received at 4 KG.
+        $ordered = '0';
+        $accepted = '0';
+        foreach ($po->items()->with('item')->get() as $line) {
+            $orderedBase = $line->item
+                ? $line->item->convertToBase((string) $line->quantity, trim((string) $line->unit) ?: null)
+                : (string) $line->quantity;
+            $ordered = bcadd($ordered, $orderedBase, 3);
+            $accepted = bcadd($accepted, (string) $line->quantity_accepted, 3);
+        }
         $zeroStatus = $po->sent_to_supplier_at
             ? PurchaseOrderStatus::Sent
             : PurchaseOrderStatus::Approved;
@@ -2245,6 +2810,19 @@ class ReturnRequestService
      */
     private function createCreditNote(ReturnRequest $rma, User $by): ?\App\Modules\Accounting\Models\CreditNote
     {
+        if ($rma->delivery_attempt_outcome_id !== null) {
+            // Truck-retained goods were never accepted by the customer. Their
+            // quarantine/QC path is inventory custody only, without a credit.
+            return null;
+        }
+        $case = ReturnCase::query()->where('return_request_id', $rma->id)->first();
+        if ($case?->resolution?->value === 'no_action') {
+            throw new BusinessRuleException('A return request cannot be settled for a case resolved with no action.');
+        }
+        if ($case?->resolution?->value === 'redelivery') {
+            return null;
+        }
+
         if ($rma->finance_only && ! $rma->finance_only_approved_by) {
             throw new BusinessRuleException('Finance-only returns require explicit approval before credit.');
         }
@@ -2612,18 +3190,34 @@ class ReturnRequestService
             $type = $line->disposition === DispositionType::Scrap->value
                 ? StockMovementType::Scrap
                 : StockMovementType::Transfer;
+            $truckSourceMovement = null;
+            if ($line->delivery_attempt_outcome_movement_id !== null) {
+                $truckSourceMovement = \App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement::query()
+                    ->with('stockMovement')
+                    ->findOrFail((int) $line->delivery_attempt_outcome_movement_id)
+                    ->stockMovement;
+                if (! $truckSourceMovement
+                    || $truckSourceMovement->movement_type !== StockMovementType::Delivery
+                    || (int) $truckSourceMovement->item_id !== (int) $itemId
+                    || (string) $truckSourceMovement->lot_number !== (string) $line->lot_number) {
+                    throw new BusinessRuleException('Truck-return disposition lost its original lot and cost lineage.');
+                }
+            }
             $movement = $this->stockMovements->move(new StockMovementInput(
                 type: $type,
                 itemId: (int) $itemId,
                 fromLocationId: (int) $line->quarantine_location_id,
                 toLocationId: $type === StockMovementType::Scrap ? null : $locationId,
                 quantity: $qty,
+                unitCost: $truckSourceMovement ? (string) $truckSourceMovement->unit_cost : null,
                 referenceType: 'return_request',
                 referenceId: $rma->id,
                 remarks: "RMA {$rma->rma_number}: Customer return",
                 createdBy: $by->id,
+                lotNumber: $line->lot_number,
+                expiryDate: $truckSourceMovement?->expiry_date?->toDateString(),
             ));
-            if ($line->lot_number) {
+            if ($line->lot_number && ! $truckSourceMovement) {
                 $this->stockMovements->stampLot($movement, $line->lot_number);
             }
             $line->update([
@@ -2735,6 +3329,7 @@ class ReturnRequestService
     {
         $updated = DB::transaction(function () use ($rma, $by, $reason): ReturnRequest {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->assertNotTruckReturn($locked, 'reject');
             if ($locked->status !== ReturnRequestStatus::PendingApproval) {
                 throw new BusinessRuleException(
                     'Only a pending-approval RMA can be rejected. Physical receipt and Quality handoff require a compensating workflow.'
@@ -2762,15 +3357,31 @@ class ReturnRequestService
         return $updated;
     }
 
-    /**
-     * Cancel (draft/pending_approval → cancelled).
-     */
+    /** Cancel before physical return effects have been recorded. */
     public function cancel(ReturnRequest $rma, ?string $reason = null): ReturnRequest
     {
         $updated = DB::transaction(function () use ($rma, $reason): ReturnRequest {
             $locked = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
-            if (! in_array($locked->status, [ReturnRequestStatus::Draft, ReturnRequestStatus::PendingApproval], true)) {
-                throw new BusinessRuleException("Only draft or pending_approval RMA can be cancelled.");
+            $this->assertNotTruckReturn($locked, 'cancel');
+            if (! in_array($locked->status, [
+                ReturnRequestStatus::Draft,
+                ReturnRequestStatus::PendingApproval,
+                ReturnRequestStatus::Approved,
+            ], true)) {
+                throw new BusinessRuleException('Only draft, pending-approval, or approved returns can be cancelled.');
+            }
+
+            $locked->load('items');
+            if ($locked->received_at !== null || $locked->items->contains(
+                static fn (ReturnRequestItem $line): bool => $line->receipt_recorded
+                    || (bool) $line->reversal_already_applied
+                    || bccomp((string) $line->returned_quantity, '0', 3) > 0
+                    || bccomp((string) ($line->stock_movement_quantity ?? '0'), '0', 3) > 0
+                    || $line->stock_movement_id !== null
+                    || $line->quarantine_movement_id !== null
+                    || $line->quarantine_release_movement_id !== null,
+            )) {
+                throw new BusinessRuleException('A return cannot be cancelled after any physical receipt or stock effect has been recorded.');
             }
             if ($locked->status === ReturnRequestStatus::PendingApproval) {
                 ApprovalRecord::query()
@@ -2779,6 +3390,19 @@ class ReturnRequestService
                     ->where('is_current', true)
                     ->whereIn('action', ['pending', 'skipped'])
                     ->update(['action' => 'superseded', 'is_current' => false]);
+            }
+            if ($locked->status === ReturnRequestStatus::Approved) {
+                ApprovalRecord::query()
+                    ->where('approvable_type', $locked->getMorphClass())
+                    ->where('approvable_id', $locked->getKey())
+                    ->where('is_current', true)
+                    ->whereIn('action', ['pending', 'skipped'])
+                    ->update(['action' => 'superseded', 'is_current' => false]);
+                ApprovalRecord::query()
+                    ->where('approvable_type', $locked->getMorphClass())
+                    ->where('approvable_id', $locked->getKey())
+                    ->where('is_current', true)
+                    ->update(['is_current' => false]);
             }
             $this->states->transition($locked, ReturnRequestStatus::Cancelled);
             $this->releaseSourceAllocations($locked);
@@ -2821,6 +3445,13 @@ class ReturnRequestService
         $existing = trim((string) $rma->internal_notes);
 
         return $existing === '' ? $note : "{$existing}\n\n{$note}";
+    }
+
+    private function assertNotTruckReturn(ReturnRequest $rma, string $action): void
+    {
+        if ($rma->delivery_attempt_outcome_id !== null) {
+            throw new BusinessRuleException("A reconciled truck-return RMA is protected from ordinary {$action} actions.");
+        }
     }
 
     private function ensureStatus(ReturnRequest $rma, ReturnRequestStatus $expected): void

@@ -52,7 +52,7 @@ export default function MaterialIssuesListPage() {
  <span className="font-mono">{r.slip_number}</span>
  ) },
  { key: 'date', header: 'Issued', cell: (r) => <span className="font-mono">{formatDate(r.issued_date)}</span> },
- { key: 'wo', header: 'Work order', cell: (r) => r.work_order_id ? `WO#${r.work_order_id}` : (r.reference_text ?? '—') },
+ { key: 'wo', header: 'Work order', cell: (r) => r.work_order?.wo_number ?? (r.reference_text ?? '—') },
  { key: 'status', header: 'Status', cell: (r) => (
  <Chip variant={r.status === 'issued' ? 'info' : r.status === 'cancelled' ? 'neutral' : 'warning'}>{r.status_label ?? r.status}</Chip>
  ) },

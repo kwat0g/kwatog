@@ -171,8 +171,11 @@ final class NotificationCatalog
                 ['key' => 'quality.inspection_awaiting_review', 'label' => 'QC result awaiting review', 'description' => 'An inspector finished a result that needs a second person to check it before it is final.'],
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
                 ['key' => 'chain.delivery_confirmed', 'label' => 'Delivery confirmed', 'description' => 'A delivery has been confirmed and an invoice draft was created.'],
+                ['key' => 'chain.delivery_attempt_reported', 'label' => 'Delivery exception needs a depot count', 'description' => 'A driver reported a delivery exception that needs physical return reconciliation.'],
                 ['key' => 'return.restocked', 'label' => 'Returned goods restocked', 'description' => 'Customer-returned goods were moved back into sellable stock. Warehouse should shelf and verify them.'],
+                ['key' => 'return.truck_return_received', 'label' => 'Truck return received', 'description' => 'Goods from an unsuccessful delivery were counted into quarantine and need Quality inspection.'],
                 ['key' => 'customer.so_responded', 'label' => 'Customer sales order response', 'description' => 'A customer responded to a sales order confirmation request.'],
+                ['key' => 'return.case_updated', 'label' => 'Problem report updated', 'description' => 'A customer or supplier report needs review or follow-up.'],
                 ['key' => 'customer.rma_created', 'label' => 'Customer return requested', 'description' => 'A customer submitted a return request that needs review.'],
             ]],
             ['title' => 'Chain 2 · Procure to Pay', 'hint' => 'Requests, purchase orders, and goods receipts', 'types' => [

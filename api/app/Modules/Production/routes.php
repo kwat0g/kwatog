@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'feature:production', 'permission:production.
     })->middleware('permission:production.work_orders.view');
 
     /* ─── Work orders (Task 51) ─── */
+    Route::get('/work-orders/form-options', [WorkOrderController::class, 'formOptions'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/options', [WorkOrderController::class, 'options'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders', [WorkOrderController::class, 'index'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show'])->middleware('permission:production.work_orders.view');

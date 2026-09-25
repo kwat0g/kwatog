@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -67,6 +68,7 @@ class ReturnRequest extends Model
         'inspection_handoff_at',
         'ncr_id',
         'return_date',
+        'delivery_attempt_outcome_id',
         'approved_at',
         'received_at',
         'inspected_at',
@@ -99,6 +101,21 @@ class ReturnRequest extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ReturnRequestItem::class);
+    }
+
+    public function returnCase(): HasOne
+    {
+        return $this->hasOne(ReturnCase::class, 'return_request_id');
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(ReturnReceipt::class)->orderBy('received_at')->orderBy('id');
+    }
+
+    public function deliveryAttemptOutcome(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryAttemptOutcome::class);
     }
 
     public function sourceAllocations(): HasManyThrough

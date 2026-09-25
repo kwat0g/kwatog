@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -21,6 +22,30 @@ use Illuminate\Support\Facades\DB;
  */
 class OpenSupplyService
 {
+    /** Physically received base-UoM stock held for QC, not yet in inventory or PO transit. */
+    public function heldQcBaseQuantity(int $itemId): string
+    {
+        $lines = DB::table('grn_items as gi')
+            ->join('goods_receipt_notes as grn', 'grn.id', '=', 'gi.goods_receipt_note_id')
+            ->join('purchase_orders as po', 'po.id', '=', 'grn.purchase_order_id')
+            ->where('gi.item_id', $itemId)
+            ->whereIn('grn.status', [GrnStatus::PendingQc->value, GrnStatus::PartialAccepted->value])
+            ->whereNull('grn.remainder_rejected_at')
+            ->where('po.status', '!=', PurchaseOrderStatus::Cancelled->value)
+            ->whereNull('po.deleted_at')
+            ->get(['gi.quantity_received', 'gi.quantity_accepted']);
+
+        $held = '0.000';
+        foreach ($lines as $line) {
+            $remainder = bcsub((string) $line->quantity_received, (string) $line->quantity_accepted, 3);
+            if (bccomp($remainder, '0', 3) > 0) {
+                $held = bcadd($held, $remainder, 3);
+            }
+        }
+
+        return $held;
+    }
+
     /**
      * Remaining unconverted quantity in open PRs for one item: the sum of PR line
      * quantities minus quantities already ordered via POs.
@@ -79,33 +104,26 @@ class OpenSupplyService
             ->select(['pri.id', 'pri.quantity', 'pri.unit'])
             ->get();
 
-        $remaining = '0.000';
+        $poLines = DB::table('purchase_order_items as poi')
+            ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
+            ->whereIn('poi.purchase_request_item_id', $lines->pluck('id'))
+            ->where('po.status', '!=', PurchaseOrderStatus::Cancelled->value)
+            ->whereNull('po.deleted_at')
+            ->get(['poi.purchase_request_item_id', 'poi.quantity', 'poi.unit'])
+            ->groupBy('purchase_request_item_id');
+
+        $remaining = '0.000000';
         foreach ($lines as $line) {
-            $prLineId = (int) $line->id;
-
-            // Sum qty ordered from this PR line via non-cancelled, non-soft-deleted POs.
-            $ordered = DB::table('purchase_order_items as poi')
-                ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
-                ->where('poi.purchase_request_item_id', $prLineId)
-                ->where('po.status', '!=', PurchaseOrderStatus::Cancelled->value)
-                ->whereNull('po.deleted_at')
-                ->selectRaw('COALESCE(SUM(poi.quantity), 0) as total_ordered')
-                ->value('total_ordered');
-            $ordered = (string) ($ordered ?? '0');
-
-            // Remaining = PR line qty - ordered.
-            $lineRemaining = bcsub((string) $line->quantity, $ordered, 3);
-            if (bccomp($lineRemaining, '0', 3) <= 0) {
-                continue;
-            }
-
-            // Convert to base UoM.
-            $prLineUnit = trim((string) $line->unit);
             try {
-                $baseQuantity = $item->convertToBase(
-                    $lineRemaining,
-                    $prLineUnit !== '' ? $prLineUnit : (string) $item->unit_of_measure,
-                );
+                $requestedBase = $item->convertToBase((string) $line->quantity, trim((string) $line->unit) ?: null);
+                $orderedBase = '0.000000';
+                foreach ($poLines->get($line->id, []) as $poLine) {
+                    $orderedBase = bcadd(
+                        $orderedBase,
+                        $item->convertToBase((string) $poLine->quantity, trim((string) $poLine->unit) ?: null),
+                        6,
+                    );
+                }
             } catch (\RuntimeException $e) {
                 throw new BusinessRuleException(
                     "Cannot net open PR quantity for item {$item->code}: {$e->getMessage()}",
@@ -113,15 +131,18 @@ class OpenSupplyService
                     $e,
                 );
             }
-            $remaining = bcadd($remaining, $baseQuantity, 3);
+            $lineRemaining = bcsub($requestedBase, $orderedBase, 6);
+            if (bccomp($lineRemaining, '0', 6) > 0) {
+                $remaining = bcadd($remaining, $lineRemaining, 6);
+            }
         }
 
-        return $remaining;
+        return bcadd($remaining, '0', 3);
     }
 
     /**
-     * Sum of (purchase_order_items.quantity - quantity_received) across all
-     * open POs for this item (base UoM). Includes POs under change re-approval
+     * Sum of (PO quantity converted to base - base quantity_received) across all
+     * open POs for this item. Includes POs under change re-approval
      * (pending approval with pending_change_response_id set) as they are real
      * supply in transit.
      *
@@ -164,15 +185,10 @@ class OpenSupplyService
 
         $inTransit = '0.000000';
         foreach ($lines as $line) {
-            $remaining = bcsub((string) $line->quantity, (string) $line->quantity_received, 6);
-            if (bccomp($remaining, '0', 6) <= 0) {
-                continue;
-            }
-
             $purchaseUnit = trim((string) $line->unit);
             try {
-                $baseQuantity = $item->convertToBase(
-                    $remaining,
+                $orderedBase = $item->convertToBase(
+                    (string) $line->quantity,
                     $purchaseUnit !== '' ? $purchaseUnit : (string) $item->unit_of_measure,
                 );
             } catch (\RuntimeException $e) {
@@ -182,7 +198,10 @@ class OpenSupplyService
                     $e,
                 );
             }
-            $inTransit = bcadd($inTransit, $baseQuantity, 6);
+            $remainingBase = bcsub($orderedBase, (string) $line->quantity_received, 6);
+            if (bccomp($remainingBase, '0', 6) > 0) {
+                $inTransit = bcadd($inTransit, $remainingBase, 6);
+            }
         }
 
         return $inTransit;

@@ -80,7 +80,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
 
     /* ─── Warehouse / Zones / Locations ─── */
     Route::get('/warehouse/options', [WarehouseController::class, 'options'])->middleware('permission:inventory.view');
-    Route::get('/warehouse', [WarehouseController::class, 'tree'])->middleware('permission:inventory.view');
+    Route::get('/warehouse', [WarehouseController::class, 'tree'])->middleware('permission_any:inventory.view,return_management.receive,return_management.dispose,return_management.complete');
     Route::get('/warehouses', [WarehouseController::class, 'indexWarehouses'])->middleware('permission:inventory.view');
     Route::post('/warehouses', [WarehouseController::class, 'storeWarehouse'])->middleware('permission:inventory.warehouse.manage');
     Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'updateWarehouse'])->middleware('permission:inventory.warehouse.manage');
@@ -107,6 +107,8 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/stock-levels', [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/stock-movements/options', [StockMovementController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-movements', [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
+    Route::get('/stock-movements/{stockMovement}/return-options', [StockMovementController::class, 'returnOptions'])->middleware('permission:inventory.issue.create');
+    Route::post('/stock-movements/{stockMovement}/return-unused', [StockMovementController::class, 'returnUnused'])->middleware('permission:inventory.issue.create');
     Route::post('/stock-movements/{stockMovement}/retry-gl', [StockMovementController::class, 'retryGlHandoff'])->middleware('permission:accounting.journal.post');
     Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
     Route::get('/scan/options', [WarehouseScanController::class, 'options'])->middleware('permission:inventory.view');
@@ -161,6 +163,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/receive-goods', [GoodsReceiptNoteController::class, 'receiveWithQc'])->middleware('permission:inventory.grn.create');
 
     /* ─── Material Issue ─── */
+    Route::get('/material-issues/options', [MaterialIssueSlipController::class, 'options'])->middleware('permission:inventory.issue.create');
     Route::get('/material-issues', [MaterialIssueSlipController::class, 'index'])->middleware('permission:inventory.issue.create');
     Route::get('/material-issues/{materialIssueSlip}', [MaterialIssueSlipController::class, 'show'])->middleware('permission:inventory.issue.create');
     Route::post('/material-issues', [MaterialIssueSlipController::class, 'store'])->middleware('permission:inventory.issue.create');

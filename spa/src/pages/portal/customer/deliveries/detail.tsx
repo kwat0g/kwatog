@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { NotArrivedPanel } from './NotArrivedPanel';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { LuCheck, LuFileText, LuInfo, LuX } from '@/lib/icons';
+import { LuCheck, LuFileText, LuInfo, LuMessageSquare, LuX } from '@/lib/icons';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +35,7 @@ async function openProof(deliveryId: string, proofId: string, fileName: string) 
 
 export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   const queryClient = useQueryClient();
   const { data: delivery, isLoading, isError, refetch } = useQuery({
@@ -42,6 +44,7 @@ export default function CustomerDeliveryDetailPage() {
     enabled: !!id,
   });
 
+  const [showTrace, setShowTrace] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [receiverName, setReceiverName] = useState('');
   const [receiverPosition, setReceiverPosition] = useState('');
@@ -70,7 +73,8 @@ export default function CustomerDeliveryDetailPage() {
   // The server decides: a delivered shipment is confirmable only once our
   // driver has uploaded a proof of delivery.
   const canConfirm = delivery?.can_confirm === true;
-  const awaitingProof = delivery?.status === 'delivered' && !canConfirm;
+  const awaitingProof = delivery?.status === 'delivered' && !canConfirm && !delivery?.billing_hold;
+  const canReportProblem = delivery?.status === 'delivered' || delivery?.status === 'confirmed';
 
  return (
     <div>
@@ -94,18 +98,20 @@ export default function CustomerDeliveryDetailPage() {
               ? `Scheduled ${formatDate(delivery.scheduled_date)}`
               : undefined
         }
-        actions={
-          canConfirm ? (
-            <Button
+        actions={delivery && (
+          <div className="flex flex-wrap items-center gap-2">
+            {delivery.can_report_not_arrived && !delivery.billing_hold && <Button variant="secondary" size="sm" onClick={() => setShowTrace((open) => !open)}>Shipment not arrived</Button>}
+            {canReportProblem && <Button variant="secondary" size="sm" icon={<LuMessageSquare size={14} />} onClick={() => navigate(`/portal/customer/problems/new?source_kind=delivery&source_id=${encodeURIComponent(id ?? '')}`)}>Report a problem</Button>}
+            {canConfirm && <Button
               variant={showConfirm ? 'secondary' : 'primary'}
               size="sm"
               icon={showConfirm ? <LuX size={14} /> : <LuCheck size={14} />}
               onClick={() => setShowConfirm(!showConfirm)}
             >
               {showConfirm ? 'Cancel' : 'Confirm Receipt'}
-            </Button>
-          ) : undefined
-        }
+            </Button>}
+          </div>
+        )}
         backTo="/portal/customer/deliveries"
         backLabel="Deliveries"
       />
@@ -127,6 +133,17 @@ export default function CustomerDeliveryDetailPage() {
 
         {!isLoading && !isError && delivery && (
           <>
+            {showTrace && <NotArrivedPanel deliveryId={delivery.id} onClose={() => setShowTrace(false)} />}
+            {delivery.status === 'return_pending' && <Panel title="Delivery follow-up in progress">
+              <p className="text-sm">Our team is checking the delivery outcome and the goods returning to the depot. Receipt confirmation is on hold while we reconcile the quantities.</p>
+            </Panel>}
+            {delivery.status === 'returned' && <Panel title="Delivery returned to depot">
+              <p className="text-sm">No goods were recorded as received for this delivery. It will not generate an invoice. Your order remains open for the remaining quantity.</p>
+            </Panel>}
+            {delivery.billing_hold && <Panel title="Problem report in progress">
+              <p className="text-sm mb-2">We’ll confirm receipt after this report is resolved. You can follow its progress and add details here.</p>
+              <Link className="text-accent hover:underline font-mono" to={`/portal/customer/problems/${delivery.billing_hold.case_id}`}>{delivery.billing_hold.case_number}</Link>
+            </Panel>}
             {awaitingProof && (
               <div className="text-sm text-muted px-4 py-3 bg-subtle rounded-md border border-default flex items-start gap-2">
                 <LuInfo size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -210,7 +227,8 @@ export default function CustomerDeliveryDetailPage() {
                       <tr className={theadTrCls}>
                         <Th>Part #</Th>
                         <Th>Description</Th>
-                        <Th align="right">Qty Delivered</Th>
+                        {delivery.has_attempt_outcome && <Th align="right">Dispatched</Th>}
+                        <Th align="right">{delivery.has_attempt_outcome ? 'Received' : 'Qty Delivered'}</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -218,6 +236,7 @@ export default function CustomerDeliveryDetailPage() {
                         <tr key={item.id} className={trCls}>
                           <Td mono className="text-muted">{item.part_number}</Td>
                           <Td>{item.name}</Td>
+                          {delivery.has_attempt_outcome && <Td align="right" mono>{item.quantity_dispatched ?? '—'}</Td>}
                           <Td align="right" mono>{item.quantity_delivered}</Td>
                         </tr>
                       ))}

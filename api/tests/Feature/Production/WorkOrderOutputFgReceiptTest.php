@@ -130,6 +130,7 @@ class WorkOrderOutputFgReceiptTest extends TestCase
 
         $this->assertNotNull($movement, 'A ProductionReceipt movement must exist after WO output recording');
         $this->assertSame('10.000', (string) $movement->quantity);
+        $this->assertSame($output->batch_code, $movement->lot_number, 'The finished-goods stock lot must preserve its unique output batch code.');
         $this->assertSame(ProductionReceiptHandoffStatus::Generated, $output->fresh()->production_receipt_handoff_status);
         $this->assertSame($movement->id, $output->fresh()->production_receipt_movement_id);
     }

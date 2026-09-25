@@ -39,6 +39,7 @@ class ReturnRequestItem extends Model
         'source_sales_order_item_id',
         'source_invoice_item_id',
         'source_delivery_item_id',
+        'delivery_attempt_outcome_movement_id',
         'source_po_item_id',
         'source_grn_item_id',
         'source_bill_item_id',
@@ -84,6 +85,11 @@ class ReturnRequestItem extends Model
     public function sourceDeliveryItem(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryItem::class, 'source_delivery_item_id');
+    }
+
+    public function deliveryAttemptOutcomeMovement(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\SupplyChain\Models\DeliveryAttemptOutcomeMovement::class, 'delivery_attempt_outcome_movement_id');
     }
 
     public function ncr(): BelongsTo

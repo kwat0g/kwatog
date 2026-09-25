@@ -13,6 +13,7 @@ export type WarehouseZoneType =
 export type StockMovementType =
   | 'grn_receipt'
   | 'material_issue'
+  | 'material_return'
   | 'production_receipt'
   | 'delivery'
   | 'transfer'
@@ -184,6 +185,24 @@ export interface StockMovement {
   creator: { id: string; name: string } | null;
 }
 
+export interface MaterialReturnOptions {
+  eligible: boolean;
+  source_movement_id: string;
+  issued_quantity: string;
+  returned_quantity: string;
+  returned_cost: string;
+  returnable_quantity: string;
+  unit_cost?: string;
+  unit_of_measure?: string | null;
+  total_returned_at_original_cost?: string;
+  location?: string | null;
+  lot_number?: string | null;
+  gross_production_units?: string;
+  consumption_floor?: string;
+  consumption_basis?: 'unlinked_issue' | 'preproduction' | 'saved_bom_norm' | 'fixed_saved_plan' | 'no_recipe';
+  message?: string | null;
+}
+
 export interface StockAdjustment {
   id: string;
   direction: 'in' | 'out';
@@ -329,6 +348,7 @@ export interface CreateGrnData {
 
 export interface MaterialIssueSlipItem {
   id: number;
+  stock_movement_id?: string | null;
   item?: { id: string; code: string; name: string; unit_of_measure: string };
   location?: { id: string; code: string };
   quantity_issued: string;
@@ -342,7 +362,8 @@ export interface MaterialIssueSlipItem {
 export interface MaterialIssueSlip {
   id: string;
   slip_number: string;
-  work_order_id: number | null;
+  work_order_id: string | null;
+  work_order?: { id: string; wo_number: string } | null;
   issued_date: string;
   status: MaterialIssueStatus;
   status_label?: string;

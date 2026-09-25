@@ -224,6 +224,7 @@ class StockCardService
         return match ($m->reference_type) {
             'goods_receipt_note', 'GoodsReceiptNote' => "/inventory/grn/{$hash}",
             'material_issue_slip', 'MaterialIssueSlip' => "/inventory/material-issues/{$hash}",
+            'stock_movement' => "/inventory/movements?movement_id={$hash}",
             'work_order', 'WorkOrder' => "/production/work-orders/{$hash}",
             'stock_adjustment', 'StockAdjustment' => "/inventory/movements?adjustment={$hash}",
             default => null,

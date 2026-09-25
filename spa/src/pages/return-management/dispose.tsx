@@ -107,7 +107,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
  <Modal isOpen={isOpen} onClose={onClose} title="Dispose Return Items" size="lg"> <div className="space-y-4">
   <p className="text-sm text-muted">
    Set the disposition for each returned item. Scrap and rework items will auto-create an NCR.
-   {rma.type === 'customer_return' && ' A credit memo will be generated for customer returns.'}
+   {rma.is_truck_return ? ' This depot return does not create a customer credit.' : rma.type === 'customer_return' && ' Any credit follows the agreed resolution and requires Finance review. No-charge replacements do not also issue a return credit.'}
    {' '}
    {rma.type === 'customer_return' && (
     <span className="text-success-fg font-medium">Lines disposed as Restock are received back into stock immediately.</span>

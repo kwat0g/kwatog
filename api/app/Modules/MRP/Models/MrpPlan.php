@@ -10,11 +10,14 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class MrpPlan extends Model
 {
@@ -60,8 +63,29 @@ class MrpPlan extends Model
         return $this->hasMany(WorkOrder::class);
     }
 
+    /** Earlier WOs still owning or having fulfilled demand for this sales order. */
+    public function priorProgressedWorkOrders(): HasManyThrough
+    {
+        return $this->hasManyThrough(WorkOrder::class, self::class, 'sales_order_id', 'mrp_plan_id', 'sales_order_id', 'id')
+            ->where(fn ($q) => $q->whereNotIn('work_orders.status', [WorkOrderStatus::Planned->value, WorkOrderStatus::Cancelled->value])
+                ->orWhere(fn ($cancelled) => $cancelled->where('work_orders.status', WorkOrderStatus::Cancelled->value)
+                    ->where('work_orders.quantity_good', '>', 0)));
+    }
+
     public function purchaseRequests(): HasMany
     {
         return $this->hasMany(PurchaseRequest::class);
+    }
+
+    /** Progressed auto-PRs linked to this SO; detail limits these to earlier versions. */
+    public function priorProgressedPurchaseRequests(): HasManyThrough
+    {
+        return $this->hasManyThrough(PurchaseRequest::class, self::class, 'sales_order_id', 'mrp_plan_id', 'sales_order_id', 'id')
+            ->where('purchase_requests.is_auto_generated', true)
+            ->whereIn('purchase_requests.status', [
+                PurchaseRequestStatus::Pending->value,
+                PurchaseRequestStatus::Approved->value,
+                PurchaseRequestStatus::Converted->value,
+            ]);
     }
 }

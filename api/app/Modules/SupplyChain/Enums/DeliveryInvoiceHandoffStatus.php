@@ -9,6 +9,7 @@ enum DeliveryInvoiceHandoffStatus: string
     case NotStarted = 'not_started';
     case Generated = 'generated';
     case ManualRequired = 'manual_required';
+    case NotRequired = 'not_required';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum DeliveryInvoiceHandoffStatus: string
             self::NotStarted => 'Not attempted',
             self::Generated => 'Draft invoice created',
             self::ManualRequired => 'Finance action required',
+            self::NotRequired => 'Not required (approved no-charge order)',
         };
     }
 }

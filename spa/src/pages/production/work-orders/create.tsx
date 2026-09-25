@@ -10,7 +10,6 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { localIsoDate } from '@/lib/formatDate';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
@@ -20,9 +19,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { productsApi } from '@/api/crm/products';
-import { machinesApi } from '@/api/mrp/machines';
-import { moldsApi } from '@/api/mrp/molds';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateWorkOrderData } from '@/types/production';
@@ -30,6 +26,7 @@ import type { CreateWorkOrderData } from '@/types/production';
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
+import { FormOptionsStatus } from './FormOptionsStatus';
 const schema = z.object({
  product_id: z.string().min(1, 'Product is required'),
  quantity_target: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be greater than 0'),
@@ -49,21 +46,16 @@ export default function CreateWorkOrderPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
 
- const products = useQuery({
- queryKey: ['crm', 'products', 'lookup'],
- queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
- });
- const machines = useQuery({
- queryKey: ['mrp', 'machines', 'lookup'],
- queryFn: () => machinesApi.list({ per_page: 100 }),
- });
- const molds = useQuery({
- queryKey: ['mrp', 'molds', 'lookup'],
- queryFn: () => moldsApi.list({ per_page: 100 }),
+ const formOptions = useQuery({
+ queryKey: ['production', 'work-orders', 'form-options'],
+ queryFn: workOrdersApi.formOptions,
+ staleTime: 5 * 60 * 1000,
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const today = `${localIsoDate()}T00:00`;
+ const now = new Date();
+ now.setSeconds(0, 0);
+ const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
@@ -121,16 +113,24 @@ export default function CreateWorkOrderPage() {
  <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders"
  />
       <FormDraftBanner safety={safety} />
+      <div className="max-w-2xl mx-auto px-5 pt-4">
+       <FormOptionsStatus
+        isLoading={formOptions.isLoading}
+        isError={formOptions.isError}
+        isFetching={formOptions.isFetching}
+        onRetry={() => { void formOptions.refetch(); }}
+       />
+      </div>
  <form
  onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
  className="max-w-2xl mx-auto px-5 py-4"
  >
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product & quantity</legend>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
  <option value="">Select product…</option>
- {products.data?.data?.map((p) => (
+ {formOptions.data?.products.map((p) => (
  <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
  ))}
  </Select>
@@ -145,7 +145,7 @@ export default function CreateWorkOrderPage() {
 
  <fieldset className="mb-8">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <Input
  label="Planned start" type="datetime-local" required
  {...register('planned_start')} error={errors.planned_start?.message}
@@ -168,16 +168,16 @@ export default function CreateWorkOrderPage() {
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
  Resources <span className="text-2xs lowercase tracking-normal text-text-subtle">— optional, can be assigned at confirm time</span>
  </legend>
- <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <Select label="Machine" {...register('machine_id')} error={errors.machine_id?.message}>
  <option value="">Pick later</option>
- {machines.data?.data?.map((m) => (
+ {formOptions.data?.machines.map((m) => (
  <option key={m.id} value={m.id}>{m.machine_code} — {m.name}{m.tonnage ? ` · ${m.tonnage}T` : ''}</option>
  ))}
  </Select>
  <Select label="Mold" {...register('mold_id')} error={errors.mold_id?.message}>
  <option value="">Pick later</option>
- {molds.data?.data?.map((m) => (
+ {formOptions.data?.molds.map((m) => (
  <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
  ))}
  </Select>

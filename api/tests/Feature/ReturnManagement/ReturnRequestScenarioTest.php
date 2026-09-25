@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\InvoiceItem;
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
@@ -27,10 +28,13 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\ReturnManagement\Models\ReturnRequestSourceAllocation;
+use App\Modules\ReturnManagement\Models\ReturnCase;
+use App\Modules\ReturnManagement\Models\ReturnCaseLine;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\SettingsService;
+use App\Common\Services\SystemUserResolver;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -64,6 +68,18 @@ class ReturnRequestScenarioTest extends TestCase
         return User::factory()->create([
             'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
         ]);
+    }
+
+    private function returnManager(): User
+    {
+        $role = Role::create([
+            'name' => 'Return Manager Test',
+            'slug' => 'return_manager_test',
+            'is_system' => false,
+        ]);
+        $role->permissions()->attach(Permission::query()->where('slug', 'return_management.manage')->value('id'));
+
+        return User::factory()->create(['role_id' => $role->id]);
     }
 
     private function customer(): Customer
@@ -259,6 +275,52 @@ class ReturnRequestScenarioTest extends TestCase
             ->assertJsonPath('data.customer_notes', 'Notes-only draft edit');
     }
 
+    public function test_return_manager_can_edit_system_attributed_draft_without_role_admin_permission(): void
+    {
+        $systemUser = app(SystemUserResolver::class)->user();
+        $manager = $this->returnManager();
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-SYS-'.substr(uniqid(), -6),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Draft,
+            'customer_id' => $this->customer()->id,
+            'return_date' => now()->toDateString(),
+            'created_by' => $systemUser->id,
+        ]);
+
+        $this->assertTrue($manager->hasPermission('return_management.manage'));
+        $this->assertFalse($manager->hasPermission('admin.roles.manage'));
+
+        $this->actingAs($manager)
+            ->patchJson("/api/v1/return-management/return-requests/{$rma->hash_id}", [
+                'internal_notes' => 'Triage by Return Management.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.internal_notes', 'Triage by Return Management.');
+    }
+
+    public function test_return_manager_cannot_edit_another_users_ordinary_draft(): void
+    {
+        $creator = $this->admin();
+        $manager = $this->returnManager();
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-OWN-'.substr(uniqid(), -6),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Draft,
+            'customer_id' => $this->customer()->id,
+            'return_date' => now()->toDateString(),
+            'created_by' => $creator->id,
+        ]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/v1/return-management/return-requests/{$rma->hash_id}", [
+                'internal_notes' => 'Unauthorized edit.',
+            ])
+            ->assertStatus(422);
+
+        $this->assertNull($rma->fresh()->internal_notes);
+    }
+
     public function test_index_filters_by_customer_hash_id(): void
     {
         $admin = $this->admin();
@@ -292,7 +354,7 @@ class ReturnRequestScenarioTest extends TestCase
 
     /* ───────────────── Receiving ───────────────── */
 
-    public function test_receive_records_returned_quantities_keyed_by_item_hash_id(): void
+    public function test_receive_records_returned_quantities_and_replays_an_unkeyed_final_receipt(): void
     {
         $admin = $this->admin();
         $rma   = $this->inspectedRma($admin, $this->customer());
@@ -300,13 +362,79 @@ class ReturnRequestScenarioTest extends TestCase
         $line  = $rma->items->first();
         $line->update(['returned_quantity' => 0]);
 
+        $payload = ['received_quantities' => [$line->hash_id => 6]];
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.returned_quantity', '6.000');
+
+        // Legacy callers may omit request_key on their first final receipt.
+        // If the response is lost, an exact replay confirms the committed
+        // receipt without applying its quantity twice.
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.returned_quantity', '6.000');
+
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
-                'received_quantities' => [$line->hash_id => 6],
+                'received_quantities' => [$line->hash_id => 7],
             ])
-            ->assertOk();
+            ->assertStatus(422);
 
         $this->assertSame('6.000', $line->fresh()->returned_quantity);
+        $this->assertSame(1, $rma->receipts()->count());
+    }
+
+    public function test_case_linked_final_receipt_below_verified_defects_is_rejected_before_mutation(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = $this->finishedGoodItem($product);
+        $rma = $this->inspectedRma($admin, $customer, null, $product, $item);
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->firstOrFail();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
+        $case = (new ReturnCase)->forceFill([
+            'case_number' => 'CASE-RMA-GUARD-'.substr(uniqid(), -6), 'type' => 'customer', 'status' => 'in_progress',
+            'customer_id' => $customer->id, 'created_by' => $admin->id, 'preferred_resolution' => 'credit',
+            'resolution' => 'return_goods', 'description' => 'Verified defective return', 'return_request_id' => $rma->id,
+        ]);
+        $case->save();
+        (new ReturnCaseLine)->forceFill([
+            'return_case_id' => $case->id, 'product_id' => $product->id, 'item_id' => $item->id,
+            'description' => 'Defective item', 'unit' => 'pcs', 'expected_quantity' => 10, 'received_quantity' => 10,
+            'missing_quantity' => 0, 'defective_quantity' => 3, 'verified_defective_quantity' => 3,
+            'source_unit_price' => 100,
+        ])->save();
+        $this->assertSame($case->id, ReturnCase::query()->where('return_request_id', $rma->id)->value('id'));
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+
+        $response = $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+            'received_quantities' => [$line->hash_id => '2.000'], 'final_receipt' => true,
+            'quarantine_location_id' => $location->hash_id,
+            'request_key' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ]);
+        $response->assertStatus(422)->assertJsonPath('message', 'This final receipt is below the verified defective quantity. Record it as a partial receipt and submit the remaining units.');
+        $this->assertSame(0, $rma->receipts()->count());
+        $this->assertSame(ReturnRequestStatus::Approved->value, $rma->fresh()->status->value);
+    }
+
+    public function test_receive_rejects_non_decimal_safe_quantity_forms_with_422(): void
+    {
+        $admin = $this->admin();
+        $rma = $this->inspectedRma($admin, $this->customer());
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->firstOrFail();
+        foreach (['1e3', '1.2345', ['nested' => '1']] as $invalid) {
+            $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+                'received_quantities' => [$line->hash_id => $invalid],
+                'request_key' => 'bbbbbbbb-bbbb-4bbb-8bbb-'.str_pad((string) (count($rma->receipts) + 1), 12, '0', STR_PAD_LEFT),
+            ])->assertStatus(422);
+        }
+        $this->assertSame(0, $rma->receipts()->count());
     }
 
     public function test_receive_puts_stockable_customer_returns_in_quarantine(): void
@@ -318,6 +446,7 @@ class ReturnRequestScenarioTest extends TestCase
         $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
         $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
         $line = $rma->items->first();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
 
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
@@ -345,6 +474,169 @@ class ReturnRequestScenarioTest extends TestCase
                 'received_quantities' => [$line->hash_id => 999],
             ])
             ->assertStatus(422);
+    }
+
+    public function test_return_receipts_accumulate_and_are_idempotent_across_installments(): void
+    {
+        $admin = $this->admin();
+        $product = $this->product();
+        $item = $this->finishedGoodItem($product);
+        $zone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $location = WarehouseLocation::factory()->create(['zone_id' => $zone->id]);
+        $rma = $this->inspectedRma($admin, $this->customer(), p: $product, item: $item);
+        $this->attachSalesOrderSource($rma, $admin, $product, $item);
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->firstOrFail();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
+        ReturnRequestSourceAllocation::create([
+            'return_request_item_id' => $line->id,
+            'source_kind' => 'sales_order_item',
+            'source_id' => $line->source_sales_order_item_id,
+            'quantity' => $line->quantity,
+            'unit_price' => $line->unit_price,
+        ]);
+
+        $firstKey = '11111111-1111-4111-8111-111111111111';
+        $firstPayload = [
+            'received_quantities' => [$line->hash_id => '4.000'],
+            'quarantine_location_id' => $location->hash_id,
+            'final_receipt' => false,
+            'request_key' => $firstKey,
+        ];
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $firstPayload)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.receipt_open', true)
+            ->assertJsonPath('data.items.0.received_total', '4.000')
+            ->assertJsonPath('data.items.0.remaining_quantity', '6.000')
+            ->assertJsonCount(1, 'data.receipts');
+        $allocation = $line->sourceAllocations()->whereNull('released_at')->firstOrFail();
+        $this->assertSame('10.000', (string) $allocation->quantity, 'The full request stays reserved until the final installment.');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $firstPayload)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.returned_quantity', '4.000');
+        $this->assertSame(1, StockMovement::query()
+            ->where('reference_type', 'return_request')->where('reference_id', $rma->id)->count());
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+                'received_quantities' => [$line->hash_id => '7.000'],
+                'final_receipt' => true,
+                'request_key' => '22222222-2222-4222-8222-222222222222',
+            ])
+            ->assertStatus(422);
+
+        $finalPayload = [
+            'received_quantities' => [$line->hash_id => '3.000'],
+            'final_receipt' => true,
+            'request_key' => '33333333-3333-4333-8333-333333333333',
+        ];
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+                ...$finalPayload,
+                'quarantine_location_id' => WarehouseLocation::factory()->create([
+                    'zone_id' => $zone->id,
+                ])->hash_id,
+            ])
+            ->assertStatus(422);
+
+        $finalPayload['quarantine_location_id'] = $location->hash_id;
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $finalPayload)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'received')
+            ->assertJsonPath('data.receipt_open', false)
+            ->assertJsonPath('data.items.0.returned_quantity', '7.000')
+            ->assertJsonPath('data.items.0.remaining_quantity', '3.000')
+            ->assertJsonCount(2, 'data.receipts');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", $finalPayload)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.returned_quantity', '7.000');
+        $this->assertSame(2, StockMovement::query()
+            ->where('reference_type', 'return_request')->where('reference_id', $rma->id)->count());
+        $this->assertSame(1, $rma->items()->firstOrFail()->sourceAllocations()->whereNull('released_at')->count());
+        $this->assertSame('7.000', (string) $rma->items()->firstOrFail()->sourceAllocations()
+            ->whereNull('released_at')->latest('id')->value('quantity'));
+    }
+
+    public function test_approved_return_can_be_cancelled_before_physical_effects_and_releases_allocation(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $product = $this->product();
+        $item = $this->finishedGoodItem($product);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => SalesOrderStatus::PartiallyDelivered,
+            'created_by' => $admin->id,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => '10.000',
+            'unit_price' => '100.00',
+        ]);
+        $created = $this->actingAs($admin)
+            ->postJson('/api/v1/return-management/return-requests', [
+                'type' => 'customer_return',
+                'customer_id' => $customer->hash_id,
+                'sales_order_id' => $salesOrder->hash_id,
+                'items' => [[
+                    'product_id' => $product->hash_id,
+                    'item_id' => $item->hash_id,
+                    'quantity' => '3.000',
+                    'source_sales_order_item_id' => $source->hash_id,
+                ]],
+            ])
+            ->assertCreated()
+            ->json('data.id');
+        $rma = ReturnRequest::query()->firstOrFail();
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $allocation = $rma->items()->firstOrFail()->sourceAllocations()->firstOrFail();
+        $this->assertSame('3.000', (string) $allocation->quantity);
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$created}/cancel", [
+                'reason' => 'Customer withdrew the request.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+
+        $this->assertNotNull($allocation->fresh()->released_at);
+        $this->assertSame('0.000', (string) $allocation->fresh()->quantity);
+        $this->assertSame([], app(ReturnRequestService::class)
+            ->activeAllocationsBySource('sales_order_item', [(int) $source->id]));
+        $options = app(ReturnRequestService::class)->sourceOptionsForCustomer((int) $customer->id);
+        $this->assertSame('10.000', $options['customer']['salesOrders'][0]['lines'][0]['remaining_quantity']);
+    }
+
+    public function test_approved_return_with_partial_physical_receipt_cannot_be_cancelled(): void
+    {
+        $admin = $this->admin();
+        $rma = $this->inspectedRma($admin, $this->customer());
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
+        $line = $rma->items->firstOrFail();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
+                'received_quantities' => [$line->hash_id => '2.000'],
+                'final_receipt' => false,
+                'request_key' => '44444444-4444-4444-8444-444444444444',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/cancel")
+            ->assertStatus(422);
+
+        $this->assertSame(ReturnRequestStatus::Approved, $rma->fresh()->status);
+        $this->assertSame('2.000', (string) $line->fresh()->returned_quantity);
     }
 
     /* ───────────────── Disposition ───────────────── */
@@ -457,6 +749,7 @@ class ReturnRequestScenarioTest extends TestCase
         $this->attachSalesOrderSource($rma, $admin, $product, $item);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
             'received_quantities' => [$line->hash_id => 8],
             'quarantine_location_id' => $loc->hash_id,
@@ -493,6 +786,7 @@ class ReturnRequestScenarioTest extends TestCase
         $this->attachSalesOrderSource($rma, $admin, $product, $item);
         $rma->forceFill(['status' => ReturnRequestStatus::Approved->value])->save();
         $line = $rma->items->first();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
         $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/receive", [
             'received_quantities' => [$line->hash_id => 8],
             'quarantine_location_id' => $loc->hash_id,

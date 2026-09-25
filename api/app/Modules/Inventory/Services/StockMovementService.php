@@ -20,6 +20,9 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\SupplyChain\Enums\DeliveryStockReservationStatus;
+use App\Modules\SupplyChain\Models\DeliveryStockReservation;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -61,6 +64,10 @@ class StockMovementService
         // transaction back, so no partial ledger row survives a transient
         // concurrency failure.
         return DB::transaction(function () use ($in) {
+            // Source rows and physical receipt authorization must be read under
+            // the same transaction as the stock-ledger mutation.
+            $this->validateInput($in);
+            SourceReferenceRegistry::assertValid($in->referenceType, $in->referenceId);
             $this->assertLocationsNotFrozen(
                 [$in->fromLocationId, $in->toLocationId],
                 ! $in->bypassCountFreeze,
@@ -84,6 +91,10 @@ class StockMovementService
             $this->assertVersionMatches($fromLevel, $in->expectedFromVersion, 'source');
             $this->assertVersionMatches($toLevel, $in->expectedToVersion, 'destination');
 
+            $deliveryReservation = $in->type === StockMovementType::Delivery
+                ? $this->lockedDeliveryReservation($in)
+                : null;
+
             $unitCost = $in->unitCost;
             if ($unitCost === null && $fromLevel !== null) {
                 if ($fromLevel->weighted_avg_cost === null) {
@@ -103,18 +114,24 @@ class StockMovementService
             if ($unitCost === null || trim((string) $unitCost) === '') {
                 throw new BusinessRuleException('A unit cost is required for this stock movement.');
             }
-            $totalCost = bcmul($in->quantity, (string) $unitCost, 4);
+            $totalCost = $in->totalCostOverride ?? bcmul($in->quantity, (string) $unitCost, 4);
 
             $lotNumber = $in->lotNumber;
             $expiryDate = $in->expiryDate;
             if ($lotNumber === null && $in->fromLocationId !== null) {
-                $lot = $this->locationSummary->preferredLot($in->itemId, $in->fromLocationId);
+                $lot = $this->availableLot($in->itemId, $in->fromLocationId, $in->quantity);
                 $lotNumber = $lot['lot_number'] ?? null;
                 $expiryDate = $lot['expiry_date'] ?? null;
             }
 
             if ($fromLevel !== null && $lotNumber !== null) {
                 $lotAvailable = $this->locationSummary->lotQuantity($in->itemId, (int) $in->fromLocationId, $lotNumber);
+                $lotAvailable = bcsub($lotAvailable, $this->activeLotHolds(
+                    $in->itemId,
+                    (int) $in->fromLocationId,
+                    $lotNumber,
+                    $deliveryReservation?->id,
+                ), 3);
                 if (bccomp($lotAvailable, $in->quantity, 3) < 0) {
                     throw new InsufficientStockException(
                         "Insufficient stock in lot {$lotNumber} at location {$in->fromLocationId}: "
@@ -126,6 +143,11 @@ class StockMovementService
             // ── Issue side: validate availability and decrement source.
             if ($fromLevel) {
                 $available = bcsub((string) $fromLevel->quantity, (string) $fromLevel->reserved_quantity, 3);
+                // This dispatch may consume only its own authorized hold.
+                // Every other hold remains unavailable to this movement.
+                if ($deliveryReservation) {
+                    $available = bcadd($available, $in->quantity, 3);
+                }
                 if (bccomp($available, $in->quantity, 3) < 0) {
                     throw new InsufficientStockException(
                         "Insufficient available stock at location {$in->fromLocationId} for item {$in->itemId}: ".
@@ -133,6 +155,9 @@ class StockMovementService
                     );
                 }
                 $fromLevel->quantity = bcsub((string) $fromLevel->quantity, $in->quantity, 3);
+                if ($deliveryReservation) {
+                    $fromLevel->reserved_quantity = bcsub((string) $fromLevel->reserved_quantity, $in->quantity, 3);
+                }
                 // WAC unchanged on the source for issues/transfers-out.
                 $fromLevel->lock_version++;
                 $fromLevel->save();
@@ -145,7 +170,14 @@ class StockMovementService
                 $newQty = bcadd($oldQty, $in->quantity, 3);
                 if (bccomp($newQty, '0', 3) > 0) {
                     $oldVal = bcmul($oldQty, $oldWac, 4);
-                    $addVal = bcmul($in->quantity, (string) $unitCost, 4);
+                    // Material returns preserve the original issue's rounded
+                    // ledger value. For a split return the allocated cents can
+                    // differ from quantity × the immutable 4-decimal unit cost,
+                    // so the receipt-side inventory value must use that same
+                    // authorized ledger amount.
+                    $addVal = $in->totalCostOverride !== null
+                        ? bcadd($in->totalCostOverride, '0', 4)
+                        : bcmul($in->quantity, (string) $unitCost, 4);
                     $newVal = bcadd($oldVal, $addVal, 4);
                     $toLevel->weighted_avg_cost = $this->round4(bcdiv($newVal, $newQty, 6));
                 }
@@ -170,7 +202,24 @@ class StockMovementService
                 'remarks' => $in->remarks,
                 'created_by' => $in->createdBy,
                 'created_at' => now(),
+                'idempotency_key' => $in->idempotencyKey,
+                'idempotency_fingerprint' => $in->idempotencyFingerprint,
             ]);
+
+            if ($deliveryReservation) {
+                $remainingReservation = bcsub($deliveryReservation->remainingQuantity(), $in->quantity, 3);
+                $deliveryReservation->forceFill([
+                    'consumed_quantity' => bcadd((string) $deliveryReservation->consumed_quantity, $in->quantity, 3),
+                    'status' => bccomp($remainingReservation, '0', 3) === 0
+                        ? DeliveryStockReservationStatus::Consumed
+                        : DeliveryStockReservationStatus::Reserved,
+                    'stock_movement_id' => $movement->id,
+                ])->save();
+                $batch = $deliveryReservation->batch()->lockForUpdate()->first();
+                if ($batch && ! $batch->reservations()->where('status', DeliveryStockReservationStatus::Reserved->value)->exists()) {
+                    $batch->forceFill(['status' => DeliveryStockReservationStatus::Consumed])->save();
+                }
+            }
 
             // Record the stock-ledger event atomically. Publication waits for
             // commit, so reorder listeners never observe rolled-back stock.
@@ -282,8 +331,120 @@ class StockMovementService
         ];
     }
 
+    /** The delivery issue must consume one exact active physical hold. */
+    private function lockedDeliveryReservation(StockMovementInput $input): DeliveryStockReservation
+    {
+        if ($input->deliveryStockReservationId === null || $input->referenceType !== 'delivery_item'
+            || $input->referenceId === null || $input->fromLocationId === null || $input->toLocationId !== null) {
+            throw new BusinessRuleException('A delivery issue must consume its exact reserved delivery line, lot, and warehouse bin.');
+        }
+
+        $reservation = DeliveryStockReservation::query()->with('batch')
+            ->lockForUpdate()->find($input->deliveryStockReservationId);
+        $line = \App\Modules\SupplyChain\Models\DeliveryItem::query()->lockForUpdate()->find($input->referenceId);
+        $delivery = $reservation ? \App\Modules\SupplyChain\Models\Delivery::query()->find($reservation->delivery_id) : null;
+        if (! $reservation || ! $line || ! $delivery
+            || (int) $line->delivery_id !== (int) $reservation->delivery_id
+            || (int) $reservation->delivery_item_id !== (int) $line->id
+            || (int) $reservation->item_id !== $input->itemId
+            || (int) $reservation->location_id !== $input->fromLocationId
+            || (string) $reservation->lot_number !== (string) $input->lotNumber
+            || (string) $reservation->expiry_date?->toDateString() !== (string) $input->expiryDate
+            || $reservation->status !== DeliveryStockReservationStatus::Reserved
+            || $delivery->status !== \App\Modules\SupplyChain\Enums\DeliveryStatus::InTransit
+            || bccomp($reservation->remainingQuantity(), $input->quantity, 3) < 0) {
+            throw new BusinessRuleException('The delivery issue does not match an active reservation for this line, lot, and bin.');
+        }
+
+        return $reservation;
+    }
+
+    /** Lot holds are enforced alongside aggregate reserved_quantity. */
+    private function activeLotHolds(int $itemId, int $locationId, string $lotNumber, ?int $exceptReservationId = null): string
+    {
+        $query = DeliveryStockReservation::query()
+            ->where('item_id', $itemId)
+            ->where('location_id', $locationId)
+            ->where('lot_number', $lotNumber)
+            ->where('status', DeliveryStockReservationStatus::Reserved->value);
+        if ($exceptReservationId !== null) $query->whereKeyNot($exceptReservationId);
+
+        return $query->get(['id', 'quantity', 'consumed_quantity', 'released_quantity'])
+            ->reduce(static fn (string $sum, DeliveryStockReservation $reservation): string => bcadd(
+                $sum,
+                $reservation->remainingQuantity(),
+                3,
+            ), '0.000');
+    }
+
+    /** Prefer an unheld FEFO/FIFO lot when an ordinary outbound omitted one. */
+    private function availableLot(int $itemId, int $locationId, string $needed): ?array
+    {
+        $lots = StockMovement::query()->where('item_id', $itemId)->whereNotNull('lot_number')
+            ->where(fn ($query) => $query->where('from_location_id', $locationId)->orWhere('to_location_id', $locationId))
+            ->orderBy('created_at')->orderBy('id')->get(['lot_number', 'expiry_date'])
+            ->unique('lot_number')->values();
+        $available = [];
+        foreach ($lots as $lot) {
+            $number = (string) $lot->lot_number;
+            $quantity = bcsub(
+                $this->locationSummary->lotQuantity($itemId, $locationId, $number),
+                $this->activeLotHolds($itemId, $locationId, $number),
+                3,
+            );
+            if (bccomp($quantity, '0', 3) <= 0) continue;
+            $available[] = [
+                'lot_number' => $number,
+                'expiry_date' => $lot->expiry_date?->toDateString(),
+                'available' => $quantity,
+            ];
+        }
+        usort($available, static function (array $left, array $right): int {
+            if ($left['expiry_date'] === null && $right['expiry_date'] !== null) return 1;
+            if ($left['expiry_date'] !== null && $right['expiry_date'] === null) return -1;
+            return strcmp((string) $left['expiry_date'], (string) $right['expiry_date']);
+        });
+        foreach ($available as $lot) {
+            if (bccomp($lot['available'], $needed, 3) >= 0) return $lot;
+        }
+        return $available[0] ?? null;
+    }
+
     private function validateInput(StockMovementInput $in): void
     {
+        if (($in->idempotencyKey === null) !== ($in->idempotencyFingerprint === null)) {
+            throw new InvalidMovementException('A stock-movement idempotency key and fingerprint must be supplied together.');
+        }
+        if ($in->idempotencyKey !== null
+            && (strlen($in->idempotencyKey) > 128 || ! preg_match('/^[A-Za-z0-9._:-]+$/D', $in->idempotencyKey))) {
+            throw new InvalidMovementException('The stock-movement idempotency key is invalid.');
+        }
+        if ($in->idempotencyFingerprint !== null && ! preg_match('/^[a-f0-9]{64}$/D', $in->idempotencyFingerprint)) {
+            throw new InvalidMovementException('The stock-movement idempotency fingerprint is invalid.');
+        }
+        if ($in->totalCostOverride !== null
+            && (! preg_match('/^\d{1,14}(?:\.\d{1,2})?$/D', $in->totalCostOverride)
+                || bccomp($in->totalCostOverride, '0', 2) < 0)) {
+            throw new InvalidMovementException('The stock-movement total cost override must be a non-negative currency amount with at most two decimal places.');
+        }
+        if ($in->totalCostOverride !== null) {
+            $sourceOverride = match ($in->type) {
+                StockMovementType::MaterialReturn,
+                StockMovementType::DeliveryReturn => $in->referenceType === 'stock_movement' && $in->referenceId !== null,
+                StockMovementType::DeliveryCustomerReturn => $in->referenceType === 'return_request_item' && $in->referenceId !== null,
+                default => false,
+            };
+            if (! $sourceOverride) {
+                throw new InvalidMovementException('Source-value overrides are allowed only on a source-linked material or delivery return.');
+            }
+        }
+        if ($in->type === StockMovementType::DeliveryReturn) {
+            $this->validateDeliveryReturnInput($in);
+        }
+        if ($in->type === StockMovementType::DeliveryCustomerReturn) {
+            $this->validateDeliveryCustomerReturnInput($in);
+        }
+
         if (bccomp($in->quantity, '0', 3) <= 0) {
             throw new InvalidMovementException('Quantity must be positive.');
         }
@@ -315,6 +476,100 @@ class StockMovementService
         // write-offs (adjustment_out, scrap, return_to_vendor) and quarantine
         // mechanics (transfer) may touch it.
         $this->assertConsumableSource($in->fromLocationId, $in->type);
+    }
+
+    private function validateDeliveryReturnInput(StockMovementInput $in): void
+    {
+        if ($in->referenceType !== 'stock_movement' || $in->referenceId === null
+            || $in->deliveryReturnItemId === null || $in->fromLocationId !== null
+            || $in->toLocationId === null || $in->totalCostOverride === null) {
+            throw new InvalidMovementException('A delivery return must reference its exact reconciled RMA line and original delivery issue.');
+        }
+
+        $source = StockMovement::query()->lockForUpdate()->find($in->referenceId);
+        $returnItem = ReturnRequestItem::query()->with('deliveryAttemptOutcomeMovement.outcomeItem.outcome', 'returnRequest')
+            ->lockForUpdate()->find($in->deliveryReturnItemId);
+        $outcomeMovement = $returnItem?->deliveryAttemptOutcomeMovement;
+        $outcome = $outcomeMovement?->outcomeItem?->outcome;
+        $destination = $this->activeLocation((int) $in->toLocationId);
+        $zoneType = $destination->zone?->zone_type;
+        $zoneType = $zoneType instanceof WarehouseZoneType ? $zoneType : WarehouseZoneType::tryFrom((string) $zoneType);
+
+        if (! $source || $source->movement_type !== StockMovementType::Delivery
+            || $source->reference_type !== 'delivery_item'
+            || (int) $source->item_id !== $in->itemId
+            || (int) $returnItem?->item_id !== $in->itemId
+            || (int) $outcomeMovement?->stock_movement_id !== (int) $source->id
+            || ! $outcome?->reconciled_at
+            || $outcomeMovement?->received_quantity === null
+            || (int) $returnItem?->quarantine_location_id !== (int) $in->toLocationId
+            || bccomp((string) $returnItem?->quantity, $in->quantity, 3) !== 0
+            || bccomp((string) $outcomeMovement->received_quantity, $in->quantity, 3) < 0
+            || bccomp((string) $in->unitCost, (string) $source->unit_cost, 4) !== 0
+            || (string) $in->lotNumber !== (string) $source->lot_number
+            || (string) $in->expiryDate !== (string) $source->expiry_date?->toDateString()
+            || $zoneType !== WarehouseZoneType::Quarantine) {
+            throw new InvalidMovementException('A delivery-return receipt must match its reconciled source, RMA quantity, lot, and quarantine bin.');
+        }
+
+        $prior = StockMovement::query()->where('movement_type', StockMovementType::DeliveryReturn->value)
+            ->where('reference_type', 'stock_movement')->where('reference_id', $source->id)
+            ->lockForUpdate()->get();
+        $priorQuantity = $prior->reduce(static fn (string $sum, StockMovement $row): string => bcadd($sum, (string) $row->quantity, 3), '0.000');
+        if (bccomp(bcadd($priorQuantity, $in->quantity, 3), (string) $outcomeMovement->received_quantity, 3) > 0) {
+            throw new InvalidMovementException('Cumulative delivery returns cannot exceed the quantity physically reconciled for this source.');
+        }
+
+        $expected = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)
+            ->deliveryReturnCost($returnItem, $in->quantity);
+        if (bccomp($expected, (string) $in->totalCostOverride, 2) !== 0) {
+            throw new InvalidMovementException('Delivery-return value must match the remaining source-backed transit or loss value.');
+        }
+    }
+
+    private function validateDeliveryCustomerReturnInput(StockMovementInput $in): void
+    {
+        if ($in->referenceType !== 'return_request_item' || $in->referenceId === null
+            || $in->customerReturnItemId === null || $in->referenceId !== $in->customerReturnItemId
+            || $in->fromLocationId !== null || $in->toLocationId === null || $in->totalCostOverride === null) {
+            throw new InvalidMovementException('A source-bound customer return must reference its exact RMA line and quarantine location.');
+        }
+
+        $returnItem = ReturnRequestItem::query()->with([
+            'sourceDeliveryItem.delivery', 'sourceDeliveryItem.salesOrderItem.product', 'returnRequest',
+        ])->lockForUpdate()->find($in->customerReturnItemId);
+        $deliveryItem = $returnItem?->sourceDeliveryItem;
+        $delivery = $deliveryItem?->delivery;
+        $rmaType = $returnItem?->returnRequest?->type;
+        $rmaType = $rmaType instanceof \BackedEnum ? $rmaType->value : (string) $rmaType;
+        $rmaStatus = $returnItem?->returnRequest?->status;
+        $rmaStatus = $rmaStatus instanceof \BackedEnum ? $rmaStatus->value : (string) $rmaStatus;
+        $destination = $this->activeLocation((int) $in->toLocationId);
+        $zoneType = $destination->zone?->zone_type;
+        $zoneType = $zoneType instanceof WarehouseZoneType ? $zoneType : WarehouseZoneType::tryFrom((string) $zoneType);
+        $issues = $deliveryItem ? StockMovement::query()->where('movement_type', StockMovementType::Delivery->value)
+            ->where('reference_type', 'delivery_item')->where('reference_id', $deliveryItem->id)->orderBy('id')->get() : collect();
+
+        if (! $returnItem || ! $deliveryItem || ! $delivery
+            || $delivery->cost_recognition_mode !== \App\Modules\SupplyChain\Enums\DeliveryCostingMode::Transit
+            || $rmaType !== \App\Modules\ReturnManagement\Enums\ReturnRequestType::CustomerReturn->value
+            || ! in_array($rmaStatus, ['approved', 'received'], true)
+            || (int) $returnItem->item_id !== $in->itemId
+            || (int) $returnItem->quarantine_location_id !== (int) $in->toLocationId
+            || bccomp((string) $returnItem->quantity, '0', 3) <= 0
+            || $zoneType !== WarehouseZoneType::Quarantine
+            || $issues->isEmpty()
+            || $issues->contains(fn (StockMovement $source): bool => (int) $source->item_id !== $in->itemId
+                || (string) $source->lot_number !== (string) $in->lotNumber
+                || (string) $source->expiry_date?->toDateString() !== (string) $in->expiryDate)) {
+            throw new InvalidMovementException('A delivery customer-return receipt must match an approved customer RMA, its accepted delivery source, and quarantine lot.');
+        }
+
+        $expected = app(\App\Modules\SupplyChain\Services\DeliveryCostRecognitionService::class)
+            ->customerReturnCost($returnItem, $in->quantity);
+        if (bccomp($expected, (string) $in->totalCostOverride, 2) !== 0) {
+            throw new InvalidMovementException('Customer-return value must reconcile to the remaining immutable delivery source cost.');
+        }
     }
 
     private function assertConsumableSource(?int $fromLocationId, StockMovementType $type): void

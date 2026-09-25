@@ -45,7 +45,7 @@ export default function DriverDeliveryList() {
   fieldSize="lg"
  >
   <option value="">All actionable statuses</option>
-  {(['scheduled', 'loading', 'in_transit', 'delivered'] as DriverDeliveryStatus[]).map((value) => (
+  {(['scheduled', 'loading', 'in_transit', 'return_pending', 'delivered'] as DriverDeliveryStatus[]).map((value) => (
   <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>
   ))}
  </Select>

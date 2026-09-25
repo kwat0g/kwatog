@@ -38,7 +38,10 @@ use Illuminate\Support\Facades\DB;
  */
 class WoOperationService
 {
-    public function __construct(private readonly InspectionService $inspections) {}
+    public function __construct(
+        private readonly InspectionService $inspections,
+        private readonly WorkOrderMaterialUsageService $materialUsage,
+    ) {}
 
     /**
      * Generate WO operations from the product's active routing.
@@ -154,6 +157,9 @@ class WoOperationService
         $this->assertPreviousCompleted($op);
 
         DB::transaction(function () use ($op, $operator) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
+            $this->assertMaterialCoverageForOperation($workOrder);
+
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Pending, WoOperationStatus::Setup], 'start');
             $this->assertParentInProgress($locked);
@@ -201,6 +207,9 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::Paused], 'resume');
 
         DB::transaction(function () use ($op, $operator) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
+            $this->assertMaterialCoverageForOperation($workOrder);
+
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::Paused], 'resume');
             $this->assertParentInProgress($locked);
@@ -224,12 +233,20 @@ class WoOperationService
         $this->assertStatus($op, [WoOperationStatus::InProgress], 'record output');
 
         DB::transaction(function () use ($op, $qty, $scrap, $scrapReason) {
+            $workOrder = WorkOrder::query()->lockForUpdate()->findOrFail($op->work_order_id);
+
             // Lock-then-guard: accumulate on the authoritative row. Without the
             // lock, two concurrent output records both read the old qty_completed
             // and one record's output is lost (P32/P33).
             $locked = WoOperation::query()->lockForUpdate()->findOrFail($op->getKey());
             $this->assertStatus($locked, [WoOperationStatus::InProgress], 'record output');
             $this->assertParentInProgress($locked);
+
+            $this->materialUsage->assertProductionCoverage(
+                $workOrder,
+                pendingOperationId: (int) $locked->id,
+                pendingOperationUnits: number_format($qty + $scrap, 4, '.', ''),
+            );
 
             $previousOp = WoOperation::query()
                 ->where('work_order_id', $locked->work_order_id)
@@ -436,6 +453,17 @@ class WoOperationService
                 "Cannot execute an operation while the parent work order is '{$workOrder->status?->value}'."
             );
         }
+    }
+
+    private function assertMaterialCoverageForOperation(WorkOrder $workOrder): void
+    {
+        if ($workOrder->status !== WorkOrderStatus::InProgress) {
+            throw new BusinessRuleException(
+                "Cannot execute an operation while the parent work order is '{$workOrder->status?->value}'."
+            );
+        }
+
+        $this->materialUsage->assertProductionCoverage($workOrder);
     }
 
     /**

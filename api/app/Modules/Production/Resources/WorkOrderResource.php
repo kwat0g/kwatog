@@ -15,6 +15,10 @@ class WorkOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $materialUsage = $this->resource->relationLoaded('materials')
+            ? app(\App\Modules\Production\Services\WorkOrderMaterialUsageService::class)->groups($this->resource)
+            : null;
+
         return [
             'id' => $this->hash_id,
             'wo_number' => $this->wo_number,
@@ -82,27 +86,37 @@ class WorkOrderResource extends JsonResource
             'creator' => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->hash_id, 'name' => $this->creator->name,
             ] : null),
-            'materials' => $this->whenLoaded('materials', fn () => $this->materials->map(fn ($m) => [
-                'id' => $m->hash_id,
-                'item' => $m->relationLoaded('item') && $m->item ? [
-                    'id' => $m->item->hash_id, 'code' => $m->item->code,
-                    'name' => $m->item->name, 'unit_of_measure' => $m->item->unit_of_measure,
-                ] : null,
-                'bom_quantity' => (string) $m->bom_quantity,
-                'standard_unit_cost' => (string) $m->standard_unit_cost,
-                'standard_cost' => (string) $m->standard_cost,
-                'actual_quantity_issued' => (string) $m->actual_quantity_issued,
-                'actual_cost' => (string) $m->actual_cost,
-                'cost_variance' => (string) $m->cost_variance,
-                'variance' => (string) $m->variance,
-            ])
-            ),
-            'material_cost_summary' => $this->whenLoaded('materials', function (): array {
+            'materials' => $materialUsage === null ? $this->whenLoaded('materials') : array_map(static fn (array $usage) => [
+                'id' => $usage['id'],
+                'item' => $usage['item'],
+                'bom_quantity' => (string) $usage['required_quantity'],
+                'standard_unit_cost' => (string) $usage['standard_unit_cost'],
+                'standard_cost' => (string) $usage['standard_cost'],
+                'actual_quantity_issued' => (string) $usage['actual_quantity_issued'],
+                'actual_cost' => (string) $usage['actual_cost'],
+                'cost_variance' => (string) $usage['cost_variance'],
+                'variance' => (string) $usage['variance'],
+                'auto_quantity_issued' => (string) $usage['auto_quantity_issued'],
+                'auto_actual_cost' => (string) $usage['auto_actual_cost'],
+                'auto_gross_quantity_issued' => (string) $usage['auto_gross_quantity_issued'],
+                'auto_gross_actual_cost' => (string) $usage['auto_gross_actual_cost'],
+                'auto_returned_quantity' => (string) $usage['auto_returned_quantity'],
+                'auto_returned_cost' => (string) $usage['auto_returned_cost'],
+                'manual_quantity_issued' => (string) $usage['manual_quantity_issued'],
+                'manual_actual_cost' => (string) $usage['manual_actual_cost'],
+                'manual_gross_quantity_issued' => (string) $usage['manual_gross_quantity_issued'],
+                'manual_gross_actual_cost' => (string) $usage['manual_gross_actual_cost'],
+                'manual_returned_quantity' => (string) $usage['manual_returned_quantity'],
+                'manual_returned_cost' => (string) $usage['manual_returned_cost'],
+                'returned_quantity' => (string) $usage['returned_quantity'],
+                'returned_cost' => (string) $usage['returned_cost'],
+            ], $materialUsage),
+            'material_cost_summary' => $materialUsage === null ? $this->whenLoaded('materials') : (function () use ($materialUsage): array {
                 $standard = '0.00';
                 $actual = '0.00';
-                foreach ($this->materials as $material) {
-                    $standard = Money::add($standard, (string) $material->standard_cost);
-                    $actual = Money::add($actual, (string) $material->actual_cost);
+                foreach ($materialUsage as $material) {
+                    $standard = Money::add($standard, (string) $material['standard_cost']);
+                    $actual = Money::add($actual, (string) $material['actual_cost']);
                 }
 
                 return [
@@ -110,7 +124,7 @@ class WorkOrderResource extends JsonResource
                     'actual_cost' => $actual,
                     'cost_variance' => Money::sub($actual, $standard),
                 ];
-            }),
+            })(),
             'outputs' => $this->whenLoaded('outputs', fn () => $this->outputs->map(fn ($o) => [
                 'id' => $o->hash_id,
                 'recorded_at' => optional($o->recorded_at)->toIso8601String(),

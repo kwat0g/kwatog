@@ -17,12 +17,13 @@ use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Services\AutoPurchaseOrderService;
 use App\Modules\Purchasing\Services\OpenSupplyService;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Watches stock movements and auto-creates a draft PR for any item that crosses
- * the reorder point — unless an open PR for that item already exists.
+ * the reorder point, net of open purchase commitments for the item.
  */
 class AutoReplenishmentService
 {
@@ -31,6 +32,7 @@ class AutoReplenishmentService
         private readonly SettingsService $settings,
         private readonly SystemActorService $actors,
         private readonly OpenSupplyService $openSupply,
+        private readonly AutoPurchaseOrderService $autoPo,
     ) {}
 
     public function checkAndReplenish(int $itemId): ?PurchaseRequest
@@ -47,18 +49,26 @@ class AutoReplenishmentService
             $reorder   = (string) $item->reorder_point;
             $safety    = (string) $item->safety_stock;
 
-            // Net in-transit supply from open POs to position.
+            // QC-held receipts have left PO transit but have not entered stock.
             $inTransit = $this->openSupply->inTransitBaseQuantity($item->id);
-            $position = bcadd($available, $inTransit, 3);
+            $heldQc = $this->openSupply->heldQcBaseQuantity($item->id);
+            $position = bcadd(bcadd($available, $inTransit, 3), $heldQc, 3);
+            $openRequests = $this->openSupply->openRequestBaseQuantity($item->id, null, false, true);
+            $unapprovedAutoPos = $this->autoPo->unapprovedBaseQuantity($item);
+            $committed = bcadd($openRequests, $unapprovedAutoPos, 3);
+            $coveredPosition = bcadd($position, $committed, 3);
 
-            if (bccomp($position, $reorder, 3) > 0) return null;
+            if (bccomp($position, $reorder, 3) > 0
+                || ((bccomp($committed, '0', 3) > 0 || bccomp($heldQc, '0', 3) > 0)
+                    && bccomp($coveredPosition, $reorder, 3) >= 0)) {
+                return null;
+            }
 
             // Task A8 — for critical items with exactly one preferred supplier,
             // skip the PR workflow and go directly to an auto-PO routed to VP.
             if ((bool) $item->is_critical) {
                 try {
-                    $auto = app(\App\Modules\Purchasing\Services\AutoPurchaseOrderService::class)
-                        ->createForCriticalShortage($item);
+                    $auto = $this->autoPo->createForCriticalShortage($item);
                     if ($auto !== null) {
                         return null; // PR workflow short-circuited
                     }
@@ -71,17 +81,6 @@ class AutoReplenishmentService
                 }
             }
 
-            // This check runs while the item row is locked. Every low-stock
-            // event for the same item therefore observes the PR/PO created by
-            // the first worker before it can create another replenishment.
-            // Note: in-transit supply is already netted via position; this guard
-            // prevents duplicate PRs from the same low-stock event.
-            // Count PRs with remaining unconverted quantity, including Draft (not yet submitted).
-            // Fully converted Approved PRs should not block a new replenishment.
-            if (bccomp($this->openSupply->openRequestBaseQuantity($item->id, null, false, true), '0', 3) > 0) {
-                return null;
-            }
-
             // Auto-PRs are system-initiated; attribute only to a configured
             // automation actor. If no eligible user exists, skip rather than hit the
             // non-null requested_by FK with a bogus id.
@@ -89,13 +88,13 @@ class AutoReplenishmentService
             if ($systemUser === null) return null;
             $systemUserId = $systemUser->id;
 
-            $orderQty = $this->computeOrderQuantity($item, $position);
+            $orderQty = $this->computeOrderQuantity($item, $coveredPosition);
             if ($orderQty === null || bccomp((string) $item->standard_cost, '0', 2) <= 0) {
                 // Do not create a replenishment request with a fabricated quantity
                 // or a zero-valued estimate; master data must be completed first.
                 return null;
             }
-            $priority = bccomp($position, $safety, 3) <= 0
+            $priority = bccomp($coveredPosition, $safety, 3) <= 0
                 ? PurchaseRequestPriority::Critical
                 : PurchaseRequestPriority::Urgent;
 

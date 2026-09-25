@@ -3,194 +3,194 @@
 import type { PurchaseOrderResponse, PurchaseOrderResponseType } from '@/types/purchasing';
 
 export interface SupplierPortalUser {
- id: string;
- name: string;
- email: string;
- must_change_password: boolean;
- is_active: boolean;
- status: 'active' | 'inactive' | 'locked' | 'pending';
+  id: string;
+  name: string;
+  email: string;
+  must_change_password: boolean;
+  is_active: boolean;
+  status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
- vendor: { id: string; name: string } | null;
- last_login_at: string | null;
- created_at: string;
+  vendor: { id: string; name: string } | null;
+  last_login_at: string | null;
+  created_at: string;
 }
 
 export interface CustomerPortalUser {
- id: string;
- name: string;
- email: string;
- customer_id: string;
- customer_name: string | null;
- must_change_password: boolean;
- is_active: boolean;
- status: 'active' | 'inactive' | 'locked' | 'pending';
+  id: string;
+  name: string;
+  email: string;
+  customer_id: string;
+  customer_name: string | null;
+  must_change_password: boolean;
+  is_active: boolean;
+  status: 'active' | 'inactive' | 'locked' | 'pending';
   deleted_at: string | null;
- customer: { id: string; name: string } | null;
- last_login_at: string | null;
- created_at: string;
+  customer: { id: string; name: string } | null;
+  last_login_at: string | null;
+  created_at: string;
 }
 
 // ── Supplier portal: Purchase Order types ─────────────
 
 export interface PortalPoSummary {
- id: string;
- po_number: string;
- date: string | null;
- total_amount: string;
- status: string;
- status_label?: string;
- expected_delivery_date: string | null;
- /** Date this supplier confirmed, vs OGAMI's required date. */
- confirmed_delivery_date: string | null;
- sent_to_supplier_at: string | null;
- incoterm: string | null;
- capabilities?: PortalPoCapabilities;
+  id: string;
+  po_number: string;
+  date: string | null;
+  total_amount: string;
+  status: string;
+  status_label?: string;
+  expected_delivery_date: string | null;
+  /** Date this supplier confirmed, vs OGAMI's required date. */
+  confirmed_delivery_date: string | null;
+  sent_to_supplier_at: string | null;
+  incoterm: string | null;
+  capabilities?: PortalPoCapabilities;
 }
 
 export interface PortalPoCapabilities {
- can_acknowledge: boolean;
- can_accept: boolean;
- can_propose: boolean;
- can_decline: boolean;
- /** Legacy: true if any of can_accept, can_propose, can_decline is true */
- can_respond: boolean;
- can_update_shipment: boolean;
- can_upload_document: boolean;
- can_submit_invoice: boolean;
+  can_acknowledge: boolean;
+  can_accept: boolean;
+  can_propose: boolean;
+  can_decline: boolean;
+  /** Legacy: true if any of can_accept, can_propose, can_decline is true */
+  can_respond: boolean;
+  can_update_shipment: boolean;
+  can_upload_document: boolean;
+  can_submit_invoice: boolean;
   can_schedule_delivery: boolean;
 }
 
 /** Body for POST /b2b/supplier/purchase-orders/{po}/respond. */
 export interface RespondToPurchaseOrderPayload {
- type: PurchaseOrderResponseType;
- proposed_delivery_date?: string;
- notes?: string;
- items?: Array<{
-  purchase_order_item_id: string;
-  proposed_quantity?: string;
-  proposed_unit_price?: string;
-  reason?: string;
- }>;
+  type: PurchaseOrderResponseType;
+  proposed_delivery_date?: string;
+  notes?: string;
+  items?: Array<{
+    purchase_order_item_id: string;
+    proposed_quantity?: string;
+    proposed_unit_price?: string;
+    reason?: string;
+  }>;
 }
 
 export interface PortalPoItem {
- id: string;
- part_number: string;
- name: string;
- quantity_ordered: string;
- quantity_received: string;
- quantity_accepted: string;
- quantity_remaining: string;
- quantity_schedulable: string | null;
- unit_price: string;
- total_price: string;
+  id: string;
+  part_number: string;
+  name: string;
+  quantity_ordered: string;
+  quantity_received: string;
+  quantity_accepted: string;
+  quantity_remaining: string;
+  quantity_schedulable: string | null;
+  unit_price: string;
+  total_price: string;
 }
 
 export interface PortalShipment {
- id: string;
- shipped_date: string | null;
- carrier: string | null;
- tracking_number: string | null;
- estimated_arrival: string | null;
- notes: string | null;
- updated_at: string | null;
+  id: string;
+  shipped_date: string | null;
+  carrier: string | null;
+  tracking_number: string | null;
+  estimated_arrival: string | null;
+  notes: string | null;
+  updated_at: string | null;
 }
 
 export interface PortalPoGrn {
- id: string;
- grn_number: string;
- received_date: string | null;
- status: string;
- status_label: string;
- supplier_invoice_number: string | null;
- can_invoice: boolean;
+  id: string;
+  grn_number: string;
+  received_date: string | null;
+  status: string;
+  status_label: string;
+  supplier_invoice_number: string | null;
+  can_invoice: boolean;
 }
 
 export interface PortalPoDetail extends PortalPoSummary {
- capabilities: PortalPoCapabilities;
- /** Most recent response this supplier submitted. */
- latest_response: PurchaseOrderResponse | null;
- shipment?: PortalShipment | null;
- shipments: PortalShipment[];
- items: PortalPoItem[];
- goods_receipt_notes: PortalPoGrn[];
+  capabilities: PortalPoCapabilities;
+  /** Most recent response this supplier submitted. */
+  latest_response: PurchaseOrderResponse | null;
+  shipment?: PortalShipment | null;
+  shipments: PortalShipment[];
+  items: PortalPoItem[];
+  goods_receipt_notes: PortalPoGrn[];
   bills: Array<{
- id: string;
- bill_number: string;
- supplier_invoice_number: string | null;
- total_amount: string;
- paid_amount: string;
- balance: string;
- status: string;
- status_label?: string;
- due_date: string | null;
+    id: string;
+    bill_number: string;
+    supplier_invoice_number: string | null;
+    total_amount: string;
+    paid_amount: string;
+    balance: string;
+    status: string;
+    status_label?: string;
+    due_date: string | null;
   }>;
 }
 
 export interface SupplierDeliveryLine {
- item_code: string;
- item_name: string;
- quantity_received: string;
- quantity_accepted: string;
- quantity_rejected: string;
- remarks?: string;
+  item_code: string;
+  item_name: string;
+  quantity_received: string;
+  quantity_accepted: string;
+  quantity_rejected: string;
+  remarks?: string;
 }
 
 export interface SupplierDeliverySummary {
- id: string;
- grn_number: string;
- received_date: string | null;
- status: string;
- status_label: string;
- rejection_reason: string | null;
- purchase_order: { id: string; po_number: string } | null;
- lines?: SupplierDeliveryLine[];
+  id: string;
+  grn_number: string;
+  received_date: string | null;
+  status: string;
+  status_label: string;
+  rejection_reason: string | null;
+  purchase_order: { id: string; po_number: string } | null;
+  lines?: SupplierDeliveryLine[];
 }
 
 // ── Customer portal: Sales Order types ────────────────
 
 export interface PortalSoSummary {
- id: string;
- so_number: string;
- date: string | null;
- total_amount: string;
- status: string;
- status_label?: string;
- created_at: string;
+  id: string;
+  so_number: string;
+  date: string | null;
+  total_amount: string;
+  status: string;
+  status_label?: string;
+  created_at: string;
 }
 
 export interface PortalSoItem {
- id: string;
- part_number: string;
- name: string;
- quantity: string;
- unit_price: string;
- total: string;
- delivery_date: string | null;
+  id: string;
+  part_number: string;
+  name: string;
+  quantity: string;
+  unit_price: string;
+  total: string;
+  delivery_date: string | null;
 }
 
 export interface PortalCatalogItem {
- id: string;
- part_number: string;
- name: string;
- unit_of_measure: string;
- unit_price: string;
- pricing_method: string;
+  id: string;
+  part_number: string;
+  name: string;
+  unit_of_measure: string;
+  unit_price: string;
+  pricing_method: string;
 }
 
 export interface PortalSoDetail extends PortalSoSummary {
- items?: PortalSoItem[];
- work_orders?: Array<{
- id: string;
- wo_number: string;
- status: string;
- status_label?: string;
- quantity_target: number;
- quantity_produced: number;
- planned_start: string | null;
- }>;
- customer?: { id: string; name: string };
- notes?: string;
+  items?: PortalSoItem[];
+  work_orders?: Array<{
+    id: string;
+    wo_number: string;
+    status: string;
+    status_label?: string;
+    quantity_target: number;
+    quantity_produced: number;
+    planned_start: string | null;
+  }>;
+  customer?: { id: string; name: string };
+  notes?: string;
   payment_terms_days?: number;
   delivery_terms?: string;
   submission_source?: string;
@@ -215,6 +215,7 @@ export interface PortalSoDetail extends PortalSoSummary {
 
 export interface PortalReturnRequest {
   id: string;
+  source_case?: { id: string; case_number: string } | null;
   rma_number: string;
   type: string;
   status: string;
@@ -258,376 +259,383 @@ export interface PortalReturnSourceOptions {
 // ── Shared portal types ──────────────────────────────
 
 export interface PortalInvoiceSummary {
- id: string;
- invoice_number: string;
- date: string | null;
- total_amount: string;
- balance: string;
- status: string;
- status_label?: string;
- due_date: string | null;
+  id: string;
+  invoice_number: string;
+  date: string | null;
+  total_amount: string;
+  balance: string;
+  status: string;
+  status_label?: string;
+  due_date: string | null;
 }
 
 export interface PortalInvoiceDetail extends PortalInvoiceSummary {
- items: Array<{
- id: string;
- description: string;
- quantity: number;
- unit_price: string;
- total: string;
- }>;
- collections: Array<{
- id: string;
- amount: string;
- collection_date: string | null;
- payment_method: string;
- payment_method_label?: string;
- }>;
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unit_price: string;
+    total: string;
+  }>;
+  collections: Array<{
+    id: string;
+    amount: string;
+    collection_date: string | null;
+    payment_method: string;
+    payment_method_label?: string;
+  }>;
 }
 
 export interface SupplierBillSummary {
- id: string;
- /** OGAMI's accounts-payable number. */
- bill_number: string;
- /** The supplier's own invoice number, once they have submitted one. */
- supplier_invoice_number: string | null;
- supplier_invoice_date: string | null;
- date: string | null;
- total_amount: string;
- balance: string;
- status: string;
- status_label?: string;
- due_date: string | null;
+  id: string;
+  /** OGAMI's accounts-payable number. */
+  bill_number: string;
+  /** The supplier's own invoice number, once they have submitted one. */
+  supplier_invoice_number: string | null;
+  supplier_invoice_date: string | null;
+  date: string | null;
+  total_amount: string;
+  balance: string;
+  status: string;
+  status_label?: string;
+  due_date: string | null;
 }
 
 export interface SupplierBillDetail extends SupplierBillSummary {
- items: Array<{
- id: string;
- description: string;
- quantity: string;
- unit_price: string;
- total: string;
- }>;
- goods_receipt_note?: { id: string; grn_number: string } | null;
- payments: Array<{
- id: string;
- amount: string;
- payment_date: string | null;
- payment_method: string;
- payment_method_label?: string;
- reference_number: string | null;
- status: string | null;
- status_label: string | null;
- }>;
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: string;
+    unit_price: string;
+    total: string;
+  }>;
+  goods_receipt_note?: { id: string; grn_number: string } | null;
+  payments: Array<{
+    id: string;
+    amount: string;
+    payment_date: string | null;
+    payment_method: string;
+    payment_method_label?: string;
+    reference_number: string | null;
+    status: string | null;
+    status_label: string | null;
+  }>;
 }
 
 export interface PortalDeliverySummary {
- id: string;
- delivery_number: string;
- delivered_at: string | null;
- status: string;
- status_label?: string;
- scheduled_date?: string | null;
- sales_order?: { id: string; so_number: string } | null;
+  id: string;
+  delivery_number: string;
+  delivered_at: string | null;
+  status: string;
+  status_label?: string;
+  scheduled_date?: string | null;
+  sales_order?: { id: string; so_number: string } | null;
 }
 
 export interface PortalDeliveryDetail extends PortalDeliverySummary {
- items: Array<{
- id: string;
- part_number: string;
- name: string;
- quantity_delivered: number;
- }>;
- proofs: Array<{
- id: string;
- proof_type: string;
- file_name: string;
- view_url: string | null;
- notes: string | null;
- }>;
- receiver_name?: string | null;
- confirmed_at?: string | null;
- driver?: { id: string; name: string } | null;
- /** Server rule: delivered AND a proof of delivery has been uploaded. */
- can_confirm?: boolean;
+  can_report_not_arrived?: boolean;
+  has_attempt_outcome?: boolean;
+  items: Array<{
+    id: string;
+    part_number: string;
+    name: string;
+    quantity_delivered: string | number;
+    quantity_dispatched?: string;
+  }>;
+  proofs: Array<{
+    id: string;
+    proof_type: string;
+    file_name: string;
+    view_url: string | null;
+    notes: string | null;
+  }>;
+  receiver_name?: string | null;
+  confirmed_at?: string | null;
+  driver?: { id: string; name: string } | null;
+  /** Server rule: delivered AND a proof of delivery has been uploaded. */
+  can_confirm?: boolean;
+  billing_hold?: { case_id: string; case_number: string; message: string } | null;
 }
 
 export interface PortalCoCSummary {
- id: string;
- coc_number: string;
- work_order: string;
- batch_number: string | null;
- inspection_date: string | null;
+  id: string;
+  coc_number: string;
+  work_order: string;
+  batch_number: string | null;
+  inspection_date: string | null;
 }
 
 export interface PortalPaymentSummary {
- id: string;
- amount: string;
- paid_at: string | null;
- payment_method: string;
- reference: string | null;
- invoice?: { id: string; invoice_number: string; total_amount?: string } | null;
- bill?: { id: string; bill_number: string; total_amount?: string } | null;
+  id: string;
+  amount: string;
+  paid_at: string | null;
+  payment_method: string;
+  reference: string | null;
+  invoice?: { id: string; invoice_number: string; total_amount?: string } | null;
+  bill?: { id: string; bill_number: string; total_amount?: string } | null;
 }
 
 // ── Portal Shipping Documents ─────────────────────────
 
 export interface PortalShippingDocument {
- id: string;
- purchase_order_id: string | null;
- document_type: string;
- document_type_label: string;
- original_filename: string;
- file_size_bytes: number;
- file_size_formatted: string;
- mime_type: string | null;
- notes: string | null;
- uploaded_by: { id: string; name: string } | null;
- uploaded_at: string | null;
- download_url: string;
+  id: string;
+  purchase_order_id: string | null;
+  document_type: string;
+  document_type_label: string;
+  original_filename: string;
+  file_size_bytes: number;
+  file_size_formatted: string;
+  mime_type: string | null;
+  notes: string | null;
+  uploaded_by: { id: string; name: string } | null;
+  uploaded_at: string | null;
+  download_url: string;
 }
 
 // ── Supplier Invoice Submission ───────────────────────
 
 export interface SubmittedBill {
- id: string;
- bill_number: string;
- total_amount: string;
- status: string;
+  id: string;
+  bill_number: string;
+  total_amount: string;
+  status: string;
 }
 
 export interface PortalComplaint {
- id: string;
- complaint_number: string;
- severity: string;
- severity_label?: string;
- status: string;
- status_label?: string;
- description: string;
- affected_quantity: number;
- received_date: string | null;
- resolved_at: string | null;
- closed_at: string | null;
- created_at: string;
+  id: string;
+  complaint_number: string;
+  severity: string;
+  severity_label?: string;
+  status: string;
+  status_label?: string;
+  description: string;
+  affected_quantity: number;
+  received_date: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  created_at: string;
 }
 
 // ── 8D Report (customer portal) ──────────────────────
 
 export interface EightDReportData {
- complaint_number: string;
- complaint_status: string;
- complaint_status_label?: string;
- severity: string;
- severity_label?: string;
- description: string;
- report: {
- id: string;
- d1_team: string | null;
- d2_problem: string | null;
- d3_containment: string | null;
- d4_root_cause: string | null;
- d5_corrective_action: string | null;
- d6_verification: string | null;
- d7_prevention: string | null;
- d8_recognition: string | null;
- finalized_at: string | null;
- } | null;
+  complaint_number: string;
+  complaint_status: string;
+  complaint_status_label?: string;
+  severity: string;
+  severity_label?: string;
+  description: string;
+  report: {
+    id: string;
+    d1_team: string | null;
+    d2_problem: string | null;
+    d3_containment: string | null;
+    d4_root_cause: string | null;
+    d5_corrective_action: string | null;
+    d6_verification: string | null;
+    d7_prevention: string | null;
+    d8_recognition: string | null;
+    finalized_at: string | null;
+  } | null;
 }
 
 // ── Statement of Account ─────────────────────────────
 
 export interface StatementOfAccount {
- customer: { id: string; name: string; code: string };
- as_of: string;
- currency: string;
- opening_balance: string;
- closing_balance: string;
- total_outstanding: string;
- aging: {
- current: string;
+  customer: { id: string; name: string; code: string };
+  as_of: string;
+  currency: string;
+  opening_balance: string;
+  closing_balance: string;
+  total_outstanding: string;
+  aging: {
+    current: string;
     d1_30: string;
     d31_60: string;
     d61_90: string;
     d91_plus: string;
- };
- aging_options: Array<{ value: keyof StatementOfAccount['aging']; label: string }>;
- transactions: Array<{
- date: string;
- type: 'invoice' | 'payment' | string;
- reference: string;
- description: string;
- amount: string;
- running_balance: string;
- }>;
+  };
+  aging_options: Array<{ value: keyof StatementOfAccount['aging']; label: string }>;
+  transactions: Array<{
+    date: string;
+    type: 'invoice' | 'payment' | string;
+    reference: string;
+    description: string;
+    amount: string;
+    running_balance: string;
+  }>;
 }
 
 // ── Delivery Schedule ────────────────────────────────
 
 export interface DeliveryScheduleLine {
- purchase_order_item_id?: string | null;
- product_name: string;
- quantity: string | number;
- notes?: string;
+  purchase_order_item_id?: string | null;
+  product_name: string;
+  quantity: string | number;
+  notes?: string;
 }
 
 // ── Supplier Item Listings (supplier-submitted offers) ─────
 
 export interface PortalItemCatalogEntry {
- id: string;
- code: string;
- name: string;
- item_type?: string;
- unit_of_measure: string;
+  id: string;
+  code: string;
+  name: string;
+  item_type?: string;
+  unit_of_measure: string;
 }
 
 export type PortalListingStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
 
 export interface PortalSupplierListing {
- id: string;
- item?: { id: string; code: string; name: string; unit_of_measure: string };
- supplier_item_code: string | null;
- supplier_item_name: string | null;
- price: string;
- order_uom: string | null;
- base_qty_per_order_unit: string | null;
- lead_time_days: number;
- valid_until: string | null;
- status: PortalListingStatus;
- rejection_reason: string | null;
- submitted_at: string | null;
- reviewed_at: string | null;
+  id: string;
+  item?: { id: string; code: string; name: string; unit_of_measure: string };
+  supplier_item_code: string | null;
+  supplier_item_name: string | null;
+  price: string;
+  order_uom: string | null;
+  base_qty_per_order_unit: string | null;
+  lead_time_days: number;
+  valid_until: string | null;
+  status: PortalListingStatus;
+  rejection_reason: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
 }
 
 export interface PortalSupplierListingInput {
- item_id?: string;
- supplier_item_code?: string | null;
- supplier_item_name?: string | null;
- price: string;
- order_uom?: string | null;
- base_qty_per_order_unit?: string | null;
- lead_time_days: number;
- valid_until?: string | null;
+  item_id?: string;
+  supplier_item_code?: string | null;
+  supplier_item_name?: string | null;
+  price: string;
+  order_uom?: string | null;
+  base_qty_per_order_unit?: string | null;
+  lead_time_days: number;
+  valid_until?: string | null;
 }
 
 export interface PortalBulkListingFailure {
- index: number;
- item_id: string | null;
- message: string;
+  index: number;
+  item_id: string | null;
+  message: string;
 }
 
 export interface PortalBulkListingResult {
- created: PortalSupplierListing[];
- failed: PortalBulkListingFailure[];
- created_count: number;
- failed_count: number;
+  created: PortalSupplierListing[];
+  failed: PortalBulkListingFailure[];
+  created_count: number;
+  failed_count: number;
 }
 
 export interface DeliverySchedule {
- id: string;
- month: string;
- status: string;
- status_label?: string;
- source?: 'customer' | 'supplier';
- customer?: { id: string; name: string } | null;
- vendor?: { id: string; name: string } | null;
- lines: DeliveryScheduleLine[];
- purchase_order?: { id: string; po_number: string } | null;
- reject_reason?: string | null;
- cancel_reason?: string | null;
- reviewed_at?: string | null;
- cancelled_at?: string | null;
- can_cancel?: boolean;
- created_at: string;
- updated_at: string;
+  id: string;
+  month: string;
+  status: string;
+  status_label?: string;
+  source?: 'customer' | 'supplier';
+  customer?: { id: string; name: string } | null;
+  vendor?: { id: string; name: string } | null;
+  lines: DeliveryScheduleLine[];
+  purchase_order?: { id: string; po_number: string } | null;
+  reject_reason?: string | null;
+  cancel_reason?: string | null;
+  reviewed_at?: string | null;
+  cancelled_at?: string | null;
+  can_cancel?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SchedulablePoOption {
- id: string;
- po_number: string;
- items: Array<{
   id: string;
-  part_number: string;
-  name: string;
-  quantity_ordered: string;
-  quantity_received: string;
-  quantity_schedulable: string;
- }>;
+  po_number: string;
+  items: Array<{
+    id: string;
+    part_number: string;
+    name: string;
+    quantity_ordered: string;
+    quantity_received: string;
+    quantity_schedulable: string;
+  }>;
 }
 
 // ── Internal B2B delivery schedule review ────────────
 
 export interface InternalDeliverySchedule {
- id: string;
- month: string;
- status: string;
- status_label: string;
- source: 'customer' | 'supplier';
- customer?: { id: string; name: string } | null;
- vendor?: { id: string; name: string } | null;
- purchase_order?: { id: string; po_number: string } | null;
- lines: Array<{
-  purchase_order_item_id: string | null;
-  product_name: string;
-  quantity: string;
-  notes: string | null;
- }>;
- reject_reason: string | null;
- reviewed_at: string | null;
- reviewed_by?: { id: string; name: string } | null;
- created_at: string;
+  id: string;
+  month: string;
+  status: string;
+  status_label: string;
+  source: 'customer' | 'supplier';
+  customer?: { id: string; name: string } | null;
+  vendor?: { id: string; name: string } | null;
+  purchase_order?: { id: string; po_number: string } | null;
+  lines: Array<{
+    purchase_order_item_id: string | null;
+    product_name: string;
+    quantity: string;
+    notes: string | null;
+  }>;
+  reject_reason: string | null;
+  reviewed_at: string | null;
+  reviewed_by?: { id: string; name: string } | null;
+  created_at: string;
 }
 
 // ── Vendor Statement of Account (Supplier Portal) ─────
 
 export interface VendorStatementOfAccount {
- vendor_name: string | null;
- total_outstanding: string;
- aging_buckets: {
- current: string;
- d1_30: string;
- d31_60: string;
- d61_90: string;
- d91_plus: string;
- };
- aging_bucket_options: Array<{ value: keyof VendorStatementOfAccount['aging_buckets']; label: string }>;
- open_bills: Array<{
- id: string;
- bill_number: string;
- date: string | null;
- due_date: string | null;
- total_amount: string;
- balance: string;
- status: string;
- status_label?: string;
- is_overdue: boolean;
- aging_bucket: string;
- purchase_order?: { id: string; po_number: string } | null;
- }>;
- as_of_date: string;
+  vendor_name: string | null;
+  total_outstanding: string;
+  aging_buckets: {
+    current: string;
+    d1_30: string;
+    d31_60: string;
+    d61_90: string;
+    d91_plus: string;
+  };
+  aging_bucket_options: Array<{
+    value: keyof VendorStatementOfAccount['aging_buckets'];
+    label: string;
+  }>;
+  open_bills: Array<{
+    id: string;
+    bill_number: string;
+    date: string | null;
+    due_date: string | null;
+    total_amount: string;
+    balance: string;
+    status: string;
+    status_label?: string;
+    is_overdue: boolean;
+    aging_bucket: string;
+    purchase_order?: { id: string; po_number: string } | null;
+  }>;
+  as_of_date: string;
 }
 
 // ── Supplier portal dashboard ─────────────────────────
 
 export interface SupplierDashboardData {
- open_po_count: number;
- /** Open RFQ invitations still waiting for this supplier's quotation. */
- open_rfq_count: number;
- pending_delivery_count: number;
- unpaid_invoice_count: number;
- total_unpaid_amount: string;
- recent_pos: PortalPoSummary[];
- recent_invoices: SupplierBillSummary[];
+  open_po_count: number;
+  /** Open RFQ invitations still waiting for this supplier's quotation. */
+  open_rfq_count: number;
+  pending_delivery_count: number;
+  unpaid_invoice_count: number;
+  total_unpaid_amount: string;
+  recent_pos: PortalPoSummary[];
+  recent_invoices: SupplierBillSummary[];
 }
 
 // ── Customer portal dashboard ─────────────────────────
 
 export interface CustomerDashboardData {
- open_so_count: number;
- pending_delivery_count: number;
- open_invoice_count: number;
- total_outstanding: string;
- recent_orders: PortalSoSummary[];
- recent_invoices: PortalInvoiceSummary[];
- recent_deliveries: PortalDeliverySummary[];
- recent_complaints: PortalComplaint[];
+  open_so_count: number;
+  pending_delivery_count: number;
+  open_invoice_count: number;
+  total_outstanding: string;
+  recent_orders: PortalSoSummary[];
+  recent_invoices: PortalInvoiceSummary[];
+  recent_deliveries: PortalDeliverySummary[];
+  recent_complaints: PortalComplaint[];
 }

@@ -15,8 +15,6 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { woOperationsApi } from '@/api/production/routings';
-import { machinesApi } from '@/api/mrp/machines';
-import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -40,6 +38,7 @@ import type { MachineDowntimeCategory } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
+import { FormOptionsStatus } from './FormOptionsStatus';
 
 const OP_STATUS_CHIP: Record<
   WoOperationStatus,
@@ -84,14 +83,10 @@ export default function WorkOrderDetailPage() {
   const [operationScrap, setOperationScrap] = useState('0');
   const [operationScrapReason, setOperationScrapReason] = useState('');
   const [operationSkipReason, setOperationSkipReason] = useState('');
-  const machineList = useQuery({
-    queryKey: ['mrp', 'machines', 'all'],
-    queryFn: () => machinesApi.list({ per_page: 100 }),
-    enabled: showConfirmDialog,
-  });
-  const moldList = useQuery({
-    queryKey: ['mrp', 'molds', 'all'],
-    queryFn: () => moldsApi.list({ per_page: 100 }),
+  const formOptions = useQuery({
+    queryKey: ['production', 'work-orders', 'form-options'],
+    queryFn: workOrdersApi.formOptions,
+    staleTime: 5 * 60 * 1000,
     enabled: showConfirmDialog,
   });
   const { data: workOrderOptions } = useQuery({
@@ -419,20 +414,20 @@ export default function WorkOrderDetailPage() {
 
       {tab === 'details' && (
         <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 min-w-0 space-y-4">
             {/* ADV3 — IATF 16949 Production Batch panel. Visible once the WO has
  been started (batch_number is generated on first start). */}
             {data.batch_number && (
               <Panel title="Production batch" meta="IATF 16949 traceability">
                 <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
                   <dt className="text-muted">Batch no.</dt>
-                  <dd className="col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
+                  <dd className="sm:col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
                   <dt className="text-muted">Machine / Mold</dt>
-                  <dd className="col-span-2 font-mono">
+                  <dd className="sm:col-span-2 font-mono">
                     {data.machine?.machine_code ?? '—'} / {data.mold?.mold_code ?? '—'}
                   </dd>
                   <dt className="text-muted">Produced</dt>
-                  <dd className="col-span-2 font-mono tabular-nums">
+                  <dd className="sm:col-span-2 font-mono tabular-nums">
                     {formatInt(data.quantity_good)} good / {formatInt(data.quantity_rejected)}{' '}
                     rejected
                   </dd>
@@ -497,12 +492,12 @@ export default function WorkOrderDetailPage() {
             <Panel title="Overview">
               <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
                 <dt className="text-muted">Product</dt>
-                <dd className="col-span-2">
+                <dd className="sm:col-span-2">
                   <span className="font-mono">{data.product?.part_number}</span> —{' '}
                   {data.product?.name}
                 </dd>
                 <dt className="text-muted">Sales order</dt>
-                <dd className="col-span-2">
+                <dd className="sm:col-span-2">
                   {data.sales_order ? (
                     <span className="font-mono">{data.sales_order.so_number}</span>
                   ) : (
@@ -510,24 +505,24 @@ export default function WorkOrderDetailPage() {
                   )}
                 </dd>
                 <dt className="text-muted">Machine</dt>
-                <dd className="col-span-2 font-mono">{data.machine?.machine_code ?? '—'}</dd>
+                <dd className="sm:col-span-2 font-mono">{data.machine?.machine_code ?? '—'}</dd>
                 <dt className="text-muted">Mold</dt>
-                <dd className="col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
+                <dd className="sm:col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
                 <dt className="text-muted">Target / Produced</dt>
-                <dd className="col-span-2 font-mono tabular-nums">
+                <dd className="sm:col-span-2 font-mono tabular-nums">
                   {formatInt(data.quantity_target)} / {formatInt(data.quantity_produced)}
                 </dd>
                 <dt className="text-muted">Good / Reject</dt>
-                <dd className="col-span-2 font-mono tabular-nums">
+                <dd className="sm:col-span-2 font-mono tabular-nums">
                   {formatInt(data.quantity_good)} / {formatInt(data.quantity_rejected)} (scrap{' '}
                   {Number(data.scrap_rate).toFixed(2)}%)
                 </dd>
                 <dt className="text-muted">Planned</dt>
-                <dd className="col-span-2 font-mono">
+                <dd className="sm:col-span-2 font-mono">
                   {data.planned_start?.slice(0, 16)} → {data.planned_end?.slice(0, 16)}
                 </dd>
                 <dt className="text-muted">Actual</dt>
-                <dd className="col-span-2 font-mono">
+                <dd className="sm:col-span-2 font-mono">
                   {data.actual_start
                     ? `${data.actual_start.slice(0, 16)} → ${data.actual_end?.slice(0, 16) ?? '…'}`
                     : '—'}
@@ -535,7 +530,7 @@ export default function WorkOrderDetailPage() {
                 {data.pause_reason && (
                   <>
                     <dt className="text-muted">Pause reason</dt>
-                    <dd className="col-span-2 text-warning-fg">{data.pause_reason}</dd>
+                    <dd className="sm:col-span-2 text-warning-fg">{data.pause_reason}</dd>
                   </>
                 )}
               </dl>
@@ -1091,6 +1086,12 @@ export default function WorkOrderDetailPage() {
         size="md"
       >
         <div className="px-5 py-4 space-y-4">
+          <FormOptionsStatus
+            isLoading={formOptions.isLoading}
+            isError={formOptions.isError}
+            isFetching={formOptions.isFetching}
+            onRetry={() => { void formOptions.refetch(); }}
+          />
           <p className="text-sm text-muted">
             Confirming a work order requires both a machine and a mold. The system will reserve
             materials based on the BOM once you confirm.
@@ -1102,7 +1103,7 @@ export default function WorkOrderDetailPage() {
             onChange={(e) => setSelectedMachineId(e.target.value)}
           >
             <option value="">Select a machine…</option>
-            {machineList.data?.data?.map((m) => (
+            {formOptions.data?.machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.machine_code} — {m.name} ({m.tonnage}t)
               </option>
@@ -1115,7 +1116,7 @@ export default function WorkOrderDetailPage() {
             onChange={(e) => setSelectedMoldId(e.target.value)}
           >
             <option value="">Select a mold…</option>
-            {moldList.data?.data
+            {formOptions.data?.molds
               .filter((m) => !data.product || !m.product || m.product.id === data.product.id)
               .map((m) => (
                 <option key={m.id} value={m.id}>

@@ -213,6 +213,13 @@ export const SECTIONS: NavSection[] = [
         permission: 'return_management.view',
         badgeKey: 'pending_returns',
       },
+      {
+        to: '/return-management/cases',
+        label: 'Problem Reports',
+        icon: ReturnIcon,
+        feature: 'return_management',
+        permission: 'return_management.view',
+      },
     ],
   },
   {

@@ -221,7 +221,7 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
     private function makeReceivedGrn(array $lineOverrides = []): GoodsReceiptNote
     {
         $receiver = User::factory()->create();
-        $item = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $po = PurchaseOrder::factory()->create([
             'status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::Approved->value,
             'created_by' => $receiver->id,

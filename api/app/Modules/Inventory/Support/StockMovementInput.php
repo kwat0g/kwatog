@@ -27,5 +27,14 @@ final class StockMovementInput
         public readonly ?int $expectedToVersion = null,
         public readonly ?string $lotNumber = null,
         public readonly ?string $expiryDate = null,
+        public readonly ?string $idempotencyKey = null,
+        public readonly ?string $idempotencyFingerprint = null,
+        public readonly ?string $totalCostOverride = null,
+        /** Exact durable delivery allocation consumed by a dispatch issue. */
+        public readonly ?int $deliveryStockReservationId = null,
+        /** Exact truck-return RRI authorized for a DeliveryReturn receipt. */
+        public readonly ?int $deliveryReturnItemId = null,
+        /** Exact ordinary customer-return RRI authorized for a customer receipt. */
+        public readonly ?int $customerReturnItemId = null,
     ) {}
 }

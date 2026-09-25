@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Modules\ReturnManagement\Controllers\ReturnRequestController;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/case-routes.php';
+
 /*
  * Return Management (RMA) routes — ADV12.
  * Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.

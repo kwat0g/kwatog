@@ -26,6 +26,7 @@ class StockMovement extends Model
         'journal_entry_id', 'gl_handoff_status', 'gl_handoff_message', 'gl_handoff_at',
         // OGAMI-012 — lot/batch traceability (null-safe; optional).
         'lot_number', 'expiry_date',
+        'idempotency_key', 'idempotency_fingerprint',
     ];
 
     protected $casts = [

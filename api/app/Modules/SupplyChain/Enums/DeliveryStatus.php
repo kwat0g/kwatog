@@ -10,17 +10,20 @@ enum DeliveryStatus: string
     case Scheduled = 'scheduled';
     case Loading   = 'loading';
     case InTransit = 'in_transit';
+    case ReturnPending = 'return_pending';
     case Delivered = 'delivered';
     case Confirmed = 'confirmed';
+    case Returned  = 'returned';
     case Cancelled = 'cancelled';
 
     public function canTransitionTo(self $next): bool
     {
-        if ($next === self::Cancelled) return $this !== self::Confirmed && $this !== self::Cancelled;
+        if ($next === self::Cancelled) return in_array($this, [self::Scheduled, self::Loading], true);
         return match ($this) {
             self::Scheduled => $next === self::Loading,
             self::Loading   => $next === self::InTransit,
-            self::InTransit => $next === self::Delivered,
+            self::InTransit => in_array($next, [self::Delivered, self::ReturnPending], true),
+            self::ReturnPending => in_array($next, [self::Delivered, self::Returned], true),
             self::Delivered => $next === self::Confirmed,
             default         => false,
         };
@@ -28,7 +31,7 @@ enum DeliveryStatus: string
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Confirmed, self::Cancelled], true);
+        return in_array($this, [self::Confirmed, self::Returned, self::Cancelled], true);
     }
 
     public static function values(): array
@@ -51,8 +54,10 @@ enum DeliveryStatus: string
             self::Scheduled => 'Scheduled',
             self::Loading => 'Loading',
             self::InTransit => 'In transit',
+            self::ReturnPending => 'Truck return pending',
             self::Delivered => 'Delivered',
             self::Confirmed => 'Confirmed',
+            self::Returned => 'Returned to depot',
             self::Cancelled => 'Cancelled',
         };
     }

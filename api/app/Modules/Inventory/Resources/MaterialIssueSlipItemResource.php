@@ -13,6 +13,7 @@ class MaterialIssueSlipItemResource extends JsonResource
     {
         return [
             'id' => $this->hash_id,
+            'stock_movement_id' => $this->whenLoaded('stockMovement', fn () => $this->stockMovement?->hash_id),
             'item'            => $this->whenLoaded('item', fn () => [
                 'id'              => $this->item->hash_id,
                 'code'            => $this->item->code,

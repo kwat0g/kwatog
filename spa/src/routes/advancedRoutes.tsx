@@ -19,6 +19,9 @@ const BudgetVsActualPage = lazy(() => import('@/pages/budgeting/budget-vs-actual
 const ReturnManagementListPage = lazy(() => import('@/pages/return-management/list'));
 const ReturnManagementDetailPage = lazy(() => import('@/pages/return-management/detail'));
 const CreateReturnRequestPage = lazy(() => import('@/pages/return-management/create'));
+const ReturnCaseListPage = lazy(() => import('@/pages/return-management/cases/list'));
+const ReturnCaseCreatePage = lazy(() => import('@/pages/return-management/cases/create'));
+const ReturnCaseDetailPage = lazy(() => import('@/pages/return-management/cases/detail'));
 
 export const advancedRoutes = (
   <>
@@ -109,6 +112,30 @@ export const advancedRoutes = (
         element={
           <PermissionGuard permission="return_management.view">
             <ReturnManagementListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/return-management/cases"
+        element={
+          <PermissionGuard permission="return_management.view">
+            <ReturnCaseListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/return-management/cases/new"
+        element={
+          <PermissionGuard permission="return_management.manage">
+            <ReturnCaseCreatePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/return-management/cases/:id"
+        element={
+          <PermissionGuard permission="return_management.view">
+            <ReturnCaseDetailPage />
           </PermissionGuard>
         }
       />

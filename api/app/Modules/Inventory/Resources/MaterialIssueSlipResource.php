@@ -14,7 +14,11 @@ class MaterialIssueSlipResource extends JsonResource
         return [
             'id'             => $this->hash_id,
             'slip_number'    => $this->slip_number,
-            'work_order_id'  => $this->work_order_id,
+            'work_order_id'  => $this->whenLoaded('workOrder', fn () => $this->workOrder?->hash_id),
+            'work_order'     => $this->whenLoaded('workOrder', fn () => $this->workOrder ? [
+                'id' => $this->workOrder->hash_id,
+                'wo_number' => $this->workOrder->wo_number,
+            ] : null),
             'issued_date'    => optional($this->issued_date)->toDateString(),
             'status'         => (string) $this->status?->value,
             'status_label'   => $this->status?->label() ?? (string) $this->status,

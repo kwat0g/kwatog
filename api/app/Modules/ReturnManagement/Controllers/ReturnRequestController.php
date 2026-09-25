@@ -149,77 +149,10 @@ class ReturnRequestController extends Controller
             if (! $customerId) {
                 return response()->json(['message' => 'Select a customer to load return source documents.'], 422);
             }
-
-            $invoiceModels = Invoice::query()
-                ->where('customer_id', $customerId)
-                ->whereNotIn('status', ['draft', 'cancelled'])
-                ->with('items')
-                ->latest('date')
-                ->limit(100)
-                ->get();
-            $invoiceReserved = $this->reservedFor('invoice_item', $invoiceModels);
-            $invoices = $invoiceModels
-                ->map(fn (Invoice $invoice): array => [
-                    'id' => $invoice->hash_id,
-                    'label' => $invoice->invoice_number,
-                    'sales_order_id' => $invoice->sales_order_id ? HashId::encode((int) $invoice->sales_order_id) : null,
-                    'lines' => $invoice->items->map(fn ($line): array => [
-                        'id' => $line->hash_id,
-                        'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
-                        'quantity' => (string) $line->quantity,
-                        'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $invoiceReserved, (int) $line->id),
-                        'unit_price' => (string) $line->unit_price,
-                        'label' => (string) ($line->description ?: 'Invoice line '.$line->id),
-                    ])->values(),
-                ])->values();
-
-            $salesOrderModels = SalesOrder::query()
-                ->where('customer_id', $customerId)
-                ->where('status', '<>', 'cancelled')
-                ->with('items')
-                ->latest('date')
-                ->limit(100)
-                ->get();
-            $salesOrderReserved = $this->reservedFor('sales_order_item', $salesOrderModels);
-            $salesOrders = $salesOrderModels
-                ->map(fn (SalesOrder $order): array => [
-                    'id' => $order->hash_id,
-                    'label' => $order->so_number,
-                    'lines' => $order->items->map(fn ($line): array => [
-                        'id' => $line->hash_id,
-                        'product_id' => $line->product_id ? HashId::encode((int) $line->product_id) : null,
-                        'quantity' => (string) $line->quantity_delivered,
-                        'remaining_quantity' => $this->remainingOnLine((string) $line->quantity_delivered, $salesOrderReserved, (int) $line->id),
-                        'unit_price' => (string) $line->unit_price,
-                        'label' => 'SO line '.$line->id,
-                    ])->values(),
-                ])->values();
-
-            $deliveryModels = Delivery::query()
-                ->whereHas('salesOrder', fn ($query) => $query->where('customer_id', $customerId))
-                ->whereNotIn('status', ['cancelled'])
-                ->with(['salesOrder:id,so_number', 'items.salesOrderItem'])
-                ->latest('delivered_at')
-                ->limit(100)
-                ->get();
-            $deliveryReserved = $this->reservedFor('delivery_item', $deliveryModels);
-            $deliveries = $deliveryModels
-                ->map(fn (Delivery $delivery): array => [
-                    'id' => $delivery->hash_id,
-                    'label' => $delivery->delivery_number,
-                    'sales_order_id' => $delivery->sales_order_id ? HashId::encode((int) $delivery->sales_order_id) : null,
-                    'lines' => $delivery->items->map(fn ($line): array => [
-                        'id' => $line->hash_id,
-                        'product_id' => $line->salesOrderItem?->product_id ? HashId::encode((int) $line->salesOrderItem->product_id) : null,
-                        'quantity' => (string) $line->quantity,
-                        'remaining_quantity' => $this->remainingOnLine((string) $line->quantity, $deliveryReserved, (int) $line->id),
-                        'unit_price' => (string) $line->unit_price,
-                        'label' => 'Delivery line '.$line->id,
-                    ])->values(),
-                ])->values();
+            $customer = $this->service->sourceOptionsForCustomer($customerId)['customer'];
 
             return response()->json(['data' => [
-                'customer' => compact('invoices', 'salesOrders', 'deliveries'),
+                'customer' => $customer,
                 'supplier' => ['purchaseOrders' => [], 'goodsReceipts' => [], 'bills' => []],
             ]]);
         }
@@ -323,6 +256,7 @@ class ReturnRequestController extends Controller
                 'invoice:id,invoice_number',
                 'bill:id,bill_number',
                 'purchaseOrder:id,po_number',
+                'deliveryAttemptOutcome.delivery:id,delivery_number',
             ])->withCount('items');
 
         // Filters
@@ -381,6 +315,7 @@ class ReturnRequestController extends Controller
             'creditMemo',
             'inspection',
             'inspections.product',
+            'receipts.items',
             'stockMovement.toLocation',
             'stockMovement.fromLocation',
             'approvalRecords.approver:id,name',
@@ -388,6 +323,8 @@ class ReturnRequestController extends Controller
             'approver:id,name',
             'completer:id,name',
             'rejecter:id,name',
+            'returnCase:id,case_number,return_request_id',
+            'deliveryAttemptOutcome.delivery:id,delivery_number',
         ]);
         $returnRequest->loadCount('items');
 
@@ -438,8 +375,23 @@ class ReturnRequestController extends Controller
      */
     public function receive(ReceiveReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
-        $rma = $this->service->receive($returnRequest, $request->receivedQuantitiesById(), $request->quarantineLocationId(), $request->user());
-        return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'inspections.product']));
+        $rma = $this->service->receive(
+            $returnRequest,
+            $request->receivedQuantitiesById(),
+            $request->quarantineLocationId(),
+            $request->user(),
+            $request->finalReceipt(),
+            $request->requestKey(),
+        );
+
+        return new ReturnRequestResource($rma->load([
+            'items',
+            'customer',
+            'vendor',
+            'inspections.product',
+            'receipts.items',
+            'returnCase:id,case_number,return_request_id',
+        ]));
     }
 
     /**

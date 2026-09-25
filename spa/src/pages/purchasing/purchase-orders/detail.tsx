@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -15,6 +15,7 @@ import {
   LuReceipt,
   LuPackage as PackageIcon,
   LuTriangleAlert,
+  LuMessageSquare,
 } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
@@ -109,6 +110,7 @@ const chargeParts = (c: RfqCommercialCharges | null | undefined): Array<[string,
 
 export default function PurchaseOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
 
@@ -301,6 +303,28 @@ export default function PurchaseOrderDetailPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Chip variant={variant[data.status]}>{statusLabel ?? data.status}</Chip>
+            {can('return_management.manage') &&
+              [
+                'approved',
+                'sent',
+                'acknowledged',
+                'partially_received',
+                'received',
+                'closed',
+              ].includes(data.status) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuMessageSquare size={14} />}
+                  onClick={() =>
+                    navigate(
+                      `/return-management/cases/new?source_kind=purchase_order&source_id=${encodeURIComponent(id)}`,
+                    )
+                  }
+                >
+                  Report a problem
+                </Button>
+              )}
             {data.requires_vp_approval && <Chip variant="warning">VP req.</Chip>}
             {data.is_auto_generated && (
               <span title="Auto-generated for critical stock">
@@ -525,6 +549,19 @@ export default function PurchaseOrderDetailPage() {
                   </dd>
                 </div>
               )}
+              {data.rfq && (
+                <div className="col-span-3">
+                  <dt className="text-2xs uppercase tracking-wider text-muted">Awarded from RFQ</dt>
+                  <dd>
+                    <Link to={`/purchasing/rfqs/${data.rfq.id}`} className="font-mono text-accent">
+                      {data.rfq.rfq_number}
+                    </Link>
+                    <span className="ml-2 text-xs text-muted">
+                      Prices and freight come from the award, so the lines cannot be edited here.
+                    </span>
+                  </dd>
+                </div>
+              )}
               {data.remarks && (
                 <div className="col-span-3">
                   <dt className="text-2xs uppercase tracking-wider text-muted">Remarks</dt>
@@ -549,19 +586,6 @@ export default function PurchaseOrderDetailPage() {
                   {data.confirmed_delivery_date ? formatDate(data.confirmed_delivery_date) : '—'}
                 </dd>
               </div>
-              {data.rfq && (
-                <div className="col-span-3">
-                  <dt className="text-2xs uppercase tracking-wider text-muted">Awarded from RFQ</dt>
-                  <dd>
-                    <Link to={`/purchasing/rfqs/${data.rfq.id}`} className="font-mono text-accent">
-                      {data.rfq.rfq_number}
-                    </Link>
-                    <span className="ml-2 text-xs text-muted">
-                      Prices and freight come from the award, so the lines cannot be edited here.
-                    </span>
-                  </dd>
-                </div>
-              )}
             </dl>
             {data.status === 'draft' && actions.can_update && (
               <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-subtle pt-3">

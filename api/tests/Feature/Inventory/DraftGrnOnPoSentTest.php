@@ -60,7 +60,8 @@ class DraftGrnOnPoSentTest extends TestCase
             'created_by' => $user->id,
         ]);
         $po->forceFill(['status' => PurchaseOrderStatus::Sent->value])->save();
-        $item = Item::factory()->create(['is_active' => true]);
+        // The PO orders kg; the default item factory measures pcs and has no conversion.
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
             'item_id'           => $item->id,

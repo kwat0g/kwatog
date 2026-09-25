@@ -16,6 +16,7 @@ class MaterialIssueSlipItem extends Model
     protected $fillable = [
         'material_issue_slip_id', 'item_id', 'location_id',
         'quantity_issued', 'unit_cost', 'total_cost',
+        'stock_movement_id',
         'issued_uom_code', 'lot_number',
         'material_reservation_id', 'remarks',
     ];
@@ -39,5 +40,10 @@ class MaterialIssueSlipItem extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(WarehouseLocation::class, 'location_id');
+    }
+
+    public function stockMovement(): BelongsTo
+    {
+        return $this->belongsTo(StockMovement::class, 'stock_movement_id');
     }
 }

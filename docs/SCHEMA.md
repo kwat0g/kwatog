@@ -312,6 +312,18 @@ id, delivery_note_number (string 20), sales_order_id (FK sales_orders nullable),
 ### delivery_items
 id, delivery_id (FK deliveries), product_id (FK products), quantity (decimal 10,2), work_order_id (FK work_orders nullable)
 
+#### Failed-delivery recovery extension (2026-09-25)
+
+`delivery_items.customer_received_quantity` is nullable decimal(15,3). The original `quantity` remains the dispatched fact; confirmed/delivered legacy rows are backfilled. Customer-received quantities must fit the two-decimal SO/invoice ledger. `deliveries.status` additionally supports `return_pending` and terminal `returned`; only the audited outcome/depot workflow enters these states.
+
+`delivery_attempt_outcomes`: one row per delivery (unique FK), unique report UUID and SHA-256 payload fingerprint, reason/notes, reporter/time, receiver/time, unique nullable receipt UUID and fingerprint, quarantine location, variance explanation, and unique nullable RMA FK.
+
+`delivery_attempt_outcome_items`: unique outcome + delivery-item pair; decimal(15,3) dispatched/customer-received/truck-return/unaccounted quantities, damaged subsets, and nullable warehouse count/final unaccounted quantity.
+
+`delivery_attempt_outcome_movements`: original dispatch stock movement (unique FK), outcome-item FK, declared return quantity and nullable actual receipt quantity. Each physical receipt uses `stock_movements.movement_type=delivery_return`, references the original issue through `reference_type=stock_movement`, preserves lot/expiry/source value, and enters quarantine. This movement does not post a GL reversal because outbound delivery movements currently do not post COGS.
+
+Protected nullable unique FKs `return_requests.delivery_attempt_outcome_id` and `return_request_items.delivery_attempt_outcome_movement_id` distinguish depot custody returns from ordinary customer RMAs. These records use existing QC/disposition without customer credit or ordinary approval/cancellation actions. Unaccounted-only reconciliation creates no physical RMA or receipt movement.
+
 ---
 
 ## PRODUCTION (7 tables)
@@ -386,12 +398,32 @@ id, complaint_id (FK customer_complaints unique), d1_team (json), d2_problem_des
 
 ## RETURN MANAGEMENT
 
+### return_cases
+Shared customer/supplier problem reports. Includes unique case_number, type, status, party and delivery/PO/GRN provenance, internal creator, external customer reporter, assigned owner, preference/agreement, expected date, request key/fingerprint, and links to authoritative RMA, credit, replacement order/delivery, and accepted receipt. `return_request_id` is unique when present. `legacy_discrepancy_id` preserves imported delivery reports.
+
+### return_case_lines
+Source delivery/PO/GRN line IDs, product/item, description/unit, expected/received/missing/defective quantities (decimal 15,3), separately verified missing/defective quantities, lot/serial/evidence reason, and source unit-price snapshot. Missing quantities do not create inventory movements. Claims share the source quantity budget with physical RMAs.
+
+### return_case_events / return_case_attachments
+Events preserve actual internal/customer/supplier attribution and public/internal visibility. Attachments reference a case and event; files remain on private storage and are downloaded through tenancy/permission checks. Private paths and internal events are excluded from portal responses. Event creation uses the application clock; timezone repair metadata preserves original values for proven legacy offsets.
+
+### return_case_receipt_allocations
+Accepted supplier redelivery quantities allocated from exact GRN/PO lines to case lines. A case can use multiple receipts; cumulative allocations cannot exceed accepted stock or the agreed quantity. Repeated linking is idempotent.
+
+### return_receipts / return_receipt_items
+Installment receipt ledger for physical RMAs. Each receipt has a request UUID/fingerprint, final-receipt flag, actor, timestamp and quarantine location. Lines contain the actual installment quantity and stock movement reference. The RMA retains cumulative quantities and remaining source reservations until final receipt.
+
+Approved customer replacement orders use unique nullable `sales_orders.return_case_id`; only the case approval service sets it. Their prices are zero, commercial editing is blocked, and deliveries use `invoice_handoff_status=not_required`. Manual invoice creation/finalization also checks this exemption.
+
 ### return_request_items
 id, return_request_id (FK return_requests), product_id (FK products nullable), item_id (FK items nullable), quantity/returned_quantity (decimal 12,3), source invoice/SO/delivery or PO/GRN/bill line IDs, stock_movement_quantity (decimal 12,3), stock_movement_id (FK stock_movements nullable), quarantine movement/location references, ncr_id (FK non_conformance_reports nullable), disposition, created_at, updated_at
 
 ---
 
-## QUALITY (5 tables)
+## QUALITY (6 tables)
+
+### inspection_result_authors
+Immutable author ledger for inspection evidence: inspection_id/user_id pairs are unique. Result writers and completers cannot review the same inspection, including inspections originally assigned to a different employee. Trusted historical measurement-change audit records backfill known writers.
 
 ### inspection_specs
 id, product_id (FK products unique), version (int default 1), created_at, updated_at

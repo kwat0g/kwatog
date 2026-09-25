@@ -49,18 +49,22 @@ class AutoPurchaseOrderService
     {
         return DB::transaction(function () use ($item): ?PurchaseOrder {
             /** @var Item|null $lockedItem */
-            $lockedItem = Item::query()->lockForUpdate()->find($item->id);
-            if (! $lockedItem || ! (bool) $lockedItem->is_critical) return null;
+            $lockedItem = Item::query()->with('stockLevels')->lockForUpdate()->find($item->id);
+            if (! $lockedItem || ! $lockedItem->is_active || ! (bool) $lockedItem->is_critical) {
+                return null;
+            }
             $item = $lockedItem;
 
-            $onHand = (float) DB::table('stock_levels')
-                ->where('item_id', $item->id)
-                ->sum('quantity');
-            $reorder = (float) $item->reorder_point;
-            // Net in-transit supply from open POs to position.
-            $inTransit = (float) $this->openSupply->inTransitBaseQuantity($item->id);
-            $position = $onHand + $inTransit;
-            if ($position >= $reorder || $reorder <= 0) return null;
+            $reorder = (string) $item->reorder_point;
+            // Count only the remaining quantity: settled/declined POs are not supply,
+            // and unapproved auto-POs are not included in inTransitBaseQuantity().
+            $position = bcadd((string) $item->available, $this->openSupply->inTransitBaseQuantity($item->id), 3);
+            $position = bcadd($position, $this->openSupply->heldQcBaseQuantity($item->id), 3);
+            $position = bcadd($position, $this->unapprovedBaseQuantity($item), 3);
+            $position = bcadd($position, $this->openSupply->openRequestBaseQuantity($item->id, null, false, true), 3);
+            if (bccomp($position, $reorder, 3) >= 0 || bccomp($reorder, '0', 3) <= 0) {
+                return null;
+            }
 
             // Exactly one preferred supplier. Lock the choice together with the
             // item so concurrent replenishment workers cannot create two auto-POs
@@ -75,21 +79,14 @@ class AutoPurchaseOrderService
 
             $supplier = $preferred->first();
 
-            // Idempotency: skip if there's already an open auto-PO for this item.
-            $hasOpenAuto = PurchaseOrder::query()
-                ->where('is_auto_generated', true)
-                ->whereIn('status', [
-                    PurchaseOrderStatus::Draft->value,
-                    PurchaseOrderStatus::PendingApproval->value,
-                    PurchaseOrderStatus::Approved->value,
-                ])
-                ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))
-                ->exists();
-            if ($hasOpenAuto) return null;
-
-            $qty = $reorder + (float) $item->safety_stock - $position;
-            if ($qty <= 0) return null;
-            $quantity = number_format($qty, 2, '.', '');
+            $qty = bcsub(bcadd($reorder, (string) $item->safety_stock, 3), $position, 3);
+            if (bccomp($qty, '0', 3) <= 0) {
+                return null;
+            }
+            $quantity = number_format((float) $qty, 2, '.', '');
+            if (bccomp($quantity, '0', 2) <= 0) {
+                return null;
+            }
             $price = (string) ($supplier->last_price ?? $item->standard_cost ?? '0.00');
             // An auto-generated PO must never invent a zero price. Wait for an
             // authoritative supplier/item cost and let the normal procurement
@@ -167,6 +164,30 @@ class AutoPurchaseOrderService
 
             return $po;
         });
+    }
+
+    /** Pending/draft auto-POs are procurement commitments but not yet in transit. */
+    public function unapprovedBaseQuantity(Item $item): string
+    {
+        $lines = DB::table('purchase_order_items as poi')
+            ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
+            ->where('poi.item_id', $item->id)
+            ->where('po.is_auto_generated', true)
+            ->whereNull('po.deleted_at')
+            ->whereNull('po.pending_change_response_id')
+            ->whereIn('po.status', [PurchaseOrderStatus::Draft->value, PurchaseOrderStatus::PendingApproval->value])
+            ->get(['poi.quantity', 'poi.quantity_received', 'poi.unit']);
+
+        $total = '0.000000';
+        foreach ($lines as $line) {
+            $orderedBase = $item->convertToBase((string) $line->quantity, trim((string) $line->unit) ?: null);
+            $remaining = bcsub($orderedBase, (string) $line->quantity_received, 6);
+            if (bccomp($remaining, '0', 6) > 0) {
+                $total = bcadd($total, $remaining, 6);
+            }
+        }
+
+        return $total;
     }
 
     private function notifyApprovers(PurchaseOrder $po, Item $item): void

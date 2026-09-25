@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
 import { Button } from '@/components/ui/Button';
@@ -47,7 +48,7 @@ export default function MaterialIssueDetailPage() {
  <StatCard label="Total value" value={formatPeso(data.total_value)} />
  <StatCard label="Issued date" value={formatDate(data.issued_date)} />
  <StatCard label="Issued by" value={data.issuer?.name ?? '—'} />
- <StatCard label="Work order" value={data.reference_text ?? '—'} />
+ <StatCard label="Work order" value={data.work_order?.wo_number ?? data.reference_text ?? '—'} />
  </div>
 
  <div className="px-5 pb-4 space-y-4">
@@ -59,7 +60,8 @@ export default function MaterialIssueDetailPage() {
  <Th>Location</Th>
  <Th align="right">Qty issued</Th>
  <Th align="right">Unit cost</Th>
- <Th align="right">Total</Th>
+          <Th align="right">Total</Th>
+          <Th>Stock ledger</Th>
  </tr>
  </thead>
  <tbody>
@@ -74,7 +76,15 @@ export default function MaterialIssueDetailPage() {
  {Number(line.quantity_issued).toFixed(4)} {line.item?.unit_of_measure}
  </Td>
  <Td align="right" mono>{formatPeso(line.unit_cost)}</Td>
- <Td align="right" mono className="font-medium">{formatPeso(line.total_cost)}</Td>
+          <Td align="right" mono className="font-medium">{formatPeso(line.total_cost)}</Td>
+          <Td>
+           {line.stock_movement_id ? (
+            <Link
+             to={`/inventory/stock-levels?view=movements&movement_id=${encodeURIComponent(line.stock_movement_id)}`}
+             className="text-sm text-accent hover:underline"
+            >View movement / return unused</Link>
+           ) : <span className="text-xs text-muted">No unique issue link</span>}
+          </Td>
  </tr>
  ))}
  </tbody>

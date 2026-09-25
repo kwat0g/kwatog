@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -118,6 +119,61 @@ class MovementGlPostingTest extends TestCase
         ));
 
         $this->assertMovementPosted($m, '5010', '20.00', '1200', '20.00');
+    }
+
+    public function test_source_linked_material_return_debits_inventory_and_credits_material_consumption(): void
+    {
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+        $source = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::MaterialIssue,
+            itemId: $this->item->id,
+            fromLocationId: $this->location->id,
+            quantity: '4.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+
+        $returned = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::MaterialReturn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '2.000',
+            unitCost: '5.00',
+            referenceType: 'stock_movement',
+            referenceId: $source->id,
+            totalCostOverride: '10.00',
+        ));
+
+        $this->assertSame('stock_movement', $returned->reference_type);
+        $this->assertSame($source->id, (int) $returned->reference_id);
+        $this->assertMovementPosted($returned, '1200', '10.00', '5010', '10.00');
+        $this->assertSame('8.000', (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)
+            ->value('quantity'));
+    }
+
+    public function test_source_value_override_is_rejected_for_non_return_movement_types(): void
+    {
+        $this->expectException(InvalidMovementException::class);
+        $this->expectExceptionMessage('Source-value overrides are allowed only on a source-linked material return.');
+
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '1.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+            totalCostOverride: '1.00',
+        ));
     }
 
     public function test_return_to_vendor_debits_grni_credits_inventory(): void

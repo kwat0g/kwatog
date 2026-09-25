@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -10,6 +10,7 @@ import {
   LuCircleX,
   LuPackageCheck,
   LuSend,
+  LuMessageSquare,
 } from '@/lib/icons';
 import { billsApi } from '@/api/accounting/bills';
 import { grnApi } from '@/api/inventory/grn';
@@ -57,6 +58,7 @@ const emptyFinalizeLine: FinalizeLine = {
 
 export default function GrnDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [confirmAccept, setConfirmAccept] = useState(false);
@@ -163,8 +165,24 @@ export default function GrnDetailPage() {
       toast.success('GRN finalized — goods sent to incoming QC.');
       setConfirmFinalize(false);
     },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to finalize GRN.'),
+    onError: async (e: AxiosError<{ message?: string }>) => {
+      // Finalization may commit even when the response is lost. Reconcile the
+      // authoritative state before offering another action; keep finalizeInput
+      // untouched so a genuine validation failure can be corrected and retried.
+      setConfirmFinalize(false);
+      try {
+        const current = await grnApi.show(id);
+        qc.setQueryData(['inventory', 'grn', id], current);
+        if (current.status === 'draft') {
+          toast.error(e.response?.data?.message ?? 'GRN remains in Draft. Review the entered quantities and try again.');
+        } else {
+          toast.success(`${current.grn_number} is now ${current.status_label ?? current.status}. Current handoff details are shown.`);
+        }
+      } catch {
+        void qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+        toast.error('Could not confirm the GRN status. Use Retry to check the current handoff before submitting again.');
+      }
+    },
   });
 
   const updateFinalizeLine = (lineId: string, patch: Partial<FinalizeLine>) => {
@@ -309,6 +327,12 @@ export default function GrnDetailPage() {
               {grnOptions?.statuses?.find((option) => option.value === data.status)?.label ??
                 data.status}
             </Chip>
+            {data.status !== 'draft' && can('return_management.manage') && <Button
+              variant="secondary"
+              size="sm"
+              icon={<LuMessageSquare size={14} />}
+              onClick={() => navigate(`/return-management/cases/new?source_kind=grn&source_id=${encodeURIComponent(id)}`)}
+            >Report a problem</Button>}
             {incomingQcNeedsAttention && can('quality.inspections.manage') && (
               <Button
                 variant="secondary"

@@ -231,12 +231,12 @@ class InvoiceService
             }
             $this->assertCustomerActive($customer);
             $lockedInvoice->setRelation('customer', $customer);
+            $source = $this->lockSourceChain($lockedInvoice);
 
             // Standard final invoices are delivery-gated. Prebilling is a
             // distinct, explicitly approved lifecycle and never masquerades
             // as a delivered sale.
             if (($lockedInvoice->lifecycle_type ?? 'standard') === 'standard') {
-                $source = $this->lockSourceChain($lockedInvoice);
                 $delivery = $source['delivery']
                     ? $source['delivery']->load('items')
                     : null;
@@ -244,6 +244,12 @@ class InvoiceService
                     throw new BusinessRuleException('A standard sales-order invoice requires a confirmed delivered quantity. Use the approved prebill lifecycle for prebilling.');
                 }
                 $this->assertInvoiceMatchesConfirmedDelivery($lockedInvoice, $delivery);
+                if ($delivery->cost_recognition_mode?->value === 'transit') {
+                    $cost = $delivery->costHandoffs()->where('handoff_type', 'customer_cogs')->reorder('id', 'desc')->first();
+                    if (! $cost || ! in_array($cost->status->value, ['generated', 'not_required'], true)) {
+                        throw new BusinessRuleException('This delivery still needs cost posting. Open its Stock and accounting panel, repair the reported setup issue and retry customer cost before finalizing the invoice.');
+                    }
+                }
             }
 
             $this->assertCreditLimit(
@@ -662,7 +668,14 @@ class InvoiceService
         }
 
         $invoice->loadMissing('items');
-        $deliveryLines = $delivery->items->keyBy('id');
+        // Zero-received lines are not invoiceable after a reconciled failed
+        // attempt. A standard invoice must match each positive actual receipt
+        // exactly and must omit lines with no goods accepted by the customer.
+        $deliveryLines = $delivery->items
+            ->filter(fn ($item): bool => bccomp(
+                (string) ($item->customer_received_quantity ?? $item->quantity), '0', 3,
+            ) > 0)
+            ->keyBy('id');
         $seen = [];
         foreach ($invoice->items as $line) {
             if (! $line->source_delivery_item_id || isset($seen[$line->source_delivery_item_id])) {
@@ -670,7 +683,7 @@ class InvoiceService
             }
             $source = $deliveryLines->get($line->source_delivery_item_id);
             if (! $source
-                || bccomp((string) $line->quantity, (string) $source->quantity, 2) !== 0
+                || bccomp((string) $line->quantity, (string) ($source->customer_received_quantity ?? $source->quantity), 2) !== 0
                 || bccomp((string) $line->unit_price, (string) $source->unit_price, 2) !== 0) {
                 throw new BusinessRuleException('Standard invoice quantity and price must match the confirmed delivery line.');
             }
@@ -726,6 +739,9 @@ class InvoiceService
             if ((int) $salesOrder->customer_id !== (int) $customer->id) {
                 throw new BusinessRuleException('Invoice customer must match the selected sales order customer.');
             }
+            if ($salesOrder->return_case_id !== null) {
+                throw new BusinessRuleException('This is an approved no-charge replacement order and must not be invoiced.');
+            }
         }
 
         if ($deliveryId !== null) {
@@ -733,6 +749,7 @@ class InvoiceService
             if (! $delivery || (int) $delivery->sales_order_id !== $salesOrderId) {
                 throw new BusinessRuleException('Selected delivery does not belong to the selected sales order.');
             }
+            app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }
 
         return ['sales_order_id' => $salesOrderId, 'delivery_id' => $deliveryId];
@@ -753,12 +770,16 @@ class InvoiceService
             if (! $salesOrder || (int) $salesOrder->customer_id !== (int) $invoice->customer_id) {
                 throw new BusinessRuleException('Invoice customer no longer matches its sales order.');
             }
+            if ($salesOrder->return_case_id !== null) {
+                throw new BusinessRuleException('This is an approved no-charge replacement order and must not be invoiced.');
+            }
         }
         if ($invoice->delivery_id) {
             $delivery = Delivery::query()->lockForUpdate()->find($invoice->delivery_id);
             if (! $delivery || (int) $delivery->sales_order_id !== (int) $invoice->sales_order_id) {
                 throw new BusinessRuleException('Invoice delivery no longer belongs to its sales order.');
             }
+            app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
         }
 
         return ['delivery' => $delivery];

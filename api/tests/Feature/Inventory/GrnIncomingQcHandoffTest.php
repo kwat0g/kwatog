@@ -114,7 +114,8 @@ class GrnIncomingQcHandoffTest extends TestCase
 
     private function createGrn(User $user): GoodsReceiptNote
     {
-        $item = Item::factory()->create(['is_active' => true]);
+        // The PO orders kg; the default item factory measures pcs and has no conversion.
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $po = PurchaseOrder::factory()->create([
             'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $user->id,

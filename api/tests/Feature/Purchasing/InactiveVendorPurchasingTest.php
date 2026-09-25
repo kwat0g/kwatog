@@ -6,6 +6,7 @@ namespace Tests\Feature\Purchasing;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\VendorService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -16,8 +17,8 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
-use App\Modules\Purchasing\Services\VendorSourcingService;
 use App\Modules\Purchasing\Services\RequestForQuoteService;
+use App\Modules\Purchasing\Services\VendorSourcingService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -65,7 +66,7 @@ class InactiveVendorPurchasingTest extends TestCase
         $pr = PurchaseRequest::factory()->create(['status' => PurchaseRequestStatus::Approved]);
         $prItem = $pr->items()->create([
             'item_id' => $item->id,
-            'description' => 'Test-Item-XX-T-' . substr(uniqid(), -5),
+            'description' => 'Test-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit' => 'pcs',
             'estimated_unit_price' => '50.00',
@@ -103,7 +104,7 @@ class InactiveVendorPurchasingTest extends TestCase
         $pr = PurchaseRequest::factory()->create(['status' => PurchaseRequestStatus::Approved]);
         $prItem = $pr->items()->create([
             'item_id' => $item->id,
-            'description' => 'Test-Item-XX-T-' . substr(uniqid(), -5),
+            'description' => 'Test-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit' => 'pcs',
             'estimated_unit_price' => '50.00',
@@ -142,7 +143,7 @@ class InactiveVendorPurchasingTest extends TestCase
         $pr = PurchaseRequest::factory()->create(['status' => PurchaseRequestStatus::Approved]);
         $prItem = $pr->items()->create([
             'item_id' => $item->id,
-            'description' => 'Test-Item-XX-T-' . substr(uniqid(), -5),
+            'description' => 'Test-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit' => 'pcs',
             'estimated_unit_price' => '50.00',
@@ -190,7 +191,7 @@ class InactiveVendorPurchasingTest extends TestCase
         $pr = PurchaseRequest::factory()->create(['status' => PurchaseRequestStatus::Approved]);
         $prItem = $pr->items()->create([
             'item_id' => $item->id,
-            'description' => 'Test-Item-XX-T-' . substr(uniqid(), -5),
+            'description' => 'Test-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit' => 'pcs',
             'estimated_unit_price' => '50.00',
@@ -303,7 +304,7 @@ class InactiveVendorPurchasingTest extends TestCase
         PurchaseOrderItem::create([
             'purchase_order_id' => $poActive->id,
             'item_id' => $item->id,
-            'description' => 'History-XX-T-' . substr(uniqid(), -5),
+            'description' => 'History-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit_price' => '100.00',
             'total' => '10000.00',
@@ -314,7 +315,7 @@ class InactiveVendorPurchasingTest extends TestCase
         PurchaseOrderItem::create([
             'purchase_order_id' => $poInactive->id,
             'item_id' => $item->id,
-            'description' => 'History-XX-T-' . substr(uniqid(), -5),
+            'description' => 'History-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
             'unit_price' => '95.00',
             'total' => '9500.00',
@@ -343,8 +344,8 @@ class InactiveVendorPurchasingTest extends TestCase
             'sourcing_method' => 'rfq',
             'is_auto_generated' => true,
         ]);
-        $pr->items()->create([
         // An RFQ line must be linked to an inventory item (an award becomes a PO line).
+        $pr->items()->create([
             'item_id' => Item::factory()->create()->id,
             'description' => 'RFQ-Item-XX-T-'.substr(uniqid(), -5),
             'quantity' => '100.000',
@@ -393,7 +394,7 @@ class InactiveVendorPurchasingTest extends TestCase
         ], $user);
 
         try {
-            app(\App\Modules\Accounting\Services\VendorService::class)->delete($vendor->fresh());
+            app(VendorService::class)->delete($vendor->fresh());
             $this->fail('Deleting a vendor with an open PO must be refused.');
         } catch (BusinessRuleException $e) {
             $this->assertStringContainsString('open purchase orders', $e->getMessage());

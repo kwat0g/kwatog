@@ -1,7 +1,7 @@
 /** Sprint 7 / ADV7 — Delivery detail with Proof-of-Delivery management. */
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   LuCamera,
   LuCheck,
@@ -42,9 +42,11 @@ import { focusRingInset } from '@/lib/focus';
 import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/formatDate';
+import { DeliveryAttemptPanel } from './DeliveryAttemptPanel';
+import { TruckReturnReceiptPanel } from './TruckReturnReceiptPanel';
+import { DeliveryStockCostPanel } from './DeliveryStockCostPanel';
 
 export default function DeliveryDetailPage() {
-  const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
@@ -257,7 +259,7 @@ export default function DeliveryDetailPage() {
   const next = statusOptions.get(data.status)?.next_status ?? null;
   const proofs = data.proofs ?? [];
   const hasProof = proofs.length > 0;
-  const canConfirm = data.status === 'delivered' && can('supply_chain.deliveries.confirm');
+  const canConfirm = data.status === 'delivered' && data.can_confirm !== false && !data.billing_hold && can('supply_chain.deliveries.confirm');
   const canUploadProofNow =
     ['in_transit', 'delivered', 'confirmed'].includes(data.status) &&
     canEdit &&
@@ -383,7 +385,20 @@ export default function DeliveryDetailPage() {
         />
       </div>
       <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
+        <div className="sm:col-span-2 space-y-4">
+          <DeliveryAttemptPanel key={data.id} deliveryId={data.id} lines={data.items ?? []}
+            can_report_attempt_outcome={canEdit && data.can_report_attempt_outcome}
+            attempt_outcome_reasons={data.attempt_outcome_reasons} attempt_outcome={data.attempt_outcome}
+            report={(payload) => deliveriesApi.reportAttempt(data.id, payload)} amend={canEdit ? (payload) => deliveriesApi.amendAttempt(data.id, payload) : undefined} canOpenReturn={can('return_management.view')} />
+          {data.attempt_outcome && <>
+            <TruckReturnReceiptPanel key={`receipt-${data.id}`} deliveryId={data.id}
+              lines={data.items ?? []} outcome={data.attempt_outcome}
+              canReceive={can('return_management.receive') && data.can_receive_truck_return === true} />
+            {data.attempt_outcome.reconciled_at && <TruckReturnReceiptPanel key={`late-${data.id}`} deliveryId={data.id} late
+              lines={data.items ?? []} outcome={data.attempt_outcome}
+              canReceive={can('return_management.receive') && data.attempt_outcome.lines.some((line) => Number(line.unaccounted_quantity) > 0)} />}
+          </>}
+          <DeliveryStockCostPanel key={`stock-cost-${data.id}`} delivery={data} />
           <Panel title="Schedule">
             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <div>
@@ -416,7 +431,7 @@ export default function DeliveryDetailPage() {
           </Panel>
 
           {/* ADV7 — Proof of Delivery. Required before confirmation. */}
-          <Panel
+          {(!['return_pending', 'returned'].includes(data.status) || hasProof) && <Panel
             title={
               <span className="inline-flex items-center gap-1.5">
                 <LuShieldCheck
@@ -597,7 +612,23 @@ export default function DeliveryDetailPage() {
                 </label>
               </div>
             )}
-          </Panel>
+          </Panel>}
+
+          {data.billing_hold && <Panel title="Receipt and billing on hold">
+            <p className="text-sm">{data.billing_hold.message}</p>
+            {can('return_management.view') ? <Link className="text-accent hover:underline font-mono" to={`/return-management/cases/${data.billing_hold.case_id}`}>{data.billing_hold.case_number}</Link>
+              : <p className="font-mono text-sm mt-1">{data.billing_hold.case_number}</p>}
+          </Panel>}
+          {!!data.preparation?.length && <Panel title="Warehouse preparation">
+            <p className="text-xs text-muted mb-3">Use these approved lots when preparing the load. Availability is checked again when the truck leaves.</p>
+            <ul className="divide-y divide-default">
+              {data.preparation.map((line) => <li key={line.delivery_item_id} className="py-2">
+                <p className="text-sm font-mono break-words">{line.product} · {line.quantity} · {line.lot_number ?? 'Lot unavailable'}</p>
+                {line.locations.map((location) => <p key={location.code} className="text-xs text-muted mt-1 font-mono">{location.code}: {location.quantity}</p>)}
+                {line.message && <p className="text-sm text-danger-fg mt-1">{line.message}</p>}
+              </li>)}
+            </ul>
+          </Panel>}
 
           <Panel
             title="Items"
@@ -610,8 +641,9 @@ export default function DeliveryDetailPage() {
               <table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
-                    <Th>Inspection</Th>
-                    <Th align="right">Qty</Th>
+                    <Th>Inspection / dispatched stock</Th>
+                    <Th align="right">Dispatched qty</Th>
+                    {data.attempt_outcome && <Th align="right">Customer received</Th>}
                     <Th align="right">Unit price</Th>
                   </tr>
                 </thead>
@@ -619,21 +651,25 @@ export default function DeliveryDetailPage() {
                   {data.items.map((i) => (
                     <tr
                       key={i.id}
-                      className={cn(trCls, i.inspection && 'cursor-pointer')}
-                      onClick={() =>
-                        i.inspection && navigate(`/quality/inspections/${i.inspection.id}`)
-                      }
+                      className={trCls}
                     >
                       <Td>
                         {i.inspection ? (
-                          <span className="font-mono">{i.inspection.inspection_number}</span>
+                          can('quality.inspections.view') ? <Link className="font-mono text-accent hover:underline" to={`/quality/inspections/${i.inspection.id}`}>{i.inspection.inspection_number}</Link>
+                          : <span className="font-mono">{i.inspection.inspection_number}</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}
+                        {i.stock_movements?.map((movement) => (
+                          <div key={movement.id} className="text-xs text-muted mt-1 font-mono break-words">
+                            {movement.quantity} · {movement.lot_number} · {movement.from_location}
+                          </div>
+                        ))}
                       </Td>
                       <Td align="right" mono>
                         {i.quantity}
                       </Td>
+                      {data.attempt_outcome && <Td align="right" mono>{i.customer_received_quantity ?? '—'}</Td>}
                       <Td align="right" mono>
                         {i.unit_price}
                       </Td>

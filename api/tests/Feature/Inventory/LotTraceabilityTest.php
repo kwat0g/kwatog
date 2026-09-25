@@ -169,7 +169,8 @@ class LotTraceabilityTest extends TestCase
 
     public function test_incoming_resin_qc_attributes_persist_on_grn_line(): void
     {
-        $item = Item::factory()->create(['is_active' => true]);
+        // Resin is ordered in kg; the default factory item uses pcs.
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([
@@ -252,7 +253,8 @@ class LotTraceabilityTest extends TestCase
 
     public function test_over_receipt_blocked_by_default_but_allowed_within_tolerance(): void
     {
-        $item = Item::factory()->create(['is_active' => true]);
+        // The over-receipt cap is for kilograms of resin, not pieces.
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([

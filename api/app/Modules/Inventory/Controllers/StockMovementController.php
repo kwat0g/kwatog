@@ -8,9 +8,12 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Exceptions\MaterialReturnConflictException;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Requests\StoreMaterialReturnRequest;
 use App\Modules\Inventory\Resources\StockMovementResource;
 use App\Modules\Inventory\Services\MovementGlPostingService;
+use App\Modules\Inventory\Services\MaterialReturnService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -59,6 +62,34 @@ class StockMovementController
             $movement = $postings->retry($stockMovement);
         } catch (BusinessRuleException) {
             return response()->json(['message' => 'The stock movement could not be posted to the General Ledger.'], 422);
+        }
+
+        return new StockMovementResource($movement->load([
+            'item', 'fromLocation', 'toLocation', 'creator:id,name,role_id', 'journalEntry:id,entry_number',
+        ]));
+    }
+
+    public function returnOptions(StockMovement $stockMovement, MaterialReturnService $returns): JsonResponse
+    {
+        return response()->json(['data' => $returns->options($stockMovement)]);
+    }
+
+    public function returnUnused(
+        StockMovement $stockMovement,
+        StoreMaterialReturnRequest $request,
+        MaterialReturnService $returns,
+    ): StockMovementResource|JsonResponse {
+        try {
+            $data = $request->validated();
+            $data['idempotency_key'] = $request->idempotencyKey();
+            $movement = $returns->returnUnused($stockMovement, $data, $request->user());
+        } catch (MaterialReturnConflictException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'material_return_conflict',
+            ], 409);
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return new StockMovementResource($movement->load([

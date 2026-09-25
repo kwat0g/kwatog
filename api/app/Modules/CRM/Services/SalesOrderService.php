@@ -24,6 +24,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Models\SalesOrderTransitionRejection;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\CRM\Support\SalesOrderTransitionResult;
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Enums\MrpRunStatus;
@@ -452,6 +453,57 @@ class SalesOrderService
         });
     }
 
+    /** Create the sole approved, zero-price order used for case redelivery. */
+    public function createNoChargeReplacement(ReturnCase $case, int $userId): SalesOrder
+    {
+        return DB::transaction(function () use ($case, $userId): SalesOrder {
+            $lockedCase = ReturnCase::query()->lockForUpdate()->findOrFail($case->id);
+            $approver = \App\Modules\Auth\Models\User::query()->findOrFail($userId);
+            abort_unless($approver->hasPermission('return_management.approve'), 403);
+            if ($lockedCase->type->value !== 'customer' || $lockedCase->resolution?->value !== 'redelivery'
+                || ! in_array($lockedCase->status->value, ['action_agreed', 'in_progress'], true)) {
+                throw new BusinessRuleException('An agreed customer redelivery is required to authorize a no-charge replacement.');
+            }
+            $existing = SalesOrder::query()->where('return_case_id', $lockedCase->id)->lockForUpdate()->first();
+            if ($existing) {
+                return $existing->load('items');
+            }
+            $lockedCase->load('lines');
+            $lines = $lockedCase->lines->filter(fn ($line): bool => bccomp((string) ($line->verified_missing_quantity ?? '0'), '0', 3) > 0
+                || bccomp((string) ($line->verified_defective_quantity ?? '0'), '0', 3) > 0);
+            if ($lines->isEmpty() || $lockedCase->customer_id === null) {
+                throw new BusinessRuleException('Verify at least one customer quantity before preparing a no-charge replacement.');
+            }
+            $so = new SalesOrder;
+            $so->forceFill([
+                'so_number' => $this->sequences->generate('sales_order'),
+                'customer_id' => $lockedCase->customer_id,
+                'return_case_id' => $lockedCase->id,
+                'date' => now()->toDateString(), 'subtotal' => '0.00', 'vat_amount' => '0.00', 'total_amount' => '0.00',
+                'status' => SalesOrderStatus::Draft->value, 'payment_terms_days' => 0,
+                'notes' => 'Approved no-charge replacement for '.$lockedCase->case_number,
+                'submission_source' => 'internal', 'created_by' => $userId,
+            ])->save();
+            foreach ($lines as $line) {
+                $quantity = bcadd((string) ($line->verified_missing_quantity ?? '0'), (string) ($line->verified_defective_quantity ?? '0'), 3);
+                if ($line->product_id === null) {
+                    throw new BusinessRuleException('Every replacement line must identify a product.');
+                }
+                if (bccomp($quantity, bcadd($quantity, '0', 2), 3) !== 0) {
+                    throw new BusinessRuleException('Replacement orders support two decimal places. Review fractional quantities before authorization.');
+                }
+                $so->items()->create([
+                    'product_id' => $line->product_id, 'quantity' => $quantity, 'unit_price' => '0.00',
+                    'total' => '0.00', 'quantity_delivered' => '0', 'delivery_date' => $lockedCase->expected_date?->toDateString() ?? now()->toDateString(),
+                ]);
+            }
+            if (! $so->items()->exists()) {
+                throw new BusinessRuleException('Verified case quantities do not identify a product for replacement.');
+            }
+            return $so->load('items');
+        });
+    }
+
     /**
      * Update a draft SO (recreate line items). Disallowed past draft.
      */
@@ -463,6 +515,9 @@ class SalesOrderService
             $lockedSo = SalesOrder::query()
                 ->lockForUpdate()
                 ->findOrFail($so->id);
+            if ($lockedSo->return_case_id !== null) {
+                throw new BusinessRuleException('Approved no-charge replacement orders cannot be edited commercially. Update the linked return case through its approval workflow.');
+            }
             if ($lockedSo->status !== SalesOrderStatus::Draft) {
                 throw new BusinessRuleException('Only draft sales orders can be updated.');
             }

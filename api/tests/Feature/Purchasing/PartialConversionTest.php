@@ -143,7 +143,7 @@ class PartialConversionTest extends TestCase
     {
         $user = User::factory()->create();
         $pr = $this->approvedPr($user);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $vendor = Vendor::factory()->create();
         $line = PurchaseRequestItem::create([
             'purchase_request_id' => $pr->id,
@@ -189,7 +189,7 @@ class PartialConversionTest extends TestCase
     {
         $user = User::factory()->create();
         $pr = $this->approvedPr($user);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $vendor = Vendor::factory()->create();
         $line = PurchaseRequestItem::create([
             'purchase_request_id' => $pr->id,
@@ -238,7 +238,7 @@ class PartialConversionTest extends TestCase
     {
         $user = User::factory()->create();
         $pr = $this->approvedPr($user);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $vendor = Vendor::factory()->create();
         $line = PurchaseRequestItem::create([
             'purchase_request_id' => $pr->id,

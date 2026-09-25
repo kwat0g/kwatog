@@ -1,3 +1,4 @@
+import type { DeliveryAttemptFields } from './deliveryAttempt';
 // Sprint 7 — Supply Chain types. IDs are hash strings.
 
 export type ShipmentStatus =
@@ -43,7 +44,7 @@ export interface Shipment {
 }
 
 export type DeliveryStatus =
- | 'scheduled' | 'loading' | 'in_transit' | 'delivered' | 'confirmed' | 'cancelled';
+ | 'scheduled' | 'loading' | 'in_transit' | 'return_pending' | 'returned' | 'delivered' | 'confirmed' | 'cancelled';
 
 /** ADV7 — Proof type for delivery proof files. */
 export type DeliveryProofType =
@@ -62,7 +63,32 @@ export interface DeliveryProof {
  uploaded_at: string | null;
 }
 
-export interface Delivery {
+export interface DeliveryCostHandoff {
+ status: string;
+ amount: string;
+ message?: string | null;
+ can_retry: boolean;
+}
+
+export interface Delivery extends DeliveryAttemptFields {
+ cost_recognition_mode?: 'legacy' | 'transit';
+ stock_reservation_status?: 'unreserved' | 'reserved' | 'partial' | 'consumed' | 'released';
+ can_reserve_stock?: boolean;
+ stock_reservation_allocations?: Array<{ delivery_item_id: string; item: { id: string; code: string; name: string }; quantity: string; consumed_quantity: string; location_id: string; location_code: string; lot_number: string; expiry_date: string | null }>;
+ cogs_handoff?: DeliveryCostHandoff;
+ loss_handoff?: DeliveryCostHandoff;
+ can_confirm?: boolean;
+ billing_hold?: { case_id: string; case_number: string; message: string } | null;
+ can_cancel?: boolean;
+ preparation?: Array<{
+  delivery_item_id: string;
+  product: string | null;
+  quantity: string;
+  lot_number: string | null;
+  locations: Array<{ code: string; quantity: string }>;
+  shortage: string;
+  message: string | null;
+ }>;
  id: string;
  delivery_number: string;
  status: DeliveryStatus;
@@ -74,7 +100,7 @@ export interface Delivery {
  receipt_photo_url: string | null;
  notes: string | null;
   invoice_handoff?: {
-   status: 'not_started' | 'generated' | 'manual_required';
+   status: 'not_started' | 'generated' | 'not_required' | 'manual_required';
    status_label?: string | null;
    message: string | null;
    attempted_at: string | null;
@@ -98,7 +124,12 @@ export interface Delivery {
  invoice?: { id: string; invoice_number: string; total_amount: string; status: string; status_label?: string } | null;
  items?: Array<{
  id: string;
+ product?: { part_number: string; name: string } | null;
+ unit_of_measure?: string;
+ customer_received_quantity?: string;
  sales_order_item_id: string | null;
+ stock_movement_id?: string | null;
+ stock_movements?: Array<{ id: string; quantity: string; lot_number: string | null; from_location: string | null }>;
  inspection: { id: string; inspection_number: string; status: string; status_label?: string } | null;
  quantity: number;
  unit_price: string;

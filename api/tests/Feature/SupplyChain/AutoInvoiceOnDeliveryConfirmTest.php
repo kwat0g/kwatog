@@ -200,6 +200,9 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
             ->latest('created_at')
             ->firstOrFail();
 
+        $this->travel(2)->seconds();
+        $this->svc->markInvoiceHandoffManual($confirmed->id);
+
         // Restore the exact accounting prerequisites that the original
         // attempt was missing, then replay only the handoff listener.
         $this->seed(ChartOfAccountsSeeder::class);

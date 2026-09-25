@@ -12,6 +12,7 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
+use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +36,7 @@ class Delivery extends Model
         'coc_handoff_status', 'coc_handoff_message', 'coc_handoff_at',
         // ADV7 — Proof of Delivery receiver capture.
         'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
+        'cost_recognition_mode',
     ];
 
     protected $casts = [
@@ -50,6 +52,7 @@ class Delivery extends Model
         'coc_handoff_status' => DeliveryCocHandoffStatus::class,
         'coc_handoff_at' => 'datetime',
         'received_at'    => 'datetime',
+        'cost_recognition_mode' => DeliveryCostingMode::class,
     ];
 
     public function salesOrder(): BelongsTo
@@ -91,6 +94,40 @@ class Delivery extends Model
     public function items(): HasMany
     {
         return $this->hasMany(DeliveryItem::class);
+    }
+
+    /** The same open quantity report holds both receipt confirmation and billing. */
+    public function blockingReturnCase(): HasOne
+    {
+        return $this->hasOne(\App\Modules\ReturnManagement\Models\ReturnCase::class)
+            ->whereNotIn('status', ['resolved', 'withdrawn'])
+            ->whereHas('lines', fn ($q) => $q->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0))
+            ->orderBy('id');
+    }
+
+    public function quantityDiscrepancy(): HasOne
+    {
+        return $this->hasOne(DeliveryQuantityDiscrepancy::class);
+    }
+
+    public function attemptOutcome(): HasOne
+    {
+        return $this->hasOne(DeliveryAttemptOutcome::class);
+    }
+
+    public function stockReservationBatch(): HasOne
+    {
+        return $this->hasOne(DeliveryStockReservationBatch::class);
+    }
+
+    public function stockReservations(): HasMany
+    {
+        return $this->hasMany(DeliveryStockReservation::class);
+    }
+
+    public function costHandoffs(): HasMany
+    {
+        return $this->hasMany(DeliveryCostHandoff::class)->orderBy('id');
     }
 
     /** ADV7 — proof-of-delivery files (signed DRs, photos, customer PO confirmations). */

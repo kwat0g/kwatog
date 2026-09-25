@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Models\Vendor;
@@ -17,7 +18,9 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\ItemUomConversion;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\Uom;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -25,6 +28,7 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Models\ReturnCase;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -97,7 +101,7 @@ class SupplierReturnLifecycleTest extends TestCase
     private function receivedShipment(User $by, bool $isVatable = true): array
     {
         $vendor   = Vendor::factory()->create(['created_by' => null]);
-        $item     = Item::factory()->create();
+        $item     = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
@@ -183,6 +187,222 @@ class SupplierReturnLifecycleTest extends TestCase
         return compact('vendor', 'item', 'location', 'po', 'poItem', 'grnItem', 'bill', 'billItem');
     }
 
+    public function test_supplier_return_uses_bill_price_in_base_units_and_returns_peso_totals(): void
+    {
+        $by = $this->admin();
+        $ctx = $this->receivedShipment($by);
+        $kg = Uom::create(['code' => 'KG', 'name' => 'Kilogram']);
+        $bag = Uom::create(['code' => 'BAG', 'name' => 'Bag']);
+        ItemUomConversion::create([
+            'item_id' => $ctx['item']->id,
+            'from_uom_id' => $bag->id,
+            'to_uom_id' => $kg->id,
+            'factor' => '5.000000',
+        ]);
+        $ctx['billItem']->update(['quantity' => '20', 'unit' => 'BAG', 'unit_price' => '60.00', 'total' => '1200.00']);
+        $ctx['bill']->update(['subtotal' => '1200.00', 'vat_amount' => '144.00', 'total_amount' => '1344.00', 'balance' => '1344.00']);
+
+        $created = $this->actingAs($by)->postJson('/api/v1/return-management/return-requests', [
+            'type' => 'supplier_return',
+            'vendor_id' => $ctx['vendor']->hash_id,
+            'purchase_order_id' => $ctx['po']->hash_id,
+            'bill_id' => $ctx['bill']->hash_id,
+            'items' => [[
+                'item_id' => $ctx['item']->hash_id,
+                'quantity' => '5',
+                'unit_price' => '1.00', // Request price cannot override billed provenance.
+                'source_po_item_id' => $ctx['poItem']->hash_id,
+                'source_grn_item_id' => $ctx['grnItem']->hash_id,
+                'source_bill_item_id' => $ctx['billItem']->hash_id,
+            ]],
+        ])->assertCreated();
+
+        $created->assertJsonPath('data.items.0.unit_price', '12.00')
+            ->assertJsonPath('data.items.0.original_unit_price', '12.00')
+            ->assertJsonPath('data.items.0.total', '60.00');
+        $this->actingAs($by)
+            ->getJson('/api/v1/return-management/return-requests/'.$created->json('data.id'))
+            ->assertOk()
+            ->assertJsonPath('data.items.0.source_allocation.unit_price', '12.00');
+        $this->actingAs($by)
+            ->postJson('/api/v1/return-management/return-requests/'.$created->json('data.id').'/submit')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.total', '60.00');
+    }
+
+    public function test_supplier_replacement_po_converts_base_quantity_to_purchase_unit_and_compares_open_balance_in_base_units(): void
+    {
+        $admin = $this->admin();
+        $ctx = $this->receivedShipment($admin, false);
+        $kg = Uom::create(['code' => 'KG', 'name' => 'Kilogram']);
+        $bag = Uom::create(['code' => 'BAG', 'name' => 'Bag']);
+        ItemUomConversion::create([
+            'item_id' => $ctx['item']->id,
+            'from_uom_id' => $bag->id,
+            'to_uom_id' => $kg->id,
+            'factor' => '5.000000',
+        ]);
+        $ctx['poItem']->update([
+            'quantity' => '1.000',
+            'unit' => 'BAG',
+            'unit_price' => '25.00',
+            'total' => '25.00',
+            'quantity_received' => '5.000',
+        ]);
+        $ctx['grnItem']->update([
+            'quantity_received' => '5.000',
+            'quantity_accepted' => '5.000',
+            'unit_cost' => '25.0000',
+        ]);
+        $ctx['billItem']->update([
+            'quantity' => '1.000',
+            'unit' => 'BAG',
+            'unit_price' => '25.00',
+            'total' => '25.00',
+        ]);
+        $ctx['bill']->update([
+            'subtotal' => '25.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '25.00',
+            'balance' => '25.00',
+            'is_vatable' => false,
+        ]);
+
+        $created = $this->actingAs($admin)->postJson('/api/v1/return-management/return-requests', [
+            'type' => 'supplier_return',
+            'vendor_id' => $ctx['vendor']->hash_id,
+            'purchase_order_id' => $ctx['po']->hash_id,
+            'bill_id' => $ctx['bill']->hash_id,
+            'items' => [[
+                'item_id' => $ctx['item']->hash_id,
+                'quantity' => '5.000',
+                'source_po_item_id' => $ctx['poItem']->hash_id,
+                'source_grn_item_id' => $ctx['grnItem']->hash_id,
+                'source_bill_item_id' => $ctx['billItem']->hash_id,
+            ]],
+        ])->assertCreated()->json('data');
+        $rmaId = $created['id'];
+        $line = ReturnRequest::query()->firstOrFail()->items()->firstOrFail();
+
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rmaId}/submit")
+            ->assertOk();
+        $this->actingAs($this->userWithRole('department_head'))
+            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/approve")
+            ->assertOk();
+        $this->actingAs($this->userWithRole('production_manager'))
+            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/approve")
+            ->assertOk();
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/receive", [
+                'received_quantities' => [$line->hash_id => '5.000'],
+            ])
+            ->assertOk();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rmaId}/inspect")
+            ->assertOk();
+        $this->actingAs($admin)->postJson("/api/v1/return-management/return-requests/{$rmaId}/dispose", [
+            'dispositions' => [[
+                'item_id' => $line->hash_id,
+                'disposition' => 'return_to_supplier',
+            ]],
+            'create_replacement_po' => true,
+            'location_id' => $ctx['location']->hash_id,
+        ])->assertOk();
+
+        $rma = ReturnRequest::query()->firstOrFail();
+        $replacement = PurchaseOrder::query()->findOrFail($rma->replacement_purchase_order_id);
+        $replacementItem = $replacement->items()->firstOrFail();
+        $this->assertSame('1.00', (string) $replacementItem->quantity);
+        $this->assertSame('BAG', (string) $replacementItem->unit);
+        $this->assertSame('25.00', (string) $replacementItem->unit_price);
+        $this->assertNotNull($ctx['po']->fresh()->short_closed_at);
+        $this->assertSame(0, bccomp((string) $ctx['poItem']->fresh()->quantity_received, '0', 3));
+    }
+
+    public function test_supplier_redelivery_case_keeps_bill_credit_and_po_acceptance_uses_base_units(): void
+    {
+        $admin = $this->admin();
+        $ctx = $this->receivedShipment($admin, false);
+        $kg = Uom::create(['code' => 'KG', 'name' => 'Kilogram']);
+        $bag = Uom::create(['code' => 'BAG', 'name' => 'Bag']);
+        ItemUomConversion::create([
+            'item_id' => $ctx['item']->id,
+            'from_uom_id' => $bag->id,
+            'to_uom_id' => $kg->id,
+            'factor' => '5.000000',
+        ]);
+        $ctx['poItem']->update([
+            'quantity' => '1.00',
+            'unit' => 'BAG',
+            'unit_price' => '25.00',
+            'total' => '25.00',
+            'quantity_received' => '5.00',
+            'quantity_accepted' => '5.00',
+        ]);
+        $ctx['grnItem']->update([
+            'quantity_received' => '5.000',
+            'quantity_accepted' => '5.000',
+            'unit_cost' => '5.0000',
+        ]);
+        $ctx['billItem']->update([
+            'quantity' => '1.00',
+            'unit' => 'BAG',
+            'unit_price' => '25.00',
+            'total' => '25.00',
+        ]);
+        $ctx['bill']->update([
+            'subtotal' => '25.00',
+            'vat_amount' => '0.00',
+            'total_amount' => '25.00',
+            'balance' => '25.00',
+            'is_vatable' => false,
+        ]);
+
+        $service = app(ReturnRequestService::class);
+        $rma = $service->create([
+            'type' => 'supplier_return',
+            'vendor_id' => $ctx['vendor']->id,
+            'purchase_order_id' => $ctx['po']->id,
+            'bill_id' => $ctx['bill']->id,
+            'items' => [[
+                'item_id' => $ctx['item']->id,
+                'quantity' => '1.000',
+                'source_po_item_id' => $ctx['poItem']->id,
+                'source_grn_item_id' => $ctx['grnItem']->id,
+                'source_bill_item_id' => $ctx['billItem']->id,
+            ]],
+        ], $admin);
+        $line = $rma->items->firstOrFail();
+        $line->update(['returned_quantity' => '0.000', 'receipt_recorded' => false]);
+        $rma->forceFill(['status' => ReturnRequestStatus::Approved])->save();
+        $rma = $service->receive($rma, [(int) $line->id => '1.000'], null, $admin);
+        $rma = $service->inspect($rma, 'Supplier return inspected.', $admin);
+
+        $case = new ReturnCase();
+        $case->forceFill([
+            'case_number' => 'CASE-SUP-'.substr(uniqid(), -8),
+            'type' => 'supplier',
+            'status' => 'in_progress',
+            'vendor_id' => $ctx['vendor']->id,
+            'purchase_order_id' => $ctx['po']->id,
+            'created_by' => $admin->id,
+            'preferred_resolution' => 'redelivery',
+            'resolution' => 'redelivery',
+            'description' => 'Supplier agreed to redeliver the affected goods.',
+            'return_request_id' => $rma->id,
+        ])->save();
+
+        $service->dispose($rma, [[
+            'item_id' => $line->hash_id,
+            'disposition' => 'return_to_supplier',
+        ]], $admin, false, (int) $ctx['location']->id);
+
+        $this->assertNotNull($rma->fresh()->credit_note_id, 'The supplier credit offsets the original payable.');
+        $this->assertSame(1, CreditNote::query()->where('bill_id', $ctx['bill']->id)->count());
+        $this->assertSame('20.00', (string) $ctx['bill']->fresh()->balance);
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $ctx['po']->fresh()->status);
+        $this->assertSame(0, bccomp((string) $ctx['poItem']->fresh()->quantity_accepted, '4', 3));
+    }
+
     public function test_supplier_return_walks_the_full_workflow_over_http(): void
     {
         $admin = $this->admin();
@@ -234,16 +454,29 @@ class SupplierReturnLifecycleTest extends TestCase
         $rma = ReturnRequest::query()->firstOrFail();
         $this->assertSame(ReturnRequestStatus::Approved, $rma->status, 'The chain must reach approved.');
 
-        // ── Receive: only 18 of the 20 claimed actually shipped back ───────
+        // ── Receive in two installments: 4 + 14 of the 20 claimed shipped back ──
         $line = $rma->items()->firstOrFail();
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rmaId}/receive", [
-                'received_quantities' => [$line->hash_id => 18],
+                'received_quantities' => [$line->hash_id => 4],
+                'final_receipt' => false,
+                'request_key' => 'a1100000-0000-4000-8000-000000000001',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.items.0.returned_quantity', '4.000');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rmaId}/receive", [
+                'received_quantities' => [$line->hash_id => 14],
+                'final_receipt' => true,
+                'request_key' => 'a1100000-0000-4000-8000-000000000002',
             ])
             ->assertOk()
             ->assertJsonPath('data.status', 'received');
 
         $this->assertSame('18.000', $line->fresh()->returned_quantity);
+        $this->assertSame(2, $rma->receipts()->count());
 
         // ── Inspect ───────────────────────────────────────────────────────
         $this->actingAs($admin)

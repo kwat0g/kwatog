@@ -14,6 +14,8 @@ export interface ReturnRequestItem {
   item_id?: string;
   quantity: string;
   returned_quantity: string;
+  received_total?: string;
+  remaining_quantity?: string;
   receipt_recorded?: boolean;
   source_invoice_item_id?: string | null;
   source_sales_order_item_id?: string | null;
@@ -39,6 +41,8 @@ export interface ReturnRequestItem {
 }
 
 export interface ReturnRequest {
+  is_truck_return?: boolean;
+  origin_delivery?: { id: string; delivery_number: string } | null;
   id: string;
   rma_number: string;
   type: 'customer_return' | 'supplier_return';
@@ -64,6 +68,7 @@ export interface ReturnRequest {
   refund_amount?: string;
   return_date?: string;
   source_label?: string;
+  source_case?: { id: string; case_number: string } | null;
   sales_order?: { id: string; so_number: string };
   invoice?: { id: string; invoice_number: string };
   purchase_order?: { id: string; po_number: string };
@@ -106,6 +111,18 @@ export interface ReturnRequest {
   rejected_by?: { id: string; name: string };
   approved_at?: string;
   received_at?: string;
+  receipt_open?: boolean;
+  receipts?: Array<{
+    id: string;
+    request_key?: string | null;
+    final_receipt: boolean;
+    received_at?: string | null;
+    items: Array<{
+      return_request_item_id: string;
+      quantity: string;
+      stock_movement_id?: string | null;
+    }>;
+  }>;
   inspected_at?: string;
   completed_at?: string;
   rejected_at?: string;

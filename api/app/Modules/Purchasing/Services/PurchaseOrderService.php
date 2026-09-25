@@ -15,6 +15,7 @@ use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
@@ -26,8 +27,8 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
-use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Enums\RfqStatus;
+use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseOrderCancelled;
 use App\Modules\Purchasing\Events\PurchaseOrderSent;
 use App\Modules\Purchasing\Events\PurchaseOrderSubmitted;
@@ -369,10 +370,21 @@ class PurchaseOrderService
                     if ($unitPrice === null || Money::lte((string) $unitPrice, '0')) {
                         throw new BusinessRuleException('PR line "'.($line->description ?? 'unnamed').'" has no authoritative unit price.');
                     }
-                    $orderedSoFar = (string) ($orderedByLine[$line->id] ?? '0');
-                    $quantityToOrder = bccomp((string) $line->quantity, $orderedSoFar, 3) > 0
-                        ? bcsub((string) $line->quantity, $orderedSoFar, 3)
-                        : (string) $line->quantity;
+                    $orderedBase = (string) ($orderedByLine[$line->id] ?? '0');
+                    $quantityToOrder = (string) $line->quantity;
+                    if (bccomp($orderedBase, '0', 6) > 0) {
+                        $factor = $this->baseQuantityForPrLine($line, '1', $line->unit);
+                        $remainingBase = bcsub(
+                            $this->baseQuantityForPrLine($line, (string) $line->quantity, $line->unit),
+                            $orderedBase,
+                            6,
+                        );
+                        $quantityToOrder = bcdiv($remainingBase, $factor, 3);
+                        if (bccomp($quantityToOrder, '0', 3) <= 0
+                            || bccomp($this->baseQuantityForPrLine($line, $quantityToOrder, $line->unit), $remainingBase, 6) !== 0) {
+                            throw new BusinessRuleException('Remaining PR quantity cannot be represented exactly in the requested unit; adjust the PR unit or quantity.');
+                        }
+                    }
                     $itemPayload[] = [
                         'item_id' => $line->item_id,
                         'purchase_request_item_id' => $line->id,
@@ -408,9 +420,11 @@ class PurchaseOrderService
         });
     }
 
-    /** @return array<int, string> Map of purchase_request_item_id => total_ordered_quantity */
+    /** @return array<int, string> Map of purchase_request_item_id => total ordered in base UoM */
     private function orderedQuantitiesByPrLine(PurchaseRequest $pr, ?int $exceptPurchaseOrderId = null): array
     {
+        $pr->loadMissing('items.item');
+        $sourceLines = $pr->items->keyBy('id');
         $query = PurchaseOrderItem::query()
             ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
             ->where('purchase_orders.purchase_request_id', $pr->id)
@@ -421,14 +435,33 @@ class PurchaseOrderService
             $query->where('purchase_orders.id', '!=', $exceptPurchaseOrderId);
         }
 
-        return $query
-            ->groupBy('purchase_order_items.purchase_request_item_id')
-            ->selectRaw('purchase_order_items.purchase_request_item_id, SUM(purchase_order_items.quantity) as total_ordered')
-            ->pluck('total_ordered', 'purchase_order_items.purchase_request_item_id')
-            ->all();
+        $ordered = [];
+        foreach ($query->get(['purchase_order_items.purchase_request_item_id', 'purchase_order_items.quantity', 'purchase_order_items.unit']) as $poLine) {
+            $sourceLine = $sourceLines->get($poLine->purchase_request_item_id);
+            if ($sourceLine === null) {
+                throw new BusinessRuleException('A PO line refers to a missing purchase-request line.');
+            }
+            $id = (int) $sourceLine->id;
+            $ordered[$id] = bcadd(
+                $ordered[$id] ?? '0',
+                $this->baseQuantityForPrLine($sourceLine, (string) $poLine->quantity, $poLine->unit),
+                6,
+            );
+        }
+
+        return $ordered;
     }
 
-    /** @param array<int, array{purchase_request_item_id:?int, quantity:string}> $lines */
+    private function baseQuantityForPrLine(PurchaseRequestItem $line, string $quantity, ?string $unit): string
+    {
+        if ($line->item === null) {
+            throw new BusinessRuleException('A purchase-request line must reference an item before it can be ordered.');
+        }
+
+        return $line->item->convertToBase($quantity, trim((string) $unit) ?: null);
+    }
+
+    /** @param array<int, array{purchase_request_item_id:?int, quantity:string, unit:?string}> $lines */
     private function assertPrLineQuantityCoverage(
         PurchaseRequest $pr,
         array $lines,
@@ -439,7 +472,12 @@ class PurchaseOrderService
         foreach ($lines as $line) {
             $sourceLineId = $line['purchase_request_item_id'] ?? null;
             if ($sourceLineId !== null) {
-                $adding[$sourceLineId] = bcadd($adding[$sourceLineId] ?? '0', (string) $line['quantity'], 3);
+                $sourceLine = $pr->items->firstWhere('id', $sourceLineId);
+                $adding[$sourceLineId] = bcadd(
+                    $adding[$sourceLineId] ?? '0',
+                    $this->baseQuantityForPrLine($sourceLine, (string) $line['quantity'], $line['unit']),
+                    6,
+                );
             }
         }
 
@@ -449,8 +487,8 @@ class PurchaseOrderService
                 continue;
             }
 
-            $total = bcadd((string) ($ordered[$sourceLineId] ?? '0'), $adding[$sourceLineId], 3);
-            if (bccomp($total, (string) $sourceLine->quantity, 3) > 0) {
+            $total = bcadd((string) ($ordered[$sourceLineId] ?? '0'), $adding[$sourceLineId], 6);
+            if (bccomp($total, $this->baseQuantityForPrLine($sourceLine, (string) $sourceLine->quantity, $sourceLine->unit), 6) > 0) {
                 throw new BusinessRuleException(
                     'PO quantity for PR line "'.($sourceLine->description ?? 'unnamed').'" would exceed the requested quantity.',
                 );
@@ -465,7 +503,10 @@ class PurchaseOrderService
         $fullyCovered = [];
         foreach ($pr->items as $line) {
             $orderedQty = (string) ($ordered[$line->id] ?? '0');
-            if (bccomp($orderedQty, (string) $line->quantity, 3) >= 0) {
+            if (bccomp($orderedQty, '0', 6) <= 0) {
+                continue;
+            }
+            if (bccomp($orderedQty, $this->baseQuantityForPrLine($line, (string) $line->quantity, $line->unit), 6) >= 0) {
                 $fullyCovered[] = (int) $line->id;
             }
         }
@@ -474,19 +515,27 @@ class PurchaseOrderService
     }
 
     /**
-     * Quantity per PR line not yet on a live PO. An RFQ for a PR that is
-     * already partly ordered sources only this remainder.
+     * Quantity per PR line (in the line's own unit) not yet on a live PO. An
+     * RFQ for a PR that is already partly ordered sources only this remainder.
      *
      * @return array<int, string> purchase_request_item_id => remaining quantity (3 dp, never negative)
      */
     public function remainingQuantitiesByPrLine(PurchaseRequest $pr): array
     {
-        $pr->loadMissing('items');
+        $pr->loadMissing('items.item');
         $ordered = $this->orderedQuantitiesByPrLine($pr);
         $remaining = [];
         foreach ($pr->items as $line) {
-            $left = bcsub((string) $line->quantity, (string) ($ordered[$line->id] ?? '0'), 3);
-            $remaining[(int) $line->id] = bccomp($left, '0', 3) > 0 ? $left : '0.000';
+            $orderedBase = (string) ($ordered[$line->id] ?? '0');
+            if (bccomp($orderedBase, '0', 6) <= 0) {
+                $remaining[(int) $line->id] = bcadd((string) $line->quantity, '0', 3);
+
+                continue;
+            }
+            $remainingBase = bcsub($this->baseQuantityForPrLine($line, (string) $line->quantity, $line->unit), $orderedBase, 6);
+            $remaining[(int) $line->id] = bccomp($remainingBase, '0', 6) > 0
+                ? bcdiv($remainingBase, $this->baseQuantityForPrLine($line, '1', $line->unit), 3)
+                : '0.000';
         }
 
         return $remaining;
@@ -514,7 +563,7 @@ class PurchaseOrderService
         $orderedByLine = $this->orderedQuantitiesByPrLine($pr);
         $total = $pr->items->count();
         $fullyCoveredCount = $pr->items->filter(static fn ($line): bool => isset($fullyCovered[$line->id]))->count();
-        $anyCoveredCount = $pr->items->filter(static fn ($line): bool => isset($orderedByLine[$line->id]) && bccomp((string) $orderedByLine[$line->id], '0', 3) > 0)->count();
+        $anyCoveredCount = $pr->items->filter(static fn ($line): bool => isset($orderedByLine[$line->id]) && bccomp((string) $orderedByLine[$line->id], '0', 6) > 0)->count();
 
         if ($total > 0 && $fullyCoveredCount >= $total) {
             $pr->forceFill([

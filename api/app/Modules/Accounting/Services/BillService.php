@@ -237,6 +237,7 @@ class BillService
                             'item_id' => $li['item_id'],
                             'description' => $li['description'],
                             'quantity' => $li['quantity'],
+                            'unit' => $li['unit'],
                             'unit_price' => $li['unit_price'],
                         ];
                     }

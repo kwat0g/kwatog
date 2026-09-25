@@ -25,6 +25,7 @@ import {
   LuX,
   LuPackageCheck,
   LuFileText,
+  LuMessageSquare,
   LuPlus,
   type IconType,
 } from '@/lib/icons';
@@ -76,6 +77,7 @@ const SUPPLIER_NAV: PortalNavSection[] = [
     items: [
       { to: '/portal/supplier/deliveries', label: 'Deliveries', icon: DeliveryIcon },
       { to: '/portal/supplier/delivery-schedules', label: 'Delivery Schedules', icon: ScheduleIcon },
+      { to: '/portal/supplier/problems', label: 'Problem reports', icon: LuMessageSquare },
     ],
   },
 ];
@@ -111,6 +113,7 @@ const CUSTOMER_NAV: PortalNavSection[] = [
    items: [
      { to: '/portal/customer/complaints', label: 'Quality Complaints', icon: ComplaintIcon },
      { to: '/portal/customer/returns', label: 'Returns', icon: LuPackageCheck },
+     { to: '/portal/customer/problems', label: 'Problem reports', icon: LuMessageSquare },
    ],
   },
 ];

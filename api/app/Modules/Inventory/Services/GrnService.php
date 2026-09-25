@@ -252,8 +252,8 @@ class GrnService
                 );
 
                 // Receipt cost is authoritative from the PO (including RFQ charges as landed cost);
-                // price differences settle at billing. For RFQ POs, deliveredUnitCost() distributes
-                // line and header charges; for non-RFQ, it returns exactly unit_price.
+                // price differences settle at billing. deliveredUnitCost() is per PO purchase unit;
+                // GRN quantities and stock movements are per item base unit.
                 // Load PO relationship for deliveredUnitCost() to compute header allocation.
                 $poi->loadMissing('purchaseOrder.items');
                 $unitCost = $poi->deliveredUnitCost();
@@ -267,6 +267,7 @@ class GrnService
                     && bccomp((string) $row['unit_cost'], (string) $unitCost, 4) !== 0) {
                     throw new BusinessRuleException("PO line {$poi->id}: receipt cost is fixed at the PO price ({$poi->unit_price}). Price differences are settled on the supplier bill.");
                 }
+                $unitCost = $this->baseUnitCost($poi, $unitCost);
 
                 GrnItem::create([
                     'goods_receipt_note_id' => $grn->id,
@@ -578,8 +579,8 @@ class GrnService
                     $receivedUomCode,
                 );
 
-                // Re-derive the delivered cost at finalize: the draft was staged
-                // at bare unit_price and the PO may have moved since.
+                // Re-derive the base-unit delivered cost at finalize: the PO
+                // price or its freight allocation may have moved since staging.
                 $poi->setRelation('purchaseOrder', $po->loadMissing('items'));
 
                 $draftLine->update([
@@ -587,7 +588,7 @@ class GrnService
                     'received_uom_code' => $receivedUomCode,
                     'quantity_received' => $qtyReceived,
                     'quantity_accepted' => '0',
-                    'unit_cost'         => $poi->deliveredUnitCost(),
+                    'unit_cost'         => $this->baseUnitCost($poi, $poi->deliveredUnitCost()),
                     'material_lot_number' => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
                     'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
                     'expiry_date'       => $row['expiry_date'] ?? null,
@@ -1258,7 +1259,9 @@ class GrnService
                 'purchase_order_item_id' => $row->purchase_order_item_id ? (int) $row->purchase_order_item_id : null,
                 'item_id'                => (int) $row->item_id,
                 'quantity'               => $remainder,
-                'unit_price'             => (string) ($poItem?->unit_price ?? $row->unit_cost),
+                'unit_price'             => $poItem
+                    ? $this->baseUnitCost($poItem, (string) $poItem->unit_price)
+                    : (string) $row->unit_cost,
                 'reason'                 => $reason,
                 'lot_number'             => $row->material_lot_number,
                 'reversal_already_applied' => true,
@@ -1318,7 +1321,9 @@ class GrnService
                 'purchase_order_item_id' => $row->purchase_order_item_id ? (int) $row->purchase_order_item_id : null,
                 'item_id'                => (int) $row->item_id,
                 'quantity'               => $quantity,
-                'unit_price'             => (string) ($poItem?->unit_price ?? $row->unit_cost),
+                'unit_price'             => $poItem
+                    ? $this->baseUnitCost($poItem, (string) $poItem->unit_price)
+                    : (string) $row->unit_cost,
                 'reason'                 => $reason,
                 'lot_number'             => $row->material_lot_number,
                 // GrnService::reversePoReceipt() already reduced the PO
@@ -2131,9 +2136,9 @@ class GrnService
             );
         }
 
+        $item = Item::query()->findOrFail($itemId);
         if ($receivedUomCode !== null && trim($receivedUomCode) !== '') {
-            $receivedQuantity = Item::query()->findOrFail($itemId)
-                ->convertToBase($receivedQuantity, $receivedUomCode);
+            $receivedQuantity = $item->convertToBase($receivedQuantity, $receivedUomCode);
         }
         if (! is_numeric($receivedQuantity) || bccomp($receivedQuantity, '0', 3) <= 0) {
             throw new BusinessRuleException(
@@ -2141,11 +2146,12 @@ class GrnService
             );
         }
 
-        $remaining = bcsub((string) $purchaseOrderItem->quantity, (string) $purchaseOrderItem->quantity_received, 3);
+        $orderedBase = $this->orderedBaseQuantity($purchaseOrderItem, $item);
+        $remaining = bcsub($orderedBase, (string) $purchaseOrderItem->quantity_received, 3);
         if (bccomp($receivedQuantity, $remaining, 3) > 0) {
             // OGAMI-014 — configurable tolerance is a percent of ordered qty.
             $tolerancePct = (string) $this->settings->requiredFloat('inventory.over_receipt_tolerance_pct', 0);
-            $allowance = bcmul((string) $purchaseOrderItem->quantity, bcdiv($tolerancePct, '100', 6), 3);
+            $allowance = bcmul($orderedBase, bcdiv($tolerancePct, '100', 6), 3);
             $maxReceivable = bcadd($remaining, $allowance, 3);
             if (bccomp($receivedQuantity, $maxReceivable, 3) > 0) {
                 throw new BusinessRuleException(
@@ -2156,6 +2162,23 @@ class GrnService
         }
 
         return $receivedQuantity;
+    }
+
+    private function orderedBaseQuantity(PurchaseOrderItem $line, ?Item $item = null): string
+    {
+        $item ??= Item::withTrashed()->findOrFail($line->item_id);
+
+        return $item->convertToBase((string) $line->quantity, trim((string) $line->unit) ?: null);
+    }
+
+    private function baseUnitCost(PurchaseOrderItem $line, string $purchaseUnitCost): string
+    {
+        $orderedBase = $this->orderedBaseQuantity($line);
+        if (bccomp($orderedBase, '0', 6) <= 0) {
+            throw new BusinessRuleException("PO line {$line->id} must have a positive base ordered quantity.");
+        }
+
+        return $this->round4(bcdiv(bcmul($purchaseUnitCost, (string) $line->quantity, 8), $orderedBase, 8));
     }
 
     private function resolveReceivingLocation(mixed $value): int
@@ -2277,9 +2300,13 @@ class GrnService
             ? $po->status->value
             : (string) $po->status;
 
-        $po->load('items');
+        $po->load(['items.item' => fn ($q) => $q->withTrashed()]);
         $allReceived = $po->items->isNotEmpty() && $po->items->every(
-            fn ($l) => bccomp((string) $l->quantity_accepted, (string) $l->quantity, 3) >= 0
+            fn (PurchaseOrderItem $l) => bccomp(
+                (string) $l->quantity_accepted,
+                $this->orderedBaseQuantity($l, $l->item),
+                3,
+            ) >= 0
         );
         $anyReceived = $po->items->contains(
             // Physical receipt is visible to purchasing before QC acceptance.

@@ -11,6 +11,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
@@ -478,7 +479,7 @@ class NcrService
                         'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
                         'parent_ncr_id'   => $locked->id,
                         'created_by'      => $by->id,
-                    ]);
+                    ] + $this->outgoingOutputSalesOrderLineage($insp, (int) $locked->product_id));
                     $locked->forceFill(['replacement_work_order_id' => $wo->id])->save();
                 }
             }
@@ -499,7 +500,7 @@ class NcrService
                         'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
                         'parent_ncr_id'   => $locked->id,
                         'created_by'      => $by->id,
-                    ]);
+                    ] + $this->outgoingOutputSalesOrderLineage($insp, (int) $locked->product_id));
                     $locked->forceFill(['rework_work_order_id' => $wo->id])->save();
                 }
             }
@@ -542,6 +543,23 @@ class NcrService
             ])->save();
             return $this->show($locked);
         });
+    }
+
+    /** Only the inspected output batch can supply a replacement's SO lineage. */
+    private function outgoingOutputSalesOrderLineage(Inspection $inspection, int $productId): array
+    {
+        $source = $inspection->workOrderOutput?->workOrder;
+        if (! $source?->sales_order_id
+            || $inspection->entity_type !== InspectionEntityType::WorkOrder
+            || (int) $inspection->entity_id !== (int) $source->id
+            || (int) $source->product_id !== $productId) {
+            return [];
+        }
+
+        return [
+            'sales_order_id' => $source->sales_order_id,
+            'sales_order_item_id' => $source->sales_order_item_id,
+        ];
     }
 
     /**

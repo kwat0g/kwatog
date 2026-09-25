@@ -36,6 +36,8 @@ export const deliveryStatusVariant: Record<DeliveryStatus, ChipVariant> = {
  scheduled: 'neutral',
  loading: 'info',
  in_transit: 'info',
+ return_pending: 'warning',
+ returned: 'neutral',
  delivered: 'warning',
  confirmed: 'success',
  cancelled: 'neutral',

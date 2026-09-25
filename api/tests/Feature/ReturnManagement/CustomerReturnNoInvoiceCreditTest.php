@@ -111,7 +111,7 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
             'item_id'                    => $item->id,
             'source_sales_order_item_id' => $source->id,
             'quantity'                   => '10.000',
-            'returned_quantity'          => '8.000',
+            'returned_quantity'          => '0.000',
             'unit_price'                 => '100.00',
             'total'                      => '1000.00',
         ]);
@@ -123,12 +123,15 @@ class CustomerReturnNoInvoiceCreditTest extends TestCase
             ->where('entity_type', 'return_request')
             ->where('entity_id', $rma->id)
             ->update(['status' => 'passed', 'completed_at' => now()]);
-        $disposed = $service->dispose($inspected, [[
-            'item_id'     => $line->hash_id,
-            'disposition' => 'restock',
-        ]], $by, false, $destination->id);
-
-        $disposed = $service->complete($disposed, $by);
+        $caseOwner = User::factory()->create(['role_id' => Role::query()->where('slug', 'customer_service_officer')->value('id')]);
+        $this->assertFalse($caseOwner->hasPermission('inventory.view'));
+        $this->actingAs($caseOwner)->getJson('/api/v1/inventory/warehouse')->assertOk();
+        $this->actingAs($caseOwner)->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/dispose', [
+            'dispositions' => [['item_id' => $line->hash_id, 'disposition' => 'restock']],
+            'location_id' => $destination->hash_id,
+        ])->assertOk();
+        $this->postJson('/api/v1/return-management/return-requests/'.$rma->hash_id.'/complete')->assertOk();
+        $disposed = $rma->fresh();
 
         $this->assertSame(ReturnRequestStatus::Completed, $disposed->status);
         $this->assertNotNull($disposed->credit_note_id, 'A no-invoice customer return must still raise a credit note.');

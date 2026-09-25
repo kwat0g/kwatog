@@ -88,6 +88,7 @@ class BillPriceVarianceTest extends TestCase
         $item = Item::factory()->create([
             'is_active' => true,
             'item_type' => ItemType::RawMaterial,
+            'unit_of_measure' => 'kg',
         ]);
         $po = PurchaseOrder::factory()->create([
             'status'     => PurchaseOrderStatus::Approved->value,
@@ -509,6 +510,7 @@ class BillPriceVarianceTest extends TestCase
         $item = Item::factory()->create([
             'is_active' => true,
             'item_type' => ItemType::RawMaterial,
+            'unit_of_measure' => 'kg',
         ]);
         $po = PurchaseOrder::factory()->create([
             'status'     => PurchaseOrderStatus::Approved->value,

@@ -14,6 +14,7 @@ import {
 } from '@/components/layout/TouchShell';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
+import { DeliveryAttemptPanel } from '@/pages/supply-chain/deliveries/DeliveryAttemptPanel';
 
 /** Extract a useful message from an axios error, preferring 422 field errors. */
 function describeAxiosError(err: unknown, fallback: string): string {
@@ -131,6 +132,11 @@ export default function DriverDeliveryDetail() {
           </div>
         </div>
       </div>
+
+      <DeliveryAttemptPanel key={id} deliveryId={id} lines={data.items ?? []} driver
+        can_report_attempt_outcome={data.can_report_attempt_outcome}
+        attempt_outcome_reasons={data.attempt_outcome_reasons} attempt_outcome={data.attempt_outcome}
+        report={(payload) => driverApi.reportAttempt(id, payload)} amend={(payload) => driverApi.amendAttempt(id, payload)} />
 
       {next && label && (
         <Button

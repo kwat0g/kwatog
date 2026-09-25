@@ -606,7 +606,7 @@ class SupplierResponseTest extends TestCase
         $vendorB = Vendor::factory()->create();
         $prItemA = PurchaseRequestItem::create([
             'purchase_request_id'  => $pr->id,
-            'item_id'              => Item::factory()->create()->id,
+            'item_id'              => Item::factory()->create(['unit_of_measure' => 'kg'])->id,
             'description'          => 'Resin Type A',
             'quantity'             => '100.00',
             'unit'                 => 'kg',

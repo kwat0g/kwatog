@@ -31,8 +31,15 @@ export const returnManagementApi = {
  approve: (id: string) =>
  client.post(`/return-management/return-requests/${id}/approve`).then((r) => r.data.data as ReturnRequest),
 
- receive: (id: string, receivedQuantities?: Record<string, number>) =>
- client.post(`/return-management/return-requests/${id}/receive`, { received_quantities: receivedQuantities }).then((r) => r.data.data as ReturnRequest),
+ receive: (
+  id: string,
+  receivedQuantities: Record<string, string>,
+  options: { finalReceipt: boolean; requestKey: string },
+ ) => client.post(`/return-management/return-requests/${id}/receive`, {
+  received_quantities: receivedQuantities,
+  final_receipt: options.finalReceipt,
+  request_key: options.requestKey,
+ }).then((r) => r.data.data as ReturnRequest),
 
  inspect: (id: string, internalNotes?: string) =>
  client.post(`/return-management/return-requests/${id}/inspect`, { internal_notes: internalNotes }).then((r) => r.data.data as ReturnRequest), // 2026-08-08 — restock lines are received back into stock at dispose time,

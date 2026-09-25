@@ -82,7 +82,7 @@ class SupplierReturnShipOnDisposeTest extends TestCase
     private function receivedShipment(User $by): array
     {
         $vendor   = Vendor::factory()->create(['created_by' => null]);
-        $item     = Item::factory()->create();
+        $item     = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 

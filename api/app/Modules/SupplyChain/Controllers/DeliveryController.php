@@ -8,10 +8,19 @@ use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Requests\AssignDeliveryRequest;
+use App\Modules\SupplyChain\Requests\AmendDeliveryAttemptRequest;
+use App\Modules\SupplyChain\Requests\ReserveDeliveryStockRequest;
+use App\Modules\SupplyChain\Requests\RetryDeliveryCostRequest;
+use App\Modules\SupplyChain\Services\DeliveryStockReservationService;
+use App\Modules\SupplyChain\Services\DeliveryCostRecognitionService;
 use App\Modules\SupplyChain\Requests\CreateDeliveryRequest;
 use App\Modules\SupplyChain\Requests\DeliveryInspectionOptionsRequest;
+use App\Modules\SupplyChain\Requests\DeliveryFormOptionsRequest;
 use App\Modules\SupplyChain\Requests\RescheduleDeliveryRequest;
+use App\Modules\SupplyChain\Requests\StoreDeliveryAttemptOutcomeRequest;
+use App\Modules\SupplyChain\Requests\StoreTruckReturnReceiptRequest;
 use App\Modules\SupplyChain\Resources\DeliveryResource;
+use App\Modules\SupplyChain\Services\DeliveryAttemptOutcomeService;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,11 +31,18 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DeliveryController
 {
-    public function __construct(private readonly DeliveryService $service) {}
+    public function __construct(
+        private readonly DeliveryService $service,
+        private readonly DeliveryAttemptOutcomeService $attemptOutcomes,
+        private readonly DeliveryStockReservationService $reservations,
+        private readonly DeliveryCostRecognitionService $costs,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return DeliveryResource::collection($this->service->list($request->query()));
+        $rows = $this->service->list($request->query());
+        $rows->getCollection()->loadMissing(['stockReservationBatch', 'stockReservations.item', 'stockReservations.location', 'stockReservations.deliveryItem', 'costHandoffs']);
+        return DeliveryResource::collection($rows);
     }
 
     public function options(): JsonResponse
@@ -39,6 +55,11 @@ class DeliveryController
                 'is_terminal' => $status->isTerminal(),
             ], DeliveryStatus::cases()),
         ]]);
+    }
+
+    public function formOptions(DeliveryFormOptionsRequest $request): JsonResponse
+    {
+        return response()->json(['data' => $this->service->formOptions($request->validated())]);
     }
 
     public function inspectionOptions(DeliveryInspectionOptionsRequest $request): JsonResponse
@@ -74,8 +95,16 @@ class DeliveryController
      */
     private static function nextStatus(DeliveryStatus $status): ?DeliveryStatus
     {
+        if ($status === DeliveryStatus::ReturnPending) {
+            return null;
+        }
         foreach (DeliveryStatus::cases() as $candidate) {
-            if (in_array($candidate, [DeliveryStatus::Confirmed, DeliveryStatus::Cancelled], true)) {
+            if (in_array($candidate, [
+                DeliveryStatus::ReturnPending,
+                DeliveryStatus::Returned,
+                DeliveryStatus::Confirmed,
+                DeliveryStatus::Cancelled,
+            ], true)) {
                 continue;
             }
             if ($status->canTransitionTo($candidate)) return $candidate;
@@ -147,6 +176,46 @@ class DeliveryController
             'delivery_remarks'  => ['nullable', 'string', 'max:1000'],
         ]);
         return new DeliveryResource($this->service->confirm($delivery, $request->user(), $data));
+    }
+
+    public function reportAttemptOutcome(StoreDeliveryAttemptOutcomeRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->attemptOutcomes->report(
+            $delivery,
+            $request->user(),
+            $request->validated(),
+        ));
+    }
+
+    public function receiveTruckReturn(StoreTruckReturnReceiptRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->attemptOutcomes->receive(
+            $delivery,
+            $request->user(),
+            $request->validated(),
+        ));
+    }
+
+    public function amendAttemptOutcome(AmendDeliveryAttemptRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->attemptOutcomes->amend($delivery, $request->user(), $request->validated(), false));
+    }
+
+    public function receiveLateTruckReturn(StoreTruckReturnReceiptRequest $request, Delivery $delivery): DeliveryResource
+    {
+        return new DeliveryResource($this->attemptOutcomes->receiveLate($delivery, $request->user(), $request->validated()));
+    }
+
+    public function reserveStock(ReserveDeliveryStockRequest $request, Delivery $delivery): DeliveryResource
+    {
+        $this->reservations->reserveForDelivery($delivery, $request->user(), $request->validated('request_key'), true);
+        return new DeliveryResource($this->service->show($delivery));
+    }
+
+    public function retryCost(RetryDeliveryCostRequest $request, Delivery $delivery): DeliveryResource
+    {
+        $this->costs->retry($delivery, $request->validated('kind'), $request->validated('request_key'), $request->user());
+        return new DeliveryResource($this->service->show($delivery));
     }
 
     public function retryCoc(Request $request, Delivery $delivery): DeliveryResource

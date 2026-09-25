@@ -161,9 +161,13 @@ export default function MrpPlanDetailPage() {
  <Td align="right" mono className="font-medium">{d.net.toFixed(3)}</Td>
  <Td align="right" mono>{formatPeso(d.net_cost)}</Td>
  <Td>
- {d.action === 'pr_created'
- ? <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>PR · {d.priority}</Chip>
- : <Chip variant="success">sufficient</Chip>}
+  {d.action === 'pr_created'
+  ? <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>PR · {d.priority}</Chip>
+  : d.action === 'awaiting_qc'
+  ? <Chip variant="warning">QC hold · <span className="font-mono tabular-nums">{d.awaiting_qc?.toFixed(3)}</span></Chip>
+  : d.action === 'awaiting_po_approval'
+  ? <Chip variant="info">PO pending · <span className="font-mono tabular-nums">{d.pending_purchase_orders?.toFixed(3)}</span></Chip>
+  : <Chip variant="success">sufficient</Chip>}
  </Td>
  </tr>
  )
@@ -179,7 +183,7 @@ export default function MrpPlanDetailPage() {
  <Panel title="Linked records">
  <div className="space-y-3 text-sm">
  <div>
- <div className="text-2xs uppercase tracking-wider text-muted mb-1">Work orders ({data.draft_wo_count})</div>
+  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Work orders ({data.work_orders?.length ?? 0})</div>
  {data.work_orders?.length ? data.work_orders.map((w) => (
  <Link key={w.id} to={`/production/work-orders/${w.id}`} className={`block font-mono text-xs text-accent hover:underline ${w.parent ? 'pl-4' : ''}`}>
  {w.parent ? '↳ ' : ''}{w.wo_number} <span className="text-muted">({w.status_label ?? w.status}, qty {w.quantity_target})</span>
@@ -187,12 +191,19 @@ export default function MrpPlanDetailPage() {
  )) : <span className="text-muted">—</span>}
  </div>
  <div>
- <div className="text-2xs uppercase tracking-wider text-muted mb-1">Auto PRs ({data.auto_pr_count})</div>
- {data.purchase_requests?.length ? data.purchase_requests.map((p) => (
- <Link key={p.id} to={`/purchasing/purchase-requests/${p.id}`} className="block font-mono text-xs text-accent hover:underline">
- {p.pr_number} <span className="text-muted">({p.status_label ?? p.status} · {p.priority_label ?? p.priority})</span>
- </Link>
- )) : <span className="text-muted">—</span>}
+  <div className="text-2xs uppercase tracking-wider text-muted mb-1">Purchase requests ({data.purchase_requests?.length ?? 0})</div>
+  {data.purchase_requests?.length ? data.purchase_requests.map((p) => (
+  <div key={p.id}>
+  <Link to={`/purchasing/purchase-requests/${p.id}`} className="block font-mono text-xs text-accent hover:underline">
+  {p.pr_number} <span className="text-muted">({p.status_label ?? p.status} · {p.priority_label ?? p.priority})</span>
+  </Link>
+  {p.purchase_orders?.map((po) => (
+  <Link key={po.id} to={`/purchasing/purchase-orders/${po.id}`} className="block pl-4 font-mono text-xs text-accent hover:underline">
+  ↳ {po.po_number} <span className="text-muted">({po.status_label ?? po.status})</span>
+  </Link>
+  ))}
+  </div>
+  )) : <span className="text-muted">—</span>}
  </div>
  </div>
  </Panel>

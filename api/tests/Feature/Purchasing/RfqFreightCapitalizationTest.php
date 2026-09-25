@@ -108,8 +108,8 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_other_charges' => '0.00',
         ]);
 
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
-        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
+        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
 
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
@@ -161,7 +161,7 @@ class RfqFreightCapitalizationTest extends TestCase
             'vendor_id' => \App\Modules\Accounting\Models\Vendor::factory()->create()->id,
         ]);
 
-        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
         $poi = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
             'item_id' => $item->id,
@@ -191,8 +191,8 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_other_charges' => '0.00',
         ]);
 
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
-        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
+        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
 
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
@@ -270,8 +270,8 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_freight_amount' => '200.00',
             'rfq_other_charges' => '0.00',
         ]);
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
-        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
+        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id, 'item_id' => $item1->id, 'description' => 'Material A',
             'quantity' => '100.000', 'unit' => 'kg', 'unit_price' => '10.00', 'total' => '1050.00',
@@ -314,8 +314,8 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_other_charges' => '0.00',
         ]);
 
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
-        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
+        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
 
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
@@ -420,8 +420,8 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_freight_amount' => '200.00',
             'rfq_other_charges' => '0.00',
         ]);
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
-        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
+        $item2 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id, 'item_id' => $item1->id, 'description' => 'Material A',
             'quantity' => '100.000', 'unit' => 'kg', 'unit_price' => '10.00', 'total' => '1050.00',
@@ -461,7 +461,7 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_freight_amount' => '200.00',
             'rfq_other_charges' => '0.00',
         ]);
-        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
         $poi = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id, 'item_id' => $item->id, 'description' => 'Material A',
             'quantity' => '100.000', 'unit' => 'kg', 'unit_price' => '10.00', 'total' => '1050.00',
@@ -535,7 +535,7 @@ class RfqFreightCapitalizationTest extends TestCase
             'rfq_other_charges' => '0.00',
         ]);
 
-        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item1 = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
 
         $poi1 = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
@@ -599,7 +599,7 @@ class RfqFreightCapitalizationTest extends TestCase
             'vendor_id' => \App\Modules\Accounting\Models\Vendor::factory()->create()->id,
         ]);
 
-        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial]);
+        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial, 'unit_of_measure' => 'kg']);
 
         $poi = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,

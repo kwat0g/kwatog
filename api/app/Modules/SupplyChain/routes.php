@@ -110,6 +110,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
      */
     Route::get('/deliveries/options',                       [DeliveryController::class, 'options'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
+    Route::get('/deliveries/form-options', [DeliveryController::class, 'formOptions'])
+        ->middleware('permission:supply_chain.deliveries.create');
     Route::get('/deliveries/inspection-options',             [DeliveryController::class, 'inspectionOptions'])
         ->middleware('permission:supply_chain.deliveries.create');
     Route::get('/deliveries/driver-options',                 [DeliveryController::class, 'driverOptions'])
@@ -128,6 +130,18 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.deliveries.create');
     Route::post('/deliveries/{delivery}/receipt',           [DeliveryController::class, 'uploadReceipt'])
         ->middleware('permission:supply_chain.deliveries.create');
+    Route::post('/deliveries/{delivery}/attempt-outcome',   [DeliveryController::class, 'reportAttemptOutcome'])
+        ->middleware('permission:supply_chain.deliveries.create');
+    Route::post('/deliveries/{delivery}/truck-return-receipt', [DeliveryController::class, 'receiveTruckReturn'])
+        ->middleware('permission:return_management.receive');
+    Route::post('/deliveries/{delivery}/amend-attempt', [DeliveryController::class, 'amendAttemptOutcome'])
+        ->middleware('permission:supply_chain.deliveries.create');
+    Route::post('/deliveries/{delivery}/receive-late-return', [DeliveryController::class, 'receiveLateTruckReturn'])
+        ->middleware('permission:return_management.receive');
+    Route::post('/deliveries/{delivery}/reserve-stock', [DeliveryController::class, 'reserveStock'])
+        ->middleware('permission_any:supply_chain.deliveries.create,inventory.adjust');
+    Route::post('/deliveries/{delivery}/retry-cost-handoff', [DeliveryController::class, 'retryCost'])
+        ->middleware('permission:accounting.journals.post');
     Route::get('/deliveries/{delivery}/receipt-photo',      [DeliveryController::class, 'receiptPhoto'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries/{delivery}/confirm',           [DeliveryController::class, 'confirm'])
@@ -164,4 +178,6 @@ Route::prefix('driver')
         Route::get('/deliveries/{delivery}',            [DriverDeliveryController::class, 'show']);
         Route::patch('/deliveries/{delivery}/status',   [DriverDeliveryController::class, 'updateStatus']);
         Route::post('/deliveries/{delivery}/receipt',   [DriverDeliveryController::class, 'uploadReceipt']);
+        Route::post('/deliveries/{delivery}/attempt-outcome', [DriverDeliveryController::class, 'reportAttemptOutcome']);
+        Route::post('/deliveries/{delivery}/amend-attempt', [DriverDeliveryController::class, 'amendAttemptOutcome']);
     });

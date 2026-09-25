@@ -83,7 +83,10 @@ export default function CustomerCreateReturnPage() {
         customer_notes: notes.trim() || undefined,
         items: [{
           quantity,
-          reason: reason.trim() || undefined,
+          // The case-level description allows 1,000 characters; an RMA line
+          // reason allows 500, so keep the full explanation on the request and
+          // send a valid line-sized summary.
+          reason: reason.trim().slice(0, 500) || undefined,
           source_invoice_item_id: selectedLine.source === 'invoice' ? selectedLine.lineId : undefined,
           source_sales_order_item_id: selectedLine.source === 'sales_order' ? selectedLine.lineId : undefined,
           source_delivery_item_id: selectedLine.source === 'delivery' ? selectedLine.lineId : undefined,

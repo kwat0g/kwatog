@@ -927,12 +927,17 @@ Then open `PR-DEMO-BUDGET` and use `vp@ogami.test` to demonstrate the pending VP
 | D2 | Normal shortage | Confirm SO for a product with insufficient raw materials | One consolidated draft auto-PR is created |
 | D3 | Multiple shortage materials | Use a BOM with resin, colorant, and packaging | One PR contains multiple shortage lines |
 | D4 | Existing open PR | Create a shortage, then rerun MRP | Existing draft auto-PR is reused, not duplicated |
-| D5 | Approved PR during MRP rerun | Submit and approve the PR, then rerun MRP | Progressed PR is not overwritten or cancelled |
+| D5 | Approved PR during MRP rerun | Submit and approve the PR, then rerun MRP | Progressed PR is not overwritten or cancelled; the latest plan still links to that PR and its POs |
 | D6 | Stock arrives after shortage | Increase stock through an accepted GRN, then wait for MRP replan | Obsolete draft auto-PR may be cancelled |
 | D7 | No active BOM | Confirm SO for a product without a valid BOM | MRP warning shows missing BOM; no standard WO/shortage PR for that line |
 | D8 | Partial SO delivery | Deliver part of an existing SO, then rerun MRP | MRP plans only the remaining quantity |
 | D9 | Shared stock between two SOs | Create two demand orders competing for the same material | Stock allocation follows MRP priority and demand rules |
-| D10 | SO cancelled after auto-PR | Create SO, generate draft auto-PR, cancel SO | Inspect whether the draft auto-PR is reconciled; current code may leave it visible |
+| D10 | SO cancelled after auto-PR | Create SO, generate draft auto-PR, cancel SO | Draft/pending auto-PR is cancelled; approved or converted PR needs Purchasing to unwind it |
+| D11 | PO pending approval | Convert an MRP PR to a draft PO, then rerun MRP | No second PR; plan shows the pending PO commitment, not stock in transit |
+| D12 | Receipt pending incoming QC | Receive against the PO without accepting QC, then rerun MRP | No second PR; plan shows a QC hold, and the material remains unavailable for WO issue |
+| D13 | Material in production | Accept the receipt, confirm/start the SO work order, issue its material, then rerun MRP before delivery | No second PR or duplicate WO for material already committed to the SO |
+| D14 | Partial good output | Record good and rejected output, then rerun MRP | Only the uncovered good-unit requirement produces a replacement WO/PR; completed good output is not planned twice |
+| D15 | Two SOs with one linked PO | Order raw material for SO1, then run MRP for SO2 separately | SO2 does not claim SO1's still-open PO quantity |
 
 ### PR and PO approval scenarios
 

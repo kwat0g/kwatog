@@ -70,7 +70,7 @@ class ThreeWayMatchPerReceiptTest extends TestCase
             'password' => bcrypt('Password1!'), 'role_id' => $roleId, 'is_active' => true,
         ]);
         $this->vendor   = Vendor::create(['name' => 'Multi-Shipment Vendor', 'payment_terms_days' => 30]);
-        $this->item     = Item::factory()->create(['code' => 'RM-MULTI-001']);
+        $this->item     = Item::factory()->create(['code' => 'RM-MULTI-001', 'unit_of_measure' => 'kg']);
         $this->location = WarehouseLocation::factory()->create();
         $this->expenseAccount = Account::query()->where('code', '5010')->firstOrFail();
     }

@@ -71,6 +71,7 @@ class InspectionService
                 'item:id,code,name',
                 'inspector:id,name,role_id',
                 'reviewer:id,name,role_id',
+                'resultAuthors:id,inspection_id,user_id',
                 'spec:id,product_id,version',
                 'specRevision:id,inspection_spec_id,version,created_by,notes',
                 'qualityPlan:id,item_id,vendor_id,version,sampling_method',
@@ -142,6 +143,7 @@ class InspectionService
             'item:id,code,name',
             'inspector:id,name,role_id',
             'reviewer:id,name,role_id',
+            'resultAuthors:id,inspection_id,user_id',
             'spec:id,product_id,version,is_active',
             'specRevision:id,inspection_spec_id,version,created_by,notes',
             'specRevision.creator:id,name,role_id',
@@ -585,6 +587,8 @@ class InspectionService
                 );
             }
 
+            $hasMeaningfulResultEdit = false;
+
             foreach ($rows as $id => $patch) {
                 /** @var InspectionMeasurement|null $m */
                 $m = $measurements->get((int) $id);
@@ -601,9 +605,11 @@ class InspectionService
                     $m->measured_value = $patch['measured_value'] === '' || $patch['measured_value'] === null
                         ? null
                         : (string) $patch['measured_value'];
+                    $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('measured_value');
                 }
                 if (array_key_exists('notes', $patch)) {
                     $m->notes = $patch['notes'] !== '' ? $patch['notes'] : null;
+                    $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('notes');
                 }
 
                 if ($m->hasTolerance()) {
@@ -619,13 +625,19 @@ class InspectionService
                         );
                     }
                     $m->is_pass = $auto;
+                    $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('is_pass');
                 } elseif (array_key_exists('is_pass', $patch)) {
                     // Manual visual/functional parameters use an explicit
                     // verdict because they have no tolerance window.
                     $m->is_pass = $patch['is_pass'] === null ? null : (bool) $patch['is_pass'];
+                    $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('is_pass');
                 }
 
                 $m->save();
+            }
+
+            if ($hasMeaningfulResultEdit && $lockedInspection->requiresMakerChecker()) {
+                $this->recordResultAuthor($lockedInspection, $by);
             }
 
             // Recompute defect_count and bump status to in_progress. A defect is
@@ -754,6 +766,10 @@ class InspectionService
                         "sample_defect_count ({$defectCount}) cannot exceed sample_size ({$lockedInspection->sample_size})."
                     );
                 }
+                if ($lockedInspection->sample_defect_count !== $defectCount
+                    && $lockedInspection->requiresMakerChecker()) {
+                    $this->recordResultAuthor($lockedInspection, $by);
+                }
                 $lockedInspection->forceFill(['sample_defect_count' => $defectCount])->save();
             }
 
@@ -860,6 +876,7 @@ class InspectionService
 
             if ($lockedInspection->requiresMakerChecker()) {
                 $this->states->assertAllowed($lockedInspection, InspectionStatus::AwaitingReview);
+                $this->recordResultAuthor($lockedInspection, $by);
 
                 $lockedInspection->forceFill([
                     'status' => InspectionStatus::AwaitingReview->value,
@@ -904,7 +921,8 @@ class InspectionService
             if (! $lockedInspection->inspector_id) {
                 throw new BusinessRuleException('Inspection has no maker; the result cannot be checked.');
             }
-            if ((int) $lockedInspection->inspector_id === (int) $by->id) {
+            if ((int) $lockedInspection->inspector_id === (int) $by->id
+                || $lockedInspection->hasResultAuthor($by)) {
                 throw new ForbiddenActionException('You cannot review an inspection you performed.');
             }
 
@@ -959,6 +977,11 @@ class InspectionService
             'entity_type' => 'inspection',
             'entity_id' => $inspection->hash_id,
         ]);
+    }
+
+    private function recordResultAuthor(Inspection $inspection, User $by): void
+    {
+        $inspection->resultAuthors()->firstOrCreate(['user_id' => $by->id]);
     }
 
     private function finalizeTerminal(Inspection $inspection, InspectionStatus $targetStatus, User $by, ?int $defects = null): Inspection

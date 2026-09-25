@@ -29,7 +29,8 @@ class InspectionResource extends JsonResource
             'can_review' => ($this->status instanceof \BackedEnum ? $this->status->value : $this->status) === InspectionStatus::AwaitingReview->value
                 && (bool) $request->user()?->hasPermission('quality.inspections.review')
                 && $this->inspector_id !== null
-                && (int) $this->inspector_id !== (int) $request->user()?->id,
+                && (int) $this->inspector_id !== (int) $request->user()?->id
+                && ! $this->hasResultAuthor($request->user()),
             'proposed_result' => $this->proposed_result instanceof \BackedEnum ? $this->proposed_result->value : $this->proposed_result,
             'reviewed_at' => optional($this->reviewed_at)?->toISOString(),
             'review_remarks' => $this->review_remarks,
@@ -84,7 +85,7 @@ class InspectionResource extends JsonResource
                     'id' => $this->workOrderOutput->workOrder->hash_id,
                     'wo_number' => $this->workOrderOutput->workOrder->wo_number,
                 ] : null,
-            ] : null),
+                ] : null),
             'inspection_mode' => $this->inspection_mode instanceof \BackedEnum ? $this->inspection_mode->value : $this->inspection_mode,
             'sample_size' => (int) $this->sample_size,
             'aql_code' => $this->aql_code,
@@ -128,7 +129,7 @@ class InspectionResource extends JsonResource
                 'revision_notes' => $this->relationLoaded('specRevision') && $this->specRevision
                     ? $this->specRevision->notes
                     : null,
-                ] : null),
+            ] : null),
             'spec_revision' => $this->whenLoaded('specRevision', fn () => $this->specRevision
                 ? (new InspectionSpecRevisionResource($this->specRevision))->toArray($request)
                 : null),

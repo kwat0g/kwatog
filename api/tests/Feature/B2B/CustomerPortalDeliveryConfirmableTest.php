@@ -88,4 +88,28 @@ class CustomerPortalDeliveryConfirmableTest extends TestCase
         $this->assertFalse($this->canConfirm('in_transit', true));
         $this->assertFalse($this->canConfirm('confirmed', true));
     }
+    public function test_open_problem_report_explains_why_receipt_confirmation_is_held(): void
+    {
+        [$portalUser, $delivery] = $this->delivery('delivered', true);
+        $case = new \App\Modules\ReturnManagement\Models\ReturnCase;
+        $case->forceFill([
+            'case_number' => 'CASE-HOLD-'.substr(uniqid(), -6), 'type' => 'customer', 'status' => 'submitted',
+            'customer_id' => $portalUser->customer_id, 'delivery_id' => $delivery->id,
+            'created_by' => $delivery->created_by, 'preferred_resolution' => 'credit', 'description' => 'One part missing',
+        ])->save();
+        $line = new \App\Modules\ReturnManagement\Models\ReturnCaseLine;
+        $line->forceFill([
+            'return_case_id' => $case->id, 'description' => 'Missing part', 'unit' => 'pcs',
+            'expected_quantity' => '2.000', 'received_quantity' => '1.000', 'missing_quantity' => '1.000',
+            'defective_quantity' => '0.000', 'source_unit_price' => '15.0000',
+        ])->save();
+        $this->actingAs($portalUser, 'customer_portal')
+            ->getJson('/api/v1/b2b/customer/deliveries/'.$delivery->hash_id)
+            ->assertOk()->assertJsonPath('data.can_confirm', false)
+            ->assertJsonPath('data.billing_hold.case_id', $case->hash_id);
+        $case->forceFill(['status' => 'withdrawn'])->save();
+        $this->getJson('/api/v1/b2b/customer/deliveries/'.$delivery->hash_id)
+            ->assertOk()->assertJsonPath('data.can_confirm', true)->assertJsonPath('data.billing_hold', null);
+    }
+
 }

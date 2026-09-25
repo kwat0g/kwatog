@@ -73,7 +73,7 @@ class PartialAcceptedGrnBillingTest extends TestCase
     /** Build an approved PO (100 kg @ 12.50) and receive 80 kg into a pending_qc GRN. */
     private function makePendingGrn(): GoodsReceiptNote
     {
-        $item = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true, 'unit_of_measure' => 'kg']);
         $po = PurchaseOrder::factory()->create([
             'status'     => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,

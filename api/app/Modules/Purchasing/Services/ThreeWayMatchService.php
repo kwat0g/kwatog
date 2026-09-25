@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Inventory\Models\GrnItem;
@@ -64,23 +65,34 @@ class ThreeWayMatchService
             ->keyBy('purchase_order_item_id');
 
         // Qty already billed on OTHER committed bills (drafts are re-matched when
-        // posted), in the same scope as the accepted qty above. Keyed by item_id
-        // like the bill lines below.
+        // posted), in the same scope as the accepted qty above. Bill lines may
+        // use different units, so normalize each row before summing by item.
         $alreadyBilledQuery = BillItem::query()
             ->join('bills', 'bill_items.bill_id', '=', 'bills.id')
             ->where('bills.purchase_order_id', $po->id)
+            ->whereIn('bill_items.item_id', $po->items->pluck('item_id'))
             ->whereNotIn('bills.status', ['draft', 'cancelled'])
-            ->select('bill_items.item_id', DB::raw('SUM(bill_items.quantity) as qty_billed'));
+            ->select('bill_items.item_id', 'bill_items.quantity', 'bill_items.unit');
         if ($excludeBillId !== null) {
             $alreadyBilledQuery->where('bills.id', '!=', $excludeBillId);
         }
         if ($grnId !== null) {
             $alreadyBilledQuery->where('bills.goods_receipt_note_id', $grnId);
         }
-        $alreadyBilled = $alreadyBilledQuery
-            ->groupBy('bill_items.item_id')
-            ->get()
-            ->mapWithKeys(fn ($row) => [(string) $row->item_id => $row]);
+        $alreadyBilled = [];
+        $poItemsByItemId = $po->items->keyBy('item_id');
+        foreach ($alreadyBilledQuery->get() as $row) {
+            $item = $poItemsByItemId[$row->item_id]?->item;
+            if (! $item) {
+                throw new BusinessRuleException('Cannot match a bill with a missing purchase-order item.');
+            }
+            $key = (string) $row->item_id;
+            $alreadyBilled[$key] = bcadd(
+                $alreadyBilled[$key] ?? '0',
+                $item->convertToBase((string) $row->quantity, trim((string) $row->unit) ?: null),
+                6,
+            );
+        }
 
         // Index bill lines by item_id (or by description fallback).
         $billByItem = [];
@@ -102,61 +114,69 @@ class ThreeWayMatchService
             $poItemKeys[$billKey] = true;
             $bl = $billByItem[$billKey] ?? null;
 
-            $billQty = $bl ? (float) $bl['quantity'] : 0.0;
-            $billPrice = $bl ? (float) $bl['unit_price'] : 0.0;
-            $totalGrnQty = $grn ? (float) $grn->qty_accepted : 0.0;
-            // Look up already-billed qty by item_id (matching key used in bill line matching above).
-            // Key by string (same as billByItem matching logic).
-            $itemIdKey = (string) $poi->item_id;
-            $alreadyBilledQty = isset($alreadyBilled[$itemIdKey]) ? (float) $alreadyBilled[$itemIdKey]->qty_billed : 0.0;
-            // Effective available GRN qty is what was accepted minus what has already been billed
-            // on other bills. This ensures a second bill for the same GRN doesn't re-claim
-            // goods already billed, and a PO-wide bill doesn't exceed the received qty.
-            $grnQty = max(0.0, $totalGrnQty - $alreadyBilledQty);
-            $grnCost = $grn ? (float) $grn->avg_cost : (float) $poi->unit_price;
-            $poQty = (float) $poi->quantity;
-            // For RFQ POs, the expected PO price includes distributed freight/charges (delivered cost).
-            // For non-RFQ POs, deliveredUnitCost() returns exactly unit_price.
-            $poPrice = (float) $poi->deliveredUnitCost();
+            $item = $poi->item;
+            if (! $item) {
+                throw new BusinessRuleException('Cannot match a bill with a missing purchase-order item.');
+            }
+            $poFactor = $item->convertToBase('1', trim((string) $poi->unit) ?: null);
+            $billFactor = $bl ? $item->convertToBase('1', trim((string) ($bl['unit'] ?? '')) ?: null) : '1';
+            if (bccomp($poFactor, '0', 6) <= 0 || bccomp($billFactor, '0', 6) <= 0) {
+                throw new BusinessRuleException('A purchase or bill unit must convert to a positive base quantity.');
+            }
+            $poQty = $item->convertToBase((string) $poi->quantity, trim((string) $poi->unit) ?: null);
+            $billQty = $bl ? $item->convertToBase((string) $bl['quantity'], trim((string) ($bl['unit'] ?? '')) ?: null) : '0';
+            $billUnitPrice = $bl ? (string) $bl['unit_price'] : '0';
+            $poUnitPrice = $poi->deliveredUnitCost();
+            // For RFQ POs, delivered cost includes distributed freight/charges.
+            // GRN quantities and unit costs are already in the item's base UOM.
+            $poPrice = bcdiv($poUnitPrice, $poFactor, 12);
+            $billPrice = bcdiv($billUnitPrice, $billFactor, 12);
+            $grnCost = $grn ? (string) $grn->avg_cost : $poPrice;
+            $available = bcsub($grn ? (string) $grn->qty_accepted : '0', $alreadyBilled[(string) $poi->item_id] ?? '0', 6);
+            $grnQty = bccomp($available, '0', 6) > 0 ? $available : '0';
             $billLinePresent = $bl !== null;
 
             // Under-billing is a normal partial-receipt state. Only an
             // overage against the ordered quantity is a quantity variance.
             // An omitted PO line is different from a present line billed at a
             // lower quantity: omission is an incomplete bill and must block.
-            $qtyVar = ! $billLinePresent
-                ? 100.0
-                : ($poQty > 0 ? max(0.0, $billQty - $poQty) / $poQty * 100 : 0.0);
-            $poPriceVar = $poPrice > 0 ? abs($billPrice - $poPrice) / $poPrice * 100 : 0.0;
-            $grnPriceVar = $grn && $grnQty > 0 && $grnCost > 0
-                ? abs($billPrice - $grnCost) / $grnCost * 100
-                : 0.0;
+            $qtyOver = bccomp($billQty, $poQty, 6) > 0 ? bcsub($billQty, $poQty, 6) : '0';
+            $qtyVar = ! $billLinePresent ? 100.0 : $this->percent($qtyOver, $poQty);
+            // Compare original prices by cross-multiplication: dividing by a
+            // conversion factor can truncate a repeating base-unit price.
+            $poPriceDifference = $this->decAbs(bcmul($billUnitPrice, $poFactor, 12), bcmul($poUnitPrice, $billFactor, 12));
+            $poPriceReference = bcmul($poUnitPrice, $billFactor, 12);
+            $grnPriceDifference = $this->decAbs($billUnitPrice, bcmul($grnCost, $billFactor, 12));
+            $grnPriceReference = bcmul($grnCost, $billFactor, 12);
+            $poPriceVar = $this->percent($poPriceDifference, $poPriceReference);
+            $grnPriceVar = $grn && bccomp($grnQty, '0', 6) > 0
+                ? $this->percent($grnPriceDifference, $grnPriceReference) : 0.0;
             $priceVar = max($poPriceVar, $grnPriceVar);
 
             // Decimal-exact pass/fail decisions: float rounding caused bills
             // priced exactly at the tolerance to block ~50% of the time
             // (e.g. PO 1.00 vs bill 1.05 at 5% computed 5.000000000000004 > 5).
-            // Use bcmath on strings with cross-multiplication to avoid division.
-            $qtyOk = $billLinePresent && ($poQty <= 0
-                ? $billQty <= 0
-                : bccomp(bcmul($this->dec($billQty), '100', 6), bcmul($this->dec($poQty), $this->dec(100 + $qtyTol), 6), 6) <= 0);
+            // Use BCMath on strings with cross-multiplication to avoid division.
+            $qtyOk = $billLinePresent && (bccomp($poQty, '0', 6) <= 0
+                ? bccomp($billQty, '0', 6) <= 0
+                : bccomp(bcmul($qtyOver, '100', 12), bcmul($poQty, $this->dec($qtyTol), 12), 12) <= 0);
 
-            $poPriceOk = $poPrice > 0
-                ? bccomp(bcmul($this->decAbs($billPrice - $poPrice), '100', 6), bcmul($this->dec($priceTol), $this->dec($poPrice), 6), 6) <= 0
+            $poPriceOk = bccomp($poPriceReference, '0', 12) > 0
+                ? bccomp(bcmul($poPriceDifference, '100', 12), bcmul($this->dec($priceTol), $poPriceReference, 12), 12) <= 0
                 : true;
-            $grnPriceOk = ($grn && $grnQty > 0 && $grnCost > 0)
-                ? bccomp(bcmul($this->decAbs($billPrice - $grnCost), '100', 6), bcmul($this->dec($priceTol), $this->dec($grnCost), 6), 6) <= 0
+            $grnPriceOk = ($grn && bccomp($grnQty, '0', 6) > 0 && bccomp($grnPriceReference, '0', 12) > 0)
+                ? bccomp(bcmul($grnPriceDifference, '100', 12), bcmul($this->dec($priceTol), $grnPriceReference, 12), 12) <= 0
                 : true;
             $priceOk = $poPriceOk && $grnPriceOk;
 
             // H-6 — Bill qty must not exceed accepted GRN qty beyond the qty
             // tolerance. If there is no GRN at all, any non-zero bill qty is
             // a hard block — you cannot pay for goods that were never received.
-            if ($grnQty > 0) {
-                $grnOver = max(0.0, $billQty - $grnQty);
-                $grnOk = bccomp(bcmul($this->dec($grnOver), '100', 6), bcmul($this->dec($qtyTol), $this->dec($grnQty), 6), 6) <= 0;
+            if (bccomp($grnQty, '0', 6) > 0) {
+                $grnOver = bccomp($billQty, $grnQty, 6) > 0 ? bcsub($billQty, $grnQty, 6) : '0';
+                $grnOk = bccomp(bcmul($grnOver, '100', 12), bcmul($this->dec($qtyTol), $grnQty, 12), 12) <= 0;
             } else {
-                $grnOk = $billQty <= 0;
+                $grnOk = bccomp($billQty, '0', 6) <= 0;
             }
 
             $severity = ($qtyOk && $priceOk && $grnOk) ? 'ok' : 'block';
@@ -170,7 +190,8 @@ class ThreeWayMatchService
 
             if ($severity === 'block') {
                 $overall = 'blocked';
-            } elseif (($qtyVar > 0 || $priceVar > 0) && $overall !== 'blocked') {
+            } elseif ((bccomp($qtyOver, '0', 6) > 0 || bccomp($poPriceDifference, '0', 12) > 0
+                || ($grn && bccomp($grnPriceDifference, '0', 12) > 0)) && $overall !== 'blocked') {
                 $overall = 'has_variances';
             }
 
@@ -178,15 +199,15 @@ class ThreeWayMatchService
                 'item_id' => $poi->item_id,
                 'item_code' => $poi->item?->code,
                 'description' => $poi->description,
-                'po_quantity' => number_format($poQty, 2, '.', ''),
-                'po_unit_price' => number_format($poPrice, 2, '.', ''),
-                'po_total' => number_format($poQty * $poPrice, 2, '.', ''),
-                'grn_quantity_accepted' => number_format($grnQty, 3, '.', ''),
-                'grn_unit_cost' => number_format($grnCost, 4, '.', ''),
+                'po_quantity' => bcadd($poQty, '0', 2),
+                'po_unit_price' => Money::round2($poPrice),
+                'po_total' => Money::round2(bcmul((string) $poi->quantity, $poUnitPrice, 12)),
+                'grn_quantity_accepted' => bcadd($grnQty, '0', 3),
+                'grn_unit_cost' => bcadd($grnCost, '0', 4),
                 'grn_status' => $grnOk ? 'ok' : 'short',
-                'bill_quantity' => number_format($billQty, 2, '.', ''),
-                'bill_unit_price' => number_format($billPrice, 2, '.', ''),
-                'bill_total' => number_format($billQty * $billPrice, 2, '.', ''),
+                'bill_quantity' => bcadd($billQty, '0', 2),
+                'bill_unit_price' => Money::round2($billPrice),
+                'bill_total' => Money::round2(bcmul((string) ($bl['quantity'] ?? '0'), $billUnitPrice, 12)),
                 'quantity_variance_pct' => round($qtyVar, 2),
                 'price_variance_pct' => round($priceVar, 2),
                 'po_price_variance_pct' => round($poPriceVar, 2),
@@ -205,8 +226,8 @@ class ThreeWayMatchService
                 continue;
             }
 
-            $billQty = (float) ($bl['quantity'] ?? 0);
-            $billPrice = (float) ($bl['unit_price'] ?? 0);
+            $billQty = (string) ($bl['quantity'] ?? '0');
+            $billPrice = (string) ($bl['unit_price'] ?? '0');
             $status = isset($poItemKeys[$key]) ? 'duplicate_bill_line' : 'unmatched_bill_line';
             $overall = 'blocked';
             $lines[] = [
@@ -219,9 +240,9 @@ class ThreeWayMatchService
                 'grn_quantity_accepted' => '0.000',
                 'grn_unit_cost' => '0.0000',
                 'grn_status' => 'short',
-                'bill_quantity' => number_format($billQty, 2, '.', ''),
-                'bill_unit_price' => number_format($billPrice, 2, '.', ''),
-                'bill_total' => number_format($billQty * $billPrice, 2, '.', ''),
+                'bill_quantity' => bcadd($billQty, '0', 2),
+                'bill_unit_price' => Money::round2($billPrice),
+                'bill_total' => Money::round2(bcmul($billQty, $billPrice, 12)),
                 'quantity_variance_pct' => 100.0,
                 'price_variance_pct' => 100.0,
                 'po_price_variance_pct' => 100.0,
@@ -242,9 +263,6 @@ class ThreeWayMatchService
 
     /**
      * Convert a numeric value to a decimal string for bcmath operations.
-     *
-     * @param float|int|string $v
-     * @return string
      */
     private function dec(float|int|string $v): string
     {
@@ -253,24 +271,29 @@ class ThreeWayMatchService
         }
         $formatted = number_format((float) $v, 6, '.', '');
         $trimmed = rtrim(rtrim($formatted, '0'), '.');
+
         return $trimmed === '' ? '0' : $trimmed;
     }
 
     /**
      * Return the absolute value of (a - b) as a decimal string for bcmath.
-     *
-     * @param float|int|string $a
-     * @param float|int|string $b
-     * @return string
      */
     private function decAbs(float|int|string $a, float|int|string $b = 0): string
     {
         $decA = $this->dec($a);
         $decB = $this->dec($b);
-        if (bccomp($decA, $decB, 6) < 0) {
-            return bcsub($decB, $decA, 6);
+        if (bccomp($decA, $decB, 12) < 0) {
+            return bcsub($decB, $decA, 12);
         }
-        return bcsub($decA, $decB, 6);
+
+        return bcsub($decA, $decB, 12);
+    }
+
+    private function percent(string $difference, string $reference): float
+    {
+        return bccomp($reference, '0', 12) > 0
+            ? round((float) bcdiv(bcmul($difference, '100', 12), $reference, 8), 2)
+            : 0.0;
     }
 
     private function nonNegativeTolerance(string $key): float
@@ -308,6 +331,7 @@ class ThreeWayMatchService
                 'item_id' => $bi->item_id,
                 'description' => $bi->description,
                 'quantity' => $bi->quantity,
+                'unit' => $bi->unit,
                 'unit_price' => $bi->unit_price,
             ];
         }
@@ -328,6 +352,7 @@ class ThreeWayMatchService
             'item_id' => null,
             'description' => $i->description,
             'quantity' => $i->quantity,
+            'unit' => $i->unit,
             'unit_price' => $i->unit_price,
         ])->all();
 

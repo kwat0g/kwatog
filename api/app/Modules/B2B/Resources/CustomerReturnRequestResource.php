@@ -29,6 +29,10 @@ class CustomerReturnRequestResource extends JsonResource
             'reason_description' => $this->reason_description,
             'customer_notes'     => $this->customer_notes,
             'resolution'         => $this->resolution,
+            'source_case'        => $this->whenLoaded('returnCase', fn () => $this->returnCase ? [
+                'id' => $this->returnCase->hash_id,
+                'case_number' => $this->returnCase->case_number,
+            ] : null),
             'return_date'        => optional($this->return_date)->toDateString(),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'items'              => $this->whenLoaded('items', fn () => $this->items->map(

@@ -7,6 +7,7 @@ namespace App\Modules\B2B\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Resources\DeliveryQuantityDiscrepancyResource;
 
 class CustomerDeliveryResource extends JsonResource
 {
@@ -23,12 +24,23 @@ class CustomerDeliveryResource extends JsonResource
             'delivered_at' => optional($this->delivered_at)?->toISOString(),
             'confirmed_at' => optional($this->confirmed_at)?->toISOString(),
             'receiver_name' => $this->receiver_name,
+            'can_report_not_arrived' => app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->canReportNotArrived($this->resource),
             // Mirrors DeliveryService::confirm(): a delivered shipment needs a
             // proof of delivery before it can be confirmed. Only the detail
             // loads proofs, so the flag is absent from the list.
             'can_confirm' => $this->whenLoaded('proofs', fn () => (
                 $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status)
-            ) === DeliveryStatus::Delivered && $this->proofs->isNotEmpty()),
+            ) === DeliveryStatus::Delivered && $this->proofs->isNotEmpty() && $this->blockingReturnCase === null),
+            'billing_hold' => $this->whenLoaded('blockingReturnCase', fn () => $this->blockingReturnCase ? [
+                'case_id' => $this->blockingReturnCase->hash_id,
+                'case_number' => $this->blockingReturnCase->case_number,
+                'message' => 'Resolve this problem report before confirming or billing the delivery.',
+            ] : null),
+            // Customer-safe summary only. Driver notes, unaccounted quantities,
+            // and warehouse RMA data remain internal.
+            'has_attempt_outcome' => $this->whenLoaded('attemptOutcome', fn () => $this->attemptOutcome !== null),
+            'quantity_discrepancy' => $this->whenLoaded('quantityDiscrepancy', fn () => $this->quantityDiscrepancy
+                ? new DeliveryQuantityDiscrepancyResource($this->quantityDiscrepancy) : null),
             'sales_order' => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id' => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
@@ -44,7 +56,8 @@ class CustomerDeliveryResource extends JsonResource
                     'id' => $item->hash_id,
                     'part_number' => $product?->part_number ?? '—',
                     'name' => $product?->name ?? '—',
-                    'quantity_delivered' => (float) $item->quantity,
+                    'quantity_dispatched' => (string) $item->quantity,
+                    'quantity_delivered' => (string) ($item->customer_received_quantity ?? $item->quantity),
                 ];
             })->all()),
             'proofs' => $this->whenLoaded('proofs', fn () => $this->proofs->map(fn ($proof) => [

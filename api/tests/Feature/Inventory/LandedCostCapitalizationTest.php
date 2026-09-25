@@ -154,7 +154,8 @@ final class LandedCostCapitalizationTest extends TestCase
             'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
-        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial->value]);
+        // Imported resin is ordered in kg; the default factory item uses pcs.
+        $item = Item::factory()->create(['item_type' => ItemType::RawMaterial->value, 'unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,

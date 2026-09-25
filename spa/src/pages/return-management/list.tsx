@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { LuPlus } from '@/lib/icons';
+import { LuMessageSquare, LuPlus } from '@/lib/icons';
 import { returnManagementApi } from '@/api/returnManagement';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
@@ -114,16 +114,10 @@ export default function ReturnManagementListPage() {
  title="Return Management (RMA)"
  subtitle={data ? `${data.meta.total} return requests` : undefined}
  actions={
- can('return_management.manage') ? (
- <Button
- variant="primary"
- size="sm"
- icon={<LuPlus size={14} />}
- onClick={() => navigate('/return-management/new')}
- >
- New RMA
- </Button>
- ) : null
+ <div className="flex flex-wrap items-center gap-2">
+ <Button variant="secondary" size="sm" icon={<LuMessageSquare size={14} />} onClick={() => navigate('/return-management/cases')}>Problem reports</Button>
+ {can('return_management.manage') && <Button variant="primary" size="sm" icon={<LuPlus size={14} />} onClick={() => navigate('/return-management/new')}>New RMA</Button>}
+ </div>
  }
  />
  <FilterBar

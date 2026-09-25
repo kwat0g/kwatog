@@ -1,4 +1,5 @@
 import { client } from '../client';
+import type { ReportDeliveryAttempt, ReceiveTruckReturn } from '@/types/deliveryAttempt';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { Shipment, ShipmentDocument, ShipmentDocumentType, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, DeliveryStatus, Incoterm } from '@/types/supplyChain';
 
@@ -98,6 +99,24 @@ export interface DeliveryInspectionOption {
  completed_at: string | null;
 }
 
+export interface DeliveryFormOrder {
+ id: string;
+ so_number: string;
+ customer: { name: string } | null;
+ items?: Array<{
+  id: string;
+  quantity: string;
+  remaining_quantity: string;
+  product: { part_number: string; name: string; unit_of_measure: string } | null;
+ }>;
+}
+
+export interface DeliveryFormOptions {
+ sales_orders: DeliveryFormOrder[];
+ selected_sales_order: DeliveryFormOrder | null;
+ has_more: boolean;
+}
+
 export interface DeliveryDriverOption {
  id: string;
  name: string;
@@ -110,6 +129,18 @@ export interface DeliveryAssignmentData {
 }
 
 export const deliveriesApi = {
+ reserveStock: (id: string, requestKey: string) => client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/reserve-stock`, { request_key: requestKey }).then(r => r.data.data),
+ retryCost: (id: string, kind: 'customer_cogs' | 'unaccounted_loss', requestKey: string) => client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/retry-cost-handoff`, { kind, request_key: requestKey }).then(r => r.data.data),
+ amendAttempt: (id: string, data: ReportDeliveryAttempt) =>
+ client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/amend-attempt`, data).then(r => r.data.data),
+ receiveLateReturn: (id: string, data: ReceiveTruckReturn) =>
+ client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/receive-late-return`, data).then(r => r.data.data),
+ receiveTruckReturn: (id: string, data: ReceiveTruckReturn) =>
+ client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/truck-return-receipt`, data).then(r => r.data.data),
+ reportAttempt: (id: string, data: ReportDeliveryAttempt) =>
+ client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/attempt-outcome`, data).then(r => r.data.data),
+ formOptions: (params?: { search?: string; page?: number; sales_order_id?: string }) =>
+  client.get<{ data: DeliveryFormOptions }>('/supply-chain/deliveries/form-options', { params }).then((r) => r.data.data),
  options: () => client.get<{ data: { statuses: Array<{ value: DeliveryStatus; label: string; next_status: DeliveryStatus | null; is_terminal: boolean }> } }>('/supply-chain/deliveries/options').then((r) => r.data.data),
  inspectionOptions: (salesOrderId: string) =>
   client.get<{ data: DeliveryInspectionOption[] }>('/supply-chain/deliveries/inspection-options', { params: { sales_order_id: salesOrderId } }).then((r) => r.data.data),

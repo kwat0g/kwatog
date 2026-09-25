@@ -599,14 +599,15 @@ class MrpNettingTest extends TestCase
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // Test 7 — Draft / cancelled POs are NOT counted as in-transit
+    // Test 7 — Draft PO commitments are held, not counted as in-transit
     // ════════════════════════════════════════════════════════════════════════
 
     /**
      * The inTransit() method only queries POs with status in:
      *   approved | sent | partially_received
      *
-     * A PO in 'draft' status must NOT reduce the net requirement.
+     * A PO in 'draft' status must NOT be labeled in transit, but its pending
+     * quantity prevents the same item from being requested a second time.
      *
      * Setup:
      *   BOM:     2 pcs per unit, 0% waste
@@ -614,9 +615,9 @@ class MrpNettingTest extends TestCase
      *   On-hand: 5 pcs (reserved = 0)
      *   Draft PO: ordered=15, received=0 → NOT in-transit (wrong status)
      *
-     * Net = max(0, 20 - 5 + 0 - 0) = 15
+     * Net = max(0, 20 - 5 - 15 pending PO) = 0
      */
-    public function test_draft_po_is_not_counted_as_in_transit(): void
+    public function test_draft_po_is_held_as_commitment_without_being_in_transit(): void
     {
         $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
         $this->setOnHand(qty: 5.0, reserved: 0.0);
@@ -625,12 +626,10 @@ class MrpNettingTest extends TestCase
 
         $plan = $this->engine->runForSalesOrder($so);
 
-        $pr = PurchaseRequest::where('is_auto_generated', true)
-            ->where('mrp_plan_id', $plan->id)
-            ->firstOrFail();
-        $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
-        // Draft PO ignored → net = 20 - 5 = 15
-        $this->assertSame('15.00', $prItem->quantity, 'Draft PO must not count as in-transit; net must be full shortage');
+        $entry = collect($plan->diagnostics)->firstWhere('item_id', $this->material->id);
+        $this->assertEqualsWithDelta(0.0, (float) $entry['in_transit'], 0.001, 'Draft PO is not yet physical in-transit supply.');
+        $this->assertSame('awaiting_po_approval', $entry['action']);
+        $this->assertSame(0, $plan->auto_pr_count, 'The pending PO commitment must not cause a duplicate PR.');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -874,7 +873,8 @@ class MrpNettingTest extends TestCase
             'factor' => '25.000000',
         ]);
         $this->createBom(qtyPerUnit: 1.0, wasteFactor: 0.0, unit: 'KG');
-        $this->createInTransitPo(ordered: 2, received: 1, poStatus: 'partially_received', unit: 'BAG');
+        // PO quantity_received is stored in item base units, not purchase bags.
+        $this->createInTransitPo(ordered: 2, received: 25, poStatus: 'partially_received', unit: 'BAG');
         $so = $this->createConfirmedSo(lineQty: 30);
 
         $plan = $this->engine->runForSalesOrder($so);

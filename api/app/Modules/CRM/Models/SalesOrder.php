@@ -101,6 +101,11 @@ class SalesOrder extends Model
         return $this->hasMany(Invoice::class, 'sales_order_id');
     }
 
+    public function returnCase(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\ReturnManagement\Models\ReturnCase::class);
+    }
+
     /** Every customer negotiation reply, newest last. */
     public function responses(): HasMany
     {

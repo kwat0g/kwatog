@@ -466,6 +466,7 @@ class CustomerPortalService
         return ReturnRequest::query()
             ->where('customer_id', $customerId)
             ->where('type', \App\Modules\ReturnManagement\Enums\ReturnRequestType::CustomerReturn->value)
+            ->whereNull('delivery_attempt_outcome_id')
             ->withCount('items')
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -477,8 +478,12 @@ class CustomerPortalService
         // Route-model binding runs before the tenancy scope is registered, so
         // it must not be trusted on its own. This is the authoritative check.
         abort_if((int) $returnRequest->customer_id !== $customerId, 403, 'You do not have access to this return request.');
+        abort_if($returnRequest->delivery_attempt_outcome_id !== null, 404);
 
-        $returnRequest->load(['items.product:id,part_number,name']);
+        $returnRequest->load([
+            'items.product:id,part_number,name',
+            'returnCase' => fn ($query) => $query->where('customer_id', $customerId)->select(['id', 'case_number', 'return_request_id']),
+        ]);
 
         return $returnRequest;
     }
@@ -550,7 +555,7 @@ class CustomerPortalService
         $query = Delivery::whereHas(
             'salesOrder',
             fn ($q) => $q->where('customer_id', $customerId),
-        )->with(['salesOrder:id,so_number', 'driver:id,name'])
+        )->with(['salesOrder:id,so_number', 'driver:id,name', 'attemptOutcome:id,delivery_id'])
             ->orderByDesc('created_at');
 
         if (! empty($filters['status'])) {
@@ -571,7 +576,9 @@ class CustomerPortalService
             'salesOrder:id,so_number',
             'items.salesOrderItem.product:id,part_number,name',
             'proofs',
+            'blockingReturnCase',
             'driver:id,name',
+            'attemptOutcome:id,delivery_id',
         ]);
 
         return $delivery;

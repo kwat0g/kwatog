@@ -9,7 +9,22 @@ export interface WorkOrderListParams extends ListParams {
  machine_id?: string;
 }
 
+export interface WorkOrderFormOptions {
+ products: Array<{ id: string; part_number: string; name: string }>;
+ machines: Array<{ id: string; machine_code: string; name: string; tonnage: number | null; status: string }>;
+ molds: Array<{
+  id: string;
+  mold_code: string;
+  name: string;
+  product: { id: string; part_number: string; name: string } | null;
+  cavity_count: number | null;
+  status: string;
+ }>;
+ shifts: Array<{ id: string; name: string }>;
+}
+
 export const workOrdersApi = {
+ formOptions: () => client.get<ApiSuccess<WorkOrderFormOptions>>('/production/work-orders/form-options').then((r) => r.data.data),
  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string; next_statuses: Array<{ value: string; label: string }> }>; operation_statuses: Array<{ value: string; label: string }> } }>('/production/work-orders/options').then((r) => r.data.data),
  downtimeCategories: () =>
  client.get<ApiSuccess<MachineDowntimeCategoryOption[]>>('/production/downtime-categories').then((r) => r.data.data),

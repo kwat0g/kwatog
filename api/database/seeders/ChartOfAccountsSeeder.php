@@ -50,6 +50,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['1210', 'Inventory - Finished Goods',   'asset', 'debit', '1000'],
             ['1220', 'Inventory - Packaging',        'asset', 'debit', '1000'],
             ['1230', 'Inventory - Spare Parts',      'asset', 'debit', '1000'],
+            ['1240', 'Inventory - Delivery Transit', 'asset', 'debit', '1000'],
             ['1300', 'Prepaid Expenses',             'asset', 'debit', '1000'],
             ['1310', 'VAT Input',                    'asset', 'debit', '1000'],
             ['1400', 'Property Plant & Equipment',   'asset', 'debit', '1000'],
@@ -103,7 +104,8 @@ class ChartOfAccountsSeeder extends Seeder
             ['6100', 'Repairs & Maintenance Expense','expense', 'debit', '6000'],
             ['6110', 'Transportation Expense',       'expense', 'debit', '6000'],
              ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
-             ['6130', 'Employee Loan Write-off Expense', 'expense', 'debit', '6000'],
+            ['6130', 'Employee Loan Write-off Expense', 'expense', 'debit', '6000'],
+            ['6135', 'Delivery Loss Expense',       'expense', 'debit', '6000'],
             ['4030', 'Gain on Disposal of Asset',    'revenue', 'credit','4000'],
         ];
 

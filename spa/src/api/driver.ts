@@ -1,5 +1,6 @@
 import { client } from './client';
 import type { DriverDelivery, DriverPaginated } from '@/types/driver';
+import type { ReportDeliveryAttempt } from '@/types/deliveryAttempt';
 
  export interface DriverDeliveryListParams {
   page?: number;
@@ -11,6 +12,10 @@ import type { DriverDelivery, DriverPaginated } from '@/types/driver';
  }
 
  export const driverApi = {
+ amendAttempt: (id: string, data: ReportDeliveryAttempt) =>
+ client.post<{ data: DriverDelivery }>(`/driver/deliveries/${id}/amend-attempt`, data).then(r => r.data.data),
+ reportAttempt: (id: string, data: ReportDeliveryAttempt) =>
+ client.post<{ data: DriverDelivery }>(`/driver/deliveries/${id}/attempt-outcome`, data).then(r => r.data.data),
  listDeliveries: (params?: DriverDeliveryListParams) =>
  client
  .get<DriverPaginated<DriverDelivery>>('/driver/deliveries', { params })

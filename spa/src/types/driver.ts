@@ -1,7 +1,10 @@
-export type DriverDeliveryStatus =
- | 'scheduled' | 'loading' | 'in_transit' | 'delivered' | 'confirmed' | 'cancelled';
+import type { DeliveryAttemptFields, DeliveryAttemptSourceLine } from './deliveryAttempt';
+import type { DeliveryStatus } from './supplyChain';
 
-export interface DriverDelivery {
+export type DriverDeliveryStatus = DeliveryStatus;
+
+export interface DriverDelivery extends DeliveryAttemptFields {
+ items?: DeliveryAttemptSourceLine[];
  id: string;
  delivery_number: string;
  status: DriverDeliveryStatus;

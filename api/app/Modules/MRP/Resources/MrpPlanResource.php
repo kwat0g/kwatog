@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Resources;
 
 use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use Illuminate\Http\Request;
@@ -38,7 +39,9 @@ class MrpPlanResource extends JsonResource
             'generator' => $this->whenLoaded('generator', fn () => $this->generator ? [
                 'id' => $this->generator->hash_id, 'name' => $this->generator->name,
             ] : null),
-            'work_orders' => $this->whenLoaded('workOrders', fn () => $this->workOrders->map(fn ($w) => [
+            'work_orders' => $this->whenLoaded('workOrders', fn () => $this->workOrders
+                ->concat($this->relationLoaded('priorProgressedWorkOrders') ? $this->priorProgressedWorkOrders : [])
+                ->map(fn ($w) => [
                 'id' => $w->hash_id, 'wo_number' => $w->wo_number,
                 'product_id' => $w->product_id === null ? null : app('hashids')->encode((int) $w->product_id),
                 'parent' => $w->relationLoaded('parent') && $w->parent ? [
@@ -51,18 +54,30 @@ class MrpPlanResource extends JsonResource
                 'planned_start' => optional($w->planned_start)->toIso8601String(),
             ])
             ),
-            'purchase_requests' => $this->whenLoaded('purchaseRequests', fn () => $this->purchaseRequests->map(function ($p): array {
-                $priority = $p->priority instanceof \BackedEnum ? $p->priority->value : (string) $p->priority;
-                $status = $p->status instanceof \BackedEnum ? $p->status->value : (string) $p->status;
+            'purchase_requests' => $this->whenLoaded('purchaseRequests', fn () => $this->purchaseRequests
+                ->concat($this->relationLoaded('priorProgressedPurchaseRequests') ? $this->priorProgressedPurchaseRequests : [])
+                ->map(function ($p): array {
+                    $priority = $p->priority instanceof \BackedEnum ? $p->priority->value : (string) $p->priority;
+                    $status = $p->status instanceof \BackedEnum ? $p->status->value : (string) $p->status;
 
-                return [
-                    'id' => $p->hash_id, 'pr_number' => $p->pr_number,
-                    'priority' => $priority, 'priority_label' => PurchaseRequestPriority::tryFrom($priority)?->label() ?? $priority, 'status' => $status,
-                    'status_label' => PurchaseRequestStatus::tryFrom($status)?->label() ?? $status,
-                    'is_auto_generated' => (bool) $p->is_auto_generated,
-                    'date' => optional($p->date)->toDateString(),
-                ];
-            })
+                    return [
+                        'id' => $p->hash_id, 'pr_number' => $p->pr_number,
+                        'priority' => $priority, 'priority_label' => PurchaseRequestPriority::tryFrom($priority)?->label() ?? $priority, 'status' => $status,
+                        'status_label' => PurchaseRequestStatus::tryFrom($status)?->label() ?? $status,
+                        'is_auto_generated' => (bool) $p->is_auto_generated,
+                        'date' => optional($p->date)->toDateString(),
+                        'purchase_orders' => $p->relationLoaded('purchaseOrders') ? $p->purchaseOrders->map(function ($po): array {
+                            $poStatus = $po->status instanceof \BackedEnum ? $po->status->value : (string) $po->status;
+
+                            return [
+                                'id' => $po->hash_id,
+                                'po_number' => $po->po_number,
+                                'status' => $poStatus,
+                                'status_label' => PurchaseOrderStatus::tryFrom($poStatus)?->label() ?? $poStatus,
+                            ];
+                        }) : [],
+                    ];
+                })
             ),
             'generated_at' => optional($this->generated_at)->toIso8601String(),
             'created_at' => optional($this->created_at)->toIso8601String(),

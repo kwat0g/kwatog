@@ -31,6 +31,11 @@ class ReturnRequestResource extends JsonResource
                 : false,
             'disposition_status'   => $this->disposition_status,
             'finance_only'         => (bool) $this->finance_only,
+            'is_truck_return'      => $this->delivery_attempt_outcome_id !== null,
+            'origin_delivery'      => $this->whenLoaded('deliveryAttemptOutcome', fn () => $this->deliveryAttemptOutcome?->relationLoaded('delivery') && $this->deliveryAttemptOutcome->delivery ? [
+                'id' => $this->deliveryAttemptOutcome->delivery->hash_id,
+                'delivery_number' => $this->deliveryAttemptOutcome->delivery->delivery_number,
+            ] : null),
             'finance_only_reason'  => $this->finance_only_reason,
             'finance_only_approved_by' => $this->finance_only_approved_by
                 ? \App\Common\Support\HashId::encode((int) $this->finance_only_approved_by) : null,
@@ -50,6 +55,11 @@ class ReturnRequestResource extends JsonResource
             'return_date'          => optional($this->return_date)->toDateString(),
 
             'source_label'         => $this->source_label,
+
+            'source_case'          => $this->whenLoaded('returnCase', fn () => $this->returnCase ? [
+                'id' => $this->returnCase->hash_id,
+                'case_number' => $this->returnCase->case_number,
+            ] : null),
 
             'sales_order'          => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id'        => $this->salesOrder->hash_id,
@@ -192,6 +202,20 @@ class ReturnRequestResource extends JsonResource
 
             'approved_at'          => optional($this->approved_at)->toIso8601String(),
             'received_at'          => optional($this->received_at)->toIso8601String(),
+            'receipt_open'         => $this->status?->value === 'approved' && $this->received_at !== null,
+            'receipts'             => $this->whenLoaded('receipts', fn () => $this->receipts->map(fn ($receipt): array => [
+                'id' => $receipt->hash_id,
+                'request_key' => $receipt->request_key,
+                'final_receipt' => (bool) $receipt->final_receipt,
+                'received_at' => optional($receipt->received_at)->toIso8601String(),
+                'items' => $receipt->items->map(fn ($line): array => [
+                    'return_request_item_id' => \App\Common\Support\HashId::encode((int) $line->return_request_item_id),
+                    'quantity' => (string) $line->quantity,
+                    'stock_movement_id' => $line->stock_movement_id
+                        ? \App\Common\Support\HashId::encode((int) $line->stock_movement_id)
+                        : null,
+                ])->values(),
+            ])->values()),
             'inspected_at'         => optional($this->inspected_at)->toIso8601String(),
             'completed_at'         => optional($this->completed_at)->toIso8601String(),
             'rejected_at'          => optional($this->rejected_at)->toIso8601String(),

@@ -24,6 +24,8 @@ const SupplierItemListingsPage = lazy(() => import('@/pages/portal/supplier/item
 const SupplierRfqsPage = lazy(() => import('@/pages/portal/supplier/rfqs'));
 const SupplierRfqDetailPage = lazy(() => import('@/pages/portal/supplier/rfqs/detail'));
 const SupplierRfqQuotePage = lazy(() => import('@/pages/portal/supplier/rfqs/quote'));
+const SupplierProblemReportsPage = lazy(() => import('@/pages/return-management/cases/list'));
+const SupplierProblemReportDetailPage = lazy(() => import('@/pages/return-management/cases/detail'));
 const CustomerPortalLayout = lazy(() => import('@/layouts/CustomerPortalLayout'));
 const CustomerPortalDashboardPage = lazy(() => import('@/pages/portal/customer/dashboard'));
 const CustomerOrdersPage = lazy(() => import('@/pages/portal/customer/orders'));
@@ -39,6 +41,9 @@ const CustomerDeliverySchedulesPage = lazy(() => import('@/pages/portal/customer
 const CustomerReturnsPage = lazy(() => import('@/pages/portal/customer/returns'));
 const CustomerCreateReturnPage = lazy(() => import('@/pages/portal/customer/returns/new'));
 const CustomerReturnDetailPage = lazy(() => import('@/pages/portal/customer/returns/detail'));
+const CustomerProblemReportsPage = lazy(() => import('@/pages/return-management/cases/list'));
+const CustomerProblemReportCreatePage = lazy(() => import('@/pages/return-management/cases/create'));
+const CustomerProblemReportDetailPage = lazy(() => import('@/pages/return-management/cases/detail'));
 
 export const portalRoutes = (
  <>
@@ -63,7 +68,9 @@ export const portalRoutes = (
   <Route path="/portal/supplier/item-listings" element={<SupplierItemListingsPage />} />
   <Route path="/portal/supplier/rfqs" element={<SupplierRfqsPage />} />
   <Route path="/portal/supplier/rfqs/:id" element={<SupplierRfqDetailPage />} />
-  <Route path="/portal/supplier/rfqs/:id/quote" element={<SupplierRfqQuotePage />} />
+ <Route path="/portal/supplier/rfqs/:id/quote" element={<SupplierRfqQuotePage />} />
+ <Route path="/portal/supplier/problems" element={<SupplierProblemReportsPage />} />
+ <Route path="/portal/supplier/problems/:id" element={<SupplierProblemReportDetailPage />} />
   </Route>
 
  {/* ADV10 — B2B Customer Portal */}
@@ -80,6 +87,9 @@ export const portalRoutes = (
   <Route path="/portal/customer/returns" element={<CustomerReturnsPage />} />
   <Route path="/portal/customer/returns/new" element={<CustomerCreateReturnPage />} />
   <Route path="/portal/customer/returns/:id" element={<CustomerReturnDetailPage />} />
+  <Route path="/portal/customer/problems" element={<CustomerProblemReportsPage />} />
+  <Route path="/portal/customer/problems/new" element={<CustomerProblemReportCreatePage />} />
+  <Route path="/portal/customer/problems/:id" element={<CustomerProblemReportDetailPage />} />
  <Route path="/portal/customer/statement-of-account" element={<CustomerStatementOfAccountPage />} />
  <Route path="/portal/customer/delivery-schedules" element={<CustomerDeliverySchedulesPage />} />
  </Route>

@@ -56,7 +56,7 @@ export default function PickingListPage() {
  <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
  Issued slips ({slips.length})
  </div>
- {slips.map((slip: { id: string; slip_number?: string; status: string; work_order?: string; issued_date?: string; created_at?: string }) => (
+ {slips.map((slip) => (
  <button
  key={slip.id}
  type="button"
@@ -66,7 +66,7 @@ export default function PickingListPage() {
  }`}
  >
  <div className="font-mono">{slip.slip_number}</div>
- <div className="truncate">{slip.work_order ?? '—'}</div>
+ <div className="truncate">{slip.work_order?.wo_number ?? '—'}</div>
  <div className="text-2xs text-muted mt-0.5">{formatDate(slip.issued_date ?? slip.created_at)}</div>
  </button>
  ))}

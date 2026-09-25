@@ -21,11 +21,13 @@ use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\TransferOrder;
 use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
 use Illuminate\Database\Eloquent\Model;
@@ -58,10 +60,12 @@ final class SourceReferenceRegistry
         'stock_adjustment' => ['model' => StockAdjustment::class],
         'stock_count_session' => ['model' => StockCountSession::class],
         'delivery_item' => ['model' => DeliveryItem::class],
+        'delivery' => ['model' => Delivery::class],
         'material_review_record' => ['model' => MaterialReviewRecord::class],
         'work_order' => ['model' => WorkOrder::class],
         'work_order_output' => ['model' => WorkOrderOutput::class],
         'return_request' => ['model' => ReturnRequest::class],
+        'return_request_item' => ['model' => ReturnRequestItem::class],
          'maintenance_work_order' => ['model' => MaintenanceWorkOrder::class],
          'loan_disbursement' => ['model' => EmployeeLoan::class],
          'loan_write_off' => ['model' => EmployeeLoan::class],

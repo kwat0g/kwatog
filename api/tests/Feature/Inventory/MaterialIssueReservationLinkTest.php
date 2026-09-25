@@ -103,7 +103,7 @@ class MaterialIssueReservationLinkTest extends TestCase
      */
     public function test_fully_reserved_stock_is_issuable_against_its_reservation(): void
     {
-        $wo = WorkOrder::factory()->create();
+        $wo = WorkOrder::factory()->create(['status' => \App\Modules\Production\Enums\WorkOrderStatus::Confirmed]);
         $reservation = $this->reserve($this->item, $this->location, '100', $wo->id);
 
         $slip = $this->issueAgainst($reservation, '100', $wo->id);
@@ -230,8 +230,8 @@ class MaterialIssueReservationLinkTest extends TestCase
 
     public function test_a_reservation_for_another_work_order_is_refused(): void
     {
-        $owningWo = WorkOrder::factory()->create();
-        $otherWo = WorkOrder::factory()->create();
+        $owningWo = WorkOrder::factory()->create(['status' => \App\Modules\Production\Enums\WorkOrderStatus::Confirmed]);
+        $otherWo = WorkOrder::factory()->create(['status' => \App\Modules\Production\Enums\WorkOrderStatus::Confirmed]);
         $reservation = $this->reserve($this->item, $this->location, '40', $owningWo->id);
 
         foreach ([$otherWo->id, null] as $slipWorkOrderId) {

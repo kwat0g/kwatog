@@ -16,11 +16,47 @@ class DeliveryResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $status = $this->status instanceof DeliveryStatus
+            ? $this->status
+            : DeliveryStatus::tryFrom((string) $this->status);
+        $hasAttemptOutcome = $this->relationLoaded('attemptOutcome') && $this->attemptOutcome !== null;
+        $canReportAttempt = $status === DeliveryStatus::InTransit && ! $hasAttemptOutcome;
+
+        $this->resource->loadMissing(['stockReservationBatch', 'stockReservations.item', 'stockReservations.location', 'stockReservations.deliveryItem', 'costHandoffs']);
+        $reservation = $this->stockReservationBatch;
+        $transit = $this->cost_recognition_mode?->value === 'transit';
+        $costSummary = function (string $kind) use ($request): array {
+            $handoff = $this->costHandoffs->where('handoff_type', $kind)->sortByDesc('id')->first();
+            $state = $handoff?->status?->value ?? 'pending';
+            return [
+                'status' => $state, 'amount' => (string) ($handoff?->target_amount ?? '0.00'),
+                'message' => $handoff?->message,
+                'can_retry' => $state === 'manual_required' && ($request->user()?->hasPermission('accounting.journals.post') ?? false),
+            ];
+        };
+
         return [
             'id'                  => $this->hash_id,
             'delivery_number'     => $this->delivery_number,
+            'cost_recognition_mode' => $this->cost_recognition_mode?->value ?? 'legacy',
+            'stock_reservation_status' => $reservation?->status?->value ?? 'unreserved',
+            'stock_reservation_batch_id' => $reservation?->hash_id,
+            'can_reserve_stock' => ! $reservation && in_array($status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading], true)
+                && (($request->user()?->hasPermission('supply_chain.deliveries.create') ?? false)
+                    || ($request->user()?->hasPermission('inventory.adjust') ?? false)),
+            'stock_reservation_allocations' => $this->stockReservations->map(static fn ($row): array => [
+                'delivery_item_id' => $row->deliveryItem->hash_id,
+                'item' => ['id' => $row->item->hash_id, 'code' => $row->item->code, 'name' => $row->item->name],
+                'location_id' => $row->location->hash_id, 'location_code' => $row->location->code,
+                'quantity' => $row->quantity, 'consumed_quantity' => $row->consumed_quantity,
+                'lot_number' => $row->lot_number, 'expiry_date' => $row->expiry_date?->toDateString(),
+            ])->all(),
+            'cogs_handoff' => $this->when($transit, fn () => $costSummary('customer_cogs')),
+            'loss_handoff' => $this->when($transit && $hasAttemptOutcome && $this->attemptOutcome->reconciled_at, fn () => $costSummary('unaccounted_loss')),
             'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
             'status_label'        => ($status = $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
+            'can_confirm' => $this->whenLoaded('proofs', fn () => $status === DeliveryStatus::Delivered && $this->proofs->isNotEmpty() && $this->blockingReturnCase === null),
+            'can_cancel' => $status?->canTransitionTo(DeliveryStatus::Cancelled) ?? false,
             'next_status'         => $nextStatus = $this->nextStatus($status),
             'next_status_label'   => $nextStatus ? DeliveryStatus::from($nextStatus)->label() : null,
             'scheduled_date'      => optional($this->scheduled_date)?->toDateString(),
@@ -67,6 +103,23 @@ class DeliveryResource extends JsonResource
             'receiver_position'   => $this->receiver_position,
             'received_at'         => optional($this->received_at)?->toISOString(),
             'delivery_remarks'    => $this->delivery_remarks,
+            'billing_hold' => $this->whenLoaded('blockingReturnCase', fn () => $this->blockingReturnCase ? [
+                'case_id' => $this->blockingReturnCase->hash_id,
+                'case_number' => $this->blockingReturnCase->case_number,
+                'message' => 'Resolve this problem report before confirming or billing the delivery.',
+            ] : null),
+            'can_report_attempt_outcome' => $canReportAttempt,
+            'attempt_outcome_reasons' => ($canReportAttempt || ($hasAttemptOutcome && ! $this->attemptOutcome->reconciled_at)) ? \App\Modules\SupplyChain\Enums\DeliveryAttemptReason::options() : [],
+            'can_receive_truck_return' => $status === DeliveryStatus::ReturnPending
+                && $hasAttemptOutcome
+                && $this->attemptOutcome->reconciled_at === null
+                && ($request->user()?->hasPermission('return_management.receive') ?? false),
+            'has_attempt_outcome' => $hasAttemptOutcome,
+            'attempt_outcome' => $hasAttemptOutcome
+                ? (new DeliveryAttemptOutcomeResource($this->attemptOutcome))->resolve($request)
+                : null,
+            'quantity_discrepancy' => $this->whenLoaded('quantityDiscrepancy', fn () => $this->quantityDiscrepancy
+                ? new DeliveryQuantityDiscrepancyResource($this->quantityDiscrepancy) : null),
             'proofs'              => $this->whenLoaded('proofs', fn () => $this->proofs->map(fn ($p) => [
                 'id'          => $p->hash_id,
                 'proof_type'  => $p->proof_type,
@@ -127,17 +180,32 @@ class DeliveryResource extends JsonResource
                 ] : null,
                 'work_order_count' => is_array($this->shipmentLot->work_order_ids) ? count($this->shipmentLot->work_order_ids) : 0,
             ] : null),
+            'preparation' => $this->preparation ?? [],
             'items'               => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id'                  => $i->hash_id,
                 'sales_order_item_id' => optional($i->salesOrderItem)?->hash_id,
                 'stock_movement_id'   => optional($i->stockMovement)?->hash_id,
+                'stock_movements' => $i->relationLoaded('stockMovements') ? $i->stockMovements->map(fn ($movement): array => [
+                    'id' => $movement->hash_id,
+                    'quantity' => (string) $movement->quantity,
+                    'lot_number' => $movement->lot_number,
+                    'from_location' => $movement->fromLocation?->full_code,
+                ])->all() : [],
                 'inspection'          => $i->relationLoaded('inspection') && $i->inspection ? [
                     'id'                => $i->inspection->hash_id,
                     'inspection_number' => $i->inspection->inspection_number,
                     'status'            => $i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status,
                     'status_label'      => InspectionStatus::tryFrom((string) ($i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status))?->label() ?? (string) $i->inspection->status,
                 ] : null,
+                'product' => $i->salesOrderItem?->product ? [
+                    'part_number' => $i->salesOrderItem->product->part_number,
+                    'name' => $i->salesOrderItem->product->name,
+                ] : null,
+                'unit_of_measure' => $i->salesOrderItem?->product?->unit_of_measure,
                 'quantity'            => (float) $i->quantity,
+                'quantity_dispatched' => (string) $i->quantity,
+                'customer_received_quantity' => $i->customer_received_quantity === null
+                    ? null : (string) $i->customer_received_quantity,
                 'unit_price'          => (string) $i->unit_price,
             ])->all()),
             'created_at'          => optional($this->created_at)?->toISOString(),
@@ -148,8 +216,11 @@ class DeliveryResource extends JsonResource
 
     private function nextStatus(?DeliveryStatus $status): ?string
     {
-        if (! $status) return null;
+        // Delivery attempts and final depot counts are a trusted service
+        // boundary; a generic status option must never complete that ledger.
+        if (! $status || $status === DeliveryStatus::ReturnPending) return null;
         foreach (DeliveryStatus::cases() as $candidate) {
+            if (in_array($candidate, [DeliveryStatus::ReturnPending, DeliveryStatus::Returned], true)) continue;
             if ($status->canTransitionTo($candidate)) return $candidate->value;
         }
         return null;

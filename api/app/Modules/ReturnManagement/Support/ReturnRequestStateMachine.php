@@ -22,7 +22,10 @@ final class ReturnRequestStateMachine
             ReturnRequestStatus::Rejected->value,
             ReturnRequestStatus::Cancelled->value,
         ],
-        ReturnRequestStatus::Approved->value => [ReturnRequestStatus::Received->value],
+        ReturnRequestStatus::Approved->value => [
+            ReturnRequestStatus::Received->value,
+            ReturnRequestStatus::Cancelled->value,
+        ],
         ReturnRequestStatus::Received->value => [ReturnRequestStatus::Inspected->value],
         // A failed retry of an already-staged Quality handoff returns the RMA
         // to the received queue so the operator can recover it explicitly.

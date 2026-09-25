@@ -178,7 +178,7 @@ class CustomerReturnPortalTest extends TestCase
 
         // A manager who should be notified of a portal-submitted return.
         $manager = User::factory()->create([
-            'role_id'   => Role::query()->where('slug', 'ppc_head')->value('id'),
+            'role_id'   => Role::query()->where('slug', 'customer_service_officer')->value('id'),
             'is_active' => true,
         ]);
 

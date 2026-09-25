@@ -23,13 +23,6 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\CRM\Services\SalesOrderService;
-use App\Modules\Inventory\Enums\ItemType;
-use App\Modules\Inventory\Enums\StockMovementType;
-use App\Modules\Inventory\Enums\WarehouseZoneType;
-use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\WarehouseLocation;
-use App\Modules\Inventory\Services\StockMovementService;
-use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -38,6 +31,8 @@ use App\Modules\Quality\Services\CoCService;
 use App\Modules\SupplyChain\Enums\DeliveryInvoiceHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryCocHandoffStatus;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
+use App\Modules\SupplyChain\Enums\DeliveryDiscrepancyStatus;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Events\DeliveryInvoiceRequested;
 use App\Modules\SupplyChain\Exceptions\DeliveryInvoiceHandoffException;
@@ -45,6 +40,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Models\DeliveryReschedule;
+use App\Modules\SupplyChain\Models\DeliveryStockReservationBatch;
 use App\Modules\SupplyChain\Models\Vehicle;
 use App\Modules\SupplyChain\Services\ShipmentLotService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -78,6 +74,7 @@ class DeliveryService
         'scheduled',
         'loading',
         'in_transit',
+        'return_pending',
         'delivered',
         'confirmed',
     ];
@@ -95,8 +92,10 @@ class DeliveryService
         private readonly NotificationService $notifications,
         private readonly CoCService $coc,
         private readonly TaxPolicyService $taxPolicy,
-        private readonly StockMovementService $movements,
+        private readonly DeliveryStockService $stock,
         private readonly ShipmentLotService $shipmentLots,
+        private readonly DeliveryStockReservationService $stockReservations,
+        private readonly DeliveryCostRecognitionService $costRecognition,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -125,6 +124,48 @@ class DeliveryService
         }
 
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+    }
+
+    /** Narrow, searchable order choices for dispatchers without CRM access. */
+    public function formOptions(array $filters): array
+    {
+        $query = SalesOrder::query()
+            ->whereIn('status', ['confirmed', 'in_production', 'partially_delivered'])
+            ->with('customer:id,name');
+        if (! empty($filters['search'])) {
+            $query->where('so_number', SearchOperator::like(), '%'.trim($filters['search']).'%');
+        }
+        $orders = (clone $query)->orderByDesc('id')->paginate(50);
+        $mapOrder = static fn (SalesOrder $order): array => [
+            'id' => $order->hash_id,
+            'so_number' => $order->so_number,
+            'customer' => $order->customer ? ['name' => $order->customer->name] : null,
+        ];
+        $selected = ! empty($filters['sales_order_id'])
+            ? SalesOrder::query()->whereIn('status', ['confirmed', 'in_production', 'partially_delivered'])
+                ->with(['customer:id,name', 'items.product:id,part_number,name,unit_of_measure'])
+                ->find($filters['sales_order_id']) : null;
+        $selectedData = null;
+        if ($selected) {
+            $reserved = $this->deliveryQuantitiesByItem((int) $selected->id, self::QUANTITY_RESERVING_STATUSES);
+            $selectedData = $mapOrder($selected) + [
+                'items' => $selected->items->map(static fn (SalesOrderItem $line): array => [
+                    'id' => $line->hash_id,
+                    'quantity' => (string) $line->quantity,
+                    'remaining_quantity' => bcsub((string) $line->quantity, $reserved[$line->id] ?? '0', 2),
+                    'product' => $line->product ? [
+                        'part_number' => $line->product->part_number,
+                        'name' => $line->product->name,
+                        'unit_of_measure' => $line->product->unit_of_measure,
+                    ] : null,
+                ])->all(),
+            ];
+        }
+        return [
+            'sales_orders' => $orders->getCollection()->map($mapOrder)->all(),
+            'selected_sales_order' => $selectedData,
+            'has_more' => $orders->hasMorePages(),
+        ];
     }
 
     /**
@@ -160,22 +201,11 @@ class DeliveryService
             return [];
         }
 
-        $reservedByInspection = DB::table('delivery_items as di')
-            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
-            ->whereIn('di.inspection_id', $inspections->pluck('id')->all())
-            ->whereNull('d.deleted_at')
-            ->whereIn('d.status', self::QUANTITY_RESERVING_STATUSES)
-            ->select('di.inspection_id')
-            ->selectRaw('COALESCE(SUM(di.quantity), 0) as reserved_quantity')
-            ->groupBy('di.inspection_id')
-            ->get()
-            ->mapWithKeys(fn (object $row): array => [
-                (int) $row->inspection_id => (string) $row->reserved_quantity,
-            ]);
+        $reservedByInspection = collect($this->inspectionReservedByInspection($inspections->pluck('id')->all()));
 
         return $inspections
             ->map(function (Inspection $inspection) use ($reservedByInspection): ?array {
-                $reserved = $reservedByInspection->get($inspection->id, '0.00');
+                $reserved = $reservedByInspection->get($inspection->id, '0.000');
                 $remaining = bcsub((string) $inspection->accepted_quantity, $reserved, 2);
 
                 if (bccomp($remaining, '0.00', 2) <= 0) {
@@ -215,9 +245,11 @@ class DeliveryService
             'creator:id,name,role_id',
             'invoice:id,invoice_number,total_amount,status',
             'items.salesOrderItem:id,sales_order_id,product_id,quantity,unit_price',
-            'items.salesOrderItem.product:id,part_number,name',
+            'items.salesOrderItem.product:id,part_number,name,unit_of_measure',
             'items.stockMovement',
-            'items.inspection:id,inspection_number,stage,status',
+            'items.stockMovements.fromLocation.zone.warehouse',
+            'items.inspection.workOrderOutput.workOrder',
+            'items.inspection.workOrderOutput.productionReceiptMovement',
             // ADV3 — surface the shipment lot for the detail page.
             'shipmentLot.product:id,part_number,name',
             'shipmentLot.customer:id,name',
@@ -227,8 +259,23 @@ class DeliveryService
             // Reschedule history for the detail page.
             'reschedules' => fn ($q) => $q->orderByDesc('created_at'),
             'reschedules.rescheduledBy:id,name',
+            'quantityDiscrepancy.resolver:id,name',
+            'blockingReturnCase',
+            'attemptOutcome.reporter:id,name',
+            'attemptOutcome.receiver:id,name',
+            'attemptOutcome.quarantineLocation.zone.warehouse',
+            'attemptOutcome.returnRequest:id,rma_number,status',
+            'attemptOutcome.items.movements.stockMovement',
+            'attemptOutcome.items.deliveryItem',
+            'stockReservationBatch.reservations.location.zone.warehouse',
+            'stockReservationBatch.reservations.item',
+            'stockReservationBatch.reservations.deliveryItem',
+            'costHandoffs',
         ]);
 
+        if (in_array($d->status, [DeliveryStatus::Scheduled, DeliveryStatus::Loading], true)) {
+            $d->setRelation('preparation', collect($this->stock->preparation($d)));
+        }
         return $d;
     }
 
@@ -303,6 +350,7 @@ class DeliveryService
                 'vehicle_id' => $data['vehicle_id'] ?? null,
                 'driver_id' => $data['driver_id'] ?? null,
                 'status' => DeliveryStatus::Scheduled->value,
+                'cost_recognition_mode' => DeliveryCostingMode::Transit->value,
                 'scheduled_date' => $data['scheduled_date'],
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $by->id,
@@ -333,6 +381,9 @@ class DeliveryService
                     'unit_price' => (string) $soItem->unit_price,
                 ]);
             }
+
+            $reservationKey = \Illuminate\Support\Str::uuid()->toString();
+            $this->stockReservations->reserveForDelivery($delivery, $by, $reservationKey);
 
             return $this->show($delivery);
             });
@@ -485,6 +536,7 @@ class DeliveryService
                 ->whereIn('status', [
                     DeliveryStatus::Loading->value,
                     DeliveryStatus::InTransit->value,
+                    DeliveryStatus::ReturnPending->value,
                 ])
                 ->exists();
             if ($hasActiveDelivery) {
@@ -517,6 +569,7 @@ class DeliveryService
             ->whereIn('status', [
                 DeliveryStatus::Loading->value,
                 DeliveryStatus::InTransit->value,
+                DeliveryStatus::ReturnPending->value,
             ])
             ->exists();
 
@@ -595,12 +648,7 @@ class DeliveryService
         }
 
         $requested = $this->normaliseDeliveryQuantity($quantity);
-        $reserved = (string) (DB::table('delivery_items as di')
-            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
-            ->where('di.inspection_id', $inspection->id)
-            ->whereNull('d.deleted_at')
-            ->whereIn('d.status', self::QUANTITY_RESERVING_STATUSES)
-            ->sum('di.quantity') ?: '0.00');
+        $reserved = (string) ($this->inspectionReservedByInspection([(int) $inspection->id])[(int) $inspection->id] ?? '0.000');
         $available = bcsub((string) $inspection->accepted_quantity, $reserved, 2);
         if (bccomp($available, '0', 2) < 0) {
             $available = '0.00';
@@ -617,6 +665,9 @@ class DeliveryService
     public function updateStatus(Delivery $d, DeliveryStatus $next, ?string $note = null): Delivery
     {
         return DB::transaction(function () use ($d, $next, $note) {
+            // Match confirmation and customer intake: SO before delivery.
+            $salesOrderId = Delivery::query()->whereKey($d->id)->value('sales_order_id');
+            $so = $salesOrderId ? SalesOrder::query()->lockForUpdate()->find($salesOrderId) : null;
             $locked = Delivery::query()->lockForUpdate()->find($d->id);
             if (! $locked) {
                 throw new BusinessRuleException('Delivery not found.');
@@ -625,21 +676,36 @@ class DeliveryService
             $current = $locked->status instanceof DeliveryStatus
                 ? $locked->status
                 : DeliveryStatus::from((string) $locked->status);
+            if ($next === DeliveryStatus::Cancelled && $current === DeliveryStatus::Delivered) {
+                throw new BusinessRuleException('A delivered shipment cannot be cancelled; process a customer return instead.');
+            }
+            if ($next === DeliveryStatus::Cancelled && $current === DeliveryStatus::InTransit) {
+                throw new BusinessRuleException('A dispatched shipment cannot be cancelled while in transit; reconcile its delivery or physical return first.');
+            }
+            if (in_array($next, [DeliveryStatus::ReturnPending, DeliveryStatus::Returned], true)
+                || $current === DeliveryStatus::ReturnPending) {
+                throw new BusinessRuleException('Delivery exceptions and depot receipt must use the audited delivery attempt workflow.');
+            }
             if (! $current->canTransitionTo($next)) {
                 throw new BusinessRuleException("Cannot transition delivery {$locked->delivery_number} from {$current->value} to {$next->value}.");
             }
             if ($next === DeliveryStatus::Confirmed) {
                 throw new BusinessRuleException('Use the delivery confirmation action so proof, invoicing, and SO reconciliation are applied together.');
             }
-            if ($next === DeliveryStatus::Cancelled && $current === DeliveryStatus::Delivered) {
-                throw new BusinessRuleException('A delivered shipment cannot be cancelled; process a customer return instead.');
+
+            if ($next === DeliveryStatus::InTransit) {
+                $this->stockReservations->assertReadyForDeparture($locked);
+            }
+
+            if ($next === DeliveryStatus::Cancelled) {
+                $this->stockReservations->releaseForDelivery($locked);
             }
 
             // Serialize cancellation/delivery changes with new reservations and
             // keep the SO quantity ledger derived from delivered deliveries.
-            $so = $locked->sales_order_id
-                ? SalesOrder::query()->lockForUpdate()->find($locked->sales_order_id)
-                : null;
+            if ((int) $locked->sales_order_id !== (int) $salesOrderId) {
+                throw new BusinessRuleException('The delivery order changed. Reload before updating its status.');
+            }
             if ($locked->sales_order_id && ! $so) {
                 throw new BusinessRuleException('Sales order not found.');
             }
@@ -669,6 +735,7 @@ class DeliveryService
                     ->whereIn('status', [
                         DeliveryStatus::Loading->value,
                         DeliveryStatus::InTransit->value,
+                        DeliveryStatus::ReturnPending->value,
                     ])
                     ->exists();
 
@@ -716,6 +783,12 @@ class DeliveryService
                 $patch['notes'] = trim(($locked->notes ? $locked->notes."\n" : '').'['.$next->value.'] '.$note);
             }
             $locked->forceFill($patch)->save();
+
+            if ($next === DeliveryStatus::Delivered) {
+                $locked->items()->whereNull('customer_received_quantity')->update([
+                    'customer_received_quantity' => DB::raw('quantity'),
+                ]);
+            }
 
             if ($next === DeliveryStatus::Delivered && $so) {
                 $this->syncDeliveredQuantities($so);
@@ -935,62 +1008,9 @@ class DeliveryService
         }
     }
 
-    /**
-     * Move finished goods out of the configured finished-goods location when
-     * the truck leaves. Each delivery line stores its movement id so retries
-     * cannot issue the same goods twice.
-     */
     private function issueFinishedGoods(Delivery $delivery): void
     {
-        $delivery->loadMissing('items.salesOrderItem.product');
-        if ($delivery->items->isEmpty()) {
-            return;
-        }
-
-        $location = WarehouseLocation::query()
-            ->where('is_active', true)
-            ->whereHas('zone', fn (Builder $q) => $q->where('zone_type', WarehouseZoneType::FinishedGoods->value))
-            ->orderBy('id')
-            ->first();
-        if (! $location) {
-            throw new BusinessRuleException('No active finished-goods warehouse location is configured for dispatch.');
-        }
-
-        foreach ($delivery->items->sortBy('id') as $line) {
-            if ($line->stock_movement_id !== null) {
-                continue;
-            }
-
-            $product = $line->salesOrderItem?->product;
-            if (! $product?->part_number) {
-                throw new BusinessRuleException(
-                    "Delivery line {$line->id} has no product part number for finished-goods inventory."
-                );
-            }
-
-            $item = Item::query()
-                ->where('code', $product->part_number)
-                ->where('item_type', ItemType::FinishedGood->value)
-                ->first();
-            if (! $item) {
-                throw new BusinessRuleException(
-                    "No finished-goods inventory item matches product {$product->part_number}."
-                );
-            }
-
-            $movement = $this->movements->move(new StockMovementInput(
-                type: StockMovementType::Delivery,
-                itemId: $item->id,
-                quantity: (string) $line->quantity,
-                fromLocationId: $location->id,
-                referenceType: 'delivery_item',
-                referenceId: $line->id,
-                remarks: "Delivery {$delivery->delivery_number}",
-                createdBy: auth()->id() ? (int) auth()->id() : null,
-            ));
-
-            $line->forceFill(['stock_movement_id' => $movement->id])->save();
-        }
+        $this->stock->issue($delivery);
     }
 
     private function normaliseDeliveryQuantity(mixed $raw): string
@@ -1014,11 +1034,97 @@ class DeliveryService
             ->where('d.sales_order_id', $salesOrderId)
             ->whereNull('d.deleted_at')
             ->whereIn('d.status', $statuses)
-            ->selectRaw('di.sales_order_item_id AS sales_order_item_id, SUM(di.quantity) AS quantity')
+            ->selectRaw("di.sales_order_item_id AS sales_order_item_id, SUM(CASE WHEN d.status IN ('delivered', 'confirmed') THEN COALESCE(di.customer_received_quantity, di.quantity) ELSE di.quantity END) AS quantity")
             ->groupBy('di.sales_order_item_id')
             ->pluck('quantity', 'sales_order_item_id')
             ->mapWithKeys(static fn ($quantity, $itemId): array => [(int) $itemId => (string) $quantity])
             ->all();
+    }
+
+    /**
+     * Inspection acceptance remains consumed by dispatched goods until a
+     * warehouse has physically returned them and the RMA workflow has released
+     * them from quarantine back to good stock. A driver declaration or a depot
+     * count alone never restores outgoing-QC capacity.
+     *
+     * @param list<int> $inspectionIds
+     * @return array<int, string>
+     */
+    private function inspectionReservedByInspection(array $inspectionIds): array
+    {
+        if ($inspectionIds === []) {
+            return [];
+        }
+
+        $issued = DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->whereIn('di.inspection_id', $inspectionIds)
+            ->whereNull('d.deleted_at')
+            ->whereIn('d.status', [
+                DeliveryStatus::Scheduled->value,
+                DeliveryStatus::Loading->value,
+                DeliveryStatus::InTransit->value,
+                DeliveryStatus::ReturnPending->value,
+                DeliveryStatus::Delivered->value,
+                DeliveryStatus::Confirmed->value,
+                DeliveryStatus::Returned->value,
+            ])
+            ->select('di.inspection_id')
+            ->selectRaw('COALESCE(SUM(di.quantity), 0) AS quantity')
+            ->groupBy('di.inspection_id')
+            ->pluck('quantity', 'inspection_id');
+
+        $restocked = DB::table('return_request_items as rri')
+            ->join('delivery_items as di', 'di.id', '=', 'rri.source_delivery_item_id')
+            ->join('return_requests as rr', 'rr.id', '=', 'rri.return_request_id')
+            ->join('stock_movements as release_movement', 'release_movement.id', '=', 'rri.quarantine_release_movement_id')
+            ->whereIn('di.inspection_id', $inspectionIds)
+            ->where('rr.type', 'customer_return')
+            ->whereNotNull('rr.delivery_attempt_outcome_id')
+            ->where('rr.disposition_status', 'disposed')
+            ->whereIn('rr.status', ['inspected', 'completed'])
+            ->where('rri.disposition', 'restock')
+            ->where('rri.quarantine_status', 'released')
+            ->whereNotNull('rri.quarantine_release_movement_id')
+            ->where('release_movement.movement_type', 'transfer')
+            ->where('release_movement.reference_type', 'return_request')
+            ->whereColumn('release_movement.reference_id', 'rr.id')
+            ->whereColumn('release_movement.item_id', 'rri.item_id')
+            ->whereColumn('release_movement.from_location_id', 'rri.quarantine_location_id')
+            ->whereNotNull('release_movement.to_location_id')
+            ->whereColumn('release_movement.quantity', 'rri.stock_movement_quantity')
+            ->where('release_movement.quantity', '>', 0)
+            ->whereExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('inspections as return_inspection')
+                    ->whereColumn('return_inspection.entity_id', 'rr.id')
+                    ->whereColumn('return_inspection.product_id', 'rri.product_id')
+                    ->where('return_inspection.entity_type', 'return_request')
+                    ->where('return_inspection.stage', 'customer_return')
+                    ->where('return_inspection.status', 'passed')
+                    ->whereNotNull('return_inspection.inspector_id')
+                    ->whereNotNull('return_inspection.reviewed_by')
+                    ->whereNotNull('return_inspection.reviewed_at')
+                    ->whereColumn('return_inspection.inspector_id', '<>', 'return_inspection.reviewed_by')
+                    ->whereNotExists(function ($authors): void {
+                        $authors->selectRaw('1')
+                            ->from('inspection_result_authors as result_author')
+                            ->whereColumn('result_author.inspection_id', 'return_inspection.id')
+                            ->whereColumn('result_author.user_id', 'return_inspection.reviewed_by');
+                    });
+            })
+            ->select('di.inspection_id')
+            ->selectRaw('COALESCE(SUM(release_movement.quantity), 0) AS quantity')
+            ->groupBy('di.inspection_id')
+            ->pluck('quantity', 'inspection_id');
+
+        $reserved = [];
+        foreach ($inspectionIds as $id) {
+            $quantity = bcsub((string) ($issued[$id] ?? '0'), (string) ($restocked[$id] ?? '0'), 3);
+            $reserved[(int) $id] = bccomp($quantity, '0', 3) > 0 ? $quantity : '0.000';
+        }
+
+        return $reserved;
     }
 
     /**
@@ -1094,7 +1200,7 @@ class DeliveryService
      *   delivery_remarks?: string|null,
      * } $receiverData
      */
-    public function confirm(Delivery $d, User $by, array $receiverData = []): Delivery
+    public function confirm(Delivery $d, User $by, array $receiverData = [], ?int $acknowledgedByPortalUserId = null): Delivery
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if ($current !== DeliveryStatus::Delivered && $current !== DeliveryStatus::Confirmed) {
@@ -1102,6 +1208,11 @@ class DeliveryService
         }
 
         return DB::transaction(function () use ($d, $by, $receiverData) {
+            // Customer problem intake locks SO → delivery. Use that same
+            // order so an operator confirmation cannot deadlock with a report
+            // arriving at the billing boundary.
+            $salesOrderId = Delivery::query()->whereKey($d->id)->value('sales_order_id');
+            $so = $salesOrderId ? SalesOrder::query()->lockForUpdate()->find($salesOrderId) : null;
             // P3.1 — Re-read the delivery under an exclusive row lock so that
             // two concurrent confirm() calls cannot both pass the status check
             // and both write a confirmed state / draft invoice.
@@ -1124,15 +1235,17 @@ class DeliveryService
                 throw new BusinessRuleException('Only delivered deliveries can be confirmed.');
             }
 
+            $this->assertInvoiceQuantityClear($locked);
+
             // ADV7 — Block confirmation without proof. This is the legally
             // defensible record for any future customer dispute.
             if ($locked->proofs()->count() === 0) {
                 throw new BusinessRuleException('At least one proof of delivery (signed DR or photo) must be uploaded before confirming.');
             }
 
-            $so = $locked->sales_order_id
-                ? SalesOrder::query()->lockForUpdate()->find($locked->sales_order_id)
-                : null;
+            if ((int) $locked->sales_order_id !== (int) $salesOrderId) {
+                throw new BusinessRuleException('The delivery order changed. Reload before confirming.');
+            }
             if ($locked->sales_order_id && ! $so) {
                 throw new BusinessRuleException('Sales order not found.');
             }
@@ -1161,6 +1274,8 @@ class DeliveryService
             if ($so) {
                 $this->syncDeliveredQuantities($so);
             }
+
+            $this->costRecognition->recognizeCustomerReceipt($locked, $by);
 
             // M-20 — Persist the lot before attaching CoC evidence. Confirmation
             // remains valid if storage or evidence fails, but the failure is a
@@ -1207,8 +1322,15 @@ class DeliveryService
             $invoiceId = null;
             $invoiceHandoffNeedsRecovery = false;
             try {
-                $invoiceId = $this->createDraftInvoice($locked, $by);
-                if ($invoiceId) {
+                $noCharge = $this->isNoChargeReplacement($locked);
+                $invoiceId = $noCharge ? null : $this->createDraftInvoice($locked, $by);
+                if ($noCharge) {
+                    $locked->forceFill([
+                        'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::NotRequired->value,
+                        'invoice_handoff_message' => 'Approved no-charge replacement; no customer invoice is due.',
+                        'invoice_handoff_at' => now(),
+                    ])->save();
+                } elseif ($invoiceId) {
                     $locked->forceFill([
                         'invoice_id' => $invoiceId,
                         'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::Generated->value,
@@ -1310,6 +1432,14 @@ class DeliveryService
                     throw new BusinessRuleException('Only confirmed deliveries can retry the customer invoice handoff.');
                 }
 
+                $this->assertInvoiceQuantityClear($locked);
+                if ($this->isNoChargeReplacement($locked)) {
+                    $locked->forceFill(['invoice_handoff_status' => DeliveryInvoiceHandoffStatus::NotRequired->value,
+                        'invoice_handoff_message' => 'Approved no-charge replacement; no customer invoice is due.',
+                        'invoice_handoff_at' => now()])->save();
+                    return $this->show($locked);
+                }
+
                 if ($locked->invoice_id !== null) {
                     $locked->forceFill([
                         'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::Generated->value,
@@ -1374,6 +1504,16 @@ class DeliveryService
                 return;
             }
 
+            // Repeated failures are the same handoff state. Touching the
+            // delivery here invalidates the outbox's published model version
+            // and prevents replay after Accounting fixes its configuration.
+            if ($this->isNoChargeReplacement($delivery)
+                || ($delivery->invoice_handoff_status === DeliveryInvoiceHandoffStatus::ManualRequired
+                    && $delivery->invoice_handoff_message === self::INVOICE_HANDOFF_MANUAL_MESSAGE
+                    && $delivery->invoice_handoff_at !== null)) {
+                return;
+            }
+
             $delivery->forceFill([
                 'invoice_handoff_status' => DeliveryInvoiceHandoffStatus::ManualRequired->value,
                 'invoice_handoff_message' => self::INVOICE_HANDOFF_MANUAL_MESSAGE,
@@ -1393,6 +1533,11 @@ class DeliveryService
         $attachedCount = 0;
 
         $inspectionIds = $delivery->items
+            ->filter(static fn ($item): bool => bccomp(
+                (string) ($item->customer_received_quantity ?? $item->quantity),
+                '0',
+                3,
+            ) > 0)
             ->pluck('inspection_id')
             ->filter()
             ->unique()
@@ -1517,6 +1662,7 @@ class DeliveryService
 
     private function createDraftInvoice(Delivery $d, User $by): ?int
     {
+        $this->assertInvoiceQuantityClear($d);
         $svc = app(InvoiceService::class);
         $d->loadMissing(['salesOrder.customer', 'items.salesOrderItem.product']);
         if (! $d->salesOrder?->customer) {
@@ -1539,7 +1685,9 @@ class DeliveryService
         $customerHashId = app('hashids')->encode($d->salesOrder->customer_id);
         $hashids = app('hashids');
 
-        $items = $d->items->map(function (DeliveryItem $i) use ($defaultAccountId, $hashids) {
+        $items = $d->items->filter(fn (DeliveryItem $item): bool => bccomp(
+            (string) ($item->customer_received_quantity ?? $item->quantity), '0', 3,
+        ) > 0)->map(function (DeliveryItem $i) use ($defaultAccountId, $hashids) {
             $revenueId = $i->salesOrderItem?->product?->revenue_account_id
                 ?? $defaultAccountId;
 
@@ -1551,7 +1699,7 @@ class DeliveryService
                 'revenue_account_id' => $hashids->encode((int) $revenueId),
                 'source_delivery_item_id' => $i->id,
                 'description' => $i->salesOrderItem?->product?->name ?? 'Delivery line',
-                'quantity' => (string) $i->quantity,
+                'quantity' => (string) ($i->customer_received_quantity ?? $i->quantity),
                 'unit_price' => (string) $i->unit_price,
             ];
         })->all();
@@ -1569,6 +1717,17 @@ class DeliveryService
         ], $by);
 
         return (int) $invoice->id;
+    }
+
+    private function isNoChargeReplacement(Delivery $delivery): bool
+    {
+        return $delivery->sales_order_id !== null && SalesOrder::query()
+            ->whereKey($delivery->sales_order_id)->whereNotNull('return_case_id')->exists();
+    }
+
+    private function assertInvoiceQuantityClear(Delivery $delivery): void
+    {
+        app(\App\Modules\ReturnManagement\Services\ReturnCaseService::class)->assertBillingClear((int) $delivery->id);
     }
 
     /**
@@ -1658,7 +1817,7 @@ class DeliveryService
                 DeliveryStatus::Confirmed->value,
                 DeliveryStatus::Delivered->value,
             ])
-            ->selectRaw('di.sales_order_item_id, SUM(di.quantity) AS qty')
+            ->selectRaw('di.sales_order_item_id, SUM(COALESCE(di.customer_received_quantity, di.quantity)) AS qty')
             ->groupBy('di.sales_order_item_id')
             ->pluck('qty', 'sales_order_item_id');
 

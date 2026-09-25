@@ -670,6 +670,8 @@ class RolePermissionSeeder extends Seeder
                         'crm.inquiries.manage',
                         'return_management.view',
                         'return_management.manage',
+                        'return_management.dispose',
+                        'return_management.complete',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
                     ],
@@ -804,11 +806,11 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view', 'inventory.grn.create', 'supply_chain.view', 'supply_chain.shipments.manage',
                         'supply_chain.deliveries.view',
                         'accounting.vendors.view', 'accounting.bills.view',
-                        'forecasting.view',
-                        'return_management.view', 'return_management.manage',
                         // Buyers look up POs, vendors and RFQs by number all day;
                         // each search group still applies its module's row scope.
                         'search.global',
+                        'forecasting.view',
+                        'return_management.view', 'return_management.manage',
                         'return_management.receive', 'return_management.inspect',
                         'return_management.dispose', 'return_management.complete',
                         'dashboard.purchasing.view',

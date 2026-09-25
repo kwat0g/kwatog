@@ -16,6 +16,7 @@ use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionOutcome;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -121,10 +122,47 @@ class Inspection extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function resultAuthors(): HasMany
+    {
+        return $this->hasMany(InspectionResultAuthor::class);
+    }
+
+    public function hasResultAuthor(?User $user): bool
+    {
+        return $this->hasResultAuthorId($user?->id);
+    }
+
+    public function hasResultAuthorId(?int $userId): bool
+    {
+        if (! $userId) {
+            return false;
+        }
+
+        if ($this->relationLoaded('resultAuthors')) {
+            return $this->getRelation('resultAuthors')->contains(
+                static fn (InspectionResultAuthor $author): bool => (int) $author->user_id === $userId,
+            );
+        }
+
+        return $this->resultAuthors()->where('user_id', $userId)->exists();
+    }
+
     public function requiresMakerChecker(): bool
     {
         if ($this->stage === InspectionStage::Incoming) {
             return $this->entity_type === InspectionEntityType::Grn;
+        }
+
+        if ($this->stage === InspectionStage::CustomerReturn
+            && $this->entity_type === InspectionEntityType::ReturnRequest
+            && $this->entity_id !== null) {
+            // Only the new protected truck-return bridge reopens previously
+            // consumed outgoing capacity. Its depot QC must therefore have an
+            // independent reviewer; preserve ordinary RMA behavior.
+            return ReturnRequest::query()
+                ->whereKey((int) $this->entity_id)
+                ->whereNotNull('delivery_attempt_outcome_id')
+                ->exists();
         }
 
         return $this->stage === InspectionStage::Outgoing
@@ -137,7 +175,8 @@ class Inspection extends Model
         return $this->inspector_id !== null
             && $this->reviewed_by !== null
             && $this->reviewed_at !== null
-            && (int) $this->inspector_id !== (int) $this->reviewed_by;
+            && (int) $this->inspector_id !== (int) $this->reviewed_by
+            && ! $this->hasResultAuthorId((int) $this->reviewed_by);
     }
 
     public function calibrationRecord(): BelongsTo

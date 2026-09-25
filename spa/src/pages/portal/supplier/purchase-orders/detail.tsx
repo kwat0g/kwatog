@@ -13,7 +13,11 @@ import {
   LuThumbsDown,
 } from '@/lib/icons';
 import { supplierPortalApi } from '@/api/b2b/supplier';
-import type { PortalShippingDocument, RespondToPurchaseOrderPayload, PortalShipment } from '@/types/b2b';
+import type {
+  PortalShippingDocument,
+  RespondToPurchaseOrderPayload,
+  PortalShipment,
+} from '@/types/b2b';
 import type { PurchaseOrderResponseStatus, PurchaseOrderResponseType } from '@/types/purchasing';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -423,7 +427,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => window.location.href = '/portal/supplier/delivery-schedules'}
+                  onClick={() => (window.location.href = '/portal/supplier/delivery-schedules')}
                 >
                   Schedule delivery
                 </Button>
@@ -457,7 +461,8 @@ export default function SupplierPurchaseOrderDetailPage() {
             {(po.status === 'sent' || po.status === 'supplier_proposed') && (
               <Panel>
                 <p className="text-sm text-secondary">
-                  Accept this purchase order to update shipments, upload documents and schedule deliveries.
+                  Accept this purchase order to update shipments, upload documents and schedule
+                  deliveries.
                 </p>
               </Panel>
             )}
@@ -471,7 +476,8 @@ export default function SupplierPurchaseOrderDetailPage() {
             {po.status === 'cancelled' && (
               <Panel>
                 <p className="text-sm text-secondary">
-                  OGAMI cancelled this purchase order. No further deliveries or invoices should be made against it.
+                  OGAMI cancelled this purchase order. No further deliveries or invoices should be
+                  made against it.
                 </p>
               </Panel>
             )}
@@ -621,7 +627,9 @@ export default function SupplierPurchaseOrderDetailPage() {
                               {shipment.tracking_number ?? '—'}
                             </Td>
                             <Td mono className="text-muted">
-                              {shipment.estimated_arrival ? formatDate(shipment.estimated_arrival) : '—'}
+                              {shipment.estimated_arrival
+                                ? formatDate(shipment.estimated_arrival)
+                                : '—'}
                             </Td>
                             <Td mono className="text-muted text-xs">
                               {shipment.updated_at ? formatDate(shipment.updated_at) : '—'}
@@ -836,11 +844,14 @@ export default function SupplierPurchaseOrderDetailPage() {
                       onChange={(e) => setGrnId(e.target.value)}
                     >
                       <option value="">— Select GRN —</option>
-                      {(po.goods_receipt_notes ?? []).filter(g => g.can_invoice).map((grn) => (
-                        <option key={grn.id} value={grn.id}>
-                          {grn.grn_number} · Received {grn.received_date ? formatDate(grn.received_date) : '—'}
-                        </option>
-                      ))}
+                      {(po.goods_receipt_notes ?? [])
+                        .filter((g) => g.can_invoice)
+                        .map((grn) => (
+                          <option key={grn.id} value={grn.id}>
+                            {grn.grn_number} · Received{' '}
+                            {grn.received_date ? formatDate(grn.received_date) : '—'}
+                          </option>
+                        ))}
                     </Select>
                   </div>
                   <FileInput

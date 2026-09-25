@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { StockAdjustment, StockLevel, StockMovement } from '@/types/inventory';
+import type { MaterialReturnOptions, StockAdjustment, StockLevel, StockMovement } from '@/types/inventory';
 
 export const stockLevelsApi = {
  list: (params?: ListParams & { item_id?: string; warehouse_id?: string; item_type?: string; low_only?: boolean }) =>
@@ -11,6 +11,14 @@ export const stockMovementsApi = {
  options: () => client.get<{ data: { movement_types: Array<{ value: string; label: string }> } }>('/inventory/stock-movements/options').then((r) => r.data.data),
  list: (params?: ListParams & { item_id?: string; movement_id?: string; movement_type?: string; from?: string; to?: string; reference_type?: string }) =>
  client.get<PaginatedResponse<StockMovement>>('/inventory/stock-movements', { params }).then((r) => r.data),
+ returnOptions: (movementId: string) =>
+ client.get<{ data: MaterialReturnOptions }>(`/inventory/stock-movements/${movementId}/return-options`).then((r) => r.data.data),
+ returnUnused: (movementId: string, data: { quantity_returned: string; expected_returned_quantity: string; reason: string }, idempotencyKey: string) =>
+ client.post<ApiSuccess<StockMovement>>(
+   `/inventory/stock-movements/${movementId}/return-unused`,
+   data,
+   { headers: { 'Idempotency-Key': idempotencyKey } },
+ ).then((r) => r.data.data),
  retryGlHandoff: (movementId: string) =>
  client.post<ApiSuccess<StockMovement>>(`/inventory/stock-movements/${movementId}/retry-gl`).then((r) => r.data.data),
 };

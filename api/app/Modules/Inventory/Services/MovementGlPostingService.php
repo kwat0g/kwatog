@@ -13,6 +13,10 @@ use App\Modules\Inventory\Enums\MovementGlHandoffStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Modules\SupplyChain\Enums\DeliveryCostingMode;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -25,7 +29,7 @@ use Illuminate\Support\Facades\Schema;
  *   AdjustmentIn / AdjustmentOut / CycleCount → inventory_adjustment_code (COGS)
  *   MaterialIssue / Scrap                     → material_consumption_code
  *   ReturnToVendor                            → grni_code
- *   ProductionReceipt                         → material_consumption_code (reversal)
+ *   ProductionReceipt / MaterialReturn        → material_consumption_code (reversal)
  *
  * GrnReceipt is posted by GrnGlPostingService; Transfer and Opening have no
  * ledger impact (location moves / opening balances post their own); Delivery's
@@ -47,7 +51,6 @@ class MovementGlPostingService
         StockMovementType::GrnReceipt,
         StockMovementType::Transfer,
         StockMovementType::Opening,
-        StockMovementType::Delivery,
     ];
 
     public function __construct(
@@ -107,7 +110,7 @@ class MovementGlPostingService
     private function postForLocked(StockMovement $movement): ?int
     {
         $type = $movement->movement_type;
-        if (in_array($type, self::NON_GL_TYPES, true)) {
+        if ($this->isNotRequired($movement)) {
             $this->markNotRequired($movement, 'movement_type_not_posted_to_gl');
             return null;
         }
@@ -140,7 +143,7 @@ class MovementGlPostingService
         }
 
         try {
-            [$inventoryCode, $offsetCode, $inventoryIsDebit, $offsetSetting] = $this->mapping($type, $item);
+            [$inventoryCode, $offsetCode, $inventoryIsDebit, $offsetSetting] = $this->mapping($movement, $item);
         } catch (BusinessRuleException $e) {
             Log::warning('MovementGlPostingService: required GL mapping is missing', [
                 'movement_id' => $movement->id,
@@ -235,15 +238,64 @@ class MovementGlPostingService
     {
         $type = $movement->movement_type;
 
+        if (in_array($type, [StockMovementType::Delivery, StockMovementType::DeliveryReturn], true)) {
+            $delivery = $this->sourceDelivery($movement);
+            return ! $delivery || $delivery->cost_recognition_mode !== DeliveryCostingMode::Transit;
+        }
+
+        if ($type === StockMovementType::DeliveryCustomerReturn) {
+            return $this->sourceDeliveryForCustomerReturn($movement)?->cost_recognition_mode !== DeliveryCostingMode::Transit;
+        }
+
         return in_array($type, self::NON_GL_TYPES, true)
             || Money::isZero(Money::round2((string) $movement->total_cost))
             || $this->settings->get('modules.accounting', false) !== true;
     }
 
     /** @return array{0: string, 1: string, 2: bool, 3: string} inventoryCode, offsetCode, inventoryIsDebit, offsetSetting */
-    private function mapping(StockMovementType $type, Item $item): array
+    private function mapping(StockMovement $movement, Item $item): array
     {
+        $type = $movement->movement_type;
         $inventoryCode = $this->grnPosting->inventoryAccountCode($item);
+
+        if ($type === StockMovementType::Delivery) {
+            return [
+                $inventoryCode,
+                $this->settings->requiredString('accounting.accounts.inventory_delivery_transit_code'),
+                false, // dispatch: DR delivery-in-transit, CR finished goods
+                'accounting.accounts.inventory_delivery_transit_code',
+            ];
+        }
+
+        if ($type === StockMovementType::DeliveryReturn) {
+            return [
+                $inventoryCode,
+                $this->settings->requiredString('accounting.accounts.inventory_delivery_transit_code'),
+                true, // truck custody recovery: DR quarantine inventory, CR transit
+                'accounting.accounts.inventory_delivery_transit_code',
+            ];
+        }
+
+        if ($type === StockMovementType::DeliveryCustomerReturn) {
+            $delivery = $this->sourceDeliveryForCustomerReturn($movement);
+            if (! $delivery) {
+                throw new BusinessRuleException('A delivery customer-return movement is missing its delivery source.');
+            }
+            $recognized = $delivery->costHandoffs()
+                ->where('handoff_type', 'customer_cogs')
+                ->where('status', 'generated')
+                ->exists();
+            $setting = $recognized
+                ? 'accounting.accounts.delivery_cogs_code'
+                : 'accounting.accounts.inventory_delivery_transit_code';
+
+            return [
+                $inventoryCode,
+                $this->settings->requiredString($setting),
+                true, // DR quarantine inventory, CR transit before COGS or COGS after
+                $setting,
+            ];
+        }
 
         return match ($type) {
             StockMovementType::AdjustmentIn,
@@ -272,7 +324,8 @@ class MovementGlPostingService
                 false, // DR GRNI, CR inventory
                 'accounting.accounts.grni_code',
             ],
-            StockMovementType::ProductionReceipt => [
+            StockMovementType::ProductionReceipt,
+            StockMovementType::MaterialReturn => [
                 $inventoryCode,
                 $this->settings->requiredString('accounting.accounts.material_consumption_code'),
                 true,  // DR inventory, CR consumption (reversal)
@@ -283,5 +336,31 @@ class MovementGlPostingService
             // omission to fix, and a 422 would hide it behind a form error.
             default => throw new \RuntimeException("No GL mapping for movement type {$type->value}"),
         };
+    }
+
+    private function sourceDelivery(StockMovement $movement): ?Delivery
+    {
+        $source = $movement;
+        if ($movement->movement_type === StockMovementType::DeliveryReturn) {
+            $source = StockMovement::query()->find((int) $movement->reference_id) ?? $movement;
+        }
+
+        if ($source->reference_type !== 'delivery_item' || ! $source->reference_id) {
+            return null;
+        }
+
+        $deliveryId = DeliveryItem::query()->whereKey($source->reference_id)->value('delivery_id');
+        return $deliveryId ? Delivery::query()->with('costHandoffs')->find((int) $deliveryId) : null;
+    }
+
+    private function sourceDeliveryForCustomerReturn(StockMovement $movement): ?Delivery
+    {
+        if ($movement->reference_type !== 'return_request_item' || ! $movement->reference_id) {
+            return null;
+        }
+
+        $returnItem = ReturnRequestItem::query()->with('sourceDeliveryItem')->find((int) $movement->reference_id);
+        $deliveryId = $returnItem?->sourceDeliveryItem?->delivery_id;
+        return $deliveryId ? Delivery::query()->with('costHandoffs')->find((int) $deliveryId) : null;
     }
 }

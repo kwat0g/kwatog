@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -35,6 +35,7 @@ export default function CustomerReturnDetailPage() {
         <p className="text-sm whitespace-pre-wrap">{request.reason_description || request.reason_code || 'No reason provided.'}</p>
         {request.customer_notes && <p className="mt-2 text-sm text-muted whitespace-pre-wrap">{request.customer_notes}</p>}
         {request.resolution && <p className="mt-2 text-sm text-muted whitespace-pre-wrap">Resolution: {request.resolution}</p>}
+        {request.source_case && <p className="mt-2 text-sm text-muted">Reported problem: <Link className="text-link hover:underline" to={`/portal/customer/problems/${request.source_case.id}`}>{request.source_case.case_number}</Link></p>}
       </Panel>
       <Panel title="Returned items" meta={String(request.items?.length ?? 0)} noPadding>
         {request.items && request.items.length > 0 ? <div className="overflow-x-auto"><table className={tableCls}>

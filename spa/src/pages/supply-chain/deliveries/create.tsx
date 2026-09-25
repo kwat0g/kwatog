@@ -1,14 +1,15 @@
  /** Sprint 7 — Delivery Create Form. Outbound delivery from a deliverable sales order. */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { isAxiosError } from 'axios';
+import { useAuthStore } from '@/stores/authStore';
 import { LuPlus, LuX } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { deliveriesApi, vehiclesApi } from '@/api/supply-chain';
-import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -16,7 +17,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
-import { formatPeso } from '@/lib/formatNumber';
+import { localIsoDate } from '@/lib/formatDate';
+import { useDebounce } from '@/hooks/useDebounce';
 
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
@@ -41,37 +43,57 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+const submissionSchema = z.object({ key: z.string().regex(/^delivery-[0-9a-f-]{36}$/i), data: schema });
+type Submission = z.infer<typeof submissionSchema>;
+
+function readSubmission(key: string): Submission | null {
+ try {
+  const result = submissionSchema.safeParse(JSON.parse(localStorage.getItem(key) ?? 'null'));
+  return result.success ? result.data : null;
+ } catch { return null; }
+}
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function CreateDeliveryPage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
+ const userId = useAuthStore((state) => state.user?.id);
+ const submissionStorageKey = `ogami:formdraft:delivery-submission:${userId}`;
+ const [submission, setSubmission] = useState<Submission | null>(() => readSubmission(submissionStorageKey));
+ const idempotencyKey = useRef(submission?.key ?? `delivery-${crypto.randomUUID()}`).current;
+ const rememberSubmission = (value: Submission | null) => {
+  setSubmission(value);
+  try {
+   if (value) localStorage.setItem(submissionStorageKey, JSON.stringify(value));
+   else localStorage.removeItem(submissionStorageKey);
+  } catch { /* In-memory retry remains available when browser storage is disabled. */ }
+ };
 
- // ── Fetch reference data ──
- // Deliverable set: an SO leaves `confirmed` when its WO starts, and split
- // deliveries park it in `partially_delivered` — so filtering on `confirmed`
- // alone hid exactly the orders that are ready to ship (audit SC-02).
- const { data: soData, isLoading: soLoading, isError: soError } = useQuery({
- queryKey: ['crm', 'sales-orders', 'for-delivery'],
- queryFn: () =>
- salesOrdersApi.list({ status: ['confirmed', 'in_production', 'partially_delivered'], per_page: 200 }),
+ const [search, setSearch] = useState('');
+ const [page, setPage] = useState(1);
+ const debouncedSearch = useDebounce(search, 300);
+ const ordersQuery = useQuery({
+  queryKey: ['supply-chain', 'deliveries', 'form-options', debouncedSearch, page],
+  queryFn: () => deliveriesApi.formOptions({ search: debouncedSearch, page }),
  });
- const soList = soData?.data ?? [];
-
- const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery({
- queryKey: ['supply-chain', 'vehicles', 'available'],
- queryFn: () => vehiclesApi.list({ status: 'available', per_page: 200 }),
+ const soList = ordersQuery.data?.sales_orders ?? [];
+ const soLoading = ordersQuery.isLoading;
+ const soError = ordersQuery.isError;
+ const vehiclesQuery = useQuery({
+  queryKey: ['supply-chain', 'vehicles', 'available'],
+  queryFn: () => vehiclesApi.list({ status: 'available', per_page: 100 }),
  });
- const vehicleList = vehiclesData?.data ?? [];
+ const vehicleList = vehiclesQuery.data?.data ?? [];
+ const vehiclesLoading = vehiclesQuery.isLoading;
 
  // ── Form ──
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),
- defaultValues: {
+ defaultValues: submission?.data ?? {
  sales_order_id: '',
  vehicle_id: '',
- scheduled_date: '',
+ scheduled_date: localIsoDate(),
  notes: '',
  items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
  },
@@ -85,31 +107,32 @@ export default function CreateDeliveryPage() {
  formState: { errors, isSubmitting },
  } = form;
 
- const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+ const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' });
 
  // Watch SO selection to populate line item options.
   const selectedSoId = watch('sales_order_id');
-  const idempotencyKey = useRef(`delivery-${crypto.randomUUID()}`).current;
 
- // When SO changes, fetch the SO detail to get its line items.
- const { data: selectedSo, isLoading: soDetailLoading } = useQuery({
- queryKey: ['crm', 'sales-orders', selectedSoId],
- queryFn: () => salesOrdersApi.show(selectedSoId),
- enabled: Boolean(selectedSoId),
+ const selectedOrderQuery = useQuery({
+  queryKey: ['supply-chain', 'deliveries', 'form-options', selectedSoId],
+  queryFn: () => deliveriesApi.formOptions({ sales_order_id: selectedSoId }),
+  enabled: Boolean(selectedSoId),
  });
-
- const soItems = selectedSo?.items ?? [];
-
- const { data: inspectionOptions = [], isLoading: inspectionOptionsLoading } = useQuery({
- queryKey: ['supply-chain', 'deliveries', 'inspection-options', selectedSoId],
- queryFn: () => deliveriesApi.inspectionOptions(selectedSoId),
- enabled: Boolean(selectedSoId),
+ const selectedSo = selectedOrderQuery.data?.selected_sales_order;
+ const soDetailLoading = selectedOrderQuery.isLoading;
+ const soItems = selectedSo?.items?.filter((item) => Number(item.remaining_quantity) > 0) ?? [];
+ const inspectionQuery = useQuery({
+  queryKey: ['supply-chain', 'deliveries', 'inspection-options', selectedSoId],
+  queryFn: () => deliveriesApi.inspectionOptions(selectedSoId),
+  enabled: Boolean(selectedSoId),
  });
+ const inspectionOptions = inspectionQuery.data ?? [];
+ const inspectionOptionsLoading = inspectionQuery.isLoading;
 
  // ── Mutation ──
  const mutation = useMutation({
- mutationFn: (data: FormValues) =>
-  deliveriesApi.create({
+ mutationFn: (data: FormValues) => {
+  rememberSubmission({ key: idempotencyKey, data });
+  return deliveriesApi.create({
  sales_order_id: data.sales_order_id,
  vehicle_id: data.vehicle_id || undefined,
  scheduled_date: data.scheduled_date,
@@ -119,17 +142,21 @@ export default function CreateDeliveryPage() {
  quantity: i.quantity,
  inspection_id: i.inspection_id,
  })),
-  }, idempotencyKey),
- onSuccess: (delivery) => {
- qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
+  }, idempotencyKey);
+ },
+ onSuccess: async (delivery) => {
+ rememberSubmission(null);
+ safety.draftState.discard();
+ await qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
  toast.success('Delivery created');
  navigate(`/supply-chain/deliveries/${delivery.id}`);
  },
  onError: (err) => {
+ if (isAxiosError(err) && err.response && err.response.status < 500) rememberSubmission(null);
  applyServerValidationErrors(err, setError, 'Failed to create delivery.');
  },
  });
- const safety = useFormSafety({ form, saved: mutation.isSuccess });
+ const safety = useFormSafety({ form, saved: mutation.isSuccess, draft: !submission && !mutation.isPending });
 
  // ── Pre-populate driver_id from SO if SO has a delivery address ──
  // (not applicable here — driver comes from fleet, not SO)
@@ -141,20 +168,30 @@ export default function CreateDeliveryPage() {
  backTo="/supply-chain/deliveries"
  backLabel="Deliveries"
  />
-      <FormDraftBanner safety={safety} />
+      {!submission && <FormDraftBanner safety={safety} />}
+ {submission && !mutation.isPending && <div role="alert" className="max-w-3xl mx-auto px-5 py-3 text-sm">
+  <p>The last save has not been confirmed. Retry that same delivery to recover it safely, including after a page reload.</p>
+  <Button type="button" variant="primary" className="mt-2" onClick={() => mutation.mutate(submission.data)}>Retry last save</Button>
+ </div>}
 
  <form
  onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
  className="max-w-3xl mx-auto px-5 py-4"
  >
+ <fieldset disabled={Boolean(submission) || mutation.isPending}>
  {/* ── Sales Order ── */}
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
  Sales order
  </legend>
+ <Input label="Find sales order" value={search} placeholder="Search order number"
+  onChange={(event) => { setSearch(event.target.value); setPage(1); }} containerClassName="mb-3" />
  <Select
  label="Sales order"
- {...register('sales_order_id')}
+ {...register('sales_order_id', { onChange: () => {
+ replace([{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }]);
+ form.clearErrors('items');
+ } })}
  error={errors.sales_order_id?.message}
  required
  disabled={soLoading || soError}
@@ -166,6 +203,7 @@ export default function CreateDeliveryPage() {
  ? 'Failed to load sales orders'
  : '— Select deliverable sales order —'}
  </option>
+ {selectedSo && !soList.some((order) => order.id === selectedSo.id) && <option value={selectedSo.id}>{selectedSo.so_number} — {selectedSo.customer?.name}</option>}
  {soList.map((so) => (
  <option key={so.id} value={so.id}>
  {so.so_number}
@@ -173,10 +211,17 @@ export default function CreateDeliveryPage() {
  </option>
  ))}
  </Select>
+ {soError && <Button type="button" className="mt-2" onClick={() => void ordersQuery.refetch()}>Retry sales orders</Button>}
+ {!soLoading && !soError && soList.length === 0 && <p className="mt-2 text-sm text-muted">No deliverable orders match. Try another order number.</p>}
+ {(page > 1 || ordersQuery.data?.has_more) && <div className="flex items-center gap-3 mt-2">
+  <Button type="button" disabled={page === 1 || ordersQuery.isFetching} onClick={() => setPage((value) => value - 1)}>Previous orders</Button>
+  <span className="text-xs text-muted">Page {page}</span>
+  <Button type="button" disabled={!ordersQuery.data?.has_more || ordersQuery.isFetching} onClick={() => setPage((value) => value + 1)}>More orders</Button>
+ </div>}
+ {selectedSo && !soList.some((order) => order.id === selectedSo.id) && <p className="text-sm text-muted mt-2">Selected: {selectedSo.so_number}</p>}
  {selectedSo && (
  <p className="mt-1.5 text-xs text-muted">
- {selectedSo.item_count} line{selectedSo.item_count === 1 ? '' : 's'} ·{' '}
- Customer: {selectedSo.customer?.name ?? '—'} · Total: {formatPeso(selectedSo.total_amount)}
+ Customer: {selectedSo.customer?.name ?? '—'}
  </p>
  )}
  </fieldset>
@@ -215,6 +260,7 @@ export default function CreateDeliveryPage() {
  </option>
  ))}
  </Select>
+ {vehiclesQuery.isError && <div role="alert" className="mt-2 text-sm text-danger-fg">Vehicles could not be loaded. You can assign one after creating the delivery. <Button type="button" onClick={() => void vehiclesQuery.refetch()}>Retry vehicles</Button></div>}
  </fieldset>
 
  {/* ── Delivery line items ── */}
@@ -233,6 +279,11 @@ export default function CreateDeliveryPage() {
  <p className="text-xs text-danger-fg mb-2">{errors.items.root.message}</p>
  )}
 
+ {selectedSoId && (selectedOrderQuery.isError || inspectionQuery.isError) && <div role="alert" className="text-sm text-danger-fg mb-3">
+  Delivery items could not be loaded.
+  <Button type="button" onClick={() => { void selectedOrderQuery.refetch(); void inspectionQuery.refetch(); }}>Retry delivery items</Button>
+ </div>}
+ {selectedSoId && !soDetailLoading && !selectedOrderQuery.isError && !selectedSo && <p role="alert" className="text-sm text-danger-fg mb-3">This order is no longer deliverable. Select another order.</p>}
  <div className="space-y-3">
  {fields.map((field, index) => (
  <div
@@ -243,8 +294,11 @@ export default function CreateDeliveryPage() {
  <Select
  label="Sales order line"
  required
- {...register(`items.${index}.sales_order_item_id`)}
- disabled={!selectedSoId || soDetailLoading}
+ {...register(`items.${index}.sales_order_item_id`, { onChange: () => {
+  form.setValue(`items.${index}.inspection_id`, '');
+  form.clearErrors(`items.${index}.inspection_id`);
+ } })}
+ disabled={!selectedSoId || soDetailLoading || selectedOrderQuery.isError}
  error={errors.items?.[index]?.sales_order_item_id?.message}
  >
  <option value="">
@@ -253,7 +307,7 @@ export default function CreateDeliveryPage() {
  : soDetailLoading
  ? 'Loading items…'
  : soItems.length === 0
- ? 'No line items on this order'
+ ? 'No remaining quantities on this order'
  : '— Select item —'}
  </option>
  {soItems.map((item) => (
@@ -261,7 +315,7 @@ export default function CreateDeliveryPage() {
  {item.product?.part_number
  ? `${item.product.part_number} — ${item.product.name}`
  : `Line ${item.id}`}
- {' '}(Qty: {item.quantity} {item.product?.unit_of_measure ?? ''})
+ {' '}({item.remaining_quantity} remaining {item.product?.unit_of_measure ?? ''})
  </option>
  ))}
  </Select>
@@ -271,7 +325,7 @@ export default function CreateDeliveryPage() {
  label="Passed outgoing inspection"
  required
  {...register(`items.${index}.inspection_id`)}
- disabled={!selectedSoId || !watch(`items.${index}.sales_order_item_id`) || inspectionOptionsLoading}
+ disabled={!selectedSoId || !watch(`items.${index}.sales_order_item_id`) || inspectionOptionsLoading || inspectionQuery.isError}
  error={errors.items?.[index]?.inspection_id?.message}
  >
  <option value="">
@@ -348,6 +402,7 @@ export default function CreateDeliveryPage() {
  />
  </fieldset>
 
+ </fieldset>
  {/* ── Actions ── */}
  <FormActions>
  <Button
@@ -360,7 +415,7 @@ export default function CreateDeliveryPage() {
  <Button
  type="submit"
  variant="primary"
- disabled={isSubmitting || mutation.isPending}
+ disabled={isSubmitting || mutation.isPending || Boolean(submission) || selectedOrderQuery.isError || inspectionQuery.isError}
  loading={mutation.isPending}
  >
  {mutation.isPending ? 'Creating…' : 'Create delivery'}

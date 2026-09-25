@@ -64,4 +64,15 @@ describe('CustomerDeliveryDetailPage', () => {
     expect(await screen.findByRole('button', { name: /Confirm Receipt/ })).toBeInTheDocument();
     expect(screen.queryByText(/Awaiting our driver's proof of delivery/)).not.toBeInTheDocument();
   });
+  it('links to an open problem report instead of asking for another proof', async () => {
+    vi.mocked(customerPortalApi.getDelivery).mockResolvedValue({
+      ...delivered, can_confirm: false,
+      billing_hold: { case_id: 'case-1', case_number: 'CASE-1', message: 'Awaiting resolution.' },
+    });
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'CASE-1' })).toHaveAttribute('href', '/portal/customer/problems/case-1');
+    expect(screen.queryByRole('button', { name: /Confirm Receipt/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Awaiting our driver's proof of delivery/)).not.toBeInTheDocument();
+  });
+
 });

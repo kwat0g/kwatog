@@ -21,6 +21,12 @@ class ReturnRequestItemResource extends JsonResource
             'item_id'           => $this->item_id ? \App\Common\Support\HashId::encode((int) $this->item_id) : null,
             'quantity'          => (string) $this->quantity,
             'returned_quantity' => (string) $this->returned_quantity,
+            'received_total'    => (string) $this->returned_quantity,
+            'remaining_quantity' => bccomp(
+                bcsub((string) $this->quantity, (string) $this->returned_quantity, 3),
+                '0',
+                3,
+            ) > 0 ? bcsub((string) $this->quantity, (string) $this->returned_quantity, 3) : '0.000',
             'receipt_recorded'  => (bool) $this->receipt_recorded,
             // RMA-010 — the reservation this line holds on its source document.
             // Without it the source contract was invisible: an operator hitting

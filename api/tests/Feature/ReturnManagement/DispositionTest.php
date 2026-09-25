@@ -492,7 +492,7 @@ class DispositionTest extends TestCase
 
         $by = $this->makeUser();
         $vendor = Vendor::factory()->create(['created_by' => null]);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         $expense = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
 
@@ -739,7 +739,7 @@ class DispositionTest extends TestCase
             'product_id'        => $product->id,
             'source_sales_order_item_id' => $source->id,
             'quantity'           => '2.000',
-            'returned_quantity'  => '2.000',
+            'returned_quantity'  => '0.000',
             'unit_price'         => '10.00',
             'total'              => '20.00',
         ]);

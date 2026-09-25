@@ -13,7 +13,29 @@ export interface MachineDowntimeCategoryOption {
  is_planned: boolean;
 }
 
-export interface WorkOrderMaterial {
+/** Material usage values are string decimals and shared by live WOs/output snapshots. */
+export interface WorkOrderMaterialUsageBreakdown {
+ item_id?: string | null;
+ bom_quantity?: string;
+ actual_quantity_issued?: string;
+ actual_cost?: string;
+ auto_quantity_issued?: string;
+ auto_actual_cost?: string;
+ auto_gross_quantity_issued?: string;
+ auto_gross_actual_cost?: string;
+ auto_returned_quantity?: string;
+ auto_returned_cost?: string;
+ manual_quantity_issued?: string;
+ manual_actual_cost?: string;
+ manual_gross_quantity_issued?: string;
+ manual_gross_actual_cost?: string;
+ manual_returned_quantity?: string;
+ manual_returned_cost?: string;
+ returned_quantity?: string;
+ returned_cost?: string;
+}
+
+export interface WorkOrderMaterial extends WorkOrderMaterialUsageBreakdown {
  id: string;
  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
  bom_quantity: string;
@@ -57,7 +79,7 @@ export interface WorkOrderOutput {
   exception_reason?: string | null;
   authorized_by?: string | null;
   material_plan_source?: string | null;
-  materials?: Array<{ item_id: string | null; bom_quantity: string; actual_quantity_issued: string }>;
+  materials?: WorkOrderMaterialUsageBreakdown[];
  } | null;
  recorder?: { id: string; name: string } | null;
  defects?: WorkOrderDefectRow[];

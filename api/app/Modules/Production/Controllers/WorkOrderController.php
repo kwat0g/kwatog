@@ -6,7 +6,11 @@ namespace App\Modules\Production\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
+use App\Modules\Attendance\Models\Shift;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -75,6 +79,65 @@ class WorkOrderController
                 ),
             ], WorkOrderStatus::cases()),
             'operation_statuses' => array_map(static fn (WoOperationStatus $status): array => ['value' => $status->value, 'label' => $status->label()], WoOperationStatus::cases()),
+        ]]);
+    }
+
+    /**
+     * Lookups needed by the production work-order forms. These are exposed
+     * under the Production read permission so a production supervisor does
+     * not need broad CRM, MRP or Attendance access just to create/confirm a
+     * work order or record a shift.
+     */
+    public function formOptions(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'products' => Product::query()
+                ->active()
+                ->orderBy('part_number')
+                ->get(['id', 'part_number', 'name'])
+                ->map(static fn (Product $product): array => [
+                    'id' => $product->hash_id,
+                    'part_number' => $product->part_number,
+                    'name' => $product->name,
+                ])
+                ->values(),
+            'machines' => Machine::query()
+                ->orderBy('machine_code')
+                ->get(['id', 'machine_code', 'name', 'tonnage', 'status'])
+                ->map(static fn (Machine $machine): array => [
+                    'id' => $machine->hash_id,
+                    'machine_code' => $machine->machine_code,
+                    'name' => $machine->name,
+                    'tonnage' => $machine->tonnage,
+                    'status' => $machine->status?->value,
+                ])
+                ->values(),
+            'molds' => Mold::query()
+                ->with('product:id,part_number,name')
+                ->orderBy('mold_code')
+                ->get(['id', 'mold_code', 'name', 'product_id', 'cavity_count', 'status'])
+                ->map(static fn (Mold $mold): array => [
+                    'id' => $mold->hash_id,
+                    'mold_code' => $mold->mold_code,
+                    'name' => $mold->name,
+                    'product' => $mold->product ? [
+                        'id' => $mold->product->hash_id,
+                        'part_number' => $mold->product->part_number,
+                        'name' => $mold->product->name,
+                    ] : null,
+                    'cavity_count' => $mold->cavity_count,
+                    'status' => $mold->status?->value,
+                ])
+                ->values(),
+            'shifts' => Shift::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(static fn (Shift $shift): array => [
+                    'id' => $shift->hash_id,
+                    'name' => $shift->name,
+                ])
+                ->values(),
         ]]);
     }
 

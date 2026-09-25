@@ -53,6 +53,17 @@ const TIMELINE_DOT: Record<string, string> = {
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
+function createReceiptRequestKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function'
+    ? crypto.getRandomValues(new Uint8Array(16))
+    : Uint8Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export default function ReturnRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -65,6 +76,8 @@ export default function ReturnRequestDetailPage() {
   const [locationId, setLocationId] = useState('');
   const [finalizeCnId, setFinalizeCnId] = useState<string | null>(null);
   const [receivedQty, setReceivedQty] = useState<Record<string, string>>({});
+  const [receiptFinal, setReceiptFinal] = useState(true);
+  const [receiptRequestKey, setReceiptRequestKey] = useState<string | null>(null);
   const [showDispose, setShowDispose] = useState(false);
 
   const {
@@ -141,22 +154,23 @@ export default function ReturnRequestDetailPage() {
   });
 
   const receiveMut = useMutation({
-    // Without per-line counts the backend falls back to the claimed quantity,
-    // so a short return would be credited in full.
-    mutationFn: () =>
-      returnManagementApi.receive(
+    mutationFn: () => {
+      const requestKey = receiptRequestKey ?? createReceiptRequestKey();
+      setReceiptRequestKey(requestKey);
+
+      return returnManagementApi.receive(
         id!,
-        Object.fromEntries(
-          Object.entries(receivedQty)
-            .filter(([, v]) => v !== '')
-            .map(([k, v]) => [k, Number(v)]),
-        ),
-      ),
-    onSuccess: () => {
+        Object.fromEntries(Object.entries(receivedQty).filter(([, value]) => value !== '')),
+        { finalReceipt: receiptFinal, requestKey },
+      );
+    },
+    onSuccess: (updated) => {
       invalidate();
-      toast.success('Receipt recorded.');
+      toast.success(updated.status === 'received' ? 'Final receipt recorded.' : 'Partial receipt recorded.');
       setConfirm(null);
       setReceivedQty({});
+      setReceiptFinal(true);
+      setReceiptRequestKey(null);
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to record receipt.')),
   });
@@ -468,6 +482,10 @@ export default function ReturnRequestDetailPage() {
       />
 
       <div className="px-5 py-4 space-y-4">
+        {rma.is_truck_return && <Panel title="Goods returned from a delivery attempt">
+          <p className="text-sm">Warehouse has counted these goods into quarantine. Inspect and record their disposition here. This warehouse return does not create a customer credit; redelivery follows the original sales order.</p>
+          {rma.origin_delivery && can('supply_chain.deliveries.view') && <Link className="inline-block mt-2 text-sm text-link underline font-mono" to={`/supply-chain/deliveries/${rma.origin_delivery.id}`}>{rma.origin_delivery.delivery_number}</Link>}
+        </Panel>}
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-4">
             {/* Details Panel */}
@@ -526,17 +544,19 @@ export default function ReturnRequestDetailPage() {
                         Bill: {rma.bill.bill_number}
                       </Link>
                     )}
+                    {rma.source_label && <span>{rma.source_label}</span>}
+                    {rma.source_case && <Link to={`/return-management/cases/${rma.source_case.id}`} className="text-accent hover:underline font-mono">Problem: {rma.source_case.case_number}</Link>}
                     {!rma.customer &&
                       !rma.vendor &&
                       !rma.sales_order &&
                       !rma.invoice &&
                       !rma.purchase_order &&
-                      !rma.bill && <span className="text-muted">—</span>}
+                      !rma.bill && !rma.source_label && !rma.source_case && <span className="text-muted">—</span>}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt>
-                  <dd>{reasonLabel.get(rma.reason_code ?? '') || rma.reason_code || '—'}</dd>
+                  <dd>{rma.is_truck_return ? 'Returned from a delivery attempt' : reasonLabel.get(rma.reason_code ?? '') || rma.reason_code || '—'}</dd>
                   {rma.reason_description && (
                     <dd className="text-muted text-xs mt-0.5">{rma.reason_description}</dd>
                   )}
@@ -636,9 +656,7 @@ export default function ReturnRequestDetailPage() {
                           {formatQuantity(item.quantity)}
                         </Td>
                         <Td align="right" mono>
-                          {formatQuantity(
-                            item.receipt_recorded ? item.returned_quantity : item.quantity,
-                          )}
+                          {formatQuantity(item.received_total ?? item.returned_quantity)}
                         </Td>
                         <Td align="right" mono>
                           {formatPeso(item.unit_price)}
@@ -715,6 +733,44 @@ export default function ReturnRequestDetailPage() {
                   ))}
               </div>
             </Panel>
+
+            {rma.receipts && rma.receipts.length > 0 && (
+              <Panel title={`Receipt history (${rma.receipts.length})`}>
+                <div className="space-y-3 text-sm mt-2">
+                  {rma.receipts.map((receipt) => (
+                    <div key={receipt.id} className="border-b border-subtle pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">
+                          {receipt.final_receipt ? 'Final installment' : 'Partial installment'}
+                        </span>
+                        <span className="font-mono tabular-nums text-xs text-muted">
+                          {formatDateTime(receipt.received_at)}
+                        </span>
+                      </div>
+                      <div className="mt-1 space-y-1 text-muted">
+                        {receipt.items.map((receivedLine, index) => {
+                          const item = rma.items?.find((line) => line.id === receivedLine.return_request_item_id);
+                          const label = item?.product
+                            ? `${item.product.part_number} — ${item.product.name}`
+                            : item?.item
+                              ? `${item.item.code} — ${item.item.name}`
+                              : `Line ${index + 1}`;
+
+                          return (
+                            <div key={receivedLine.return_request_item_id} className="flex items-center justify-between gap-3">
+                              <span className="truncate">{label}</span>
+                              <span className="shrink-0 font-mono tabular-nums">
+                                {formatQuantity(receivedLine.quantity)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            )}
 
             {/* Outcome — the documents disposition produced. These were returned by
      the API but never rendered, so there was no way to tell from the UI
@@ -996,14 +1052,21 @@ export default function ReturnRequestDetailPage() {
       <Modal isOpen={confirm === 'receive'} onClose={() => setConfirm(null)} title="Record receipt">
         <div className="space-y-3">
           <p className="text-sm text-muted">
-            Enter how many units actually came back on each line. Leave a line blank to accept the
-            full requested quantity.
+            {rma.receipt_open
+              ? 'Enter quantities in this installment. Previously received quantities stay recorded and the request remains reserved until the final installment.'
+              : 'Enter how many units actually came back on each line. On the first final receipt, a blank line records the full requested quantity.'}
           </p>
+          {rma.receipt_open && (
+            <p className="text-sm text-info-fg">
+              Remaining quantities are shown for each line. The quarantine location recorded for the first installment is reused automatically.
+            </p>
+          )}
           <table className={tableCls}>
             <thead>
               <tr className={theadTrCls}>
                 <Th>Line</Th>
                 <Th align="right">Requested</Th>
+                <Th align="right">Remaining</Th>
                 <Th align="right">Received</Th>
               </tr>
             </thead>
@@ -1020,23 +1083,46 @@ export default function ReturnRequestDetailPage() {
                   <Td align="right" mono>
                     {formatQuantity(item.quantity)}
                   </Td>
+                  <Td align="right" mono>
+                    {formatQuantity(item.remaining_quantity ?? item.quantity)}
+                  </Td>
                   <Td align="right">
                     <Input
                       type="number"
                       step="0.001"
                       min="0"
-                      max={item.quantity}
+                      max={item.remaining_quantity ?? item.quantity}
                       className="font-mono tabular-nums text-right"
                       value={receivedQty[item.id] ?? ''}
-                      onChange={(e) =>
-                        setReceivedQty((prev) => ({ ...prev, [item.id]: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        setReceivedQty((prev) => ({ ...prev, [item.id]: e.target.value }));
+                        setReceiptRequestKey(null);
+                      }}
                     />
                   </Td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={receiptFinal}
+              onChange={(e) => {
+                setReceiptFinal(e.target.checked);
+                setReceiptRequestKey(null);
+              }}
+              className="mt-0.5 accent-accent"
+            />
+            <span>
+              <span className="font-medium">This is the final installment</span>
+              <span className="block text-xs text-muted">
+                {receiptFinal
+                  ? 'Inspection can begin after this receipt is recorded.'
+                  : 'The return stays approved for another receipt. Enter at least one positive quantity.'}
+              </span>
+            </span>
+          </label>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setConfirm(null)}>
               Cancel
@@ -1044,9 +1130,10 @@ export default function ReturnRequestDetailPage() {
             <Button
               variant="primary"
               loading={receiveMut.isPending}
+              disabled={!receiptFinal && !Object.values(receivedQty).some((quantity) => quantity !== '' && Number(quantity) > 0)}
               onClick={() => receiveMut.mutate()}
             >
-              Record Receipt
+              {receiptFinal ? 'Record Final Receipt' : 'Record Partial Receipt'}
             </Button>
           </div>
         </div>

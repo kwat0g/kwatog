@@ -19,6 +19,7 @@ class ConfirmPortalDeliveryRequest extends FormRequest
             'receiver_name'     => ['nullable', 'string', 'max:100'],
             'receiver_position' => ['nullable', 'string', 'max:100'],
             'delivery_remarks'  => ['nullable', 'string', 'max:500'],
+            'accept_rejection' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -19,10 +19,8 @@ use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
-use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
-use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Services\StockLocationSummaryService;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -90,6 +88,7 @@ class WorkOrderService
         private readonly WorkOrderStateMachine $stateMachine,
         private readonly MachineService $machines,
         private readonly StockLocationSummaryService $locationSummary,
+        private readonly WorkOrderMaterialUsageService $materialUsage,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -300,89 +299,10 @@ class WorkOrderService
      * records actual_start, and issues the previously-reserved materials.
      *
      * Sprint 6 audit §1.1: this previously only flipped statuses. Now it
-     * also releases reservations and creates MaterialIssue stock movements
-     * via StockMovementService.
+     * also verifies issued/reserved coverage, releases only the quantity still
+     * needed from backed reservations, and creates any remaining MaterialIssue
+     * stock movements via StockMovementService.
      */
-    /**
-     * ADV3 — Snapshot the supplier-lot trail of every issued material onto
-     * `work_orders.material_lot_references`. This enables IATF 16949
-     * backward traceability: "this batch used Resin from GRN X, supplier lot Y".
-     */
-    private function captureMaterialLotReferences(WorkOrder $wo): void
-    {
-        $refs = [];
-        $materials = $wo->materials()->with('item:id,code,name')->get();
-
-        // 1. Authoritative: resolve lots from actual stock movements recorded for this WO.
-        $issueMovements = StockMovement::query()
-            ->where('reference_type', 'work_order')
-            ->where('reference_id', $wo->id)
-            ->where('movement_type', StockMovementType::MaterialIssue)
-            ->whereNotNull('lot_number')
-            ->get();
-
-        if ($issueMovements->isNotEmpty()) {
-            $grouped = $issueMovements->groupBy(fn ($m) => $m->item_id.'_'.$m->lot_number);
-            foreach ($grouped as $mvmts) {
-                $first = $mvmts->first();
-                $itemId = (int) $first->item_id;
-                $lotNumber = (string) $first->lot_number;
-                $qtyTotal = '0';
-                foreach ($mvmts as $m) {
-                    $qtyTotal = bcadd($qtyTotal, (string) $m->quantity, 3);
-                }
-
-                $matchingMaterial = $materials->firstWhere('item_id', $itemId);
-                $item = $matchingMaterial?->item ?? $first->item;
-
-                $grnItem = GrnItem::query()
-                    ->where('item_id', $itemId)
-                    ->where('material_lot_number', $lotNumber)
-                    ->with('grn:id,grn_number,received_date')
-                    ->latest('id')
-                    ->first();
-
-                $refs[] = [
-                    'item_id' => $item ? $item->hash_id : null,
-                    'item_code' => $item->code ?? null,
-                    'item_name' => $item->name ?? null,
-                    'grn_number' => $grnItem?->grn?->grn_number,
-                    'material_lot_number' => $lotNumber,
-                    'supplier_lot_reference' => $grnItem?->supplier_lot_reference,
-                    'quantity_used' => $qtyTotal,
-                ];
-            }
-        }
-
-        // 2. Fallback: if no movements had lots (legacy records / unlotted stock), query latest GRN items per material.
-        if (empty($refs)) {
-            foreach ($materials as $material) {
-                $latestGrnItem = GrnItem::query()
-                    ->where('item_id', $material->item_id)
-                    ->whereNotNull('material_lot_number')
-                    ->with('grn:id,grn_number,received_date')
-                    ->latest('id')
-                    ->first();
-                if (! $latestGrnItem) {
-                    continue;
-                }
-                $refs[] = [
-                    'item_id' => $material->item ? $material->item->hash_id : null,
-                    'item_code' => $material->item->code ?? null,
-                    'item_name' => $material->item->name ?? null,
-                    'grn_number' => $latestGrnItem->grn?->grn_number,
-                    'material_lot_number' => $latestGrnItem->material_lot_number,
-                    'supplier_lot_reference' => $latestGrnItem->supplier_lot_reference,
-                    'quantity_used' => (string) $material->bom_quantity,
-                ];
-            }
-        }
-
-        if (! empty($refs)) {
-            $wo->update(['material_lot_references' => $refs]);
-        }
-    }
-
     public function start(WorkOrder $wo, int $startedBy): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
@@ -397,6 +317,7 @@ class WorkOrderService
             $from = $lockedWo->status?->value ?? 'confirmed';
             $this->assertMaterialPlan($lockedWo);
             $this->assertProductionDependenciesReady($lockedWo);
+            $this->materialUsage->assertCoverage($lockedWo, lockReservationLevels: true);
 
             $machine = $lockedWo->machine_id ? Machine::lockForUpdate()->find($lockedWo->machine_id) : null;
             $mold = $lockedWo->mold_id ? Mold::lockForUpdate()->find($lockedWo->mold_id) : null;
@@ -427,16 +348,13 @@ class WorkOrderService
                 'batch_number' => $batchNumber,
             ]);
 
-            // Issue reserved materials. Best-effort: if no reservation exists
-            // (e.g. legacy WOs that were confirmed before the audit fix), the
-            // WO still starts — material_issue rows just won't be created.
+            // Coverage was checked before any machine/material mutation. Manual
+            // issues count once; reservations issue only the remaining BOM need.
             $this->issueReservedMaterials($lockedWo, $startedBy);
 
-            // ADV3 — Capture incoming material lot references for backward traceability.
-            // Best-effort: queries the latest GRN item with a material_lot_number for
-            // each WO material's item_id. If no lot info exists in seeded data, the
-            // attribute stays an empty array — the WO still starts cleanly.
-            $this->captureMaterialLotReferences($lockedWo);
+            // Refresh the lot trail from exact auto/manual issue evidence. Legacy
+            // GRN fallback is used only when no issue evidence exists.
+            $this->materialUsage->refreshLotReferences($lockedWo);
 
             // C-2 — Promote the parent SO to in_production. app() lookup avoids
             // a circular dependency on SalesOrderService at construction time.
@@ -530,7 +448,7 @@ class WorkOrderService
      * assertMaterialPlan(), assertProductionDependenciesReady(), the
      * machine/mold availability checks, issueReservedMaterials(),
      * batch_number generation, the actual_start stamp,
-     * captureMaterialLotReferences() and the parent-SO promotion. That defeated
+     * material-lot snapshot refresh and the parent-SO promotion. That defeated
      * two invariants which have their own passing tests
      * (`standard_no_bom_work_order_cannot_start` and
      * `parent_work_order_cannot_start_before_subassembly_child_is_ready`) and
@@ -550,6 +468,10 @@ class WorkOrderService
             $this->assertResumable($lockedWo);
             $this->assertTransition($lockedWo, WorkOrderStatus::InProgress);
             $from = $lockedWo->status?->value ?? 'paused';
+            // The full BOM is the start gate. After a pause, require issued
+            // material only for the saved per-item norm of production already
+            // recorded; each further output record gates its own increment.
+            $this->materialUsage->assertProductionCoverage($lockedWo);
 
             // Close any open downtime row for this WO.
             $open = MachineDowntime::where('work_order_id', $lockedWo->id)
@@ -716,6 +638,7 @@ class WorkOrderService
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Cancelled);
             $from = $lockedWo->status?->value ?? 'planned';
+            $this->materialUsage->assertReservationLedgerConsistent($lockedWo);
 
             $lockedWo->update([
                 'status' => WorkOrderStatus::Cancelled->value,
@@ -1174,27 +1097,77 @@ class WorkOrderService
     }
 
     /**
-     * Convert each Reserved MaterialReservation into an Issued one by
-     * (a) releasing the reservation, (b) recording a MaterialIssue stock
-     * movement, and (c) bumping the matching work_order_materials row's
-     * actual_quantity_issued counter. All within the start() transaction.
+     * Release every backed reservation and issue only the remaining BOM
+     * requirement after manual and prior auto issues have been counted. The
+     * auto-only persisted counter remains the input used by MRP. All within
+     * the start() transaction.
      */
     private function issueReservedMaterials(WorkOrder $wo, int $userId): void
     {
+        $remainingByItem = [];
+        foreach ($this->materialUsage->groups($wo) as $group) {
+            $remainingByItem[(int) $group['item_id']] = bcsub(
+                (string) $group['required_quantity'],
+                (string) $group['actual_quantity_issued'],
+                3,
+            );
+            if (bccomp($remainingByItem[(int) $group['item_id']], '0', 3) < 0) {
+                $remainingByItem[(int) $group['item_id']] = '0.000';
+            }
+        }
+
         $reservations = MaterialReservation::where('work_order_id', $wo->id)
             ->where('status', ReservationStatus::Reserved->value)
             ->lockForUpdate()
+            ->orderBy('id')
             ->get();
+        $planByReservation = collect($this->materialUsage->reservationPlan($wo, strict: true))
+            ->keyBy('reservation_id');
 
         foreach ($reservations as $res) {
+            $reservedQty = (string) $res->quantity;
+            $reservationPlan = $planByReservation->get((int) $res->id);
             if ($res->location_id === null) {
+                // A null-location row cannot hold stock in the ledger.
+                $res->update([
+                    'status' => ReservationStatus::Released->value,
+                    'released_at' => Carbon::now(),
+                ]);
+                continue;
+            }
+            if (! $reservationPlan || ! $reservationPlan['backed']) {
+                throw new BusinessRuleException(
+                    "Reservation {$res->id} is not backed by an unambiguous stock hold. Reconcile the reservation ledger before starting production."
+                );
+            }
+
+            $remaining = $remainingByItem[(int) $res->item_id] ?? '0.000';
+            if (! $reservationPlan['location_usable']) {
+                // A known, exactly backed reservation at a now-blocked location
+                // can be released, but not consumed. It never contributes to
+                // start coverage; manual/other usable issues must cover demand.
+                $this->stock->release((int) $res->item_id, (int) $res->location_id, $reservedQty);
+                $res->update([
+                    'status' => ReservationStatus::Released->value,
+                    'released_at' => Carbon::now(),
+                ]);
                 continue;
             }
 
-            $qty = (string) $res->quantity;
-            // Release first so the move()'s availability check sees the
-            // freed stock as on-hand-available.
-            $this->stock->release((int) $res->item_id, (int) $res->location_id, $qty);
+            $qty = bccomp($remaining, $reservedQty, 3) >= 0 ? $reservedQty : $remaining;
+
+            // Release the full, verified reservation before moving only the
+            // portion still needed after manual and prior auto issues.
+            $this->stock->release((int) $res->item_id, (int) $res->location_id, $reservedQty);
+
+            if (bccomp($qty, '0', 3) <= 0) {
+                $res->update([
+                    'quantity' => $reservedQty,
+                    'status' => ReservationStatus::Released->value,
+                    'released_at' => Carbon::now(),
+                ]);
+                continue;
+            }
 
             $preferredLot = $this->locationSummary->preferredLot((int) $res->item_id, (int) $res->location_id);
 
@@ -1213,11 +1186,27 @@ class WorkOrderService
             ));
 
             $res->update([
+                'quantity' => $qty,
                 'status' => ReservationStatus::Issued->value,
                 'released_at' => Carbon::now(),
             ]);
 
-            // Bump the matching work_order_materials counter.
+            $excess = bcsub($reservedQty, $qty, 3);
+            if (bccomp($excess, '0', 3) > 0) {
+                MaterialReservation::create([
+                    'item_id' => $res->item_id,
+                    'work_order_id' => $res->work_order_id,
+                    'location_id' => $res->location_id,
+                    'quantity' => $excess,
+                    'status' => ReservationStatus::Released->value,
+                    'reserved_at' => $res->reserved_at,
+                    'released_at' => Carbon::now(),
+                ]);
+            }
+
+            // Persisted issue counters deliberately remain auto-issue-only;
+            // Warehouse slips are read separately and MRP adds the two sources.
+            // Repeated BOM rows are aggregated on this deterministic first row.
             $material = WorkOrderMaterial::where('work_order_id', $wo->id)
                 ->where('item_id', $res->item_id)
                 ->orderBy('id')
@@ -1227,10 +1216,17 @@ class WorkOrderService
                 $actualCost = Money::add((string) $material->actual_cost, (string) $movement->total_cost);
                 $material->actual_quantity_issued = bcadd((string) $material->actual_quantity_issued, $qty, 3);
                 $material->actual_cost = $actualCost;
-                $material->cost_variance = Money::sub($actualCost, (string) $material->standard_cost);
-                $material->variance = bcsub((string) $material->actual_quantity_issued, (string) $material->bom_quantity, 3);
+                $itemPlan = WorkOrderMaterial::query()
+                    ->where('work_order_id', $wo->id)
+                    ->where('item_id', $res->item_id)
+                    ->selectRaw('SUM(bom_quantity) AS bom_quantity, SUM(standard_cost) AS standard_cost')
+                    ->first();
+                $material->cost_variance = Money::sub($actualCost, (string) $itemPlan->standard_cost);
+                $material->variance = bcsub((string) $material->actual_quantity_issued, (string) $itemPlan->bom_quantity, 3);
                 $material->save();
             }
+
+            $remainingByItem[(int) $res->item_id] = bcsub($remaining, $qty, 3);
         }
     }
 
@@ -1248,6 +1244,10 @@ class WorkOrderService
 
         foreach ($reservations as $res) {
             if ($res->location_id === null) {
+                $res->update([
+                    'status' => ReservationStatus::Released->value,
+                    'released_at' => Carbon::now(),
+                ]);
                 continue;
             }
             $this->stock->release((int) $res->item_id, (int) $res->location_id, (string) $res->quantity);

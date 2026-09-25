@@ -14,7 +14,6 @@ import { LuTriangleAlert, LuPlus, LuTrash2 } from '@/lib/icons';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { workOrdersApi } from '@/api/production/workOrders';
-import { shiftsApi } from '@/api/attendance/shifts';
 import { client } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -25,6 +24,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useEcho } from '@/hooks/useEcho';
 import { formatInt } from '@/lib/formatNumber';
 import type { DefectType } from '@/types/production';
+import { FormOptionsStatus } from './FormOptionsStatus';
 
 const schema = z.object({
  good_count: z.string().regex(/^\d+$/, 'Good count must be a non-negative integer'),
@@ -55,8 +55,8 @@ export default function RecordOutputPage() {
  queryFn: () => client.get<{ data: DefectType[] }>('/production/defect-types').then((r) => r.data.data),
  });
  const shifts = useQuery({
- queryKey: ['attendance', 'shifts', 'production-output'],
- queryFn: () => shiftsApi.list({ per_page: 200 }),
+ queryKey: ['production', 'work-orders', 'form-options'],
+ queryFn: workOrdersApi.formOptions,
  staleTime: 300_000,
  });
 
@@ -99,7 +99,7 @@ export default function RecordOutputPage() {
  defects: values.defects.map((d) => ({ defect_type_id: d.defect_type_id, count: Number(d.count) })),
  }, key);
  },
- onSuccess: (output) => {
+ onSuccess: async (output) => {
  if (output.production_receipt_handoff?.status === 'manual_required') {
  toast(`Output ${output.batch_code ?? ''} recorded. Finished-goods receipt needs Inventory attention.`, { icon: <LuTriangleAlert size={16} aria-hidden="true" /> });
  } else {
@@ -107,6 +107,12 @@ export default function RecordOutputPage() {
  }
  reset({ good_count: '', shift: '', remarks: '', defects: [] });
  submissionKey.current = null;
+ await qc.invalidateQueries({
+ predicate: (query) =>
+ query.queryKey[0] === 'production'
+ && query.queryKey[1] === 'work-orders'
+ && query.queryKey[2] !== 'form-options',
+ });
  navigate(`/production/work-orders/${id}`);
  },
  onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
@@ -151,8 +157,14 @@ export default function RecordOutputPage() {
  backTo={`/production/work-orders/${id}`}
  backLabel="Work order"
  />
- <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
- <div className="lg:col-span-2">
+ <div className="min-w-0 px-5 py-4 grid gap-4 lg:grid-cols-3">
+  <div className="min-w-0 lg:col-span-2">
+ <FormOptionsStatus
+  isLoading={shifts.isLoading}
+  isError={shifts.isError}
+  isFetching={shifts.isFetching}
+  onRetry={() => { void shifts.refetch(); }}
+ />
  <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())}>
  <Panel title="New recording">
  <div className="grid grid-cols-2 gap-3">
@@ -166,7 +178,7 @@ export default function RecordOutputPage() {
  </div>
  <Select label="Shift" {...register('shift')}>
  <option value="">—</option>
- {(shifts.data?.data ?? []).map((shift) => (
+ {(shifts.data?.shifts ?? []).map((shift) => (
  <option key={shift.id} value={shift.name}>{shift.name}</option>
  ))}
  </Select>
@@ -185,8 +197,8 @@ export default function RecordOutputPage() {
  </div>
  {fields.length === 0 && <div className="text-xs text-muted">No rejects — click "Add defect" to classify rejected units.</div>}
  {fields.map((f, i) => (
- <div key={f.id} className="flex items-end gap-2 mt-2">
- <div className="flex-1">
+ <div key={f.id} className="grid grid-cols-[minmax(0,1fr)_6rem_auto] items-end gap-2 mt-2">
+ <div className="min-w-0">
  <Select label={i === 0 ? 'Defect type' : ''} {...register(`defects.${i}.defect_type_id`)} error={errors.defects?.[i]?.defect_type_id?.message}>
  <option value="">Select…</option>
  {(defects.data ?? []).map((d) => (
@@ -223,7 +235,7 @@ export default function RecordOutputPage() {
  </form>
  </div>
 
- <div className="space-y-4">
+ <div className="min-w-0 space-y-4">
  <Panel title="Live cumulative" meta="updated via WebSocket">
  <dl className="space-y-2 text-sm">
  <div className="flex justify-between"><dt className="text-muted">Produced</dt><dd className="font-mono tabular-nums">{formatInt(cumulative.produced)}</dd></div>

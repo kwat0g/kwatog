@@ -56,6 +56,7 @@ class WorkOrderOutputService
         private readonly MoldService $molds,
         private readonly StockMovementService $movements,
         private readonly SettingsService $settings,
+        private readonly WorkOrderMaterialUsageService $materialUsage,
     ) {}
 
     /**
@@ -204,6 +205,16 @@ class WorkOrderOutputService
                 throw new BusinessRuleException("Recording this output would exceed the work order target of {$fresh->quantity_target} good pieces.");
             }
 
+            // Reserves only cover the full-target start gate. Once production
+            // is under way, actual issued material must cover the saved BOM
+            // norm for cumulative good-plus-reject units. This lets a reject
+            // already made be reported, while gating any further replacement
+            // output until its incremental material is issued.
+            $this->materialUsage->assertProductionCoverage(
+                $fresh,
+                pendingCanonicalUnits: number_format($total, 4, '.', ''),
+            );
+
             // Generate batch code: {wo}-B{seq}.
             $existing = $fresh->outputs()->count();
             $batchCode = sprintf('%s-B%02d', $fresh->wo_number, $existing + 1);
@@ -222,7 +233,27 @@ class WorkOrderOutputService
                     'exception_reason' => $fresh->exception_reason,
                     'authorized_by' => $fresh->exception_authorized_by,
                     'material_plan_source' => $fresh->material_plan_source,
-                    'materials' => $fresh->materials()->get(['item_id', 'bom_quantity', 'actual_quantity_issued'])->toArray(),
+                    'materials' => array_map(static fn (array $usage): array => [
+                        'item_id' => $usage['item_id'],
+                        'bom_quantity' => $usage['required_quantity'],
+                        'actual_quantity_issued' => $usage['actual_quantity_issued'],
+                        'actual_cost' => $usage['actual_cost'],
+                        'auto_quantity_issued' => $usage['auto_quantity_issued'],
+                        'auto_actual_cost' => $usage['auto_actual_cost'],
+                        'auto_gross_quantity_issued' => $usage['auto_gross_quantity_issued'],
+                        'auto_gross_actual_cost' => $usage['auto_gross_actual_cost'],
+                        'auto_returned_quantity' => $usage['auto_returned_quantity'],
+                        'auto_returned_cost' => $usage['auto_returned_cost'],
+                        'manual_quantity_issued' => $usage['manual_quantity_issued'],
+                        'manual_actual_cost' => $usage['manual_actual_cost'],
+                        'manual_gross_quantity_issued' => $usage['manual_gross_quantity_issued'],
+                        'manual_gross_actual_cost' => $usage['manual_gross_actual_cost'],
+                        'manual_returned_quantity' => $usage['manual_returned_quantity'],
+                        'manual_returned_cost' => $usage['manual_returned_cost'],
+                        'returned_quantity' => $usage['returned_quantity'],
+                        'returned_cost' => $usage['returned_cost'],
+                    ], $this->materialUsage->groups($fresh)),
+                    'material_lot_references' => $fresh->material_lot_references ?? [],
                 ],
                 'idempotency_key' => $idempotencyKey,
                 'idempotency_fingerprint' => $idempotencyFingerprint,
@@ -505,6 +536,7 @@ class WorkOrderOutputService
             referenceId: $output->id,
             remarks: "WO {$workOrder->wo_number} batch {$output->batch_code}",
             createdBy: $createdBy,
+            lotNumber: (string) $output->batch_code,
             bypassCountFreeze: true,
         ));
 

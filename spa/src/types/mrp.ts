@@ -116,12 +116,16 @@ export interface MrpMaterialDiagnostic {
  gross: number;
  on_hand: number;
  reserved: number;
- in_transit: number;
+  in_transit: number;
+  linked_purchase_orders?: number;
+  work_order_material?: number;
+  awaiting_qc?: number;
+  pending_purchase_orders?: number;
  standard_unit_cost?: string;
  gross_cost?: string;
  net_cost?: string;
  net: number;
- action: 'sufficient' | 'pr_created';
+  action: 'sufficient' | 'pr_created' | 'awaiting_qc' | 'awaiting_po_approval';
  order_by?: string;
  priority?: string;
  lead_time_days?: number;
@@ -177,7 +181,7 @@ export interface MrpPlan {
   planned_start: string;
   parent?: { id: string; wo_number: string } | null;
  }>;
- purchase_requests?: Array<{ id: string; pr_number: string; priority: string; priority_label?: string; status: string; status_label?: string; is_auto_generated: boolean; date: string }>;
+  purchase_requests?: Array<{ id: string; pr_number: string; priority: string; priority_label?: string; status: string; status_label?: string; is_auto_generated: boolean; date: string; purchase_orders?: Array<{ id: string; po_number: string; status: string; status_label?: string }> }>;
  generated_at: string;
  created_at: string;
  updated_at: string;

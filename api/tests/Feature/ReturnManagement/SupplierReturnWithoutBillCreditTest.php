@@ -63,7 +63,7 @@ class SupplierReturnWithoutBillCreditTest extends TestCase
     private function unbilledReceipt(User $by): array
     {
         $vendor = Vendor::factory()->create(['created_by' => null]);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([
