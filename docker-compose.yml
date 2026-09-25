@@ -82,6 +82,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-ogami}"]
+      # Crash-recovery after an abrupt VM shutdown can fsync the data dir for
+      # several minutes while connections are rejected. start_period keeps that
+      # window from counting against retries (else `make up` fails with
+      # "container ogami-db is unhealthy" mid-recovery).
+      start_period: 5m
       interval: 5s
       timeout: 3s
       retries: 10

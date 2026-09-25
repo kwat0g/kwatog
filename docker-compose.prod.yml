@@ -106,6 +106,10 @@ services:
       - /var/backups/ogami:/var/backups/ogami
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      # Crash-recovery after an abrupt host shutdown can fsync the data dir for
+      # several minutes while connections are rejected; give it a grace window
+      # so the deploy script's health wait doesn't abort mid-recovery.
+      start_period: 5m
       interval: 10s
       timeout: 3s
       retries: 10
