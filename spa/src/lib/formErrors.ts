@@ -9,31 +9,47 @@ import { wasReportedGlobally } from '@/api/client';
  * Handles nested objects (like `items.0.product_id`) and array-level
  * root messages (like `defects.root.message`).
  */
-function collectMessages(errors: Record<string, unknown>): string[] {
- const msgs: string[] = [];
+type ValidationMessage = { path: string; message: string };
 
- for (const val of Object.values(errors)) {
+function humanizePath(path: string): string {
+ return path
+  .replace(/\.(\d+)(?=\.)/g, ' $1')
+  .replace(/[._-]+/g, ' ')
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function collectMessages(errors: Record<string, unknown>, parentPath = ''): ValidationMessage[] {
+ const msgs: ValidationMessage[] = [];
+
+ for (const [key, val] of Object.entries(errors)) {
  if (!val || typeof val !== 'object') continue;
  const node = val as Record<string, unknown>;
+ const path = parentPath ? `${parentPath}.${key}` : key;
 
  // Leaf error: { message: "..." }
  if (typeof node.message === 'string' && node.message) {
- msgs.push(node.message);
+ msgs.push({ path, message: node.message });
  continue;
  }
 
  // Array root error: { root: { message: "..." } }
  const root = node.root as Record<string, unknown> | undefined;
  if (root && typeof root.message === 'string' && root.message) {
- msgs.push(root.message);
+ msgs.push({ path, message: root.message });
  }
 
  // Recurse into nested objects / array items
- msgs.push(...collectMessages(node));
+ msgs.push(...collectMessages(node, path));
  }
 
- // Deduplicate
- return [...new Set(msgs)];
+ return msgs.filter((entry, index, all) => all.findIndex((item) => item.path === entry.path && item.message === entry.message) === index);
+}
+
+function formatValidationMessage(path: string, message: string, labels?: Record<string, string>): string {
+ const label = labels?.[path] ?? humanizePath(path);
+ if (/^(required|is required|this field is required)\.?$/i.test(message.trim())) return `${label} is required.`;
+ if (message.toLowerCase().includes(label.toLowerCase())) return message;
+ return `${label}: ${message}`;
 }
 
 export function focusFirstInvalidField(): void {
@@ -51,14 +67,16 @@ export function focusFirstInvalidField(): void {
 }
 
 export function onFormInvalid<T extends FieldValues>(
- _labels?: Partial<Record<keyof T & string, string>>,
+ labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
  return (errors) => {
  focusFirstInvalidField();
- const messages = collectMessages(errors as Record<string, unknown>);
+ const messages = collectMessages(errors as Record<string, unknown>).map(({ path, message }) =>
+  formatValidationMessage(path, message, labels as Record<string, string> | undefined),
+ );
 
  if (messages.length === 0) {
- toast.error('Please fix the highlighted fields before submitting.', { duration: 5000 });
+ toast.error('Enter the required fields before submitting.', { duration: 5000 });
  return;
  }
 
@@ -91,7 +109,11 @@ export function applyServerValidationErrors<T extends FieldValues>(
  Object.entries(data.errors).forEach(([field, msgs]) => {
  setError(field as Path<T>, { type: 'server', message: msgs[0] });
  });
- toast.error('The server flagged some fields. Please review and try again.');
+ const first = Object.entries(data.errors)[0];
+ if (first) {
+  const [field, messages] = first;
+  toast.error(formatValidationMessage(field, messages[0] ?? 'Enter a valid value.'));
+ }
  // The fields are now marked aria-invalid; send the keyboard there rather
  // than leaving focus on a submit button the user just bounced off.
  focusFirstInvalidField();
