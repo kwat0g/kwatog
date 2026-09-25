@@ -159,7 +159,7 @@ export default function SelfServiceLoansPage() {
  <EmptyState
  icon="alert-circle"
  title="Couldn't load loans"
- description="An error occurred while loading your loans. Please try again."
+ description="This data could not be loaded. Check your connection and try again."
  action={
  <Button variant="secondary" onClick={() => refetch()}>
  Retry

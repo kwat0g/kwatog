@@ -232,7 +232,7 @@ const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null)
  {isError && (
  <EmptyState
  title="Failed to load scheduled exports"
- description="An error occurred while loading the list. Please try again."
+ description="This data could not be loaded. Check your connection and try again."
  action={
  <Button variant="secondary" size="xs" onClick={() => refetch()}>
  Retry

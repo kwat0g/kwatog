@@ -292,7 +292,7 @@ export default function SelfServiceLeavePage() {
           <EmptyState
             icon="alert-circle"
             title="Couldn't load leaves"
-            description="An error occurred while loading your requests. Please try again."
+            description="This data could not be loaded. Check your connection and try again."
             action={
               <Button variant="secondary" onClick={() => refetch()}>
                 Retry

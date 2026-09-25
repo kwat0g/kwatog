@@ -112,7 +112,7 @@ export default function SelfServiceHomePage() {
           <EmptyState
             icon="alert-circle"
             title="Couldn't load your dashboard"
-            description="Something went wrong while loading your data. Please try again."
+            description="This data could not be loaded. Check your connection and try again."
             action={
               <Button
                 variant="secondary"

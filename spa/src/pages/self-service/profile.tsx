@@ -164,7 +164,7 @@ export default function SelfServiceProfilePage() {
  <EmptyState
  icon="alert-circle"
  title="Couldn't load your profile"
- description="An error occurred while loading your record. Please try again."
+ description="This data could not be loaded. Check your connection and try again."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}

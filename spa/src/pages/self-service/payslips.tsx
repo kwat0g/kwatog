@@ -100,7 +100,7 @@ export default function SelfServicePayslipsPage() {
  <EmptyState
  icon="alert-circle"
  title="Failed to load payslips"
- description="An error occurred while loading your payslips. Please try again."
+ description="This data could not be loaded. Check your connection and try again."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}

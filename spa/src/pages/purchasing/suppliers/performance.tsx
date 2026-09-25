@@ -103,7 +103,7 @@ export default function SupplierPerformancePage() {
         <EmptyState
           icon="alert-circle"
           title="Failed to load performance"
-          description="Something went wrong."
+          description="This data could not be loaded. Check your connection and try again."
           action={
             <Button variant="secondary" onClick={() => refetch()}>
               Retry
