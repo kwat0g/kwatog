@@ -5,6 +5,7 @@
  * editor (keyed by the spec hash so archived or unavailable products remain
  * addressable without constructing an undefined product URL).
  */
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { LuArchiveRestore, LuPlus, LuTrash2 } from '@/lib/icons';
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -23,6 +25,7 @@ import { formatDateIso } from '@/lib/formatDate';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { ListEmptyState } from '@/components/ui/ListEmptyState';
+import { reportMutationError } from '@/lib/formErrors';
 export default function InspectionSpecsListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -32,6 +35,7 @@ export default function InspectionSpecsListPage() {
     per_page: 25,
     trashed: 'with',
   });
+  const [archiveTarget, setArchiveTarget] = useState<InspectionSpec | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'inspection-specs', filters],
@@ -43,9 +47,10 @@ export default function InspectionSpecsListPage() {
     mutationFn: (id: string) => inspectionSpecsApi.deactivate(id),
     onSuccess: () => {
       toast.success('Inspection spec archived');
+      setArchiveTarget(null);
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to archive inspection spec'),
+    onError: (error) => reportMutationError(error, 'Could not archive the inspection specification.'),
   });
   const restoreMutation = useMutation({
     mutationFn: (id: string) => inspectionSpecsApi.restore(id),
@@ -53,7 +58,7 @@ export default function InspectionSpecsListPage() {
       toast.success('Inspection spec restored');
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to restore inspection spec'),
+    onError: (error) => reportMutationError(error, 'Could not restore the inspection specification.'),
   });
 
   const columns: Column<InspectionSpec>[] = [
@@ -116,7 +121,7 @@ export default function InspectionSpecsListPage() {
                 variant="ghost"
                 icon={<LuTrash2 size={13} />}
                 aria-label="Archive inspection spec"
-                onClick={() => archiveMutation.mutate(r.id)}
+                onClick={() => setArchiveTarget(r)}
                 disabled={archiveMutation.isPending}
               />
             ) : (
@@ -198,6 +203,17 @@ export default function InspectionSpecsListPage() {
             onPageSizeChange={(per_page) => setFilters((f) => ({ ...f, per_page, page: 1 }))}
           />
         </div>
+      )}
+      {archiveTarget && (
+        <ConfirmDialog
+          isOpen
+          onClose={() => setArchiveTarget(null)}
+          onConfirm={() => archiveMutation.mutate(archiveTarget.id)}
+          title="Archive inspection specification?"
+          description={<>Archive the specification for <span className="font-medium">{archiveTarget.product?.name ?? 'this product'}</span>? Existing inspection workflows may depend on it.</>}
+          confirmLabel="Archive"
+          pending={archiveMutation.isPending}
+        />
       )}
     </div>
   );

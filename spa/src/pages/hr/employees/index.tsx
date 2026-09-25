@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -132,7 +133,7 @@ export default function EmployeesListPage() {
       setBulkResult(r);
       queryClient.invalidateQueries({ queryKey: ['hr', 'employees'] });
     },
-    onError: () => toast.error('Bulk provisioning failed.'),
+    onError: (error) => reportMutationError(error, 'Bulk provisioning failed.'),
   });
 
   const { data: depts = [] } = useQuery({

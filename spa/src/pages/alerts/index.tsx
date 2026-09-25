@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /** Task A2 — Smart Alert Engine list page. */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -73,7 +74,7 @@ export default function AlertsListPage() {
  queryClient.invalidateQueries({ queryKey: ['alerts'] });
  queryClient.invalidateQueries({ queryKey: ['alerts', 'unread-count'] });
  },
- onError: () => toast.error('Failed to dismiss alert'),
+ onError: (error) => reportMutationError(error, 'Failed to dismiss alert'),
  });
 
  const markRead = useMutation({
@@ -82,7 +83,7 @@ export default function AlertsListPage() {
  queryClient.invalidateQueries({ queryKey: ['alerts'] });
  queryClient.invalidateQueries({ queryKey: ['alerts', 'unread-count'] });
  },
- onError: () => toast.error('Failed to mark alert as read'),
+ onError: (error) => reportMutationError(error, 'Failed to mark alert as read'),
  });
 
  const toggleSeverity = (sev: AlertSeverity) => {

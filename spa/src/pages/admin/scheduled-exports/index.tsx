@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /**
  * Series E (E2) — Scheduled exports admin page.
  *
@@ -83,7 +84,7 @@ const [restoreTarget, setRestoreTarget] = useState<ScheduledExport | null>(null)
  onSuccess: () => {
  queryClient.invalidateQueries({ queryKey: ['scheduled-exports'] });
  },
- onError: () => toast.error('Failed to toggle the schedule.'),
+ onError: (error) => reportMutationError(error, 'Failed to toggle the schedule.'),
  });
 
  const columns: Column<ScheduledExport>[] = [

@@ -322,7 +322,7 @@ export default function AttendancePage() {
       toast.success('Attendance record restored.');
       setArchiveScope('active');
     },
-    onError: () => toast.error('Failed to restore attendance record.'),
+    onError: (error) => reportMutationError(error, 'Failed to restore attendance record.'),
   });
   const archiveMutation = useMutation({
     mutationFn: (id: string) => attendancesApi.delete(id),
@@ -333,7 +333,7 @@ export default function AttendancePage() {
         onUndo: () => restoreMutation.mutate(archivedId),
       });
     },
-    onError: () => toast.error('Failed to archive attendance record.'),
+    onError: (error) => reportMutationError(error, 'Failed to archive attendance record.'),
   });
   const statusLabels = new Map(
     (attendanceOptions?.statuses ?? []).map((option) => [option.value, option.label]),

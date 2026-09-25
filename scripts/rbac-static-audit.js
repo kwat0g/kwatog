@@ -54,7 +54,8 @@ const phpPatterns = [
   /(?:hasPermission|can|cannot)\(\s*'([^']+)'/g,
 ];
 const phpFiles = filesUnder(path.join(ROOT, 'api/app'), ['.php']);
-for (const file of phpFiles) {
+const routeFiles = filesUnder(path.join(ROOT, 'api/routes'), ['.php']);
+for (const file of [...phpFiles, ...routeFiles]) {
   const source = fs.readFileSync(file, 'utf8');
   for (const pattern of phpPatterns) {
     for (const match of source.matchAll(pattern)) {
@@ -63,6 +64,9 @@ for (const file of phpFiles) {
   }
   // Permission constants are commonly passed to hasPermission later.
   for (const match of source.matchAll(/PERMISSION\s*=\s*'([^']+)'/g)) record(match[1], file);
+  for (const match of source.matchAll(/permission:([a-z0-9_.-]+)/gi)) {
+    for (const value of match[1].split(',')) record(value.trim(), file);
+  }
 }
 
 // Catch catalog permissions used through constants or lookup maps instead of

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -60,7 +61,7 @@ export default function MobileWorkOrderDetail() {
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'mwo', mwoId] });
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'mobile-mwos'] });
     },
-    onError: () => toast.error('Failed to start work order.'),
+    onError: (error) => reportMutationError(error, 'Failed to start work order.'),
   });
 
   // ── Complete mutation ──────────────────────────────────
@@ -133,7 +134,7 @@ export default function MobileWorkOrderDetail() {
       setShowPartSheet(false);
       queryClient.invalidateQueries({ queryKey: ['maintenance', 'mwo', mwoId] });
     },
-    onError: () => toast.error('Failed to record spare part.'),
+    onError: (error) => reportMutationError(error, 'Failed to record spare part.'),
   });
 
   const canAddPart = selectedItem && partLocationId && parseFloat(partQty) > 0;

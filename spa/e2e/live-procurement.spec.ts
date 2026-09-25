@@ -1,4 +1,5 @@
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { localIsoDate } from '../src/lib/formatDate';
 
 const PASSWORD = 'password';
 
@@ -259,7 +260,7 @@ async function approvePaymentRequest(browser: Browser, email: string, billUrl: s
 function futureDate(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return localIsoDate(date);
 }
 
 test.describe('Live procurement runbook', () => {
@@ -592,7 +593,7 @@ test.describe('Live procurement runbook', () => {
         ?? cashOptions.find((option) => /^1020\b/.test(option.text));
       if (!cashChoice?.value) throw new Error('No concrete cash or bank account was available.');
       await cash.selectOption(cashChoice.value);
-      await payment.getByLabel('Payment date').fill(new Date().toISOString().slice(0, 10));
+      await payment.getByLabel('Payment date').fill(localIsoDate());
       await payment.getByLabel(/Amount \(max/).fill('1.00');
       await payment.getByLabel('Method').selectOption('bank_transfer');
       await payment.getByLabel('Reference no.').fill('LIVE-E2E-PARTIAL');

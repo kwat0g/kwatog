@@ -242,7 +242,7 @@ export default function CreateNcrPage() {
  <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
  Cancel
  </Button>
- <Button variant="primary" type="submit" loading={submit.isPending}>
+ <Button variant="primary" type="submit" loading={submit.isPending} disabled={submit.isPending}>
  Open NCR
  </Button>
  </ModalFooter>

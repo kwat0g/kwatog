@@ -127,7 +127,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
 
   const results = useQuery({
     queryKey: ['chains', 'so-search', debouncedSearch],
-    queryFn: () => salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }),
+    queryFn: ({ signal }) => salesOrdersApi.list({ search: debouncedSearch || undefined, per_page: 8 }, signal),
     placeholderData: (prev) => prev,
   });
 

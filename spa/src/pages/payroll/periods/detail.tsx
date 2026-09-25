@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1278,7 +1279,7 @@ function DisbursementProofCard({
       toast.success('Proof archived.');
       qc.invalidateQueries({ queryKey: ['payroll-period', periodId] });
     },
-    onError: () => toast.error('Failed to archive proof.'),
+    onError: (error) => reportMutationError(error, 'Failed to archive proof.'),
   });
 
   const restoreMutation = useMutation({
@@ -1287,7 +1288,7 @@ function DisbursementProofCard({
       toast.success('Proof restored.');
       qc.invalidateQueries({ queryKey: ['payroll-period', periodId] });
     },
-    onError: () => toast.error('Failed to restore proof.'),
+    onError: (error) => reportMutationError(error, 'Failed to restore proof.'),
   });
 
   return (

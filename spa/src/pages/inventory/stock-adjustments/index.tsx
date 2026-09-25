@@ -16,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatQuantity } from '@/lib/formatNumber';
+import { reportMutationError } from '@/lib/formErrors';
 import type { StockAdjustment } from '@/types/inventory';
 
 const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'neutral'> = {
@@ -60,7 +61,7 @@ export default function StockAdjustmentsPage() {
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
  },
- onError: () => toast.error('Failed to approve adjustment.'),
+ onError: (error) => reportMutationError(error, 'Could not approve the stock adjustment.'),
  });
 
  const columns: Column<StockAdjustment>[] = [
@@ -141,7 +142,7 @@ export default function StockAdjustmentsPage() {
  isOpen={approveTarget !== null}
  onClose={() => setApproveTarget(null)}
  title="Approve adjustment?"
- description={`Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${Number(approveTarget?.quantity ?? 0).toFixed(3)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
+ description={`Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${formatQuantity(approveTarget?.quantity)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
  confirmLabel="Approve"
  pending={approve.isPending}
  onConfirm={() => { if (approveTarget) approve.mutate(approveTarget.id); }}

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -144,27 +145,27 @@ function SuppliersSection() {
    refresh();
    toast.success('Invitation queued. The temporary password was sent by email.');
   },
-  onError: () => toast.error('Could not queue the supplier invitation.'),
+  onError: (error) => reportMutationError(error, 'Could not queue the supplier invitation.'),
  });
  const resendMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.resendSupplier(id),
   onSuccess: () => { refresh(); toast.success('Invitation re-sent.'); },
-  onError: () => toast.error('Could not re-send the invitation.'),
+  onError: (error) => reportMutationError(error, 'Could not re-send the invitation.'),
  });
  const deactivateMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.deactivateSupplier(id),
   onSuccess: () => { setConfirmAction(null); refresh(); toast.success('Portal access deactivated.'); },
-  onError: () => toast.error('Could not deactivate portal access.'),
+  onError: (error) => reportMutationError(error, 'Could not deactivate portal access.'),
  });
  const reactivateMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.reactivateSupplier(id),
   onSuccess: () => { refresh(); toast.success('Portal access reactivated.'); },
-  onError: () => toast.error('Could not reactivate portal access.'),
+  onError: (error) => reportMutationError(error, 'Could not reactivate portal access.'),
  });
  const revokeMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.revokeTokens(id),
   onSuccess: () => { setConfirmAction(null); refresh(); toast.success('All supplier sessions revoked.'); },
-  onError: () => toast.error('Could not revoke supplier sessions.'),
+  onError: (error) => reportMutationError(error, 'Could not revoke supplier sessions.'),
  });
 
  const submitInvite = (event: FormEvent<HTMLFormElement>) => {
@@ -232,7 +233,7 @@ function SuppliersSection() {
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-      <Button type="submit" variant="primary" loading={inviteMutation.isPending}>Send invitation</Button>
+      <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>
      </ModalFooter>
     </form>
    </Modal>
@@ -290,27 +291,27 @@ function CustomersSection() {
    refresh();
    toast.success('Invitation queued. The temporary password was sent by email.');
   },
-  onError: () => toast.error('Could not queue the customer invitation.'),
+  onError: (error) => reportMutationError(error, 'Could not queue the customer invitation.'),
  });
  const resendMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.resendCustomer(id),
   onSuccess: () => { refresh(); toast.success('Invitation re-sent.'); },
-  onError: () => toast.error('Could not re-send the invitation.'),
+  onError: (error) => reportMutationError(error, 'Could not re-send the invitation.'),
  });
  const deactivateMutation = useMutation({
   mutationFn: (id: string) => portalAccessApi.deactivateCustomer(id),
   onSuccess: () => { setConfirmAction(null); refresh(); toast.success('Portal access deactivated.'); },
-  onError: () => toast.error('Could not deactivate portal access.'),
+  onError: (error) => reportMutationError(error, 'Could not deactivate portal access.'),
  });
   const reactivateMutation = useMutation({
    mutationFn: (id: string) => portalAccessApi.reactivateCustomer(id),
    onSuccess: () => { refresh(); toast.success('Portal access reactivated.'); },
-   onError: () => toast.error('Could not reactivate portal access.'),
+   onError: (error) => reportMutationError(error, 'Could not reactivate portal access.'),
   });
   const revokeMutation = useMutation({
    mutationFn: (id: string) => portalAccessApi.revokeCustomerTokens(id),
    onSuccess: () => { setConfirmAction(null); refresh(); toast.success('All customer sessions revoked.'); },
-   onError: () => toast.error('Could not revoke customer sessions.'),
+   onError: (error) => reportMutationError(error, 'Could not revoke customer sessions.'),
   });
 
  const submitInvite = (event: FormEvent<HTMLFormElement>) => {
@@ -378,7 +379,7 @@ function CustomersSection() {
      <Input label="Email" required type="email" value={invite.email} onChange={(event) => setInvite((current) => ({ ...current, email: event.target.value }))} maxLength={255} />
      <ModalFooter>
       <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>Cancel</Button>
-      <Button type="submit" variant="primary" loading={inviteMutation.isPending}>Send invitation</Button>
+      <Button type="submit" variant="primary" loading={inviteMutation.isPending} disabled={inviteMutation.isPending}>Send invitation</Button>
      </ModalFooter>
     </form>
    </Modal>

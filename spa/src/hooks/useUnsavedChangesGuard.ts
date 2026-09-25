@@ -1,24 +1,25 @@
 // Series X / Task X2 — unsaved-changes guard.
 //
 // Blocks tab close / hard refresh / external nav with the browser's native
-// `beforeunload` prompt. The user sees the OS-level "Leave site? Changes you
-// made may not be saved." dialog.
-//
-// **In-app SPA navigation is not blocked here.** `useBlocker` from
-// react-router-dom requires a *data router* (createBrowserRouter), and the
-// app currently uses the legacy `<BrowserRouter>` (see main.tsx). Adding
-// data-router migration is out of scope for X2; the autosave-draft feature
-// (`useFormDraftAutosave`) covers the common case where a user accidentally
-// clicks a sidebar link mid-edit — they'll see the restore banner on
-// return.
+// `beforeunload` prompt and blocks in-app history transitions with a
+// confirmation dialog. The latter uses the history block seam exposed by the
+// legacy BrowserRouter, so forms do not need a router migration just to stay
+// safe while editing.
 //
 // Usage:
 // const { isDirty } = formState;
 // useUnsavedChangesGuard(isDirty && !mutation.isSuccess);
 
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
+import { UNSAFE_NavigationContext } from 'react-router-dom';
+
+interface BlockableNavigator {
+ block?: (listener: (transition: { retry: () => void }) => void) => () => void;
+}
 
 export function useUnsavedChangesGuard(when: boolean): void {
+ const { navigator } = useContext(UNSAFE_NavigationContext);
+
  useEffect(() => {
  if (!when) return;
  const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -28,6 +29,17 @@ export function useUnsavedChangesGuard(when: boolean): void {
  e.returnValue = '';
  };
  window.addEventListener('beforeunload', onBeforeUnload);
- return () => window.removeEventListener('beforeunload', onBeforeUnload);
- }, [when]);
+ const block = (navigator as unknown as BlockableNavigator).block;
+ const unblock = block?.((transition) => {
+   if (window.confirm('You have unsaved changes. Leave this page?')) {
+     unblock?.();
+     transition.retry();
+   }
+ });
+
+ return () => {
+   window.removeEventListener('beforeunload', onBeforeUnload);
+   unblock?.();
+ };
+ }, [navigator, when]);
 }

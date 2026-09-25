@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -74,7 +75,7 @@ export default function SessionsPage() {
  queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] });
  setTerminateTarget(null);
  },
- onError: () => toast.error('Could not terminate session.'),
+ onError: (error) => reportMutationError(error, 'Could not terminate session.'),
  });
 
  return (

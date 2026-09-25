@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /** Sprint 8 — Task 77 + Sprint P4. Notifications page.
  *
  * Polished into a grouped, filterable list:
@@ -80,17 +81,17 @@ export default function NotificationsListPage() {
  const markRead = useMutation({
  mutationFn: (id: string) => notificationsApi.markRead(id),
  onSuccess: invalidate,
- onError: () => toast.error('Could not mark that notification read.'),
+ onError: (error) => reportMutationError(error, 'Could not mark that notification read.'),
  });
  const markAll = useMutation({
  mutationFn: () => notificationsApi.markAllRead(),
  onSuccess: invalidate,
- onError: () => toast.error('Could not mark all read.'),
+ onError: (error) => reportMutationError(error, 'Could not mark all read.'),
  });
  const dismiss = useMutation({
  mutationFn: (id: string) => notificationsApi.remove(id),
  onSuccess: invalidate,
- onError: () => toast.error('Could not dismiss that notification.'),
+ onError: (error) => reportMutationError(error, 'Could not dismiss that notification.'),
  });
  const clearRead = useMutation({
  mutationFn: () => notificationsApi.clearRead(),
@@ -102,7 +103,7 @@ export default function NotificationsListPage() {
  : `Cleared ${result.deleted} read notifications.`,
  );
  },
- onError: () => toast.error('Could not clear read notifications.'),
+ onError: (error) => reportMutationError(error, 'Could not clear read notifications.'),
  });
 
  // Apply group filter client-side (filter chips other than All / Unread).
