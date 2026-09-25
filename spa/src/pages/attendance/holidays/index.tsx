@@ -30,6 +30,7 @@ import type { Holiday } from '@/types/attendance';
 import { cn } from '@/lib/cn';
 
 import { showUndoToast } from '@/lib/undoToast';
+import { reportMutationError } from '@/lib/formErrors';
 const schema = z.object({
  name: z.string().min(1).max(100),
  date: z.string().min(1, 'Required'),
@@ -70,7 +71,7 @@ export default function HolidaysPage() {
   });
  setPendingDelete(null);
  },
- onError: () => toast.error('Failed to archive holiday.'),
+ onError: (error) => reportMutationError(error, 'Could not archive the holiday.'),
  });
 
  const restoreMutation = useMutation({
@@ -81,7 +82,7 @@ export default function HolidaysPage() {
  setPendingRestore(null);
  setScope('active');
  },
- onError: () => toast.error('Failed to restore holiday.'),
+ onError: (error) => reportMutationError(error, 'Could not restore the holiday.'),
  });
 
  return (

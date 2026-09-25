@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
+import { reportMutationError } from '@/lib/formErrors';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTablePagination } from '@/components/ui/DataTablePagination';
@@ -48,7 +49,7 @@ export default function DeliverySchedulesPage() {
       setLines([{ product_name: '', quantity: 0, notes: '' }]);
       queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'delivery-schedules'] });
     },
-    onError: () => toast.error('Failed to submit delivery schedule.'),
+    onError: (error) => reportMutationError(error, 'Could not submit the delivery schedule.'),
   });
 
   const addLine = () => setLines([...lines, { product_name: '', quantity: 0, notes: '' }]);
