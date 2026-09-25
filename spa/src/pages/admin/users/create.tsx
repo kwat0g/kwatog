@@ -58,11 +58,11 @@ export default function AdminCreateUserPage() {
 
  const candidatesQuery = useQuery({
  queryKey: ['admin-employee-candidates', departmentId, debouncedEmployeeSearch],
- queryFn: () =>
+ queryFn: ({ signal }) =>
  adminUsersApi.employeeCandidates({
  department_id: departmentId,
  search: debouncedEmployeeSearch || undefined,
- }),
+ }, signal),
  enabled: !!departmentId,
  placeholderData: (prev) => prev,
  });

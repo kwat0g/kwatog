@@ -8,6 +8,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Series E (Task E1) — single entry point for every PDF rendered in the
@@ -118,7 +119,11 @@ class PdfRenderService
         try {
             $val = $this->settings->get($key);
             return is_string($val) && trim($val) !== '' ? $val : '';
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            Log::warning('PDF branding setting lookup failed; using an empty value.', [
+                'setting' => $key,
+                'exception' => $exception,
+            ]);
             return '';
         }
     }

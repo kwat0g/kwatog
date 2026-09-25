@@ -85,8 +85,8 @@ export const customerPortalApi = {
  },
 
  // ── Sales Orders ───────────────────────────────────
- listCatalog: async (params?: { as_of?: string; search?: string }) => {
- const { data } = await portalClient.get<{ data: PortalCatalogItem[] }>('/b2b/customer/catalog', { params });
+ listCatalog: async (params?: { as_of?: string; search?: string }, signal?: AbortSignal) => {
+ const { data } = await portalClient.get<{ data: PortalCatalogItem[] }>('/b2b/customer/catalog', { params, signal });
  return data.data;
  },
 

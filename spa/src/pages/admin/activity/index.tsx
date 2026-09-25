@@ -137,7 +137,7 @@ export default function AdminActivityFeedPage() {
  <EmptyState
  icon="alert-circle"
  title="Failed to load activity"
- description="Something went wrong."
+ description="The activity log could not be loaded. Check your connection and try again."
  action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
  />
  )}

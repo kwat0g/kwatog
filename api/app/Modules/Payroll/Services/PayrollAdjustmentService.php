@@ -12,6 +12,7 @@ use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 class PayrollAdjustmentService
@@ -48,6 +49,7 @@ class PayrollAdjustmentService
         return DB::transaction(function () use ($data, $user) {
             /** @var Payroll $original */
             $original = Payroll::findOrFail($data['original_payroll_id']);
+            $this->assertCanAccessPayroll($original, $user);
             $period   = $original->period;
 
             // Adjustments are only meaningful against finalized periods (you can
@@ -69,6 +71,32 @@ class PayrollAdjustmentService
             $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
             return $adj;
         });
+    }
+
+    /**
+     * The submitted payroll hash is user-controlled input. Requiring the
+     * adjustment permission alone is not enough: a crafted hash must not let
+     * a requester mutate another employee's finalized payroll.
+     */
+    private function assertCanAccessPayroll(Payroll $payroll, User $user): void
+    {
+        if ($user->role?->slug === 'system_admin' || $user->hasPermission('payroll.payslip.view_all')) {
+            return;
+        }
+
+        if ($user->employee_id && (int) $user->employee_id === (int) $payroll->employee_id) {
+            return;
+        }
+
+        if ($user->role?->slug === 'department_head' && $user->employee_id) {
+            $requesterDepartment = Employee::query()->whereKey($user->employee_id)->value('department_id');
+            $payrollDepartment = Employee::query()->whereKey($payroll->employee_id)->value('department_id');
+            if ($requesterDepartment && (int) $requesterDepartment === (int) $payrollDepartment) {
+                return;
+            }
+        }
+
+        throw new AuthorizationException('You do not have permission to create an adjustment for this payroll.');
     }
 
     public function approve(PayrollAdjustment $adjustment, User $user): PayrollAdjustment

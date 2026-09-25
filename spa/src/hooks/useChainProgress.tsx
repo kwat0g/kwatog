@@ -81,6 +81,8 @@ export function useChainProgress(
         }
         echo.leave(channelName);
       };
+    }).catch((error: unknown) => {
+      console.error('Real-time chain updates are unavailable.', error);
     });
 
     return () => {

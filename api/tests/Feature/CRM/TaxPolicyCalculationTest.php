@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
+use App\Common\Services\TaxPolicyService;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\PricingMethod;
@@ -66,5 +68,25 @@ class TaxPolicyCalculationTest extends TestCase
         $this->assertSame('200.00', (string) $so->subtotal);
         $this->assertSame('30.00', (string) $so->vat_amount);
         $this->assertSame('230.00', (string) $so->total_amount);
+    }
+
+    public function test_vat_registered_without_a_rate_is_not_silently_treated_as_non_vatable(): void
+    {
+        app(SettingsService::class)->set('company.vat_status', 'VAT Registered', 'company');
+        app(SettingsService::class)->set('tax.ph.vat_rate', null, 'tax');
+
+        $this->expectException(BusinessRuleException::class);
+
+        app(TaxPolicyService::class)->isVatRegistered();
+    }
+
+    public function test_invalid_vat_rate_is_not_silently_treated_as_non_vatable(): void
+    {
+        app(SettingsService::class)->set('company.vat_status', 'VAT Registered', 'company');
+        app(SettingsService::class)->set('tax.ph.vat_rate', 1.2, 'tax');
+
+        $this->expectException(BusinessRuleException::class);
+
+        app(TaxPolicyService::class)->isVatRegistered();
     }
 }

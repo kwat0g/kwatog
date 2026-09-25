@@ -217,6 +217,7 @@ class RolePermissionSeeder extends Seeder
             // Inventory
             'inventory' => [
                 ['slug' => 'inventory.view',                'name' => 'View Inventory'],
+                ['slug' => 'inventory.stock_levels.view',   'name' => 'View Live Stock Levels'],
                 ['slug' => 'inventory.items.manage',        'name' => 'Manage Items'],
                 ['slug' => 'inventory.warehouse.manage',    'name' => 'Manage Warehouse Structure'],
                 ['slug' => 'inventory.grn.create',          'name' => 'Create / Accept GRN'],

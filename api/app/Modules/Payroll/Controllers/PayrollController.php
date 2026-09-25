@@ -60,6 +60,13 @@ class PayrollController
             $eid = \App\Modules\HR\Models\Employee::tryDecodeHash((string) $empHash);
             if ($eid) $query->where('employee_id', $eid);
         }
+        if ($search = trim((string) $request->query('search', ''))) {
+            $query->whereHas('employee', function ($employeeQuery) use ($search): void {
+                $employeeQuery->where('employee_no', 'ilike', "%{$search}%")
+                    ->orWhere('first_name', 'ilike', "%{$search}%")
+                    ->orWhere('last_name', 'ilike', "%{$search}%");
+            });
+        }
         if ($request->boolean('failed_only')) {
             $query->whereNotNull('error_message');
         }

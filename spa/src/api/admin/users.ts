@@ -17,9 +17,9 @@ export const adminUsersApi = {
  options: () => client.get<{ data: AdminUserOptions }>('/admin/users/options').then((r) => r.data.data),
 
  /** Employees without a user account, searchable by employee no / name. */
- employeeCandidates: (params?: EmployeeCandidateFilters) =>
+ employeeCandidates: (params?: EmployeeCandidateFilters, signal?: AbortSignal) =>
  client
- .get<{ data: EmployeeCandidate[] }>('/admin/users/employee-candidates', { params })
+ .get<{ data: EmployeeCandidate[] }>('/admin/users/employee-candidates', { params, signal })
  .then((r) => r.data.data),
  list: (params?: AdminUserListFilters) =>
  client.get<AdminUserListResponse>('/admin/users', { params }).then((r) => r.data),

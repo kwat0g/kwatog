@@ -51,6 +51,7 @@ export default function ShiftsPage() {
  const [editing, setEditing] = useState<Shift | null>(null);
  const [modalOpen, setModalOpen] = useState(false);
  const [pendingRestore, setPendingRestore] = useState<Shift | null>(null);
+ const [pendingDelete, setPendingDelete] = useState<Shift | null>(null);
  const [scope, setScope] = useState<ArchiveScope>('active');
  const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -195,7 +196,7 @@ export default function ShiftsPage() {
  {scope === 'only' ? (
  <Button variant="secondary" size="sm" onClick={() => setPendingRestore(selected)} icon={<LuArchiveRestore size={12} />}>Restore</Button>
  ) : (
- <Button variant="danger" size="sm" onClick={() => deleteMutation.mutate(selected.id)} icon={<LuTrash2 size={12} />}>Archive</Button>
+ <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<LuTrash2 size={12} />}>Archive</Button>
  )}
  </ModalFooter>
  )}
@@ -226,6 +227,9 @@ export default function ShiftsPage() {
  confirmLabel="Restore"
  pending={restoreMutation.isPending}
  />
+ )}
+ {pendingDelete && (
+ <ConfirmDialog isOpen onClose={() => setPendingDelete(null)} onConfirm={() => deleteMutation.mutate(pendingDelete.id)} title="Archive shift?" description={<>Archive <span className="font-medium">{pendingDelete.name}</span>? It will no longer be available for new assignments.</>} confirmLabel="Archive" pending={deleteMutation.isPending} />
  )}
  </div>
  );
