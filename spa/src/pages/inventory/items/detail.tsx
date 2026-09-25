@@ -10,6 +10,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatQuantity } from '@/lib/formatNumber';
 
 const stockChipVariant = { ok: 'success' as const, low: 'warning' as const, critical: 'danger' as const };
 
@@ -60,9 +61,9 @@ export default function ItemDetailPage() {
  />
  <div className="px-5 py-4 space-y-4">
  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
- <StatCard label="On hand" value={Number(data.on_hand_quantity).toFixed(3)} helper={data.unit_of_measure} />
- <StatCard label="Reserved" value={Number(data.reserved_quantity).toFixed(3)} helper={data.unit_of_measure} />
- <StatCard label="Available" value={Number(data.available_quantity).toFixed(3)} helper={data.unit_of_measure} />
+ <StatCard label="On hand" value={formatQuantity(data.on_hand_quantity)} helper={data.unit_of_measure} />
+ <StatCard label="Reserved" value={formatQuantity(data.reserved_quantity)} helper={data.unit_of_measure} />
+ <StatCard label="Available" value={formatQuantity(data.available_quantity)} helper={data.unit_of_measure} />
  <StatCard label="Standard cost" value={Number(data.standard_cost).toFixed(4)} />
  </div>
  <Panel title="Specifications">
@@ -71,9 +72,9 @@ export default function ItemDetailPage() {
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Item type</dt><dd>{data.item_type_label}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Unit of measure</dt><dd>{data.unit_of_measure}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder method</dt><dd>{reorderMethodLabel ?? data.reorder_method}</dd></div>
- <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder point</dt><dd className="font-mono tabular-nums">{Number(data.reorder_point).toFixed(3)}</dd></div>
- <div><dt className="text-2xs uppercase tracking-wider text-muted">Safety stock</dt><dd className="font-mono tabular-nums">{Number(data.safety_stock).toFixed(3)}</dd></div>
- <div><dt className="text-2xs uppercase tracking-wider text-muted">MOQ</dt><dd className="font-mono tabular-nums">{Number(data.minimum_order_quantity).toFixed(3)}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder point</dt><dd className="font-mono tabular-nums">{formatQuantity(data.reorder_point)}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Safety stock</dt><dd className="font-mono tabular-nums">{formatQuantity(data.safety_stock)}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">MOQ</dt><dd className="font-mono tabular-nums">{formatQuantity(data.minimum_order_quantity)}</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Lead time</dt><dd className="font-mono tabular-nums">{data.lead_time_days} days</dd></div>
  <div><dt className="text-2xs uppercase tracking-wider text-muted">Description</dt><dd>{data.description ?? '—'}</dd></div>
  </dl>

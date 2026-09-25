@@ -33,9 +33,9 @@ class StoreBillRequest extends FormRequest
             'items.*.expense_account_id'   => ['required', 'string'],
             'items.*.item_id'              => ['nullable', 'string'],
             'items.*.description'          => ['required', 'string', 'max:200'],
-            'items.*.quantity'             => ['required', 'numeric', 'min:0.01'],
+            'items.*.quantity'             => ['required', 'numeric', 'decimal:0,2', 'min:0.01'],
             'items.*.unit'                 => ['nullable', 'string', 'max:20'],
-            'items.*.unit_price'           => ['required', 'numeric', 'min:0'],
+            'items.*.unit_price'           => ['required', 'numeric', 'decimal:0,2', 'min:0'],
         ];
     }
 }

@@ -32,9 +32,9 @@ const itemSchema = z.object({
   // REC-02 — hidden PO item FK; empty for manually added free-text lines.
   item_id: z.string().optional().or(z.literal('')),
   description: z.string().min(1, 'Required').max(200),
-  quantity: z.coerce.number().positive('> 0'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required.' }).positive('Quantity must be greater than zero.'),
   unit: z.string().max(20).optional().or(z.literal('')),
-  unit_price: z.coerce.number().min(0, '≥ 0'),
+  unit_price: z.coerce.number({ invalid_type_error: 'Unit price is required.' }).min(0, 'Unit price cannot be negative.'),
 });
 
 const schema = z

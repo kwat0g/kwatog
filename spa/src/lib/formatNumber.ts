@@ -11,7 +11,7 @@ const decimal = new Intl.NumberFormat('en-PH', {
 });
 
 const quantity = new Intl.NumberFormat('en-PH', {
- minimumFractionDigits: 3,
+ minimumFractionDigits: 0,
  maximumFractionDigits: 3,
 });
 

@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { ItemCategoriesManager } from '@/pages/inventory/categories';
 import { usePermission } from '@/hooks/usePermission';
+import { formatQuantity } from '@/lib/formatNumber';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { reportMutationError } from '@/lib/formErrors';
 import { showUndoToast } from '@/lib/undoToast';
@@ -240,13 +241,13 @@ export default function ItemsListPage() {
  ) },
  { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
  { key: 'cost', header: 'Std Cost', align: 'right', cell: (r) => <NumCell>{Number(r.standard_cost).toFixed(4)}</NumCell> },
- { key: 'on_hand', header: 'On hand', align: 'right', cell: (r) => <NumCell>{Number(r.on_hand_quantity).toFixed(3)}</NumCell> },
+ { key: 'on_hand', header: 'On hand', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.on_hand_quantity)}</NumCell> },
  { key: 'available', header: 'Available', align: 'right', cell: (r) => (
  <NumCell className={r.stock_status === 'critical' ? 'text-danger-fg' : r.stock_status === 'low' ? 'text-warning-fg' : ''}>
- {Number(r.available_quantity).toFixed(3)}
+ {formatQuantity(r.available_quantity)}
  </NumCell>
  ) },
- { key: 'reorder', header: 'Reorder pt', align: 'right', cell: (r) => <NumCell>{Number(r.reorder_point).toFixed(3)}</NumCell> },
+ { key: 'reorder', header: 'Reorder pt', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.reorder_point)}</NumCell> },
  { key: 'status', header: 'Stock', cell: (r) => <Chip variant={stockChip(r.stock_status)}>{stockStatusLabel(r.stock_status)}</Chip> },
  { key: 'quality', header: 'QC plan', cell: (r) => (
  <Chip variant={r.quality_plan_ready ? 'success' : 'warning'}>{r.quality_plan_ready ? 'ready' : 'missing'}</Chip>

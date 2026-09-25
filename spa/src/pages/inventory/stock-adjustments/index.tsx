@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import type { StockAdjustment } from '@/types/inventory';
 
 const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'neutral'> = {
@@ -75,7 +75,7 @@ export default function StockAdjustmentsPage() {
  </div>
  ) },
  { key: 'location', header: 'Location', cell: (r) => <span className="font-mono">{r.location?.code ?? '—'}</span> },
- { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
+ { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.quantity)}</NumCell> },
  { key: 'value', header: 'Value', align: 'right', cell: (r) => <NumCell>{formatPeso(r.value)}</NumCell> },
  { key: 'reason', header: 'Reason', cell: (r) => (
  <span className="block max-w-[260px] truncate text-muted" title={r.reason}>
