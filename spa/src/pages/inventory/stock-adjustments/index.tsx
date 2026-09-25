@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPeso, formatQuantity } from '@/lib/formatNumber';
 import { reportMutationError } from '@/lib/formErrors';
 import type { StockAdjustment } from '@/types/inventory';
 
@@ -76,7 +76,7 @@ export default function StockAdjustmentsPage() {
  </div>
  ) },
  { key: 'location', header: 'Location', cell: (r) => <span className="font-mono">{r.location?.code ?? '—'}</span> },
- { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
+ { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{formatQuantity(r.quantity)}</NumCell> },
  { key: 'value', header: 'Value', align: 'right', cell: (r) => <NumCell>{formatPeso(r.value)}</NumCell> },
  { key: 'reason', header: 'Reason', cell: (r) => (
  <span className="block max-w-[260px] truncate text-muted" title={r.reason}>
@@ -142,7 +142,7 @@ export default function StockAdjustmentsPage() {
  isOpen={approveTarget !== null}
  onClose={() => setApproveTarget(null)}
  title="Approve adjustment?"
- description={`Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${Number(approveTarget?.quantity ?? 0).toFixed(3)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
+ description={`Post a ${approveTarget?.direction === 'in' ? 'receipt' : 'issue'} of ${formatQuantity(approveTarget?.quantity)} for ${approveTarget?.item?.code ?? 'this item'}? The stock movement is posted immediately.`}
  confirmLabel="Approve"
  pending={approve.isPending}
  onConfirm={() => { if (approveTarget) approve.mutate(approveTarget.id); }}

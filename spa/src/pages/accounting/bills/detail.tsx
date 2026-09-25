@@ -42,7 +42,7 @@ import { agingBucketLabel } from '@/lib/labels';
 const paymentSchema = z.object({
   cash_account_id: z.string().min(1, 'Required'),
   payment_date: z.string().min(1, 'Required'),
-  amount: z.coerce.number().positive('> 0'),
+  amount: z.coerce.number({ invalid_type_error: 'Payment amount is required.' }).positive('Payment amount must be greater than zero.').max(999999999999.99, 'Payment amount is too large.'),
   payment_method: z.string().min(1, 'Required'),
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
@@ -122,6 +122,7 @@ export default function BillDetailPage() {
     reset,
   } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
+    mode: 'onChange',
     defaultValues: { payment_date: localIsoDate(), payment_method: '' },
   });
 
