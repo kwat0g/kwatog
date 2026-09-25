@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -59,7 +60,7 @@ export function SalaryAdjustmentsTab() {
  setConfirm(null);
  queryClient.invalidateQueries({ queryKey: ['hr', 'salary-adjustments'] });
  },
- onError: () => toast.error('Failed to update adjustment.'),
+ onError: (error) => reportMutationError(error, 'Failed to update adjustment.'),
  });
 
  const filterConfig: FilterConfig[] = [

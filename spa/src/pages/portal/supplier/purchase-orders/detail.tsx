@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -175,7 +176,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setEditingShipmentId(null);
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
     },
-    onError: () => toast.error('Failed to save shipment.'),
+    onError: (error) => reportMutationError(error, 'Failed to save shipment.'),
   });
 
   const uploadDocMut = useMutation({
@@ -193,7 +194,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setUploadNotes('');
       refetchDocs();
     },
-    onError: () => toast.error('Failed to upload document.'),
+    onError: (error) => reportMutationError(error, 'Failed to upload document.'),
   });
 
   const submitInvoiceMut = useMutation({

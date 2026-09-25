@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LuPencil, LuEyeOff, LuEye } from '@/lib/icons';
@@ -75,7 +76,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
  qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  setConfirmDeactivate(null);
  },
- onError: () => toast.error('Failed to deactivate bracket.'),
+ onError: (error) => reportMutationError(error, 'Failed to deactivate bracket.'),
  });
 
  const activate = useMutation({
@@ -85,7 +86,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
  qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  setConfirmActivate(null);
  },
- onError: () => toast.error('Failed to activate bracket.'),
+ onError: (error) => reportMutationError(error, 'Failed to activate bracket.'),
  });
 
  const help = AGENCY_HELP[agency];
@@ -207,7 +208,7 @@ function EditBracketModal({
  qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
  onClose();
  },
- onError: () => toast.error('Failed to update bracket.'),
+ onError: (error) => reportMutationError(error, 'Failed to update bracket.'),
  });
 
  if (!bracket) return null;

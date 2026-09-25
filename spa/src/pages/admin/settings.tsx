@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -217,7 +218,7 @@ export default function SettingsPage() {
         await refreshAuth();
       }
     },
-    onError: () => toast.error('Could not save setting.'),
+    onError: (error) => reportMutationError(error, 'Could not save setting.'),
   });
 
   const groups = useMemo(() => {

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -73,7 +74,7 @@ export default function PostingDetailPage() {
  toast.success('Status updated.');
  queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
  },
- onError: () => toast.error('Failed to update status.'),
+ onError: (error) => reportMutationError(error, 'Failed to update status.'),
  });
 
  const deleteMutation = useMutation({
@@ -82,7 +83,7 @@ export default function PostingDetailPage() {
   toast.success('Posting archived.');
   navigate('/hr/recruitment/postings');
   },
-  onError: () => toast.error('Failed to archive posting.'),
+  onError: (error) => reportMutationError(error, 'Failed to archive posting.'),
  });
 
  const restoreMutation = useMutation({
@@ -92,7 +93,7 @@ export default function PostingDetailPage() {
   toast.success('Posting restored.');
   setShowRestoreConfirm(false);
  },
-  onError: () => toast.error('Failed to restore posting.'),
+  onError: (error) => reportMutationError(error, 'Failed to restore posting.'),
  });
 
  const appColumns: Column<JobApplication>[] = [

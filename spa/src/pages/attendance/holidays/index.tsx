@@ -70,7 +70,7 @@ export default function HolidaysPage() {
   });
  setPendingDelete(null);
  },
- onError: () => toast.error('Failed to archive holiday.'),
+ onError: (error) => reportMutationError(error, 'Failed to archive holiday.'),
  });
 
  const restoreMutation = useMutation({
@@ -81,7 +81,7 @@ export default function HolidaysPage() {
  setPendingRestore(null);
  setScope('active');
  },
- onError: () => toast.error('Failed to restore holiday.'),
+ onError: (error) => reportMutationError(error, 'Failed to restore holiday.'),
  });
 
  return (

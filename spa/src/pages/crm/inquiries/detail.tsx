@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { LuMail, LuPhone, LuBuilding2 } from '@/lib/icons';
@@ -40,7 +41,7 @@ export default function InquiryDetailPage() {
  toast.success('Status updated');
  invalidate();
  },
- onError: () => toast.error('Could not update status'),
+ onError: (error) => reportMutationError(error, 'Could not update status'),
  });
 
  if (isLoading) return <SkeletonDetail />;

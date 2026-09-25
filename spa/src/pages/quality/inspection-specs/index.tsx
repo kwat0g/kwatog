@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /**
  * Sprint 7 — Task 59 — Inspection specs list page.
  *
@@ -45,7 +46,7 @@ export default function InspectionSpecsListPage() {
       toast.success('Inspection spec archived');
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to archive inspection spec'),
+    onError: (error) => reportMutationError(error, 'Failed to archive inspection spec'),
   });
   const restoreMutation = useMutation({
     mutationFn: (id: string) => inspectionSpecsApi.restore(id),
@@ -53,7 +54,7 @@ export default function InspectionSpecsListPage() {
       toast.success('Inspection spec restored');
       queryClient.invalidateQueries({ queryKey: ['quality', 'inspection-specs'] });
     },
-    onError: () => toast.error('Failed to restore inspection spec'),
+    onError: (error) => reportMutationError(error, 'Failed to restore inspection spec'),
   });
 
   const columns: Column<InspectionSpec>[] = [

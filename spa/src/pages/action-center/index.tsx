@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { IconType } from '@/lib/icons';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -72,7 +73,7 @@ export default function ActionCenterPage() {
       qc.invalidateQueries({ queryKey: ['action-center'] });
       qc.invalidateQueries({ queryKey: ['badges'] });
     },
-    onError: () => toast.error('Could not update the selected items.'),
+    onError: (error) => reportMutationError(error, 'Could not update the selected items.'),
   });
 
   const toggle = (id: string) => setSelected((current) => {

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -85,7 +86,7 @@ export default function ChartOfAccountsPage() {
       setStatusTarget(null);
       toast.success(`Account ${account.code} ${account.is_active ? 'activated' : 'deactivated'}.`);
     },
-    onError: () => toast.error('Failed to update account status.'),
+    onError: (error) => reportMutationError(error, 'Failed to update account status.'),
   });
 
   return (

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -66,7 +67,7 @@ export default function ItemQualityPlansPage() {
  queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
  queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
  },
- onError: () => toast.error('Could not publish the quality plan.'),
+ onError: (error) => reportMutationError(error, 'Could not publish the quality plan.'),
  });
 
  const deactivate = useMutation({

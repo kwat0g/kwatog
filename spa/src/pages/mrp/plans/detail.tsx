@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useParams, Link } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -36,7 +37,7 @@ export default function MrpPlanDetailPage() {
  qc.setQueryData(['mrp', 'plans', 'detail', id], plan);
  toast.success(`Re-ran MRP — new version v${plan.version}.`);
  },
- onError: () => toast.error('Failed to re-run MRP. Review the run history for recovery details.'),
+ onError: (error) => reportMutationError(error, 'Failed to re-run MRP. Review the run history for recovery details.'),
  });
 
  const summary = useMemo(() => {

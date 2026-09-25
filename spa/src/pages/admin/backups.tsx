@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -347,7 +348,7 @@ export default function AdminBackupsPage() {
  toast.success(result.message);
  void queryClient.invalidateQueries({ queryKey: ['admin', 'backups'] });
  },
- onError: () => toast.error('Could not queue the backup.'),
+ onError: (error) => reportMutationError(error, 'Could not queue the backup.'),
  });
 
  const restore = useMutation({
@@ -358,7 +359,7 @@ export default function AdminBackupsPage() {
  setConfirmation('');
  void queryClient.invalidateQueries({ queryKey: ['admin', 'backups'] });
  },
- onError: () => toast.error('Could not queue the restore.'),
+ onError: (error) => reportMutationError(error, 'Could not queue the restore.'),
  });
 
  const firstPage = query.data?.pages[0];

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,7 +33,7 @@ export default function BomDetailPage() {
       qc.invalidateQueries({ queryKey: ['mrp', 'boms'] });
       toast.success('BOM cost recalculated.');
     },
-    onError: () => toast.error('Failed to recalculate BOM cost.'),
+    onError: (error) => reportMutationError(error, 'Failed to recalculate BOM cost.'),
   });
 
   const { data, isLoading, isError, refetch } = useQuery({

@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
@@ -46,7 +47,7 @@ export default function AdminUserDetailPage() {
  setTempPasswordModal(r.temp_password);
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  },
- onError: () => toast.error('Failed to reset password.'),
+ onError: (error) => reportMutationError(error, 'Failed to reset password.'),
  });
 
  const deactivate = useMutation({
@@ -57,7 +58,7 @@ export default function AdminUserDetailPage() {
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: () => toast.error('Failed to deactivate.'),
+ onError: (error) => reportMutationError(error, 'Failed to deactivate.'),
  });
 
  const activate = useMutation({
@@ -67,7 +68,7 @@ export default function AdminUserDetailPage() {
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: () => toast.error('Failed to activate.'),
+ onError: (error) => reportMutationError(error, 'Failed to activate.'),
  });
 
  const unlock = useMutation({
@@ -77,7 +78,7 @@ export default function AdminUserDetailPage() {
  setConfirm(null);
  queryClient.invalidateQueries({ queryKey: ['admin-user', id] });
  },
- onError: () => toast.error('Failed to unlock.'),
+ onError: (error) => reportMutationError(error, 'Failed to unlock.'),
  });
 
  const changeRole = useMutation({

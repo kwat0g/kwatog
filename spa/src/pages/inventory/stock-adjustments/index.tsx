@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -60,7 +61,7 @@ export default function StockAdjustmentsPage() {
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-adjustments'] });
  qc.invalidateQueries({ queryKey: ['inventory', 'stock-levels'] });
  },
- onError: () => toast.error('Failed to approve adjustment.'),
+ onError: (error) => reportMutationError(error, 'Failed to approve adjustment.'),
  });
 
  const columns: Column<StockAdjustment>[] = [

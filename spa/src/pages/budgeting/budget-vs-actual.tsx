@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
@@ -49,7 +50,7 @@ export default function BudgetVsActualPage() {
       void syncStatusQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ['budget-vs-actual', selectedFiscalYearId] });
     },
-    onError: () => toast.error('Failed to queue the budget actuals rebuild.'),
+    onError: (error) => reportMutationError(error, 'Failed to queue the budget actuals rebuild.'),
   });
 
   const data = reportQuery.data;

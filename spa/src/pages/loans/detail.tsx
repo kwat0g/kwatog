@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -37,17 +38,17 @@ export default function LoanDetailPage() {
  const approve = useMutation({
  mutationFn: () => loansApi.approve(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Approved.'); },
- onError: () => toast.error('Approve failed.'),
+ onError: (error) => reportMutationError(error, 'Approve failed.'),
  });
  const rejectMut = useMutation({
  mutationFn: () => loansApi.reject(id, reason),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
- onError: () => toast.error('Reject failed.'),
+ onError: (error) => reportMutationError(error, 'Reject failed.'),
  });
  const cancel = useMutation({
  mutationFn: () => loansApi.cancel(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Cancelled.'); },
- onError: () => toast.error('Cancel failed.'),
+ onError: (error) => reportMutationError(error, 'Cancel failed.'),
  });
 
  if (isLoading) return <SkeletonDetail />;

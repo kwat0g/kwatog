@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -73,7 +74,7 @@ export default function PayrollAdjustmentsPage() {
       qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
       setConfirmApprove(null);
     },
-    onError: () => toast.error('Failed to approve adjustment.'),
+    onError: (error) => reportMutationError(error, 'Failed to approve adjustment.'),
   });
   const rejectMutation = useMutation({
     mutationFn: ({ id, remarks }: { id: string; remarks: string }) =>
@@ -84,7 +85,7 @@ export default function PayrollAdjustmentsPage() {
       setRejectTarget(null);
       setRejectRemarks('');
     },
-    onError: () => toast.error('Failed to reject adjustment.'),
+    onError: (error) => reportMutationError(error, 'Failed to reject adjustment.'),
   });
 
   const filterConfig: FilterConfig[] = [

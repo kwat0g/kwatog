@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -73,7 +74,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget submitted for approval.');
       setConfirmSubmit(false);
     },
-    onError: () => toast.error('Failed to submit budget.'),
+    onError: (error) => reportMutationError(error, 'Failed to submit budget.'),
   });
 
   const approveMutation = useMutation({
@@ -83,7 +84,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget approved and activated.');
       setConfirmApprove(false);
     },
-    onError: () => toast.error('Failed to approve budget.'),
+    onError: (error) => reportMutationError(error, 'Failed to approve budget.'),
   });
 
   const closeMutation = useMutation({
@@ -93,7 +94,7 @@ export default function BudgetDetailPage() {
       toast.success('Budget closed.');
       setConfirmClose(false);
     },
-    onError: () => toast.error('Failed to close budget.'),
+    onError: (error) => reportMutationError(error, 'Failed to close budget.'),
   });
 
   if (isLoading) return <SkeletonDetail />;

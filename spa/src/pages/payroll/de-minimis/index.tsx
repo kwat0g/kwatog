@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -91,7 +92,7 @@ export function DeMinimisManager() {
   const createMutation = useMutation({
     mutationFn: (d: FormValues) => client.post('/de-minimis', d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['de-minimis'] }); toast.success('Benefit recorded.'); setShowCreate(false); reset(); },
-    onError: () => toast.error('Failed to record benefit.'),
+    onError: (error) => reportMutationError(error, 'Failed to record benefit.'),
   });
 
   const deleteMutation = useMutation({
@@ -102,7 +103,7 @@ export function DeMinimisManager() {
   const restoreMutation = useMutation({
     mutationFn: (id: string) => client.patch(`/de-minimis/${id}/restore`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['de-minimis'] }); toast.success('Benefit restored.'); setScope('active'); },
-    onError: () => toast.error('Failed to restore benefit.'),
+    onError: (error) => reportMutationError(error, 'Failed to restore benefit.'),
   });
 
   const columns = [

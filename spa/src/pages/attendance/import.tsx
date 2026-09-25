@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
@@ -24,7 +25,7 @@ export default function AttendanceImportPage() {
  if (r.imported > 0) toast.success(`Imported ${r.imported} records.`);
  if (r.skipped > 0) toast.error(`${r.skipped} rows had errors — see details below.`);
  },
- onError: () => toast.error('Import failed. Check the file format.'),
+ onError: (error) => reportMutationError(error, 'Import failed. Check the file format.'),
  });
 
  const onPick = (e: ChangeEvent<HTMLInputElement>) => {

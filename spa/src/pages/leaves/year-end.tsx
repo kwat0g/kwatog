@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { leaveTypesApi } from '@/api/leave';
@@ -57,7 +58,7 @@ export function YearEndLeaveModal({
       onSuccess?.();
       onClose();
     },
-    onError: () => toast.error('Failed to queue year-end processing.'),
+    onError: (error) => reportMutationError(error, 'Failed to queue year-end processing.'),
   });
 
   return (

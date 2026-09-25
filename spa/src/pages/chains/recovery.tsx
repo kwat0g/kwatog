@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -121,7 +122,7 @@ export default function ChainRecoveryPage() {
  setReplayTarget(null);
  queryClient.invalidateQueries({ queryKey: ['chain', 'listener-runs'] });
  },
- onError: () => toast.error('The listener replay could not be queued. Review the run and try again.'),
+ onError: (error) => reportMutationError(error, 'The listener replay could not be queued. Review the run and try again.'),
  });
 
  const resolve = useMutation({
@@ -132,7 +133,7 @@ export default function ChainRecoveryPage() {
  setResolveTarget(null);
  queryClient.invalidateQueries({ queryKey: ['chain', 'listener-runs'] });
  },
- onError: () => toast.error('The resolution note could not be saved.'),
+ onError: (error) => reportMutationError(error, 'The resolution note could not be saved.'),
  });
 
  const data = query.data;

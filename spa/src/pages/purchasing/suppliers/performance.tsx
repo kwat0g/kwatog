@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LuRefreshCw } from '@/lib/icons';
@@ -50,7 +51,7 @@ export default function SupplierPerformancePage() {
       toast.success('Performance recomputed.');
       queryClient.invalidateQueries({ queryKey: ['purchasing', 'supplier-performance', id] });
     },
-    onError: () => toast.error('Failed to recompute.'),
+    onError: (error) => reportMutationError(error, 'Failed to recompute.'),
   });
 
   const renderHeader = (d?: SupplierPerformance) => (

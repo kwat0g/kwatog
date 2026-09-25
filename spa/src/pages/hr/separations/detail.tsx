@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /** Sprint 8 — Task 71. Separation/clearance detail with sign + final-pay + finalize flow. */
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -56,7 +57,7 @@ export default function SeparationDetailPage() {
       qc.invalidateQueries({ queryKey: ['clearance', id] });
       toast.success('Item cleared.');
     },
-    onError: () => toast.error('Failed to sign item.'),
+    onError: (error) => reportMutationError(error, 'Failed to sign item.'),
   });
   const compute = useMutation({
     mutationFn: () => separationsApi.computeFinalPay(id),
@@ -64,7 +65,7 @@ export default function SeparationDetailPage() {
       qc.invalidateQueries({ queryKey: ['clearance', id] });
       toast.success('Final pay computed.');
     },
-    onError: () => toast.error('Failed to compute final pay.'),
+    onError: (error) => reportMutationError(error, 'Failed to compute final pay.'),
   });
   const finalize = useMutation({
     mutationFn: () => separationsApi.finalize(id),
@@ -74,7 +75,7 @@ export default function SeparationDetailPage() {
       qc.invalidateQueries({ queryKey: ['hr', 'separations'] });
       toast.success('Separation finalized; JE posted.');
     },
-    onError: () => toast.error('Failed to finalize.'),
+    onError: (error) => reportMutationError(error, 'Failed to finalize.'),
   });
 
   if (isLoading) return <SkeletonDetail />;

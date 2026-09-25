@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -71,7 +72,7 @@ export function PermissionOverrides({
  queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'overrides'] });
  queryClient.invalidateQueries({ queryKey: ['admin-user', userId] });
  },
- onError: () => toast.error('Failed to remove override.'),
+ onError: (error) => reportMutationError(error, 'Failed to remove override.'),
  });
 
  const restore = useMutation({
@@ -81,7 +82,7 @@ export function PermissionOverrides({
  queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'overrides'] });
  queryClient.invalidateQueries({ queryKey: ['admin-user', userId] });
  },
- onError: () => toast.error('Failed to restore override.'),
+ onError: (error) => reportMutationError(error, 'Failed to restore override.'),
  });
 
  return (

@@ -354,7 +354,7 @@ export default function InspectionSpecEditorPage() {
       qc.invalidateQueries({ queryKey: ['quality', 'inspection-specs', 'show', specId] });
       toast.success('Inspection spec restored');
     },
-    onError: () => toast.error('Failed to restore inspection spec'),
+    onError: (error) => reportMutationError(error, 'Failed to restore inspection spec'),
   });
 
   const productLabel = useMemo(() => {

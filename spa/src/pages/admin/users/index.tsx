@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -66,7 +67,7 @@ export default function AdminUsersIndexPage() {
  setSelectedRows([]);
  queryClient.invalidateQueries({ queryKey: ['admin-users'] });
  },
- onError: () => toast.error('Failed to update roles.') });
+ onError: (error) => reportMutationError(error, 'Failed to update roles.') });
 
  const filterConfig: FilterConfig[] = [
  {

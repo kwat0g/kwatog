@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /** Sprint 8 — Task 69. Maintenance WO detail. Action buttons gated by status + permission. */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -63,7 +64,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-order', id] });
       toast.success('Work order started.');
     },
-    onError: () => toast.error('Failed to start.'),
+    onError: (error) => reportMutationError(error, 'Failed to start.'),
   });
   const completeMutation = useMutation({
     mutationFn: () =>
@@ -76,7 +77,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       toast.success('Work order completed.');
       setCompleteOpen(false);
     },
-    onError: () => toast.error('Failed to complete.'),
+    onError: (error) => reportMutationError(error, 'Failed to complete.'),
   });
   const cancelMutation = useMutation({
     mutationFn: (reason: string) => workOrdersApi.cancel(id, reason),
@@ -85,7 +86,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       toast.success('Work order cancelled.');
       setCancelOpen(false);
     },
-    onError: () => toast.error('Failed to cancel.'),
+    onError: (error) => reportMutationError(error, 'Failed to cancel.'),
   });
   const assignMutation = useMutation({
     mutationFn: () => workOrdersApi.assign(id, assigneeId),
@@ -94,7 +95,7 @@ export default function MaintenanceWorkOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
       toast.success('Work order assigned.');
     },
-    onError: () => toast.error('Failed to assign.'),
+    onError: (error) => reportMutationError(error, 'Failed to assign.'),
   });
 
   if (isLoading) return <SkeletonDetail />;

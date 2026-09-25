@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /**
  * Sprint 8 — Task 77. Per-user notification preferences.
  *
@@ -79,7 +80,7 @@ export default function NotificationPreferencesPage() {
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['notification-preferences'] });
  },
- onError: () => toast.error('Failed to save preferences. Please try again.'),
+ onError: (error) => reportMutationError(error, 'Failed to save preferences. Please try again.'),
  });
 
  const isEnabled = (type: string, channel: Channel) =>

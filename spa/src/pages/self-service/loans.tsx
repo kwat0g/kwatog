@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 /** U3 — Self-service > Loans. Lists active + history; lets employee apply. */
 import { useEffect, useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -125,7 +126,7 @@ export default function SelfServiceLoansPage() {
  queryClient.invalidateQueries({ queryKey: ['self-service', 'loans'] });
  setShowApply(false);
  },
- onError: () => toast.error('Failed to submit loan request.'),
+ onError: (error) => reportMutationError(error, 'Failed to submit loan request.'),
  });
 
  const cancel = useMutation({
@@ -135,7 +136,7 @@ export default function SelfServiceLoansPage() {
   setConfirmCancel(null);
   queryClient.invalidateQueries({ queryKey: ['self-service', 'loans'] });
   },
-  onError: () => toast.error('Failed to withdraw loan request.'),
+  onError: (error) => reportMutationError(error, 'Failed to withdraw loan request.'),
   });
 
  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);

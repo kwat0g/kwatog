@@ -1,3 +1,4 @@
+import { reportMutationError } from '@/lib/formErrors';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -87,7 +88,7 @@ export function LeaveTypesManager() {
  const updateMutation = useMutation({
  mutationFn: ({ id, d }: { id: string; d: FormValues }) => leaveTypesApi.update(id, toPayload(d)),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type updated.'); setEditTarget(null); },
- onError: () => toast.error('Failed to update leave type.'),
+ onError: (error) => reportMutationError(error, 'Failed to update leave type.'),
  });
 
  const deleteMutation = useMutation({
@@ -104,7 +105,7 @@ export function LeaveTypesManager() {
  const restoreMutation = useMutation({
  mutationFn: (id: string) => leaveTypesApi.restore(id),
  onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-types'] }); toast.success('Leave type restored.'); setScope('active'); },
- onError: () => toast.error('Failed to restore leave type.'),
+ onError: (error) => reportMutationError(error, 'Failed to restore leave type.'),
  });
 
  const openEdit = (lt: LeaveType) => {
