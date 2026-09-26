@@ -2,6 +2,8 @@
 
 Reviewed and implemented locally on 2026-09-25. See the [latest headless acceptance report](RETURN-MANAGEMENT-HEADLESS-TEST.md) for completed real role-account journeys and the fixes to QC self-approval and timeline timestamps.
 
+Updated 2026-09-27: the draft-invoice credit guard above was added, and the real headless journeys (scrap and restock, 30 checks each, 0 findings) were re-run against the current code. Details in the [headless acceptance report](RETURN-MANAGEMENT-HEADLESS-TEST.md).
+
 ## Findings
 
 Ogami already had supplier returns for rejected receipts and previously accepted defective raw materials. Customer portal RMAs also existed. The missing piece was a shared, understandable path for reporting shortages and defects together and following them through resolution.
@@ -16,6 +18,7 @@ Ogami already had supplier returns for rejected receipts and previously accepted
 | Only one physical-return receipt | Idempotent installment receipts, cumulative/remaining quantities and final receipt control |
 | Five kilograms could create five replacement bags | Purchase/base-unit conversion in replacement quantities, open obligations and PO acceptance status |
 | Disputed goods could be invoiced | Delivery confirmation and invoice creation/finalization check unresolved cases; posted documents remain unchanged |
+| A return against a still-draft delivery invoice credited nothing while the draft kept billing the returned goods | `ReturnCaseSettlementService::createCredit()` refuses the credit and names the invoice: finalize it first, or credit an un-invoiced return as before |
 | A replacement could charge the customer again | Explicit approver action creates the case's zero-price SO; normal confirmation/QC/dispatch remain; billing is prohibited for that order |
 | Unrelated credits or incomplete returns could close cases | Source-linked financial documents, actual return coverage and completed delivery/receipt checks |
 | An incorrect resolution link could strand a case | Validate every selected document before saving; offer case-linked customer replacement orders and allocate accepted supplier receipt quantities from the correct PO lines |

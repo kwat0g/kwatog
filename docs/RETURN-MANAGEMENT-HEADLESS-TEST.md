@@ -2,6 +2,30 @@
 
 Updated 2026-09-25. The two defects from the initial audit are fixed, and the real headless journeys now reach settlement and case closure. RFQ implementation was outside this work.
 
+## Fresh retest — 2026-09-27
+
+Re-ran the real headless journeys against the current code, which now includes the
+draft-invoice credit guard: `ReturnCaseSettlementService::createCredit()` refuses to credit a
+return whose delivery still has a non-cancelled draft invoice and asks the operator to
+finalize it first (the customer-side twin of the supplier rule for an unbilled shortage).
+The runner is now self-contained — `RETURN_TEST_BOOTSTRAP=1` creates and migrates the
+isolated database, seeds the role fixture, serves a temporary API and Vite proxy, and tears
+both down.
+
+| Run | Result | Evidence |
+| --- | --- | --- |
+| Full journey, scrap disposition | **30 checks passed, 0 findings** | `/tmp/return-headless-RET0927A/report.json` |
+| Full journey, restock disposition | **30 checks passed, 0 findings** | `/tmp/return-headless-RET0927B/report.json` |
+
+Each run covered the supplier shortage (4 + 6 kg with early resolution blocked), the
+supplier defective raw-material return (1 kg, `return_to_supplier`), the customer mobile
+report (100 expected / 90 received / 2 damaged → 10 missing + 2 defective, only the 2
+damaged goods physically returned), both independent approval steps, split receipts,
+Finance's 250 shortage + 50 defect credits, and case closure. The fixture delivery carries
+no invoice, so the new guard does not fire on this journey; its own coverage is the backend
+test `CustomerCaseDraftInvoiceCreditTest`, whose failing-before case returned HTTP 200 where
+the guard now returns 422.
+
 ## Fresh retest — 2026-09-25, 07:07 PHT
 
 Repeated the tests after the fixes using fresh databases and new source documents. **No new failures or application changes were needed.**
@@ -76,7 +100,24 @@ The no-charge replacement HTTP regression exercises case agreement/approval, rep
 - Link verification: `/tmp/ogami-return-headless-cs/links-report.json` (four checkpoints including two logins).
 - The original failing audit is retained at `/tmp/ogami-return-headless/report.json`.
 
-Run the fixture only against a freshly migrated database whose name starts with `ogami_test_return_browser_`. Copy its JSON manifest from the API container to the host. Start a temporary API with that database, separate session/cache settings, `QUEUE_CONNECTION=sync`, `MAIL_MAILER=array`, and `BROADCAST_CONNECTION=log`. Use **`artisan serve --no-reload`** to preserve the database/session environment. Proxy a temporary SPA to that API and include its origin in `SANCTUM_STATEFUL_DOMAINS`.
+Simplest path — let the runner build and tear down its own environment (needs the Docker
+stack up):
+
+```bash
+# scrap disposition
+RETURN_TEST_BOOTSTRAP=1 RETURN_RUN_ID=RET0927A node scripts/return-management-headless.cjs
+
+# restock disposition (separate database)
+RETURN_TEST_BOOTSTRAP=1 RETURN_RUN_ID=RET0927B RETURN_TEST_DISPOSITION=restock \
+  node scripts/return-management-headless.cjs
+```
+
+`RETURN_TEST_OUTPUT` defaults to `/tmp/return-headless-<run>`, `RETURN_API_PORT` to 8210 and
+`RETURN_SPA_PORT` to 5210; give a concurrent run its own ports. `RETURN_TEST_KEEP=1` (or any
+failure) keeps the database for inspection. Playwright, Tailwind and the Vite plugins now
+resolve from `spa/node_modules`, so `NODE_PATH` is no longer needed.
+
+To drive an environment you already built, run the fixture only against a freshly migrated database whose name starts with `ogami_test_return_browser_`. Copy its JSON manifest from the API container to the host. Start a temporary API with that database, separate session/cache settings, `QUEUE_CONNECTION=sync`, `MAIL_MAILER=array`, and `BROADCAST_CONNECTION=log`. Use **`artisan serve --no-reload`** to preserve the database/session environment. Proxy a temporary SPA to that API and include its origin in `SANCTUM_STATEFUL_DOMAINS`.
 
 ```bash
 NODE_PATH=./spa/node_modules \

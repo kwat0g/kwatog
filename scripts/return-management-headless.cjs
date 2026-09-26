@@ -1,12 +1,111 @@
-// Real-API acceptance check. Requires tests/Browser/return_case_fixture.php in an isolated DB.
-// NODE_PATH=./spa/node_modules node scripts/return-management-headless.cjs
-const { chromium, expect } = require('@playwright/test');
+// Real-API acceptance check through the SPA and API with one browser context per role.
+//
+//   node scripts/return-management-headless.cjs
+//
+// With RETURN_TEST_BOOTSTRAP=1 the runner is self-contained: it creates
+// ogami_test_return_browser_<run>, migrates it, seeds the role fixture
+// (api/tests/Browser/return_case_fixture.php), serves a temporary API and a
+// temporary Vite proxy on it, then tears both down. The shared dev database is
+// never touched. Without the flag it points at RETURN_TEST_URL and
+// RETURN_TEST_FIXTURE, exactly as before.
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const BASE = process.env.RETURN_TEST_URL || 'http://127.0.0.1:5210';
-const OUT = process.env.RETURN_TEST_OUTPUT || '/tmp/ogami-return-headless';
-const fixture = JSON.parse(fs.readFileSync(process.env.RETURN_TEST_FIXTURE || '/tmp/return-case-role-fixture.json', 'utf8'));
+const { execFileSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
+const { createRequire } = require('node:module');
+
+const ROOT = path.resolve(__dirname, '..');
+const SPA = path.join(ROOT, 'spa');
+// SPA-owned tooling (Tailwind, its Vite plugins, Playwright) resolves from
+// spa/node_modules, so the runner works without NODE_PATH.
+const spaRequire = createRequire(path.join(SPA, 'package.json'));
+const { chromium, expect } = spaRequire('@playwright/test');
+
+const BOOTSTRAP = process.env.RETURN_TEST_BOOTSTRAP === '1';
+const RUN = (process.env.RETURN_RUN_ID || `RET${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+const DB = `ogami_test_return_browser_${RUN.toLowerCase()}`;
+const API_PORT = Number(process.env.RETURN_API_PORT || 8210);
+const SPA_PORT = Number(process.env.RETURN_SPA_PORT || 5210);
+const BASE = process.env.RETURN_TEST_URL || `http://127.0.0.1:${SPA_PORT}`;
+const OUT = process.env.RETURN_TEST_OUTPUT || (BOOTSTRAP ? path.join('/tmp', `return-headless-${RUN}`) : '/tmp/ogami-return-headless');
+let fixture;
+
+/* ─── Self-contained environment (RETURN_TEST_BOOTSTRAP=1) ─────────── */
+
+const FIXTURE_IN_CONTAINER = '/tmp/return-case-role-fixture.json';
+const ENV = {
+  DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
+  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
+};
+const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
+const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
+
+/** Free the port so a run killed before its teardown cannot poison this one. */
+function stopApiServer() {
+  for (const pattern of [`port=${API_PORT}`, `0.0.0.0:${API_PORT}`]) {
+    try { compose(['exec', '-T', 'api', 'pkill', '-f', pattern]); } catch { /* not running */ }
+  }
+}
+
+async function setUp() {
+  fs.mkdirSync(OUT, { recursive: true });
+  stopApiServer();
+  psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  artisan('migrate', '--force');
+  compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
+  artisan('tinker', '--execute', "require 'tests/Browser/return_case_fixture.php';");
+  compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
+  fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
+  compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
+  const target = `http://${apiIp()}:${API_PORT}`;
+  let ready = false;
+  for (let i = 0; i < 60; i++) {
+    try {
+      const csrf = await fetch(`${target}/sanctum/csrf-cookie`);
+      const user = await fetch(`${target}/api/v1/auth/user`, { headers: { Accept: 'application/json' } });
+      if (csrf.status < 500 && user.status < 500) { ready = true; break; }
+    } catch { /* booting */ }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (!ready) throw new Error(`The API on :${API_PORT} never answered against ${DB}.`);
+  const vite = await import(pathToFileURL(path.join(SPA, 'node_modules/vite/dist/node/index.js')).href);
+  // Tailwind resolves its content globs from the working directory, so run the
+  // SPA toolchain from the SPA root; every runner path is absolute.
+  process.chdir(SPA);
+  const server = await vite.createServer({
+    configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
+    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
+    server: {
+      host: '127.0.0.1', port: SPA_PORT, strictPort: true,
+      hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
+      proxy: { '/api': { target, changeOrigin: false }, '/sanctum': { target, changeOrigin: false } },
+    },
+  });
+  await server.listen();
+  return server;
+}
+
+async function tearDown(server) {
+  // The Vite server keeps the event loop alive: close it even when keeping the
+  // database, or the runner never exits and the next run cannot bind the port.
+  try { await server?.close(); } catch { /* already closed */ }
+  // A failed run is the one worth inspecting: keep its database for a look.
+  if (process.env.RETURN_TEST_KEEP === '1' || process.exitCode) {
+    console.log(`Kept ${DB} and API :${API_PORT} for inspection.`);
+    return;
+  }
+  stopApiServer();
+  try { compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]); } catch { /* gone */ }
+  try {
+    psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
+    psql(`DROP DATABASE IF EXISTS ${DB};`);
+  } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+}
 fs.mkdirSync(OUT, { recursive: true });
 const stateFile = path.join(OUT, 'state.json');
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
@@ -173,6 +272,9 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
   return ok(manager, 'GET', url);
 }
 (async () => {
+  let server;
+  if (BOOTSTRAP) server = await setUp();
+  else fixture = JSON.parse(fs.readFileSync(process.env.RETURN_TEST_FIXTURE || '/tmp/return-case-role-fixture.json', 'utf8'));
   const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
   try {
     if (process.env.RETURN_TEST_PHASE === 'links') {
@@ -391,5 +493,8 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     fs.writeFileSync(path.join(OUT, process.env.RETURN_TEST_PHASE === 'links' ? 'links-report.json' : 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, failure: String(error.stack) }, null, 2));
     console.error(error);
     process.exitCode = 1;
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+    if (BOOTSTRAP) await tearDown(server);
+  }
 })();
