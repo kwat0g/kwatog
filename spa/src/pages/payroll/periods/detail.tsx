@@ -19,7 +19,7 @@ import {
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { downloadAuthenticatedFile } from '@/api/download';
-import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
+import { type PayrollListParams } from '@/api/payroll/payrolls';
 import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -209,16 +209,18 @@ export default function PayrollPeriodDetailPage() {
       toast.error(err.response?.data?.message ?? 'Failed to generate the bank file.'),
   });
 
+  // The run's own rows. This reads the period-scoped endpoint, not the
+  // publication-gated /payrolls collection: a run is reviewed while it is
+  // still `computed`, so the tab must not wait for finalize.
   const payrollFilters: PayrollListParams = {
-    period_id: id,
     page: payrollPage,
     per_page: 50,
     search: payrollSearch || undefined,
     failed_only: activeTab === 'failures',
   };
   const { data: payrolls, isLoading: payrollsLoading } = useQuery({
-    queryKey: ['payrolls', payrollFilters],
-    queryFn: () => payrollsApi.list(payrollFilters),
+    queryKey: ['payrolls', id, payrollFilters],
+    queryFn: () => periodsApi.payrolls(id!, payrollFilters),
     enabled: !!id && (activeTab === 'employees' || activeTab === 'failures'),
     placeholderData: (prev) => prev,
   });
@@ -344,7 +346,7 @@ export default function PayrollPeriodDetailPage() {
   // finished run look untouched.
   useEffect(() => {
     if (period && period.status !== 'processing')
-      qc.invalidateQueries({ queryKey: ['payrolls', payrollFilters] });
+      qc.invalidateQueries({ queryKey: ['payrolls', id] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period?.status]);
 

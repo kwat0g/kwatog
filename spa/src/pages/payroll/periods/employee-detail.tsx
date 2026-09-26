@@ -48,6 +48,7 @@ export default function PayrollEmployeeDetailPage() {
  }
 
  const emp = data.employee;
+ const payslipPublished = data.period_status === 'finalized' || data.period_status === 'disbursed';
  const earningRows = [
  { label: 'Basic Pay', value: data.basic_pay },
  { label: 'Leave Pay', value: data.leave_pay },
@@ -69,10 +70,15 @@ export default function PayrollEmployeeDetailPage() {
  actions={
  <>
  {data.error_message ? <Chip variant="danger">Failed</Chip> : <Chip variant="success">Computed</Chip>}
+ {/* The payslip PDF is publication-gated server-side: it does not exist
+ until the period is finalized. A row can now be read while the run is
+ still being checked, so the button says why instead of failing on click. */}
  <Button
  variant="secondary"
  size="sm"
  icon={<LuDownload size={14} />}
+ disabled={!payslipPublished}
+ title={payslipPublished ? undefined : 'Available once the period is finalized'}
  onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(data.id), {
  openInNewTab: true,
  errorMessage: 'Failed to generate the payslip.',

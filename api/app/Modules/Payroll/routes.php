@@ -68,6 +68,10 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::post('/{period}/bank-file', [PayrollPeriodController::class, 'generateBankFile'])->middleware('permission:payroll.periods.bank_file');
             Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.bank_file');
             Route::get('/{period}/variance', [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.periods.view');
+            // The run's own rows — the staff working list for a period under
+            // review, NOT publication-gated (a run is checked while `computed`).
+            // The SPA period-detail Employees/Failures tabs read this.
+            Route::get('/{period}/payrolls', [PayrollController::class, 'indexForPeriod'])->middleware('permission:payroll.periods.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
             Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.disburse');
             // H-8 — Admin escape hatch for periods stuck at Processing because

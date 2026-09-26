@@ -1,6 +1,8 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { BankFilePreview, CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollScopePreview, PayrollVarianceReport, ProofType } from '@/types/payroll';
+import type { PayrollListParams } from './payrolls';
+import type { Payroll } from '@/types/payroll';
 
 export interface PeriodListParams extends ListParams {
  status?: string;
@@ -44,6 +46,13 @@ export const periodsApi = {
  client.get<PaginatedResponse<PayrollPeriod>>('/payroll-periods', { params }).then((r) => r.data),
  show: (id: string) =>
  client.get<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}`).then((r) => r.data.data),
+ /**
+  * The run's own rows — what the period-detail Employees/Failures tabs show.
+  * Distinct from payrollsApi.list, which is publication-gated to finalized
+  * periods and stays the employee-facing collection.
+  */
+ payrolls: (id: string, params?: PayrollListParams) =>
+ client.get<PaginatedResponse<Payroll>>(`/payroll-periods/${id}/payrolls`, { params }).then((r) => r.data),
  create: (data: CreatePayrollPeriodData) =>
  client.post<ApiSuccess<PayrollPeriod>>('/payroll-periods', data).then((r) => r.data.data),
  compute: (id: string) =>
