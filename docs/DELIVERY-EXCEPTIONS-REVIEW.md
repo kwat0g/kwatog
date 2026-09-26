@@ -27,11 +27,20 @@ The existing outbound COGS posting gap requires a separate Accounting follow-up.
 | Scoped frontend ESLint | Passed | `/tmp/delivery-exception-eslint-final.log` |
 | Existing customer delivery Vitest | Three tests passed | `/tmp/delivery-exception-portal-vitest-final.log` |
 | Real-role headless Chromium | 26 checkpoints passed; zero JavaScript errors | `/tmp/delivery-exception-headless-DXP0925C/report.json` |
+| Re-run, self-contained (`DXP0927A`) | **26 checks passed; zero JavaScript errors** | `/tmp/exception-headless-DXP0927A/report.json` |
 | Settled read-only revisit | Three checkpoints passed; zero JavaScript errors | `/tmp/delivery-exception-readonly-DXP0925C/report.json` |
 | Backend focused regression | 95 tests, 419 assertions passed | `/tmp/ogami-delivery-exceptions-focused-20260925.log`; isolated DB `ogami_test_delivery_excp0925sv01` |
 | PHP syntax | Passed for changed API PHP files | Backend verification, including new migration and test class |
 
 The backend run covered the new six-case `DeliveryAttemptOutcomeServiceTest`, ordinary delivery status/quantity/provenance/driver/confirmation/invoicing tests, customer portal confirmation and return visibility, cross-document return quantities and disposition/cost, and Quality maker-checker/result-author tests. The new cases include unaccounted-only reconciliation without stock/RMA/GL creation, a partial source recovery that cannot be repeated beyond the actual receipt, safe request replay and changed-payload rejection, customer-received damage holds, and checked-restock-only reuse of outgoing capacity. Early new-test failures were invalid fixtures (same outgoing maker/checker and an omitted required depot variance reason); the service guards remained intact.
+
+The runner is now self-contained: `DISPATCH_TEST_BOOTSTRAP=1` creates and migrates `ogami_test_dispatch_browser_<run>`, seeds `api/tests/Browser/delivery_exception_fixture.php`, serves a temporary API and Vite proxy, runs, and tears both down. Playwright, Tailwind and the Vite plugins resolve from `spa/node_modules`.
+
+```bash
+DISPATCH_TEST_BOOTSTRAP=1 DISPATCH_RUN_ID=DXP0927A node scripts/delivery-exception-headless.cjs
+```
+
+`DISPATCH_TEST_OUTPUT` defaults to `/tmp/delivery-exception-headless-<run>`, `DISPATCH_TEST_API_PORT` to 8210 and `DISPATCH_TEST_SPA_PORT` to 5210; `DISPATCH_TEST_KEEP=1` (or any failure) keeps the database. `scripts/delivery-completion-headless.cjs` uses the same fixture and is converted the same way, but it still stalls on the driver page's **Correct report** button (`/tmp/completion-headless-DXC0927B/report.json`) — an open item, not caused by the bootstrap change, since the API exposes that amendment path and the browser never renders the control.
 
 The dedicated browser scenario is `scripts/delivery-exception-headless.cjs`, with prerequisites in `api/tests/Browser/delivery_exception_fixture.php`. It verified a six-unit full refusal, quarantine/Quality/restock and redelivery, followed by a four-unit partial receipt and redelivery of the remaining two. Final totals were ten units received/invoiced and five unrelated unapproved units still in inventory. Quantity reports and depot receipts each exercised loss of a successful response, reload and exact-request retry. Other-driver access/reporting and driver depot-receipt authority were denied. Confirmation and reuse before QC were blocked; the inspector could not approve their own return inspection.
 
