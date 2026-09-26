@@ -37,7 +37,7 @@ const ENV = {
   O2C_BROWSER_DB: DB, O2C_RUN_ID: RUN, O2C_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 
-const report = { run_id: RUN, database: DB, base_url: BASE, checks: [], failures: [], http_errors: [], page_errors: [], session_recoveries: [] };
+const report = { run_id: RUN, database: DB, base_url: BASE, checks: [], failures: [], http_errors: [], page_errors: [], session_recoveries: [], login_retries: [] };
 let fixture;
 
 function check(name, ok, evidence = '') {
@@ -119,7 +119,8 @@ async function tearDown(server) {
   // A failed run is the one worth inspecting: keep its database even without
   // O2C_KEEP so the checks can be reproduced against the exact rows.
   const dirty = report.failures.length > 0 || report.http_errors.length > 0
-    || report.session_recoveries.length > 0 || (report.csrf_recoveries?.length ?? 0) > 0;
+    || report.session_recoveries.length > 0 || (report.csrf_recoveries?.length ?? 0) > 0
+    || report.login_retries.length > 0;
   if (KEEP || dirty) {
     if (dirty && !KEEP) console.log(`Run was not clean — keeping ${DB} and API :${API_PORT} for inspection.`);
     console.log(`Kept ${DB} and API :${API_PORT} — start the SPA with: npm run dev`);
@@ -157,8 +158,29 @@ async function login(email, sessionCheck = '/auth/user') {
   page.on('response', (r) => {
     if (r.status() >= 500 && r.url().includes('/api/')) report.http_errors.push(`${email} ${r.status()} ${r.request().method()} ${r.url().replace(BASE, '')}`);
   });
-  await signIn(page, email, sessionCheck);
+  await signInWithRetry(page, email, sessionCheck);
   return page;
+}
+
+/**
+ * The lost-session race that hits mid-chain can hit the sign-in itself: the
+ * form posts, the SPA lands on the dashboard, and the freshly rotated session
+ * is already gone. Retry the sign-in rather than calling that a product
+ * failure. Every retry stays in the report.
+ */
+async function signInWithRetry(page, email, sessionCheck) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await signIn(page, email, sessionCheck);
+      return;
+    } catch (error) {
+      lastError = error;
+      report.login_retries.push({ email, attempt, error: String(error?.message ?? error).slice(0, 160) });
+      await page.waitForTimeout(1_000);
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -178,6 +200,19 @@ async function signIn(page, email, sessionCheck) {
   if (me.status !== 200) throw new Error(`Login as ${email} left no session (GET ${sessionCheck} → ${me.status}).`);
 }
 
+/**
+ * Re-establishes the session for a context whose role is known, counting the
+ * recovery so it stays visible in the report. Returns false when the context
+ * has no recorded role (nothing we can replay).
+ */
+async function recoverSession(page, method, route) {
+  const role = roleOf.get(page.context());
+  if (!role) return false;
+  await signInWithRetry(page, role.email, role.sessionCheck);
+  report.session_recoveries.push({ role: role.email, method, route, first: 401, retried: 200 });
+  return true;
+}
+
 async function api(page, method, route, body, headers = {}, options = {}) {
   // Capture what the browser actually sent, so a 401 can be told apart from a
   // lost session (missing Referer/Origin makes Sanctum treat it as stateless).
@@ -188,7 +223,7 @@ async function api(page, method, route, body, headers = {}, options = {}) {
     }
   };
   page.on('request', watch);
-  const result = await page.evaluate(async ({ method, route, body, headers }) => {
+  const send = () => page.evaluate(async ({ method, route, body, headers }) => {
     const xsrf = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
     const r = await fetch(`/api/v1${route}`, {
       method, credentials: 'include',
@@ -198,6 +233,22 @@ async function api(page, method, route, body, headers = {}, options = {}) {
     const type = r.headers.get('content-type') || '';
     return { status: r.status, body: type.includes('json') ? await r.json().catch(() => null) : { contentType: type } };
   }, { method, route, body, headers });
+  let result;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      result = await send();
+      break;
+    } catch (error) {
+      if (attempt === 1) throw error;
+      // The SPA answers a 401 by hard-navigating to /sign-in, which destroys
+      // the JS context and surfaces here as "Failed to fetch". Recover and
+      // resend rather than aborting the whole run.
+      await page.waitForTimeout(500);
+      if (new URL(page.url()).pathname === '/sign-in' && roleOf.get(page.context())) {
+        await recoverSession(page, method, route);
+      }
+    }
+  }
   // A 401 mid-run means the browser lost its session, which otherwise shows up
   // as a misleading downstream failure. Record the cookie state at that moment.
   page.off('request', watch);
@@ -218,12 +269,9 @@ async function api(page, method, route, body, headers = {}, options = {}) {
     // The SPA hard-redirects to /sign-in the moment any call 401s, so a role
     // can lose its session mid-chain. Re-establish it and replay the call once;
     // every recovery stays in the report so the anomaly is never hidden.
-    const role = roleOf.get(page.context());
-    if (role) {
-      await signIn(page, role.email, role.sessionCheck);
+    if (await recoverSession(page, method, route)) {
       const replay = await api(page, method, route, body, headers, { probe: false, csrfRetried: false });
-      report.session_recoveries ??= [];
-      report.session_recoveries.push({ role: role.email, method, route, first: result.status, retried: replay.status });
+      report.session_recoveries[report.session_recoveries.length - 1].retried = replay.status;
       return replay;
     }
   }
@@ -244,13 +292,27 @@ async function shot(page, route, name) {
 
 async function uploadProof(driver, deliveryId) {
   const png = (await driver.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 80, height: 60 } })).toString('base64');
-  return driver.evaluate(async ({ id, b64 }) => {
+  const send = () => driver.evaluate(async ({ id, b64 }) => {
     const xsrf = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
     const form = new FormData();
     form.append('photo', new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: 'image/png' }), 'receipt.png');
     const r = await fetch(`/api/v1/driver/deliveries/${id}/receipt`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json', 'X-XSRF-TOKEN': xsrf }, body: form });
     return r.status;
   }, { id: deliveryId, b64: png });
+  // The multipart receipt POST does not go through api(), so it needs the same
+  // lost-session recovery or a driver whose session dropped fails the chain.
+  let first;
+  try {
+    first = await send();
+  } catch {
+    // Same hard-navigation race as api(): the context dies under the fetch.
+    await driver.waitForTimeout(500);
+    if (!(await recoverSession(driver, 'POST', `/driver/deliveries/${deliveryId}/receipt`))) throw new Error('driver context lost before the receipt upload');
+    first = await send();
+  }
+  if (first !== 401) return first;
+  if (!(await recoverSession(driver, 'POST', `/driver/deliveries/${deliveryId}/receipt`))) return first;
+  return send();
 }
 
 /* ─── Shared chain steps ──────────────────────────────────────────── */
@@ -407,6 +469,58 @@ async function collect(invoice, amount, key) {
 
 /* ─── Scenarios ───────────────────────────────────────────────────── */
 
+/**
+ * A single stray 401 must not throw a signed-in user back to /sign-in.
+ *
+ * The interceptor proves the session with /auth/user before navigating and
+ * replays the call once; this forces one 401 on a real page and asserts the
+ * user stays put and still gets their data.
+ */
+async function sessionResilience() {
+  const label = 'Session';
+  const page = who.prod;
+  const pattern = '**/api/v1/production/work-orders**';
+  // Start from a session this scenario just proved, so the check measures the
+  // interceptor's behaviour and not an earlier loss.
+  if (!(new URL(page.url()).pathname === '/production/work-orders')) {
+    await page.goto('/production/work-orders').catch(() => {});
+    await page.waitForTimeout(300);
+    if (new URL(page.url()).pathname === '/sign-in') await recoverSession(page, 'GET', '/session-resilience-setup');
+  }
+  let forced = 0;
+  await page.route(pattern, async (route) => {
+    if (forced++ === 0) {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Unauthenticated.' }) });
+      return;
+    }
+    await route.continue();
+  });
+  try {
+    // The list only loads if the interceptor probed the session and replayed.
+    const replayed = page
+      .waitForResponse((r) => r.url().includes('/api/v1/production/work-orders') && r.status() === 200, { timeout: 20_000 })
+      .catch(() => null);
+    await page.goto('/production/work-orders');
+    let ok = await replayed;
+    let path = new URL(page.url()).pathname;
+    if (path === '/sign-in') {
+      // The interceptor only navigates when the probe also fails; give the
+      // context one recovery so the check reports the redirect, not the blip.
+      await recoverSession(page, 'GET', '/session-resilience');
+      const again = page
+        .waitForResponse((r) => r.url().includes('/api/v1/production/work-orders') && r.status() === 200, { timeout: 20_000 })
+        .catch(() => null);
+      await page.goto('/production/work-orders');
+      ok = await again;
+      path = new URL(page.url()).pathname;
+    }
+    check(`${label}: one stray 401 does not throw the user back to sign-in`, path.startsWith('/production/work-orders'), `url=${page.url()} forced=${forced}`);
+    check(`${label}: the replayed call still returned the page's data`, Boolean(ok), `200 seen=${Boolean(ok)} requests=${forced}`);
+  } finally {
+    await page.unroute(pattern);
+  }
+}
+
 async function happyPath() {
   const label = 'Happy path';
   const so = await orderAndPlan(label, 200);
@@ -557,6 +671,7 @@ async function complaintTo8D(so) {
   try {
     server = await setUp();
     await logins();
+    await sessionResilience();
     // Opt-in fault injection: drop a role's server-side session rows so the
     // recovery path in api() is exercised on demand, not only when the real
     // intermittent loss shows up.
@@ -575,12 +690,14 @@ async function complaintTo8D(so) {
       passed: report.checks.length, failed: report.failures.length,
       server_errors: report.http_errors.length, page_errors: report.page_errors.length,
       session_recoveries: report.session_recoveries.length, csrf_recoveries: report.csrf_recoveries?.length ?? 0,
+      login_retries: report.login_retries.length,
     };
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors, ${report.summary.session_recoveries} session / ${report.summary.csrf_recoveries} csrf recoveries → ${OUT}/report.json`);
+    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors, ${report.summary.session_recoveries} session / ${report.summary.csrf_recoveries} csrf / ${report.summary.login_retries} login retries → ${OUT}/report.json`);
     for (const r of report.session_recoveries) console.log(`  re-signed in ${r.role} on ${r.method} ${r.route} (first ${r.first} → ${r.retried})`);
     for (const r of report.csrf_recoveries ?? []) console.log(`  refreshed CSRF on ${r.method} ${r.route} (first ${r.first} → ${r.retried})`);
+    for (const r of report.login_retries) console.log(`  retried sign-in for ${r.email} (attempt ${r.attempt}: ${r.error})`);
     await browser?.close();
     await tearDown(server);
     process.exitCode = report.failures.length || report.http_errors.length ? 1 : 0;

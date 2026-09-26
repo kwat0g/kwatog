@@ -54,6 +54,9 @@ product was wrong and was fixed with a test.
 | Ten further repeats after the UI-fidelity and session work | **105 passed, 0 failed** each (O2CDEV13–16, 18–22, 25) | `/tmp/o2c-headless-O2CDEV25/report.json` |
 | One repeat captured the lost session with new evidence | 6 passed, 2 failed — see the session finding below | `/tmp/o2c-headless-O2CDEV17/report.json` |
 | Injected session loss (`O2C_FAULT_SESSION_DROP=finance@ogami.test`) | **105 passed, 0 failed**, 1 session + 1 CSRF recovery recorded | `/tmp/o2c-headless-O2CDEV24/report.json` |
+| Session fix in place, five phases | **107 passed, 0 failed** (O2CFINAL5, O2CFINAL6) | `/tmp/o2c-headless-O2CFINAL6/report.json` |
+| Same, with five real session losses mid-chain | **107 passed, 0 failed**, every role re-signed in and replayed | `/tmp/o2c-headless-O2CFINAL7/report.json` |
+| The new check against the *old* interceptor (probe disabled) | 2 failed — the user is thrown to `/dashboard/plant-manager` | `/tmp/o2c-headless-O2CNOPROBE/report.json` |
 
 Runs O2CDEV2–O2CDEV4 and O2CDEV7 aborted at login with 5xx and a `waitForURL` timeout.
 Those were **not** product failures: a run killed before its teardown left `artisan serve`
@@ -79,7 +82,7 @@ synchronous so every listener runs inline as a worker would; mail is captured, a
 broadcasts are logged.
 
 It logs in nine staff roles plus the customer portal account, each in its own Chromium
-context, and drives four phases:
+context, and drives five phases:
 
 - **Happy path** — order → plan → schedule → work order → material issue → in-process QC →
   output → outgoing QC → Action Center review → two delivery drafts → assignment →
@@ -92,11 +95,15 @@ context, and drives four phases:
   delivered, cancelling reverses the invoice's own journal entry, Finance re-bills from the
   delivery page, then a credit note and a partial payment leave the invoice `partial`
   before the rest pays it off. Every journal entry is balanced at the end.
+- **Session resilience** — the runner forces one 401 on the production work-order list
+  through Playwright route interception and asserts the user stays on the page and still
+  gets the data. This is the permanent regression check for the fix below; disabling the
+  interceptor's session probe makes it fail (`url=…/dashboard/plant-manager`).
 - **Complaint → 8D** — the customer files a complaint in the portal, an NCR opens from it,
   customer service writes and finalizes the 8D, QC dispositions and closes the NCR, and the
   customer reads the finalized report back in the portal.
 
-Final result: **105 checkpoints passed, zero server errors, zero page errors**, with
+Final result: **107 checkpoints passed, zero server errors, zero page errors**, with
 `happy-so-closed.png` and `billing-invoice-paid.png` written to the output directory.
 
 Negative checks are real API calls, not UI guesses: a work order with no good output
@@ -156,12 +163,22 @@ portal offers Confirm, and a customer cannot confirm a delivery that has not arr
   a fresh guest one. Whether the trigger was the fixed-port collision or something that races
   the post-login session rotation, the user-visible outcome is the same: a signed-in user
   lands on `/sign-in` mid-task. The port rule removes one cause; it does not by itself make
-  that outcome impossible, so the SPA's hard redirect on a 401 is worth a deliberate look
-  (re-checking `/auth/user` once before navigating is the cheap mitigation).
+  that outcome impossible, so the SPA's hard redirect on a 401 was changed. **Fixed**:
+  `spa/src/api/client.ts` now asks `GET /auth/user` (outside the interceptor) before
+  navigating and, when the session is still alive, replays the failed call once; only a probe
+  that also fails reaches the redirect, and a request that has already been replayed once
+  never re-probes, so there is no loop. The runner keeps this honest with the **Session
+  resilience** phase above: with the probe disabled the check fails and the user lands on
+  `/dashboard/plant-manager`; with it enabled the user stays on the work-order list and the
+  replayed call returns 200.
   The runner no longer fails on either signature: on a 401 it re-signs the role in and
-  replays the call, and each recovery is counted in `report.session_recoveries` and printed,
-  so nothing is hidden. `O2C_FAULT_SESSION_DROP=<email>` drops that role's session rows after
-  login to exercise the path on demand — O2CDEV24 ran 105/0 with the recovery recorded.
+  replays the call, each recovery counted in `report.session_recoveries` and printed, so
+  nothing is hidden. Sign-in retries are counted separately in `report.login_retries`, the
+  driver's multipart receipt upload recovers the same way, and a fetch that dies because the
+  SPA hard-navigated under it is resent instead of aborting the run.
+  `O2C_FAULT_SESSION_DROP=<email>` drops that role's session rows after login to exercise the
+  path on demand — O2CDEV24 ran 105/0 with the recovery recorded, and O2CFINAL7 recovered
+  five real losses (production, driver, finance twice, customer service) to finish 107/0.
 - **The runner's screenshots used to misrepresent the UI.** A programmatic Vite server
   started from the repo root does not pick up the SPA's PostCSS/Tailwind config, so every
   page rendered unstyled and `happy-so-closed.png` read like plain text. The runner now runs
@@ -186,8 +203,9 @@ This workspace is shared with other concurrent sessions. At the start and end of
  M scripts/o2c-headless.cjs
 ```
 
-Both files were committed in `9723147a`. The follow-up work described above (UI fidelity,
-session recovery, failure evidence) touches only `scripts/o2c-headless.cjs` and this file.
+Both files were committed in `9723147a`. The follow-up work described above touches
+`scripts/o2c-headless.cjs`, this file, and the product fix in `spa/src/api/client.ts`
+with its tests in `spa/src/api/__tests__/client.test.ts`.
 
 No other session's file was edited, reverted, reformatted or staged. No reset, clean,
 stash or rebase was performed, and the shared development database was never migrated or

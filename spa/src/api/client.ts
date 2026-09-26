@@ -38,6 +38,8 @@ export const client = axios.create({
 interface OgamiRequestConfig extends InternalAxiosRequestConfig {
  /** Internal loop guard for the one-time CSRF recovery retry. */
  _csrfRetried?: boolean;
+ /** Internal loop guard for the one-time lost-session recovery retry. */
+ _sessionRetried?: boolean;
  /**
   * Force a global toast for a status the interceptor would otherwise leave to
   * the page (5xx on a mutation). Rarely needed — see `interceptorOwnsToast`.
@@ -176,7 +178,18 @@ const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error:
  // • the login attempt itself (form handles its own error UI)
  // • the bootstrap call from AuthGuard (AuthGuard handles routing)
  if (!isLoginAttempt && !isBootstrap) {
-  if (typeof window !== 'undefined' && window.location.pathname !== '/sign-in' && window.location.pathname !== '/login') {
+ // A 401 does not always mean the session is gone. A browser can drop
+ // the session rotated at sign-in, and one stray 401 used to throw a
+ // signed-in user back to /sign-in mid-task, losing whatever they were
+ // doing. Prove the session is really gone before navigating, and when
+ // it is still alive replay the call once so the user never sees it.
+ if (requestConfig && !requestConfig._sessionRetried) {
+ requestConfig._sessionRetried = true;
+ if (await sessionProbe.check()) {
+ return retryClient.request(requestConfig);
+ }
+ }
+ if (typeof window !== 'undefined' && window.location.pathname !== '/sign-in' && window.location.pathname !== '/login') {
  // Defense in depth: the hard navigation below normally wipes
  // in-memory state, but clearing the query cache here guarantees no
  // stale cross-user data survives (e.g. a future soft-nav refactor).
@@ -320,6 +333,29 @@ unwrappingClient.interceptors.response.use(
  },
  createResponseErrorHandler(unwrappingClient),
 );
+
+/**
+ * "Is this session still valid?", asked outside the interceptor so the answer
+ * can never itself trigger a redirect.
+ *
+ * Exported as an object rather than a bare function so tests can stub the
+ * answer: the 401 branch's redirect must be driven by the probe, not by the
+ * first request that happens to fail.
+ */
+export const sessionProbe = {
+ async check(): Promise<boolean> {
+ try {
+ await axios.get('/api/v1/auth/user', {
+ withCredentials: true,
+ timeout: 10_000,
+ headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+ });
+ return true;
+ } catch {
+ return false;
+ }
+ },
+};
 
 /**
  * Pre-flight CSRF endpoint. Sets the XSRF-TOKEN cookie that Axios

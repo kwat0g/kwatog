@@ -16,7 +16,7 @@ vi.mock('react-hot-toast', () => ({
 // The 401 branch navigates; keep it inert and assert on the cache clear instead.
 vi.mock('@/lib/queryClient', () => ({ queryClient: { clear: vi.fn() } }));
 
-import { client, wasReportedGlobally } from '../client';
+import { client, sessionProbe, wasReportedGlobally } from '../client';
 import { queryClient } from '@/lib/queryClient';
 
 /** Drive the response interceptor directly — no network, no MSW. */
@@ -27,11 +27,14 @@ function reject(opts: {
   data?: unknown;
   code?: string;
   headers?: Record<string, string>;
+  /** Extra request-config fields, e.g. the interceptor's own loop guards. */
+  config?: Record<string, unknown>;
 }): Promise<never> {
   const config = {
     method: opts.method ?? 'get',
     url: opts.url ?? '/things',
     headers: new AxiosHeaders(),
+    ...opts.config,
   } as InternalAxiosRequestConfig;
 
   const error = new AxiosError('Request failed with status code ' + (opts.status ?? 500));
@@ -57,7 +60,12 @@ function reject(opts: {
 const errorToast = toast.error as unknown as ReturnType<typeof vi.fn>;
 
 describe('response error interceptor', () => {
-  beforeEach(() => vi.clearAllMocks());
+  // Default: the session really is gone, so the 401 branch behaves as before.
+  // The lost-session tests below flip it.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(sessionProbe, 'check').mockResolvedValue(false);
+  });
   afterEach(() => vi.clearAllMocks());
 
   it('reports a 429 and quotes Retry-After', async () => {
@@ -128,6 +136,31 @@ describe('response error interceptor', () => {
   it('does not redirect on the unified sign-in attempt itself', async () => {
     await expect(reject({ status: 401, url: '/auth/sign-in', method: 'post' })).rejects.toBeTruthy();
     expect(queryClient.clear).not.toHaveBeenCalled();
+  });
+
+  it('keeps a signed-in user in place when the session is still alive', async () => {
+    vi.mocked(sessionProbe.check).mockResolvedValue(true);
+    const replay = vi.spyOn(client, 'request').mockResolvedValue({ data: { ok: true } });
+    await expect(reject({ status: 401, url: '/production/work-orders' })).resolves.toEqual({
+      data: { ok: true },
+    });
+    expect(queryClient.clear).not.toHaveBeenCalled();
+    expect(replay).toHaveBeenCalledOnce();
+    vi.mocked(client.request).mockRestore();
+  });
+
+  it('does not re-probe a request it already replayed once', async () => {
+    vi.mocked(sessionProbe.check).mockResolvedValue(true);
+    await expect(
+      reject({ status: 401, url: '/production/work-orders', config: { _sessionRetried: true } }),
+    ).rejects.toBeTruthy();
+    expect(sessionProbe.check).not.toHaveBeenCalled();
+    expect(queryClient.clear).toHaveBeenCalled();
+  });
+
+  it('asks the API whether the session is alive before navigating away', async () => {
+    await expect(reject({ status: 401, url: '/production/work-orders' })).rejects.toBeTruthy();
+    expect(sessionProbe.check).toHaveBeenCalledOnce();
   });
 
   it('honours an explicit opt-out', async () => {
