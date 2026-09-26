@@ -13,7 +13,18 @@ class PasswordResetNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(private readonly string $tempPassword) {}
+    /**
+     * PROTECTED and NOT readonly — `private readonly` here kills the queued HR
+     * subclass (EmployeePasswordResetNotification) exactly as it did the welcome
+     * email: SerializesModels rewrites a private property under the CONCRETE
+     * class name (so the subclass cannot hydrate it) and a readonly property
+     * cannot be initialized from the child's scope. Either way no employee
+     * received their reset password.
+     *
+     * @see \App\Modules\Auth\Notifications\WelcomeNotification
+     * @see \Tests\Feature\HR\EmployeeWelcomeNotificationTest
+     */
+    public function __construct(protected string $tempPassword) {}
 
     /**
      * @return array<int, string>
