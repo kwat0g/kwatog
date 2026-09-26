@@ -112,11 +112,14 @@ export function DeliveryAttemptPanel({ deliveryId, lines, report, amend, driver 
   const mutation = useMutation({
     mutationFn: (payload: ReportDeliveryAttempt) => payload.expected_version && amend ? amend(payload) : report(payload),
     onSuccess: async () => {
-      await refresh();
+      // The server has the report. Drop the retry draft before the refetch:
+      // refreshing can remount this panel, and a draft still in storage would
+      // re-open it in the retry state and hide the correction control.
       remember(null);
       setFailure('');
       setOpen(false);
       toast.success('Delivery outcome recorded.');
+      await refresh();
     },
     onError: (error) => {
       const definitive = isAxiosError(error) && error.response && error.response.status < 500;

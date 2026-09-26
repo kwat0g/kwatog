@@ -390,7 +390,7 @@ async function reportAttempt(driver, id, customerQty, truckQty, loseResponse = f
   await expect(driver.getByRole('button', { name: /^Mark delivered$/i })).toHaveCount(0);
   await expect(driver.getByRole('button', { name: 'Save delivery outcome', exact: true })).toHaveCount(0);
   await expect(driver.getByRole('button', { name: 'Retry saved report', exact: true })).toHaveCount(0);
-  await expect(driver.getByLabel('What happened?', { exact: true })).toHaveCount(0);
+  await expect(driver.getByLabel(/^What happened\?/)).toHaveCount(0);
   await driver.evaluate(() => window.scrollTo(0, 0));
   await fit(driver);
   passed('Driver records exact customer/truck quantities with safe retry', { id, customerQty, truckQty, loseResponse });
@@ -497,7 +497,17 @@ async function deliverAndConfirm(impex, driver, customer, finance, id, expectedQ
 
 async function amendAttempt(driver, id) {
   await driver.goto(`/driver/${id}`);
-  await driver.getByRole('button', { name: 'Correct report', exact: true }).click();
+  // Wait for the panel to settle before choosing a control: a stale draft from
+  // an earlier lost response opens it in the retry state, which hides the
+  // correction control. Settle that the way a driver would, then amend.
+  const correct = driver.getByRole('button', { name: 'Correct report', exact: true });
+  const retryDraft = driver.getByRole('button', { name: 'Retry saved report', exact: true });
+  await expect(correct.or(retryDraft).first()).toBeVisible();
+  if (await retryDraft.isVisible()) {
+    await retryDraft.click();
+    await expect(retryDraft).toHaveCount(0);
+  }
+  await correct.click();
   await driver.getByLabel(/^Returning on truck/).fill('4');
   await driver.getByLabel(/^Reason for correction/).fill('Recount found four units on the truck; two units need tracing.');
   const path = `/api/v1/driver/deliveries/${id}/amend-attempt`;
@@ -628,7 +638,7 @@ async function recoverLate(warehouse, id) {
     passed('Whole refused delivery cannot invoice or reuse returned stock before Quality');
     await manager.goto(`/return-management/cases/${traceId}`);
     await manager.getByRole('button', { name: 'Close shipment tracking', exact: true }).click();
-    await manager.getByLabel('Agreed action and next step', { exact: true }).fill('Delivery returned to depot. Original order remains open and redelivery follows Quality release.');
+    await manager.getByLabel(/^Agreed action and next step/).fill('Delivery returned to depot. Original order remains open and redelivery follows Quality release.');
     const traceClosed = manager.waitForResponse((r) => r.url().endsWith(`/cases/${traceId}/actions`) && r.request().method() === 'POST');
     await manager.getByRole('button', { name: 'Close shipment tracking', exact: true }).last().click();
     expect((await traceClosed).status()).toBe(200);

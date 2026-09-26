@@ -82,13 +82,16 @@ export function TruckReturnReceiptPanel({ deliveryId, lines, outcome, canReceive
       return late ? deliveriesApi.receiveLateReturn(deliveryId, payload) : deliveriesApi.receiveTruckReturn(deliveryId, payload);
     },
     onSuccess: async () => {
+      // Clear the retry draft the moment the count is saved. The refetches below
+      // can remount this panel, and a draft still in storage would re-open it in
+      // the retry state instead of showing the saved reconciliation.
+      remember(null); setOpen(false); setFailure('');
+      form.reset({ request_key: crypto.randomUUID(), quarantine_location_id: '', variance_reason: '', lines: outcome.lines.map((line) => ({ delivery_item_id: line.delivery_item_id, received_quantity: '0' })) });
+      toast.success(late ? 'Recovered goods received into quarantine.' : 'Truck return reconciled.');
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] }), qc.invalidateQueries({ queryKey: ['driver'] }),
         qc.invalidateQueries({ queryKey: ['inventory'] }), qc.invalidateQueries({ queryKey: ['return-request'] }),
       ]);
-      remember(null); setOpen(false); setFailure('');
-      form.reset({ request_key: crypto.randomUUID(), quarantine_location_id: '', variance_reason: '', lines: outcome.lines.map((line) => ({ delivery_item_id: line.delivery_item_id, received_quantity: '0' })) });
-      toast.success(late ? 'Recovered goods received into quarantine.' : 'Truck return reconciled.');
     },
     onError: (error) => {
       if (isAxiosError(error) && error.response && error.response.status < 500) {
