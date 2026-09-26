@@ -4,14 +4,16 @@ Backend and UI implementation, headless verification, and audit-process cleanup 
 
 ## Runner status — updated 2026-09-27
 
-`scripts/material-recovery-headless.cjs` is self-contained through `PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1` (same fixture, ports and teardown as the work-order runner):
+`scripts/material-recovery-headless.cjs` is self-contained through `PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1` (same ports and teardown as the work-order runner; it seeds its own `api/tests/Browser/material_recovery_fixture.php`):
 
 ```bash
 PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1 PRODUCTION_WORKORDERS_RUN_ID=MRV0927A \
   node scripts/material-recovery-headless.cjs
 ```
 
-The run currently stops on a quantity assertion — expected 9, received 7 (`/tmp/mrv-headless-MRV0927A/report.json`) — the same material-coverage shift that stops the work-order runner. Harness debt, to be reconciled together.
+The 2026-09-27 run stopped on a quantity assertion — expected 9, received 7 (`/tmp/mrv-headless-MRV0927A/report.json`) — the same material-coverage shift that stopped the work-order runner.
+
+Fixed 2026-09-27: the bootstrap was seeding `production_workorders_fixture.php` (7 KG opening stock, two work orders) instead of this scenario's own `material_recovery_fixture.php` (9 KG opening stock, three work orders), so every stock assertion was off by two kilograms. The runner now seeds the correct fixture. **Re-run green: 33 checks, 0 failures, 0 JavaScript errors** (`/tmp/material-recovery-headless-PWOMUIZYTB7/report.json`).
 
 ## Scope and resulting behavior
 

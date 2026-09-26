@@ -9,7 +9,9 @@ PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1 PRODUCTION_WORKORDERS_RUN_ID=PWO0927A \
   node scripts/production-workorders-headless.cjs
 ```
 
-On the current checkout the run stops at the second main output with **HTTP 422: "Material coverage is short for cumulative production ... 1.000 KG"** (`/tmp/pwo-headless-PWO0927A/report.json`). The fixture reserves and issues 5 KG for a run whose gross output is 6 (3 + 1, then 2 + 0), so it predates the material-coverage rule that the order-to-cash harness already satisfies by issuing for gross units, rejects included. This is harness debt, not a product regression; a fix has to raise the reservation, issue and stock assertions together.
+The 2026-09-27 run stops at the second main output with **HTTP 422: "Material coverage is short for cumulative production ... 1.000 KG"** (`/tmp/pwo-headless-PWO0927A/report.json`). The fixture reserved and issued 5 KG for a run whose gross output is 6 (3 + 1, then 2 + 0), so it predated the material-coverage rule that the order-to-cash harness already satisfies by issuing for gross units, rejects included. This was harness debt, not a product regression.
+
+Fixed 2026-09-27: the fixture opens 8 KG instead of 7, and the runner records the attempted over-cover output through the API and asserts the 422 names the 1.000 KG shortage before Warehouse issues the extra kilogram as an unreserved top-up. Final assertions now read manual issue 6 (5 reserved plus 1 top-up), actual cost 24 PHP, first-output lineage 5 KG / 20 PHP and final-output lineage 6 KG / 24 PHP, with raw stock 0 / reserved 0 at close. The per-output lineage is a snapshot taken when that output is recorded, so the two outputs legitimately report different issued quantities. **Re-run green: 29 checks, 0 failures, 0 JavaScript errors** (`/tmp/production-workorders-headless-PWOMUIZTM8S/report.json`).
 
 ## Verified findings and repairs
 

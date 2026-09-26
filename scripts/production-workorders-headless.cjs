@@ -616,9 +616,9 @@ async function main() {
   expect(confirmedMain.status).toBe('confirmed');
   expect(Number(confirmedRecovery.quantity_target) + Number(confirmedMain.quantity_target)).toBe(7);
   let rawStock = await stockAt(warehouse, fixture.raw_item_id, fixture.raw_location_id);
-  expect(Number(rawStock.quantity)).toBe(7);
+  expect(Number(rawStock.quantity)).toBe(8);
   expect(Number(rawStock.reserved_quantity)).toBe(7);
-  expect(Number(rawStock.available)).toBe(0);
+  expect(Number(rawStock.available)).toBe(1);
   passed('Confirmation reserves the BOM quantity across the two linked orders', {
     target: confirmedRecovery.quantity_target,
     quantity: rawStock.quantity,
@@ -628,13 +628,13 @@ async function main() {
 
   const recoveryIssue = await createIssueInUi(warehouse, fixture.recovery_work_order_id, 2, fixture.material_lot_number, fixture.recovery_work_order_number, 'reservation');
   const afterRecoveryIssue = await stockAt(warehouse, fixture.raw_item_id, fixture.raw_location_id);
-  expect(Number(afterRecoveryIssue.quantity)).toBe(5);
+  expect(Number(afterRecoveryIssue.quantity)).toBe(6);
   expect(Number(afterRecoveryIssue.reserved_quantity)).toBe(5);
   await at(warehouse, 'DELETE', `/inventory/material-issues/${recoveryIssue.slip.id}`);
   const afterPreOutputCancel = await stockAt(warehouse, fixture.raw_item_id, fixture.raw_location_id);
-  expect(Number(afterPreOutputCancel.quantity)).toBe(7);
+  expect(Number(afterPreOutputCancel.quantity)).toBe(8);
   expect(Number(afterPreOutputCancel.reserved_quantity)).toBe(5);
-  expect(Number(afterPreOutputCancel.available)).toBe(2);
+  expect(Number(afterPreOutputCancel.available)).toBe(3);
   const shortStart = await startViaUi(manager, fixture.recovery_work_order_id, 422);
   expect(shortStart.body.message).toMatch(/material|issue|coverage|short/i);
   await manager.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -739,6 +739,28 @@ async function main() {
   });
   await mobileManager.context().close();
 
+  // The first output's reject consumed the sixth kilogram: gross production is
+  // 4 so far against a 5 KG reserve, and the final 2 good units need the extra
+  // kilogram issued before the coverage rule will accept them.
+  const coverageBlocked = await request(manager, 'POST', `/production/work-orders/${fixture.main_work_order_id}/outputs`, {
+    good_count: 2,
+    reject_count: 0,
+    shift: fixture.shift_name,
+    defects: [],
+  });
+  expect(coverageBlocked.status).toBe(422);
+  expect(String(coverageBlocked.body.message)).toMatch(/coverage is short/i);
+  const topUpIssue = await createIssueInUi(warehouse, fixture.main_work_order_id, 1, fixture.material_lot_number, fixture.main_work_order_number, 'general');
+  const afterTopUp = await stockAt(warehouse, fixture.raw_item_id, fixture.raw_location_id);
+  expect(Number(afterTopUp.quantity)).toBe(0);
+  expect(Number(afterTopUp.reserved_quantity)).toBe(0);
+  passed('Recording output past the issued material is refused with the exact shortage, and issuing the extra kilogram clears it', {
+    blocked: coverageBlocked.status,
+    message: coverageBlocked.body.message,
+    topUpSlip: topUpIssue.slip.slip_number,
+    stock: { quantity: afterTopUp.quantity, reserved: afterTopUp.reserved_quantity },
+  });
+
   const secondMainOutput = await outputViaUi(manager, fixture.main_work_order_id, 2, 0, fixture.defect_type_id, fixture.shift_name, 'final', { target: 5, produced: 6, good: 5, reject: 1 });
   expect(secondMainOutput.production_receipt_handoff.status).toBe('generated');
   await runOperationViaUi(manager, fixture.main_work_order_id, 5, 5, 1);
@@ -759,8 +781,8 @@ async function main() {
   expect(finalDetail.quantity_produced).toBe(6);
   expect(finalDetail.quantity_good).toBe(5);
   expect(finalDetail.quantity_rejected).toBe(1);
-  expect(Number(finalDetail.materials[0].manual_quantity_issued)).toBe(5);
-  expect(Number(finalDetail.material_cost_summary.actual_cost)).toBe(20);
+  expect(Number(finalDetail.materials[0].manual_quantity_issued)).toBe(6);
+  expect(Number(finalDetail.material_cost_summary.actual_cost)).toBe(24);
   const finalOutputs = dataOf(await at(manager, 'GET', `/production/work-orders/${fixture.main_work_order_id}/outputs`));
   expect(finalOutputs).toHaveLength(2);
   expect(new Set(finalOutputs.map((item) => item.id))).toEqual(new Set([firstMainOutput.id, secondMainOutput.id]));
@@ -768,10 +790,13 @@ async function main() {
   expect([outputsById.get(firstMainOutput.id).good_count, outputsById.get(firstMainOutput.id).reject_count]).toEqual([3, 1]);
   expect([outputsById.get(secondMainOutput.id).good_count, outputsById.get(secondMainOutput.id).reject_count]).toEqual([2, 0]);
   expect(finalOutputs.every((item) => item.production_receipt_handoff.status === 'generated')).toBe(true);
-  for (const item of finalOutputs) {
-    const lineage = item.material_lineage;
-    expect(Number(lineage.materials[0].manual_quantity_issued)).toBe(5);
-    expect(Number(lineage.materials[0].manual_actual_cost)).toBe(20);
+  // Lineage is a per-output snapshot: the first output was recorded against the
+  // reserved 5 KG, the final one after the extra kilogram was issued.
+  const firstLineage = outputsById.get(firstMainOutput.id).material_lineage;
+  const secondLineage = outputsById.get(secondMainOutput.id).material_lineage;
+  expect([Number(firstLineage.materials[0].manual_quantity_issued), Number(firstLineage.materials[0].manual_actual_cost)]).toEqual([5, 20]);
+  expect([Number(secondLineage.materials[0].manual_quantity_issued), Number(secondLineage.materials[0].manual_actual_cost)]).toEqual([6, 24]);
+  for (const lineage of [firstLineage, secondLineage]) {
     expect(lineage.material_lot_references.some((row) => row.material_lot_number === fixture.material_lot_number)).toBe(true);
   }
   const finalStock = await stockAt(warehouse, fixture.raw_item_id, fixture.raw_location_id);

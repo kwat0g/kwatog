@@ -169,7 +169,7 @@ $fgLocation = WarehouseLocation::factory()->create([
 app(StockMovementService::class)->move(new StockMovementInput(
     type: StockMovementType::Opening,
     itemId: $rawItem->id,
-    quantity: '7.000',
+    quantity: '8.000',
     toLocationId: $rawLocation->id,
     unitCost: '4.0000',
     remarks: 'Production work-order browser fixture opening stock',

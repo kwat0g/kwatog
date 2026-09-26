@@ -5,7 +5,7 @@
 //
 // With PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1 the runner is self-contained: it
 // creates ogami_test_production_workorders_browser_<run>, migrates it, seeds
-// the fixture (api/tests/Browser/production_workorders_fixture.php), serves a
+// the fixture (api/tests/Browser/material_recovery_fixture.php), serves a
 // temporary API and Vite proxy, then tears both down. Without the flag it
 // points at PRODUCTION_WORKORDERS_TEST_URL and PRODUCTION_WORKORDERS_FIXTURE_PATH.
 const fs = require('node:fs');
@@ -57,7 +57,7 @@ function prepare() {
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
   compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'migrate', '--force']);
   compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
-  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'tinker', '--execute', "require 'tests/Browser/production_workorders_fixture.php';"]);
+  compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', 'tinker', '--execute', "require 'tests/Browser/material_recovery_fixture.php';"]);
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT_ROOT, 'fixture.json')]);
   compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
