@@ -163,7 +163,7 @@ class MovementGlPostingTest extends TestCase
     public function test_source_value_override_is_rejected_for_non_return_movement_types(): void
     {
         $this->expectException(InvalidMovementException::class);
-        $this->expectExceptionMessage('Source-value overrides are allowed only on a source-linked material return.');
+        $this->expectExceptionMessage('Source-value overrides are allowed only on a source-linked material or delivery return.');
 
         $this->movements->move(new StockMovementInput(
             type: StockMovementType::AdjustmentIn,

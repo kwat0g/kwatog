@@ -35,6 +35,19 @@ failure) keeps the database for inspection. Playwright, Tailwind and the Vite pl
 resolve from `spa/node_modules`, so `NODE_PATH` is no longer needed. The manual multi-terminal
 recipe below still works for driving an environment you build yourself.
 
+## Test alignment — 2026-09-27
+
+Three Inventory tests pinned behaviour that later work replaced, and the full Inventory +
+Quality suite is green again (`536 passed, 1993 assertions`):
+
+- `MaterialIssueCancelTest` expected cancelling an issued slip to leave an `adjustment_in`
+  movement on the slip. Cancellation now returns the unused quantity through
+  `MaterialReturnService`, so the reversal is a `material_return` movement keyed to the
+  original issue movement (`reference_type = stock_movement`). The stock-level and
+  double-cancel assertions are unchanged.
+- `MovementGlPostingTest` still quoted the older source-value message; the guard now reads
+  "…material or delivery return", covering delivery returns as well.
+
 ## Confirmed findings and fixes
 
 | Severity | Confirmed evidence | Fix |

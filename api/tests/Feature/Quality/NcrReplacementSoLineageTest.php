@@ -42,7 +42,13 @@ class NcrReplacementSoLineageTest extends TestCase
         app(SettingsService::class)->set('quality.ncr.replacement_work_order_priority', 7);
     }
 
-    private function closeForOutput(NcrDisposition $disposition, bool $soBound): array
+    /**
+     * `$mrpOwned` mirrors the one-owner rule: a root work order on a sales
+     * order line is MRP's to replace, so NCR close must create nothing for it.
+     * A child work order that still carries sales-order lineage is not MRP's,
+     * so the NCR replacement has to inherit that lineage.
+     */
+    private function closeForOutput(NcrDisposition $disposition, bool $soBound, bool $mrpOwned = true): array
     {
         $user = User::factory()->create([
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
@@ -54,10 +60,14 @@ class NcrReplacementSoLineageTest extends TestCase
             'product_id' => $product->id,
             'quantity' => 10,
         ]) : null;
+        $parent = (! $mrpOwned && $soBound)
+            ? WorkOrder::factory()->create(['product_id' => $product->id, 'quantity_target' => 10])
+            : null;
         $original = WorkOrder::factory()->create([
             'product_id' => $product->id,
             'sales_order_id' => $order?->id,
             'sales_order_item_id' => $line?->id,
+            'parent_wo_id' => $parent?->id,
             'quantity_target' => 10,
         ]);
         $output = WorkOrderOutput::create([
@@ -98,12 +108,14 @@ class NcrReplacementSoLineageTest extends TestCase
         $replacementId = $disposition === NcrDisposition::Scrap
             ? $closed->replacement_work_order_id : $closed->rework_work_order_id;
 
-        return [WorkOrder::findOrFail($replacementId), $order, $line, $ncr, $original];
+        // An MRP-owned order-line batch gets no NCR work order at all, so the
+        // slot is intentionally empty for that contract.
+        return [$replacementId ? WorkOrder::findOrFail($replacementId) : null, $order, $line, $ncr, $original];
     }
 
     public function test_scrap_replacement_carries_output_sales_order_lineage(): void
     {
-        [$replacement, $order, $line, $ncr] = $this->closeForOutput(NcrDisposition::Scrap, true);
+        [$replacement, $order, $line, $ncr] = $this->closeForOutput(NcrDisposition::Scrap, true, mrpOwned: false);
 
         $this->assertSame($order->id, $replacement->sales_order_id);
         $this->assertSame($line->id, $replacement->sales_order_item_id);
@@ -112,7 +124,7 @@ class NcrReplacementSoLineageTest extends TestCase
 
     public function test_rework_replacement_carries_output_sales_order_lineage(): void
     {
-        [$replacement, $order, $line, $ncr] = $this->closeForOutput(NcrDisposition::Rework, true);
+        [$replacement, $order, $line, $ncr] = $this->closeForOutput(NcrDisposition::Rework, true, mrpOwned: false);
 
         $this->assertSame($order->id, $replacement->sales_order_id);
         $this->assertSame($line->id, $replacement->sales_order_item_id);
@@ -157,7 +169,10 @@ class NcrReplacementSoLineageTest extends TestCase
     public function test_mrp_rerun_counts_planned_and_confirmed_so_bound_replacement_without_another_wo(): void
     {
         Event::fake([MrpPlanGenerated::class]);
-        [$replacement, $order, $line, , $original] = $this->closeForOutput(NcrDisposition::Scrap, true);
+        // A root work order on a sales-order line: MRP owns the shortfall, so
+        // closing the NCR must not add a second work order for the same line.
+        [$replacement, $order, $line, $ncr, $original] = $this->closeForOutput(NcrDisposition::Scrap, true);
+        $this->assertNull($replacement, 'NCR close must not replace an order-line batch MRP owns.');
         $order->forceFill(['status' => 'confirmed'])->save();
         $original->forceFill([
             'status' => WorkOrderStatus::Completed,
@@ -188,11 +203,13 @@ class NcrReplacementSoLineageTest extends TestCase
         $engine->runForSalesOrder($order->fresh());
         $engine->runForSalesOrder($order->fresh());
 
+        $planned = WorkOrder::where('sales_order_item_id', $line->id)->whereKeyNot($original->id)->firstOrFail();
+
         $this->assertSame(2, WorkOrder::where('sales_order_item_id', $line->id)->count());
         $this->assertSame(1, WorkOrder::where('sales_order_item_id', $line->id)
             ->where('status', WorkOrderStatus::Planned->value)->count());
 
-        $replacement->forceFill(['status' => WorkOrderStatus::Confirmed])->save();
+        $planned->forceFill(['status' => WorkOrderStatus::Confirmed])->save();
         $engine->runForSalesOrder($order->fresh());
         $engine->runForSalesOrder($order->fresh());
 

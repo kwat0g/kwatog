@@ -78,10 +78,15 @@ class MaterialIssueCancelTest extends TestCase
         $level->refresh();
         $this->assertSame('100.000', (string) $level->quantity, 'Stock restored after cancel');
 
+        // Cancelling an issued slip returns the unused quantity through the
+        // material-return engine, so the reversal is a `material_return` keyed
+        // to the original issue movement, not a bare adjustment.
+        $sourceMovementId = (int) MaterialIssueSlipItem::query()
+            ->where('material_issue_slip_id', $slip->id)->value('stock_movement_id');
         $this->assertDatabaseHas('stock_movements', [
-            'reference_type' => 'material_issue_slip',
-            'reference_id'   => $slip->id,
-            'movement_type'  => 'adjustment_in',
+            'movement_type'  => 'material_return',
+            'reference_type' => 'stock_movement',
+            'reference_id'   => $sourceMovementId,
         ]);
     }
 
@@ -113,11 +118,13 @@ class MaterialIssueCancelTest extends TestCase
             ->where('item_id', $this->item->id)
             ->where('location_id', $this->location->id)
             ->value('quantity'));
+        $sourceMovementId = (int) MaterialIssueSlipItem::query()
+            ->where('material_issue_slip_id', $slip->id)->value('stock_movement_id');
         $this->assertSame(1,
             DB::table('stock_movements')
-                ->where('reference_type', 'material_issue_slip')
-                ->where('reference_id', $slip->id)
-                ->where('movement_type', 'adjustment_in')
+                ->where('reference_type', 'stock_movement')
+                ->where('reference_id', $sourceMovementId)
+                ->where('movement_type', 'material_return')
                 ->count());
     }
 

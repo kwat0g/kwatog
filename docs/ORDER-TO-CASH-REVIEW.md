@@ -40,6 +40,16 @@ Nothing in the runner's own scope weakens a product guard. Where a check failed,
 harness was not doing what the shop floor does (issuing material, reserving stock) or the
 product was wrong and was fixed with a test.
 
+## Test alignment — 2026-09-27
+
+Three `NcrReplacementSoLineageTest` cases still expected NCR close to create a work order for
+an output that belongs to a root work order on a sales-order line. That contradicts the
+one-owner rule above (`WorkOrder::coversSalesOrderLine()`), so the fixture now marks which
+source outputs MRP owns: an order-line root output gets no NCR work order, while a child
+output that still carries sales-order lineage keeps its lineage on the NCR replacement. The
+MRP-rerun case asserts the MRP-planned shortfall is counted once instead of looking for a
+second NCR work order.
+
 ## Validation
 
 | Check | Result | Evidence |
@@ -62,6 +72,8 @@ product was wrong and was fixed with a test.
 | `tests/Feature/Accounting` (full suite) | 265 passed | local run |
 | `tests/Feature/ReturnManagement` (full suite) | 135 passed, 1 pre-existing unrelated failure (`ReturnCaseCustomerReplacementTest`) | local run |
 | Acceptance run after both fixes (`O2CSO1`) | **107 passed, 0 failed, 0 5xx, 0 page errors** | `/tmp/o2c-headless-O2CSO1/report.json` |
+| `tests/Feature/Quality` + `tests/Feature/Inventory` after aligning stale tests to current contracts | **536 passed, 1993 assertions, 0 failures** | local run `invq0927c` |
+| `NcrReplacementSoLineageTest` after the one-owner rewrite | 5 passed | `api/tests/Feature/Quality/NcrReplacementSoLineageTest.php` |
 
 Runs O2CDEV2–O2CDEV4 and O2CDEV7 aborted at login with 5xx and a `waitForURL` timeout.
 Those were **not** product failures: a run killed before its teardown left `artisan serve`
