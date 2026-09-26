@@ -121,6 +121,15 @@ portal offers Confirm, and a customer cannot confirm a delivery that has not arr
      `finalized|partial|paid`, so a return case settled against a delivery whose invoice is
      still a draft creates a customer credit note with `invoice_id = null` while the draft
      still holds the delivery lines. Out of this review's blast radius (Return Management).
+- **One repeat run lost a role's session, and it is not a chain defect.** A later repeat
+  reported 89 passed / 7 failed; every failure was a 401 on the finance session. Finance had
+  logged in eight roles earlier, idle for roughly two minutes — far inside the configured
+  15/30-minute idle timeout — and the auth log records no logout or lockout. The first
+  finance call of the chain (`finalize`) was already unauthenticated, so no chain behaviour
+  was involved. Two other repeat runs were fully green (105 checks each). Treat a cluster of
+  401s as harness session loss, not a regression, and re-run. The 401 response body and the
+  context's cookie jar at that moment are what distinguish a dropped session from an expired
+  one; neither was captured on the run that failed.
 - **The dev stack still has no queue worker or scheduler.** The runner sets
   `QUEUE_CONNECTION=sync` so listeners run inline; the operator walkthrough relies on that
   too. A production deployment needs both.
