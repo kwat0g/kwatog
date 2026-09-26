@@ -1,5 +1,16 @@
 # Production & Work Orders audit
 
+## Runner status — updated 2026-09-27
+
+`scripts/production-workorders-headless.cjs` is now self-contained: `PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1` creates and migrates `ogami_test_production_workorders_browser_<run>`, seeds `api/tests/Browser/production_workorders_fixture.php`, serves a temporary API and Vite proxy, runs and tears both down.
+
+```bash
+PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1 PRODUCTION_WORKORDERS_RUN_ID=PWO0927A \
+  node scripts/production-workorders-headless.cjs
+```
+
+On the current checkout the run stops at the second main output with **HTTP 422: "Material coverage is short for cumulative production ... 1.000 KG"** (`/tmp/pwo-headless-PWO0927A/report.json`). The fixture reserves and issues 5 KG for a run whose gross output is 6 (3 + 1, then 2 + 0), so it predates the material-coverage rule that the order-to-cash harness already satisfies by issuing for gross units, rejects included. This is harness debt, not a product regression; a fix has to raise the reservation, issue and stock assertions together.
+
 ## Verified findings and repairs
 
 | Priority | Finding | Repair and evidence |

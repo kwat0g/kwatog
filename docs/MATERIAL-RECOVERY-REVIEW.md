@@ -2,6 +2,17 @@
 
 Backend and UI implementation, headless verification, and audit-process cleanup are complete. Delivery and dispatch are covered separately in `DELIVERY-DISPATCH-REVIEW.md`.
 
+## Runner status — updated 2026-09-27
+
+`scripts/material-recovery-headless.cjs` is self-contained through `PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1` (same fixture, ports and teardown as the work-order runner):
+
+```bash
+PRODUCTION_WORKORDERS_TEST_BOOTSTRAP=1 PRODUCTION_WORKORDERS_RUN_ID=MRV0927A \
+  node scripts/material-recovery-headless.cjs
+```
+
+The run currently stops on a quantity assertion — expected 9, received 7 (`/tmp/mrv-headless-MRV0927A/report.json`) — the same material-coverage shift that stops the work-order runner. Harness debt, to be reconciled together.
+
 ## Scope and resulting behavior
 
 This review closes the handoff between Warehouse issues, production rejects/replacement output, unused-material returns, work-order cost, and MRP. It does not change RFQ or quotation behavior.
