@@ -115,6 +115,9 @@ const findings = state.findings || [];
 state.findings = findings;
 const pages = [];
 const errors = [];
+// Non-fatal noise (Vite HMR sockets, expected 401s) that explains a blank page
+// when a run fails. Never asserted; it is attached to the failure report only.
+const diagnostics = [];
 const save = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 const pass = (name) => { if (!checks.includes(name)) checks.push(name); console.log('PASS:', name); };
 const internal = '/return-management/cases';
@@ -141,6 +144,15 @@ async function login(browser, email, mobile = false) {
   page.setDefaultTimeout(20000);
   pages.push({ page, email });
   page.on('pageerror', (e) => errors.push(`${email}: ${e.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error' && diagnostics.length < 200) diagnostics.push(`${email} console: ${message.text().slice(0, 300)}`);
+  });
+  page.on('requestfailed', (request) => {
+    if (diagnostics.length < 200) diagnostics.push(`${email} requestfailed: ${request.method()} ${request.url().slice(0, 160)} (${request.failure()?.errorText ?? 'unknown'})`);
+  });
+  page.on('response', (response) => {
+    if (response.status() >= 500 && diagnostics.length < 200) diagnostics.push(`${email} http ${response.status()}: ${response.request().method()} ${response.url().slice(0, 160)}`);
+  });
   await page.goto('/sign-in');
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(process.env.RETURN_TEST_PASSWORD || 'password');
@@ -155,8 +167,19 @@ async function login(browser, email, mobile = false) {
 async function act(page, id, body) { return ok(page, 'POST', `${internal}/${id}/actions`, body); }
 async function show(page, id) { return ok(page, 'GET', `${internal}/${id}`); }
 async function casePage(page, id, realm = 'internal') {
-  await page.goto(realm === 'internal' ? `${internal}/${id}` : `/portal/${realm}/problems/${id}`);
-  await expect(page.getByRole('heading', { name: 'Reported problem', exact: true })).toBeVisible();
+  const url = realm === 'internal' ? `${internal}/${id}` : `/portal/${realm}/problems/${id}`;
+  const heading = page.getByRole('heading', { name: 'Reported problem', exact: true });
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  // The case detail is one route with several data panels; a cold API can take
+  // longer than the default 5s assertion budget on a busy machine.
+  try {
+    await expect(heading).toBeVisible({ timeout: 20_000 });
+  } catch {
+    // Vite's dev-server module graph occasionally leaves a blank shell after a
+    // long run. A user would reload; do the same once before failing.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(heading).toBeVisible({ timeout: 20_000 });
+  }
 }
 async function submitIntake(page, kind, source, realm, expected, received, defective) {
   const url = realm === 'customer' ? '/portal/customer/problems' : internal;
@@ -490,7 +513,7 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
         fs.writeFileSync(path.join(OUT, `failure-${email}.txt`), await page.locator('body').innerText().catch(() => 'Unavailable'));
       }
     }
-    fs.writeFileSync(path.join(OUT, process.env.RETURN_TEST_PHASE === 'links' ? 'links-report.json' : 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, failure: String(error.stack) }, null, 2));
+    fs.writeFileSync(path.join(OUT, process.env.RETURN_TEST_PHASE === 'links' ? 'links-report.json' : 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, diagnostics, failure: String(error.stack) }, null, 2));
     console.error(error);
     process.exitCode = 1;
   } finally {

@@ -2,6 +2,24 @@
 
 Updated 2026-09-25. The two defects from the initial audit are fixed, and the real headless journeys now reach settlement and case closure. RFQ implementation was outside this work.
 
+## Fresh retest — 2026-09-27 (latest)
+
+Re-ran the full journey after the not-arrived billing hold and the recovery-request outbox fix.
+
+| Run | Result | Evidence |
+| --- | --- | --- |
+| Full journey, bootstrap, scrap disposition | **30 checks passed, 0 findings** | `/tmp/return-headless-RETMUJ0A6B5/report.json` |
+
+One earlier run of this same code stopped on the case-detail heading with a blank page
+(`/tmp/return-headless-RETMUJ066LZ/failure-purchasing-ogami-test.png`). Replaying that exact
+case id against the same database rendered the page and its `Reported problem` panel in
+1.9 s, so the stop was the Vite dev-server shell failing to boot after a long run, not a
+product fault. `casePage()` now waits with a 20 s budget and reloads once before failing
+(the same thing a user does), and every page records console errors, failed requests and
+5xx responses into a `diagnostics` array that is attached to the failure report. There was
+also an earlier, quieter flake of the same shape (RET0927C/D); this run is the first green
+one after the retry was added.
+
 ## Fresh retest — 2026-09-27
 
 Re-ran the real headless journeys against the current code, which now includes the
