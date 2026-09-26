@@ -15,6 +15,7 @@ use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\CRM\Enums\SalesOrderStatus;
@@ -41,6 +42,7 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\SupplyChain\Models\Delivery;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -984,7 +986,7 @@ class SalesOrderService
             $invoices = Invoice::query()
                 ->where('sales_order_id', $so->id)
                 ->where('status', '!=', InvoiceStatus::Cancelled->value)
-                ->get(['status', 'total_amount']);
+                ->get(['id', 'status', 'date', 'created_at', 'total_amount']);
             if ($invoices->isEmpty() || ! $invoices->every(
                 static fn (Invoice $invoice): bool => $invoice->status === InvoiceStatus::Paid,
             )) {
@@ -998,7 +1000,19 @@ class SalesOrderService
                 && Money::gte($invoicedTotal, (string) $so->total_amount)
                 ? SalesOrderStatus::Closed
                 : SalesOrderStatus::Paid;
-            $result = $this->transitionLocked($so, $target);
+            // An order that is fully delivered, invoiced and paid closes in one
+            // step, which used to skip the Invoiced and Paid transitions
+            // entirely — leaving both chain steps done but dateless. Read the
+            // real dates off the invoices and their collections instead.
+            $stamps = [];
+            if (! $so->invoiced_at && $this->invoicesSayInvoiced($invoices)) {
+                $stamps['invoiced_at'] = $this->invoicedAt($invoices);
+            }
+            if (! $so->paid_at) {
+                $stamps['paid_at'] = $this->paidAt($invoices);
+            }
+
+            $result = $this->transitionLocked($so, $target, $stamps);
             if (! $result->isSuccess()) {
                 throw new BusinessRuleException($result->reason ?? 'Sales order completion state is invalid.');
             }
@@ -1088,7 +1102,38 @@ class SalesOrderService
         });
     }
 
-    private function transitionLocked(SalesOrder $so, SalesOrderStatus $target): SalesOrderTransitionResult
+    /**
+     * True once every invoice on the order is past draft, so `invoiced_at` can
+     * be dated even when the order never sat in the Invoiced status.
+     */
+    private function invoicesSayInvoiced(Collection $invoices): bool
+    {
+        return $invoices->isNotEmpty() && $invoices->every(
+            static fn (Invoice $invoice): bool => $invoice->status !== InvoiceStatus::Draft,
+        );
+    }
+
+    /** When the order was billed, taken from the invoices rather than the clock. */
+    private function invoicedAt(Collection $invoices): ?Carbon
+    {
+        $latest = $invoices->sortByDesc(
+            static fn (Invoice $invoice): string => (string) ($invoice->date?->toDateString() ?? $invoice->created_at),
+        )->first();
+
+        return $latest?->date?->copy()->startOfDay();
+    }
+
+    /** The day the last collection settled the order, so `paid_at` is evidence, not `now()`. */
+    private function paidAt(Collection $invoices): ?Carbon
+    {
+        $last = InvoiceCollection::query()
+            ->whereIn('invoice_id', $invoices->pluck('id')->all())
+            ->max('collection_date');
+
+        return $last === null ? null : Carbon::parse((string) $last);
+    }
+
+    private function transitionLocked(SalesOrder $so, SalesOrderStatus $target, array $extra = []): SalesOrderTransitionResult
     {
         $currentValue = $so->status?->value;
 
@@ -1116,6 +1161,7 @@ class SalesOrderService
         $so->update([
             'status' => $target->value,
             ...$this->transitionTimestamp($target),
+            ...$extra,
         ]);
         $fresh = $so->fresh();
         app(ChainBroadcaster::class)->broadcastFor($fresh, $target->value);
@@ -1211,6 +1257,19 @@ class SalesOrderService
             default => 'pending',
         };
 
+        // Billing is a fact about the invoices, not about the status: an order
+        // can sit in `delivered` with its invoice already finalized, and the
+        // tile used to read `pending` while the order had in fact been billed.
+        $billing = Invoice::query()
+            ->where('sales_order_id', $so->id)
+            ->where('status', '!=', InvoiceStatus::Cancelled->value)
+            ->get(['date', 'status']);
+        $invoiced = $billing->isNotEmpty() && ! $billing->contains(
+            static fn (Invoice $invoice): bool => $invoice->status === InvoiceStatus::Draft,
+        );
+        $invoicedDate = $so->invoiced_at?->toDateString()
+            ?? ($invoiced ? $billing->max(static fn (Invoice $invoice): ?string => $invoice->date?->toDateString()) : null);
+
         return [
             ['key' => 'order_entered', 'label' => 'Order Entered',
                 'date' => $so->created_at?->toDateString(),
@@ -1226,8 +1285,8 @@ class SalesOrderService
                 'date' => ($so->delivered_at ?? $so->partially_delivered_at)?->toDateString(),
                 'state' => $deliveryState],
             ['key' => 'invoiced', 'label' => 'Invoiced',
-                'date' => $so->invoiced_at?->toDateString(),
-                'state' => $isCancelled ? 'skipped' : ($isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
+                'date' => $invoicedDate,
+                'state' => $isCancelled ? 'skipped' : ($invoiced || $isPaid || $isClosed || $status === SalesOrderStatus::Invoiced ? 'done' : 'pending')],
             ['key' => 'paid', 'label' => 'Paid',
                 'date' => $so->paid_at?->toDateString(),
                 'state' => $isCancelled ? 'skipped' : ($isPaid ? 'done' : 'pending')],

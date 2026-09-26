@@ -7,6 +7,7 @@ namespace App\Modules\ReturnManagement\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
@@ -103,7 +104,24 @@ class ReturnCaseSettlementService
             && ReturnRequest::query()->where('goods_receipt_note_id', $case->goods_receipt_note_id)->whereNotIn('status', ['cancelled', 'rejected'])->exists()) {
             throw new BusinessRuleException('Link the existing Quality return with Prepare physical return before preparing a case credit.');
         }
-        $invoice = $customer ? Invoice::query()->where('delivery_id', $case->delivery_id)->whereIn('status', ['finalized', 'partial', 'paid'])->latest('id')->first() : null;
+        $invoice = null;
+        if ($customer) {
+            $invoicesForDelivery = Invoice::query()->where('delivery_id', $case->delivery_id);
+            $invoice = (clone $invoicesForDelivery)->whereIn('status', ['finalized', 'partial', 'paid'])->latest('id')->first();
+            // A draft invoice still bills the returned goods. Crediting the case
+            // here would raise an unlinked credit that never offsets that bill,
+            // so make the operator post the invoice first — the same rule the
+            // supplier side applies to a shortage that was never billed.
+            if (! $invoice) {
+                $pending = (clone $invoicesForDelivery)
+                    ->where('status', '!=', InvoiceStatus::Cancelled->value)
+                    ->latest('id')
+                    ->first();
+                if ($pending) {
+                    throw new BusinessRuleException("Finalize invoice {$pending->invoice_number} before crediting this return; it still bills the returned goods.");
+                }
+            }
+        }
         $bill = ! $customer ? Bill::query()->where('purchase_order_id', $case->purchase_order_id)
             ->when($case->goods_receipt_note_id, fn ($q) => $q->where('goods_receipt_note_id', $case->goods_receipt_note_id))
             ->whereIn('status', ['unpaid', 'partial', 'paid'])->latest('id')->first() : null;

@@ -57,6 +57,11 @@ product was wrong and was fixed with a test.
 | Session fix in place, five phases | **107 passed, 0 failed** (O2CFINAL5, O2CFINAL6) | `/tmp/o2c-headless-O2CFINAL6/report.json` |
 | Same, with five real session losses mid-chain | **107 passed, 0 failed**, every role re-signed in and replayed | `/tmp/o2c-headless-O2CFINAL7/report.json` |
 | The new check against the *old* interceptor (probe disabled) | 2 failed — the user is thrown to `/dashboard/plant-manager` | `/tmp/o2c-headless-O2CNOPROBE/report.json` |
+| `SalesOrderChainBillingDatesTest` — three billing-date cases | passed, proven to fail before the fix | `api/tests/Feature/CRM/SalesOrderChainBillingDatesTest.php` |
+| `CustomerCaseDraftInvoiceCreditTest` — two draft-invoice cases | passed; the old code returned 200 where the test now expects 422 | `api/tests/Feature/ReturnManagement/CustomerCaseDraftInvoiceCreditTest.php` |
+| `tests/Feature/Accounting` (full suite) | 265 passed | local run |
+| `tests/Feature/ReturnManagement` (full suite) | 135 passed, 1 pre-existing unrelated failure (`ReturnCaseCustomerReplacementTest`) | local run |
+| Acceptance run after both fixes (`O2CSO1`) | **107 passed, 0 failed, 0 5xx, 0 page errors** | `/tmp/o2c-headless-O2CSO1/report.json` |
 
 Runs O2CDEV2–O2CDEV4 and O2CDEV7 aborted at login with 5xx and a `waitForURL` timeout.
 Those were **not** product failures: a run killed before its teardown left `artisan serve`
@@ -122,16 +127,30 @@ portal offers Confirm, and a customer cannot confirm a delivery that has not arr
 - **Material coverage is checked at output time.** Production cannot record more output
   than the material issued covers (`assertProductionCoverage`), so the runner issues resin
   for the gross units it is about to record — including the rejects.
-- **Two known findings were reported, not fixed** (both need a product decision, and one
-  lives in another session's module):
-  1. `SalesOrderService::synchronizeCompletionState()` goes straight from delivered to
-     `closed` and only lands on `paid` when the order is delivered but *not* fully invoiced.
-     The status name reads as "customer paid"; the transition it actually marks is
-     "invoiced". No runner check depends on it — the closing check is the one that matters.
-  2. `ReturnCaseSettlementService::createCredit()` selects from invoices in
-     `finalized|partial|paid`, so a return case settled against a delivery whose invoice is
-     still a draft creates a customer credit note with `invoice_id = null` while the draft
-     still holds the delivery lines. Out of this review's blast radius (Return Management).
+- **Two findings raised by earlier passes are now fixed, each with a failing-before test.**
+  1. **The closing status name was sound; the timeline and its dates were not.**
+     `SalesOrderService::synchronizeCompletionState()` requires every invoice to be `paid`
+     before it can choose `paid` or `closed`, so the `invoiced` status is only ever set by
+     the explicit `markInvoiced()` path and the label is not misleading. The real defects
+     were that the direct `delivered → closed` transition wrote no `invoiced_at` and no
+     `paid_at`, and that `chain()` derived the **Invoiced** tile from the status alone, so a
+     delivered order whose invoice was already finalized still showed Invoiced as pending.
+     Both are fixed: the completion write now stamps `invoiced_at` from the latest invoice
+     date (only once nothing on the order is still a draft) and `paid_at` from the last
+     collection, and `chain()` reads the invoices themselves instead of the status. Test:
+     `api/tests/Feature/CRM/SalesOrderChainBillingDatesTest.php` — a finalized invoice marks
+     the step done with its date while the order stays `delivered`; a one-step close stamps
+     both dates; a draft invoice leaves Invoiced pending with no date.
+  2. **A return case settled against a draft invoice billed the customer twice.**
+     `ReturnCaseSettlementService::createCredit()` selected only from invoices in
+     `finalized|partial|paid`, so a return against a delivery whose invoice was still a draft
+     wrote a customer credit note with `invoice_id = null` while the draft kept billing the
+     returned goods. It now stops and tells the operator to post the invoice first:
+     `Finalize invoice <number> before crediting this return; it still billed the returned
+     goods.` — the same rule the supplier side already applied to an unbilled shortage.
+     Returns that legitimately have no invoice (the path documented by
+     `CustomerReturnNoInvoiceCreditTest`) still credit against a null invoice. Test:
+     `api/tests/Feature/ReturnManagement/CustomerCaseDraftInvoiceCreditTest.php`.
 - **One repeat run lost a role's session, and it is not a chain defect.** A later repeat
   reported 89 passed / 7 failed; every failure was a 401 on the finance session. Finance had
   logged in eight roles earlier, idle for roughly two minutes — far inside the configured
@@ -206,6 +225,14 @@ This workspace is shared with other concurrent sessions. At the start and end of
 Both files were committed in `9723147a`. The follow-up work described above touches
 `scripts/o2c-headless.cjs`, this file, and the product fix in `spa/src/api/client.ts`
 with its tests in `spa/src/api/__tests__/client.test.ts`.
+
+The last round of fixes — the return-case draft-invoice guard and the sales-order billing
+dates — touches `api/app/Modules/ReturnManagement/Services/ReturnCaseSettlementService.php`,
+`api/app/Modules/CRM/Services/SalesOrderService.php`, this file, and two new tests
+(`api/tests/Feature/ReturnManagement/CustomerCaseDraftInvoiceCreditTest.php`,
+`api/tests/Feature/CRM/SalesOrderChainBillingDatesTest.php`). They were committed on their
+own; the payroll, HR and auth-notification files other sessions held at the same time were
+left untouched.
 
 No other session's file was edited, reverted, reformatted or staged. No reset, clean,
 stash or rebase was performed, and the shared development database was never migrated or
