@@ -8,6 +8,7 @@ The starting boundary is an independently reviewed outgoing inspection bound to 
 
 - Dispatch used the first active finished-goods bin and generic FIFO/FEFO stock, even when its inspection authorized a different output. `DeliveryStockService` now requires the output's traceable production receipt and uses that receipt's lot across current active finished-goods bins. Transfers and split bins are supported. Every issue remains in the canonical stock ledger under its delivery item; the legacy singular pointer identifies the first issue, while `stockMovements` exposes all issues.
 - The whole departure transaction rolls back when the approved lot is short, reserved, quarantined, or otherwise unavailable. A partial issue cannot survive a failed departure. The delivery detail provides read-only lot/bin preparation guidance and actual dispatched movement history.
+- Creation now places a durable lot-and-bin reservation, and the pick guidance reads it back: a shipment whose whole bin is reserved for its own departure no longer shows a red *Short by N* line. Before this fix the guidance subtracted every reservation on the bin, including the shipment's own hold, so a fully reserved delivery contradicted itself. Only other operations' holds reduce what the guide offers.
 - In-transit cancellation previously released delivery capacity after stock had physically left. Ordinary cancellation is now limited to scheduled/loading deliveries. Delivered/in-transit shipments require reconciliation through delivery/return operations.
 - ImpEx could open the delivery form but its CRM sales-order requests returned 403. A narrow dispatch-only form-options endpoint now provides searchable, paginated order choices and unallocated line quantities, without granting CRM access or exposing order pricing. Changing the order/line clears dependent selections. Lookup errors have retry actions.
 - A delivery save whose response is lost retains its original payload and idempotency key in user-scoped browser draft storage. Retry, including after reload, recovers the original delivery rather than creating another. Inputs remain protected until the save is resolved.
@@ -33,8 +34,12 @@ The accompanying material-recovery work adds the production output's batch code 
 | Dispatch stock integration after material-return WAC fix | 10 tests, 45 assertions passed | `/tmp/dispatch-stock-final-0925.txt` |
 | Final arrival/status/driver/stock lock-order regression | 41 tests, 130 assertions passed | `/tmp/dispatch-arrival-lock-final-0925.txt` |
 | Scoped ESLint | Passed without warnings | `/tmp/dispatch-eslint-final-0925b.txt` |
+| Fresh dispatch acceptance, self-contained (`DSP0927B`) | **17 checks, 0 failures, 0 5xx, 0 JS errors** | `/tmp/dispatch-headless-DSP0927B/report.json` |
+| `DeliveryDispatchProvenanceTest` (rewritten to the durable-hold contract) | 9 passed, 43 assertions | local run |
+| `preparation()` own-hold credit, failing before the fix | shortage read 3.000; fixed reads 0.000 | local run |
+| `tests/Feature/SupplyChain` (full suite) | 30 failed, 200 passed — 33/196 at HEAD, so no new failures | local run |
 
-These runs overlap; their counts must not be added. The earlier outbound-only run had three failures (two obsolete anonymous-stock fixtures and cancellation error ordering). The stock fixtures now include real output/inspection/receipt provenance, and the cancellation message retains its customer-return guidance. Both fixes passed the final outbound rerun. PHP syntax passed for 17 scoped files, and the browser runner passed Node syntax validation. The built SPA passed `tsc -b` and Vite compilation (`/tmp/dispatch-build-DSP0925A-retry.log`).
+These runs overlap; their counts must not be added. The full `tests/Feature/SupplyChain` suite still carries **30 pre-existing failures** (33 before this change): they predate the required output-to-receipt provenance and fail in `DeliveryStockService::source()` with *"The approved output has no traceable finished-goods receipt"* because their fixtures never create a production receipt. `DeliveryDispatchProvenanceTest` and three stale dispatch tests were updated to the durable-hold contract; the rest are fixture debt, not product regressions. The earlier outbound-only run had three failures (two obsolete anonymous-stock fixtures and cancellation error ordering). The stock fixtures now include real output/inspection/receipt provenance, and the cancellation message retains its customer-return guidance. Both fixes passed the final outbound rerun. PHP syntax passed for 17 scoped files, and the browser runner passed Node syntax validation. The built SPA passed `tsc -b` and Vite compilation (`/tmp/dispatch-build-DSP0925A-retry.log`).
 
 ## Headless acceptance
 
@@ -75,6 +80,14 @@ Cleanup completed: owned API 8124, preview 5220, and host forwarding processes s
 This workspace contained extensive pre-existing and concurrent changes. Baseline copies and a manifest were captured at `/tmp/ogami-material-delivery-baseline-0925-nd0dyv0y`; additional narrow B2B/Return handoff files were copied before editing. No reset, clean, stash, deployment, commit, or RFQ modification was performed.
 
 ## Repeating the headless scenario
+
+Simplest path — let the runner build and tear down its own environment (needs the Docker stack up):
+
+```bash
+DISPATCH_TEST_BOOTSTRAP=1 DISPATCH_RUN_ID=DSP0927B node scripts/delivery-dispatch-headless.cjs
+```
+
+`DISPATCH_TEST_OUTPUT` defaults to `/tmp/delivery-dispatch-headless-<run>`, `DISPATCH_TEST_API_PORT` to 8210 and `DISPATCH_TEST_SPA_PORT` to 5210, so give a concurrent run its own ports. `DISPATCH_TEST_KEEP=1` (or any failure) keeps the database. Playwright, Tailwind and the Vite plugins resolve from `spa/node_modules`, so `NODE_PATH` is no longer needed. The manual steps below still work for driving an environment you build yourself.
 
 1. Create a new PostgreSQL database named `ogami_test_dispatch_browser_<unique suffix>`; never reuse a completed scenario as an empty fixture.
 2. Run migrations with that explicit `DB_DATABASE`, an unused `APP_CONFIG_CACHE` path, and `CACHE_STORE=array`. Run `tests/Browser/delivery_dispatch_fixture.php` through `artisan tinker` with the same database plus matching `DISPATCH_BROWSER_DB`, a unique 6–16 character `DISPATCH_RUN_ID`, and `DISPATCH_FIXTURE_PATH`. Use `MAIL_MAILER=array`, `QUEUE_CONNECTION=sync`, and `BROADCAST_CONNECTION=log` for both fixture and API.

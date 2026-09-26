@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
@@ -25,6 +26,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Services\DeliveryService;
+use App\Modules\SupplyChain\Services\DeliveryStockReservationService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -104,51 +106,62 @@ class DeliveryDispatchProvenanceTest extends TestCase
         $this->actingAs($warehouse, 'sanctum')->getJson('/api/v1/supply-chain/deliveries/form-options')->assertForbidden();
     }
 
-    public function test_transferred_lot_can_be_dispatched_across_bins_without_duplicate_issues(): void
+    public function test_transferred_lot_still_dispatches_its_own_hold_without_duplicate_issues(): void
     {
         [$delivery, $receipt, $item, $source] = $this->arrange();
         $destination = WarehouseLocation::factory()->create(['zone_id' => $source->zone_id]);
+        // Creation holds the three dispatch units at the source bin, so only the
+        // free seven can move; the shipment still leaves with its own lot.
         app(StockMovementService::class)->move(new StockMovementInput(
-            type: StockMovementType::Transfer, itemId: $item->id, quantity: '8.000',
+            type: StockMovementType::Transfer, itemId: $item->id, quantity: '7.000',
             fromLocationId: $source->id, toLocationId: $destination->id, lotNumber: $receipt->lot_number,
         ));
         $service = app(DeliveryService::class);
         $service->updateStatus($delivery, DeliveryStatus::InTransit);
         $line = $delivery->items()->firstOrFail();
-        $this->assertSame(['2.000', '1.000'], $line->stockMovements()->orderBy('id')->pluck('quantity')->all());
+        $this->assertSame(['3.000'], $line->stockMovements()->orderBy('id')->pluck('quantity')->all());
         $this->assertSame(['APPROVED-BATCH'], $line->stockMovements()->pluck('lot_number')->unique()->all());
         $this->assertSame('0.000', (string) StockLevel::where('location_id', $source->id)->value('quantity'));
         $this->assertSame('7.000', (string) StockLevel::where('location_id', $destination->id)->value('quantity'));
-        // Even a replay after restoring the old status cannot issue twice.
-        Delivery::query()->whereKey($delivery->id)->update(['status' => DeliveryStatus::Loading->value]);
-        $service->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
-        $this->assertSame(2, $line->stockMovements()->count());
         $service->updateStatus($delivery->fresh(), DeliveryStatus::Delivered);
         $sources = app(\App\Modules\ReturnManagement\Services\ReturnCaseSourceService::class);
         $options = $sources->options($sources->resolve('delivery', $delivery->hash_id));
         $this->assertSame('APPROVED-BATCH', $options['lines'][0]['lot_number']);
+        // Even a replay after restoring the old status cannot issue twice: the
+        // consumed hold is refused rather than issuing the same stock again.
+        Delivery::query()->whereKey($delivery->id)->update(['status' => DeliveryStatus::Loading->value]);
+        try {
+            $service->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
+            $this->fail('A consumed reservation must not issue the same stock twice.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('Reserve the inspected lot', $error->getMessage());
+        }
+        $this->assertSame(1, $line->stockMovements()->count());
     }
 
-    public function test_short_approved_lot_rolls_back_partial_issues_and_preserves_other_lots(): void
+    public function test_departure_without_its_durable_hold_is_refused_and_issues_nothing(): void
     {
-        [$delivery, $receipt, $item, $source] = $this->arrange(olderLot: true);
-        $quarantine = WarehouseLocation::factory()->create([
-            'zone_id' => WarehouseZone::factory()->create(['zone_type' => 'quarantine'])->id,
-        ]);
+        [$delivery, $receipt, $item, $source] = $this->arrange();
+        // The hold is released and the approved lot leaves the finished-goods
+        // bin. Departure must refuse rather than fall back to generic stock or
+        // issue a partial load.
+        app(DeliveryStockReservationService::class)->releaseForDelivery($delivery);
         app(StockMovementService::class)->move(new StockMovementInput(
-            type: StockMovementType::Transfer, itemId: $item->id, quantity: '8.000',
-            fromLocationId: $source->id, toLocationId: $quarantine->id, lotNumber: $receipt->lot_number,
+            type: StockMovementType::Transfer, itemId: $item->id, quantity: '10.000',
+            fromLocationId: $source->id, toLocationId: WarehouseLocation::factory()->create([
+                'zone_id' => WarehouseZone::factory()->create(['zone_type' => 'quarantine'])->id,
+            ])->id, lotNumber: $receipt->lot_number,
         ));
         try {
             app(DeliveryService::class)->updateStatus($delivery, DeliveryStatus::InTransit);
-            $this->fail('Only two approved units are available outside quarantine.');
+            $this->fail('Without its durable hold the delivery must not issue generic stock.');
         } catch (BusinessRuleException $error) {
-            $this->assertStringContainsString('short by 1.000', $error->getMessage());
+            $this->assertMatchesRegularExpression('/no durable physical stock reservation|short by|Reserve the inspected lot/i', $error->getMessage());
         }
         $this->assertSame(DeliveryStatus::Loading, $delivery->fresh()->status);
         $this->assertNull($delivery->fresh()->departed_at);
         $this->assertSame(0, $delivery->items()->firstOrFail()->stockMovements()->count());
-        $this->assertSame('7.000', (string) StockLevel::where('location_id', $source->id)->value('quantity'));
+        $this->assertSame('0.000', (string) StockLevel::where('location_id', $source->id)->value('quantity'));
     }
 
     public function test_untraceable_output_receipt_cannot_dispatch_generic_stock(): void
@@ -161,20 +174,41 @@ class DeliveryDispatchProvenanceTest extends TestCase
         app(DeliveryService::class)->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
     }
 
-    public function test_dispatch_cannot_consume_stock_reserved_for_another_operation(): void
+    public function test_preparation_counts_the_deliverys_own_reservation_as_pickable(): void
     {
         [$delivery, , $item, $source] = $this->arrange();
-        app(StockMovementService::class)->reserve($item->id, $source->id, '8.000');
+        // Creation reserves the three dispatch units; another operation takes
+        // the remaining free balance, so the whole bin is reserved. The pick
+        // guidance must still offer this shipment its own three units.
+        app(StockMovementService::class)->reserve($item->id, $source->id, '7.000');
+
+        $preparation = app(DeliveryService::class)->show($delivery->fresh())->preparation->first();
+
+        $this->assertSame('0.000', $preparation['shortage'],
+            "The shipment's own hold must not be reported as a shortage.");
+        $this->assertNull($preparation['message']);
+        $this->assertSame('APPROVED-BATCH', $preparation['lot_number']);
+        $this->assertSame([[
+            'code' => WarehouseLocation::with('zone.warehouse')->find($source->id)->full_code,
+            'quantity' => '3.000',
+        ]], $preparation['locations']);
+    }
+
+    public function test_another_operation_cannot_reserve_the_stock_this_delivery_holds(): void
+    {
+        [$delivery, , $item, $source] = $this->arrange();
         try {
-            app(DeliveryService::class)->updateStatus($delivery, DeliveryStatus::InTransit);
-            $this->fail('Only two unreserved units are available for a three-unit dispatch.');
-        } catch (BusinessRuleException $error) {
-            $this->assertStringContainsString('short by 1.000', $error->getMessage());
+            app(StockMovementService::class)->reserve($item->id, $source->id, '8.000');
+            $this->fail('Creation already holds three of the ten units for this delivery.');
+        } catch (InsufficientStockException $error) {
+            $this->assertStringContainsString('only 7.000 available', $error->getMessage());
         }
         $level = StockLevel::where('location_id', $source->id)->firstOrFail();
         $this->assertSame('10.000', (string) $level->quantity);
-        $this->assertSame('8.000', (string) $level->reserved_quantity);
-        $this->assertSame(DeliveryStatus::Loading, $delivery->fresh()->status);
+        $this->assertSame('3.000', (string) $level->reserved_quantity);
+        // The delivery's own hold is untouched and still departs cleanly.
+        app(DeliveryService::class)->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
+        $this->assertSame(DeliveryStatus::InTransit, $delivery->fresh()->status);
     }
 
     /** @return array{Delivery, StockMovement, Item, WarehouseLocation} */

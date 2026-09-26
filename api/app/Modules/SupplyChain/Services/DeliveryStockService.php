@@ -15,6 +15,7 @@ use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStockReservationStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\DeliveryStockReservation;
@@ -105,7 +106,14 @@ class DeliveryStockService
                 foreach ($levels as $level) {
                     $key = $item->id.':'.$level->location_id;
                     $lotKey = $key.':'.$receipt->lot_number;
-                    $available = bcsub(bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3), $planned[$key] ?? '0', 3);
+                    // This shipment's own durable hold is stock it can pick, not a
+                    // competing reservation: only other operations' holds reduce
+                    // what the pick guidance offers. Reading the raw reserved
+                    // figure made a fully reserved shipment look short.
+                    $reserved = bcsub((string) $level->reserved_quantity,
+                        $this->ownActiveHold((int) $delivery->id, (int) $item->id, (int) $level->location_id, (string) $receipt->lot_number), 3);
+                    if (bccomp($reserved, '0', 3) < 0) $reserved = '0.000';
+                    $available = bcsub(bcsub((string) $level->quantity, $reserved, 3), $planned[$key] ?? '0', 3);
                     $lotAvailable = bcsub($this->lots->lotQuantity((int) $item->id, (int) $level->location_id, (string) $receipt->lot_number), $plannedLots[$lotKey] ?? '0', 3);
                     $quantity = bccomp($available, $lotAvailable, 3) < 0 ? $available : $lotAvailable;
                     $quantity = bccomp($quantity, $remaining, 3) < 0 ? $quantity : $remaining;
@@ -143,6 +151,27 @@ class DeliveryStockService
     public function reservationSource(Delivery $delivery, DeliveryItem $line): array
     {
         return $this->source($delivery, $line);
+    }
+
+    /** The part of a bin's reservation this delivery holds for that lot. */
+    private function ownActiveHold(int $deliveryId, int $itemId, int $locationId, string $lotNumber): string
+    {
+        $rows = DeliveryStockReservation::query()
+            ->where('delivery_id', $deliveryId)
+            ->where('item_id', $itemId)
+            ->where('location_id', $locationId)
+            ->where('lot_number', $lotNumber)
+            ->where('status', DeliveryStockReservationStatus::Reserved)
+            ->get(['quantity', 'consumed_quantity', 'released_quantity']);
+
+        return (string) $rows->reduce(
+            static fn (string $carry, DeliveryStockReservation $row): string => bcadd(
+                $carry,
+                bcsub(bcsub((string) $row->quantity, (string) $row->consumed_quantity, 3), (string) $row->released_quantity, 3),
+                3,
+            ),
+            '0.000',
+        );
     }
 
     private function source(Delivery $delivery, DeliveryItem $line): array

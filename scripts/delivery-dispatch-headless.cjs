@@ -1,18 +1,117 @@
 // Browser-authenticated Delivery / Dispatch acceptance flow.
-// The fixture creates prerequisite records only. Run against an explicitly
-// selected, migrated database with a temporary API + Vite proxy.
-const { chromium, expect } = require('@playwright/test');
+// The fixture creates prerequisite records only.
+//
+//   DISPATCH_TEST_BOOTSTRAP=1 node scripts/delivery-dispatch-headless.cjs
+//
+// With DISPATCH_TEST_BOOTSTRAP=1 the runner is self-contained: it creates
+// ogami_test_dispatch_browser_<run>, migrates it, seeds the fixture
+// (api/tests/Browser/delivery_dispatch_fixture.php), serves a temporary API and
+// Vite proxy, then tears both down. Without the flag it points at
+// DISPATCH_TEST_URL and DISPATCH_FIXTURE_PATH, as before.
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
+const { createRequire } = require('node:module');
 
-const BASE = process.env.DISPATCH_TEST_URL || 'http://127.0.0.1:5210';
-const FIXTURE_PATH = process.env.DISPATCH_FIXTURE_PATH;
+const ROOT = path.resolve(__dirname, '..');
+const SPA = path.join(ROOT, 'spa');
+const spaRequire = createRequire(path.join(SPA, 'package.json'));
+const { chromium, expect } = spaRequire('@playwright/test');
+
+const BOOTSTRAP = process.env.DISPATCH_TEST_BOOTSTRAP === '1';
+const RUN_KEY = (process.env.DISPATCH_RUN_ID || `DSP${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+const DB = `ogami_test_dispatch_browser_${RUN_KEY.toLowerCase()}`;
+const API_PORT = Number(process.env.DISPATCH_TEST_API_PORT || 8210);
+const SPA_PORT = Number(process.env.DISPATCH_TEST_SPA_PORT || 5210);
+const BASE = process.env.DISPATCH_TEST_URL || (BOOTSTRAP ? `http://127.0.0.1:${SPA_PORT}` : 'http://127.0.0.1:5210');
+const OUT_ROOT = path.join('/tmp', `delivery-dispatch-headless-${RUN_KEY}`);
+const FIXTURE_IN_CONTAINER = `/tmp/dispatch-${RUN_KEY.toLowerCase()}-fixture.json`;
+const ENV = {
+  DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
+  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
+  DISPATCH_BROWSER_DB: DB, DISPATCH_RUN_ID: RUN_KEY, DISPATCH_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
+};
+const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+const envFlags = () => Object.entries(ENV).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
+const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
+const sleep = (ms) => { try { execFileSync('sleep', [String(ms / 1000)]); } catch { /* ignored */ } };
+
+/** Free the port so a run killed before its teardown cannot poison this one. */
+function stopApiServer() {
+  for (const pattern of [`port=${API_PORT}`, `0.0.0.0:${API_PORT}`]) {
+    try { compose(['exec', '-T', 'api', 'pkill', '-f', pattern]); } catch { /* not running */ }
+  }
+}
+
+/**
+ * Everything except the Vite proxy can run before the async main, so the
+ * fixture manifest exists by the time the module builds its report.
+ */
+function prepare() {
+  fs.mkdirSync(OUT_ROOT, { recursive: true });
+  stopApiServer();
+  psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  artisan('migrate', '--force');
+  compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
+  artisan('tinker', '--execute', "require 'tests/Browser/delivery_dispatch_fixture.php';");
+  compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT_ROOT, 'fixture.json')]);
+  compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
+  const target = `http://${apiIp()}:${API_PORT}`;
+  for (let i = 0; i < 60; i++) {
+    let status = '000';
+    try { status = execFileSync('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', `${target}/api/v1/auth/user`], { encoding: 'utf8' }).trim(); } catch { /* booting */ }
+    if (status !== '000' && Number(status) < 500) return;
+    sleep(1000);
+  }
+  throw new Error(`The API on :${API_PORT} never answered against ${DB}.`);
+}
+
+let viteServer;
+async function startVite() {
+  const vite = await import(pathToFileURL(path.join(SPA, 'node_modules/vite/dist/node/index.js')).href);
+  // Tailwind resolves its content globs from the working directory, so run the
+  // SPA toolchain from the SPA root; every runner path is absolute.
+  process.chdir(SPA);
+  const target = `http://${apiIp()}:${API_PORT}`;
+  const server = await vite.createServer({
+    configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
+    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
+    server: {
+      host: '127.0.0.1', port: SPA_PORT, strictPort: true,
+      hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
+      proxy: { '/api': { target, changeOrigin: false }, '/sanctum': { target, changeOrigin: false } },
+    },
+  });
+  await server.listen();
+  return server;
+}
+
+async function tearDown(server) {
+  try { await server?.close(); } catch { /* already closed */ }
+  if (process.env.DISPATCH_TEST_KEEP === '1' || process.exitCode) {
+    console.log(`Kept ${DB} and API :${API_PORT} for inspection.`);
+    return;
+  }
+  stopApiServer();
+  try { compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]); } catch { /* gone */ }
+  try {
+    psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
+    psql(`DROP DATABASE IF EXISTS ${DB};`);
+  } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+}
+
+if (BOOTSTRAP) prepare();
+const FIXTURE_PATH = BOOTSTRAP ? path.join(OUT_ROOT, 'fixture.json') : process.env.DISPATCH_FIXTURE_PATH;
 if (!FIXTURE_PATH) throw new Error('Set DISPATCH_FIXTURE_PATH to the fixture manifest.');
 const fixture = JSON.parse(fs.readFileSync(FIXTURE_PATH, 'utf8'));
 const RUN = fixture.run_id;
 const OUT = process.env.DISPATCH_TEST_OUTPUT
-  || path.join('/tmp', `delivery-dispatch-headless-${RUN}-${Date.now()}`);
-fs.mkdirSync(OUT, { recursive: false });
+  || (BOOTSTRAP ? OUT_ROOT : path.join('/tmp', `delivery-dispatch-headless-${RUN}-${Date.now()}`));
+fs.mkdirSync(OUT, { recursive: BOOTSTRAP });
 
 const report = {
   run_id: RUN,
@@ -255,6 +354,7 @@ async function uploadProof(page, id) {
 }
 
 (async () => {
+  if (BOOTSTRAP) viteServer = await startVite();
   try {
     const impex = await login('impex@ogami.test');
     expect((await request(impex, 'GET', '/crm/sales-orders')).status).toBe(403);
@@ -269,7 +369,11 @@ async function uploadProof(page, id) {
     passed('ImpEx form recovers a lookup failure without broad CRM permission');
     const first = await createDelivery(impex, 0, true);
     report.first_delivery = first;
-    await expect(impex.getByText(fixture.batches[0].lot, { exact: false }).first()).toBeVisible();
+    // The pick guidance names the approved lot; a collapsed duplicate lot list
+    // earlier in the DOM must not decide this check, and the shipment's own
+    // hold must not read as a shortage.
+    await expect(impex.locator('p', { hasText: fixture.batches[0].lot }).first()).toBeVisible();
+    await expect(impex.getByText(/Short by/)).toHaveCount(0);
     await screenshot(impex, '01-dispatch-preparation-desktop.png');
     const warehouse = await login('warehouse@ogami.test');
     await warehouse.goto(`/supply-chain/deliveries/${first}`);
@@ -389,5 +493,6 @@ async function uploadProof(page, id) {
     for (const { context } of live) await context.close();
     if (sharedBrowser) await sharedBrowser.close();
     console.log(`Report: ${OUT}/report.json`);
+    if (BOOTSTRAP) await tearDown(viteServer);
   }
 })();
