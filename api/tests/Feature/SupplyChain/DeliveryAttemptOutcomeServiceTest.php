@@ -101,9 +101,14 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertSame(1, ReturnRequest::query()->count());
 
         $source = StockMovement::query()->where('movement_type', StockMovementType::Delivery->value)->sole();
+        // A delivery return has to name the reconciled RMA line it settles, so
+        // the replay must carry it to reach the cumulative-quantity guard.
+        $returnItem = \App\Modules\ReturnManagement\Models\ReturnRequestItem::query()
+            ->where('return_request_id', ReturnRequest::query()->sole()->id)->firstOrFail();
         try {
             app(StockMovementService::class)->move(new StockMovementInput(
                 type: StockMovementType::DeliveryReturn,
+                deliveryReturnItemId: (int) $returnItem->id,
                 itemId: (int) $movement->item_id,
                 toLocationId: $quarantine->id,
                 quantity: '2.000',
@@ -372,6 +377,7 @@ class DeliveryAttemptOutcomeServiceTest extends TestCase
         $this->assertSame('18.00', bcadd((string) StockMovement::query()->where('item_id', $item->id)->where('movement_type', 'delivery_return')->sum('total_cost'), '0', 2));
         $this->assertSame(2, $second->attemptOutcome->revisions()->count());
         foreach ($second->attemptOutcome->returnRequests as $rma) {
+            $rma->loadMissing('items');
             $this->assertSame('received', $rma->status->value);
             $this->assertSame('held', $rma->items->first()->quarantine_status);
             $this->assertNull($rma->credit_note_id);

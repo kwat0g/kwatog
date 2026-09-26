@@ -117,6 +117,33 @@ class ReturnInspectionHandoffTest extends TestCase
             ->count());
     }
 
+    public function test_a_later_rma_touch_still_rehydrates_the_inspection_request(): void
+    {
+        $product = Product::factory()->create(['part_number' => 'RMA-QC-LATER']);
+        $rma = $this->receivedRma($product);
+
+        app(ReturnRequestService::class)->inspect($rma, 'Waiting on Quality setup.', $this->user);
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', ReturnInspectionRequested::class)
+            ->where('dedupe_key', 'return-inspection-request:' . $rma->id)
+            ->firstOrFail();
+
+        // The receipt, a manual retry and the worker's own retry all write to
+        // the RMA row, so by replay time the row can legitimately be newer than
+        // the version published with the request.
+        $this->travel(5)->seconds();
+        $rma->forceFill(['internal_notes' => 'Operator followed up'])->save();
+
+        $event = app(OutboxEventCodec::class)->decode(
+            (string) $outbox->event_type,
+            json_decode((string) $outbox->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertInstanceOf(ReturnInspectionRequested::class, $event);
+        $this->assertSame($rma->id, $event->returnRequest->id);
+    }
+
     public function test_multi_product_return_stages_one_inspection_per_product(): void
     {
         $first = Product::factory()->create(['part_number' => 'RMA-QC-MULTI-A']);

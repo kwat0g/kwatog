@@ -20,10 +20,12 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 final class DeliveryCreateIdempotencyTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -134,6 +136,8 @@ final class DeliveryCreateIdempotencyTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'IDEM-BATCH-'.substr(uniqid(), -6),
         ]);
+        // The dispatch boundary needs the output's traceable finished-goods receipt.
+        $output = $this->receiveProductionOutput($output, $user, $product);
         $reviewer = User::factory()->create(['role_id' => $user->role_id]);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-IDEM-'.substr(uniqid(), -6),

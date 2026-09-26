@@ -15,10 +15,12 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class FleetDriverHardeningTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -174,7 +176,8 @@ class FleetDriverHardeningTest extends TestCase
     public function test_driver_response_excludes_internal_delivery_and_accounting_fields(): void
     {
         $driver = $this->driver();
-        $delivery = $this->delivery($driver, driver: $driver, vehicle: $this->vehicle());
+        [$delivery, $item] = $this->dispatchableDelivery($driver, '3.00');
+        $delivery->forceFill(['driver_id' => $driver->id, 'vehicle_id' => $this->vehicle()->id])->save();
         $delivery->update(['notes' => 'Internal dispatch note']);
 
         $this->actingAs($driver)
@@ -182,9 +185,14 @@ class FleetDriverHardeningTest extends TestCase
             ->assertOk()
             ->assertJsonMissingPath('data.notes')
             ->assertJsonMissingPath('data.invoice')
-            ->assertJsonMissingPath('data.items')
             ->assertJsonMissingPath('data.shipment_lot')
-            ->assertJsonMissingPath('data.receipt_photo_url');
+            ->assertJsonMissingPath('data.receipt_photo_url')
+            // The driver needs the load lines for the outcome form, but only as the
+            // narrow projection: no costing, stock or reservation internals.
+            ->assertJsonPath('data.items.0.product.part_number', $item->code)
+            ->assertJsonMissingPath('data.items.0.unit_price')
+            ->assertJsonMissingPath('data.items.0.stock_movement_id')
+            ->assertJsonMissingPath('data.items.0.reserved_quantity');
     }
 
     private function operator(): User

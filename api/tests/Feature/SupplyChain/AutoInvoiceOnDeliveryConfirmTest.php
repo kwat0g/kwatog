@@ -371,4 +371,33 @@ class AutoInvoiceOnDeliveryConfirmTest extends TestCase
 
         return [$delivery, $item, $so, $customer];
     }
+    public function test_a_later_delivery_touch_still_rehydrates_the_invoice_request(): void
+    {
+        DB::table('settings')->where('key', 'accounting.default_sales_revenue_account_code')->delete();
+        DB::table('accounts')->where('code', '4010')->delete();
+
+        $user = $this->makeUser();
+        [$delivery] = $this->seedDeliveryWithLine($user, productRevenueAccountId: null, qty: '3', price: '40.00');
+        $this->addProof($delivery, $user);
+
+        $this->svc->confirm($delivery, $user);
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', DeliveryInvoiceRequested::class)
+            ->firstOrFail();
+
+        // Confirmation, the failed handoff and any later AR follow-up all write
+        // to the delivery row, so a replay must accept a row that moved on.
+        $this->travel(5)->seconds();
+        $delivery->fresh()->forceFill(['invoice_handoff_message' => 'AR followed up'])->save();
+
+        $event = app(OutboxEventCodec::class)->decode(
+            (string) $outbox->event_type,
+            json_decode((string) $outbox->payload, true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertInstanceOf(DeliveryInvoiceRequested::class, $event);
+        $this->assertSame($delivery->id, $event->delivery->id);
+    }
+
 }

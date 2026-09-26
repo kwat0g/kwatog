@@ -23,10 +23,12 @@ use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class DeliveryQuantityReconciliationTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     private DeliveryService $service;
@@ -363,6 +365,8 @@ class DeliveryQuantityReconciliationTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'QTY-BATCH-001',
         ]);
+        // The dispatch boundary needs the output's traceable finished-goods receipt.
+        $output = $this->receiveProductionOutput($output, $user, $product);
         $reviewer = User::factory()->create(['role_id' => $role->id]);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-QTY-'.substr(uniqid(), -8),

@@ -39,10 +39,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 class ReturnCaseCustomerReplacementTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -132,6 +134,9 @@ class ReturnCaseCustomerReplacementTest extends TestCase
             'recorded_at' => now(), 'good_count' => 5, 'reject_count' => 0,
             'batch_code' => 'RMA-'.Str::upper(Str::random(8)),
         ]);
+        // Dispatch needs the output's traceable finished-goods receipt, not an
+        // anonymous lot, so the replacement stock is received the real way.
+        $output = $this->receiveProductionOutput($output, $salesOfficer, $product);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-RMA-REPL-'.Str::upper(Str::random(6)),
             'stage' => InspectionStage::Outgoing->value, 'status' => InspectionStatus::Passed->value,

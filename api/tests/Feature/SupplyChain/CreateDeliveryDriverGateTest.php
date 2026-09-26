@@ -20,6 +20,7 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Services\DeliveryService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ use Tests\TestCase;
  */
 class CreateDeliveryDriverGateTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -208,6 +210,8 @@ class CreateDeliveryDriverGateTest extends TestCase
             'reject_count' => 0,
             'batch_code' => 'GT-BATCH-' . substr(uniqid(), -8),
         ]);
+        // The dispatch boundary needs the output's traceable finished-goods receipt.
+        $output = $this->receiveProductionOutput($output, $user, $product);
         $reviewer = User::factory()->create(['role_id' => $role->id]);
 
         Inspection::create([

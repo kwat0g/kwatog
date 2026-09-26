@@ -17,6 +17,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
  */
 class DeliveryLifecycleConcurrencyTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -43,28 +45,12 @@ class DeliveryLifecycleConcurrencyTest extends TestCase
 
     private function makeDelivery(User $user, string $status): Delivery
     {
-        $customer = Customer::create([
-            'name' => 'Delivery concurrency customer '.uniqid(),
-            'is_active' => true,
-        ]);
-        $order = SalesOrder::create([
-            'so_number' => 'SO-CONC-'.substr(uniqid(), -8),
-            'customer_id' => $customer->id,
-            'date' => now()->toDateString(),
-            'subtotal' => '100.00',
-            'vat_amount' => '12.00',
-            'total_amount' => '112.00',
-            'status' => 'confirmed',
-            'created_by' => $user->id,
-        ]);
+        // A delivery can only depart with its durable stock reservation, so build
+        // a real dispatchable one and then move it to the status under test.
+        [$delivery] = $this->dispatchableDelivery($user, '3.00');
+        $delivery->forceFill(['status' => $status])->save();
 
-        return Delivery::create([
-            'delivery_number' => 'DEL-CONC-'.substr(uniqid(), -8),
-            'sales_order_id' => $order->id,
-            'status' => $status,
-            'scheduled_date' => now()->toDateString(),
-            'created_by' => $user->id,
-        ]);
+        return $delivery->fresh();
     }
 
     public function test_stale_delete_cannot_delete_a_delivery_that_is_now_confirmed(): void

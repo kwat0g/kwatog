@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\SupplyChain;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -47,17 +48,24 @@ final class DeliveryInventoryDecrementTest extends TestCase
         $this->assertSame($deliveryItem->id, $movement->reference_id);
     }
 
-    public function test_retrying_dispatch_does_not_create_a_second_stock_movement(): void
+    public function test_retrying_dispatch_cannot_issue_the_reserved_stock_twice(): void
     {
         [$delivery, $location, $item] = $this->deliveryWithFinishedGoodsStock();
         $deliveryItem = $delivery->items()->firstOrFail();
 
         Delivery::query()->whereKey($delivery->id)->update(['status' => DeliveryStatus::Loading->value]);
         $service = app(DeliveryService::class);
-        $service->updateStatus($delivery, DeliveryStatus::InTransit);
-
-        Delivery::query()->whereKey($delivery->id)->update(['status' => DeliveryStatus::Loading->value]);
         $service->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
+
+        // A stale client that still offers the departure action cannot issue the
+        // same reserved stock again: the reservation is already consumed.
+        Delivery::query()->whereKey($delivery->id)->update(['status' => DeliveryStatus::Loading->value]);
+        try {
+            $service->updateStatus($delivery->fresh(), DeliveryStatus::InTransit);
+            $this->fail('A replayed departure must not issue the reserved stock twice.');
+        } catch (BusinessRuleException $error) {
+            $this->assertStringContainsString('Reserve the inspected lot', $error->getMessage());
+        }
 
         $this->assertSame(1, $deliveryItem->fresh()->stockMovement()->count());
         $this->assertSame('7.000', (string) StockLevel::query()
@@ -140,20 +148,17 @@ final class DeliveryInventoryDecrementTest extends TestCase
             'sample_size' => 1, 'accept_count' => 1, 'reject_count' => 0, 'defect_count' => 0, 'completed_at' => now(),
         ]);
 
-        $delivery = Delivery::create([
-            'delivery_number' => 'DL-STOCK-'.substr(uniqid(), -6),
+        // Create through the service: departure is refused unless the load holds
+        // a durable reservation, and the service is what holds it.
+        $delivery = app(DeliveryService::class)->create([
             'sales_order_id' => $so->id,
-            'status' => DeliveryStatus::Scheduled->value,
             'scheduled_date' => now()->toDateString(),
-            'created_by' => $user->id,
-        ]);
-        DeliveryItem::create([
-            'delivery_id' => $delivery->id,
-            'sales_order_item_id' => $soItem->id,
-            'inspection_id' => $inspection->id,
-            'quantity' => '3.00',
-            'unit_price' => '15.00',
-        ]);
+            'items' => [[
+                'sales_order_item_id' => $soItem->id,
+                'quantity' => '3.00',
+                'inspection_id' => $inspection->id,
+            ]],
+        ], $user);
 
         return [$delivery, $location, $item];
     }

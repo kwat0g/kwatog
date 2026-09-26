@@ -31,6 +31,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -41,6 +42,7 @@ use Tests\TestCase;
  */
 class ZzM044AuditProbeTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -717,6 +719,8 @@ class ZzM044AuditProbeTest extends TestCase
             'good_count' => 10, 'reject_count' => 0,
             'batch_code' => 'P4-'.substr(uniqid(), -8),
         ]);
+        // The dispatch boundary requires a traceable receipt for this output.
+        $output = $this->receiveProductionOutput($output, $officer, $product);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-P4-'.substr(uniqid(), -8),
             'stage' => InspectionStage::Outgoing->value,

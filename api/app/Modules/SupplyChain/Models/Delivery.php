@@ -96,12 +96,21 @@ class Delivery extends Model
         return $this->hasMany(DeliveryItem::class);
     }
 
-    /** The same open quantity report holds both receipt confirmation and billing. */
+    /**
+     * The same open report holds both receipt confirmation and billing.
+     *
+     * A `delivery_trace` intake ("the shipment has not arrived") carries no
+     * lines by design, so matching only on line quantities let a delivery be
+     * confirmed and invoiced while the customer was still waiting for it.
+     * Rejected reports are closed and must not hold money.
+     */
     public function blockingReturnCase(): HasOne
     {
         return $this->hasOne(\App\Modules\ReturnManagement\Models\ReturnCase::class)
-            ->whereNotIn('status', ['resolved', 'withdrawn'])
-            ->whereHas('lines', fn ($q) => $q->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0))
+            ->whereNotIn('status', ['resolved', 'withdrawn', 'rejected'])
+            ->where(fn ($query) => $query
+                ->where('intake_kind', \App\Modules\ReturnManagement\Enums\ReturnCaseIntakeKind::DeliveryTrace->value)
+                ->orWhereHas('lines', fn ($q) => $q->where('missing_quantity', '>', 0)->orWhere('defective_quantity', '>', 0)))
             ->orderBy('id');
     }
 

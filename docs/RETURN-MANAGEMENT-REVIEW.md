@@ -4,6 +4,12 @@ Reviewed and implemented locally on 2026-09-25. See the [latest headless accepta
 
 Updated 2026-09-27: the draft-invoice credit guard above was added, and the real headless journeys (scrap and restock, 30 checks each, 0 findings) were re-run against the current code. Details in the [headless acceptance report](RETURN-MANAGEMENT-HEADLESS-TEST.md).
 
+Updated 2026-09-27 (later): the whole Supply Chain and Return Management backend suites now pass on one database — **366 tests, 1565 assertions, 0 failures** — after repairing fixtures that predated the finished-goods receipt provenance rule, and the not-arrived billing hold above was closed. Cross-module check: **285 tests, 4639 assertions, 0 failures** across the customer-portal confirmation, delivery-trace intake, return-case workflow and Accounting suites.
+
+Updated 2026-09-27 (latest): the suites now stand at **368 tests, 1569 assertions, 0 failures** after two recovery-request outbox events (`DeliveryInvoiceRequested`, `ReturnInspectionRequested`) were made to tolerate a newer model row. The outbox pinned each published row's `updated_at`, and the RMA/delivery row is legitimately written again by the receipt, the retry and later operator actions, so a replay that landed after any of those wrote the row failed forever with "changed after publication" (surfacing as a rare, second-boundary-dependent red suite run). Both listeners already re-read the current row and guard on it, so the pin now accepts a newer row instead of holding the handoff forever.
+
+The same strict pin is still in place for the other model-bearing outbox events. The audit list for a follow-up sweep is every strict event whose listener only needs the row id: `WorkOrderOutputRecorded`, `ProductionReceiptRequested`, `PurchaseRequestApproved`, `PurchaseOrder*` (approved/sent/submitted/cancelled), `GoodsReceiptNoteCreated/Accepted`, `LowStockPrCreated`, `StockMovementCompleted`, `StockMovementGlPostingRequested`, `InspectionFailed`, `NcrRecurrenceLinked`, and the payroll/HR/leave/loan events. Each needs the same review before opting in.
+
 ## Findings
 
 Ogami already had supplier returns for rejected receipts and previously accepted defective raw materials. Customer portal RMAs also existed. The missing piece was a shared, understandable path for reporting shortages and defects together and following them through resolution.
@@ -18,6 +24,7 @@ Ogami already had supplier returns for rejected receipts and previously accepted
 | Only one physical-return receipt | Idempotent installment receipts, cumulative/remaining quantities and final receipt control |
 | Five kilograms could create five replacement bags | Purchase/base-unit conversion in replacement quantities, open obligations and PO acceptance status |
 | Disputed goods could be invoiced | Delivery confirmation and invoice creation/finalization check unresolved cases; posted documents remain unchanged |
+| A shipment the customer reported as never arriving did not hold its delivery | `Delivery::blockingReturnCase` matched only cases with line quantities, so a line-less `delivery_trace` intake ("the shipment has not arrived") left confirmation and billing open. The relation now holds any open trace report and stops holding rejected ones, which also removes a rejected report's permanent hold |
 | A return against a still-draft delivery invoice credited nothing while the draft kept billing the returned goods | `ReturnCaseSettlementService::createCredit()` refuses the credit and names the invoice: finalize it first, or credit an un-invoiced return as before |
 | A replacement could charge the customer again | Explicit approver action creates the case's zero-price SO; normal confirmation/QC/dispatch remain; billing is prohibited for that order |
 | Unrelated credits or incomplete returns could close cases | Source-linked financial documents, actual return coverage and completed delivery/receipt checks |

@@ -14,6 +14,7 @@ use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\ReceivesProductionOutput;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
  */
 class DriverDeliveryTest extends TestCase
 {
+    use ReceivesProductionOutput;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -47,28 +49,12 @@ class DriverDeliveryTest extends TestCase
     }
 
     /**
-     * Build a minimal delivery owned by $driver. Keep so_number short to avoid
-     * varchar(20) `so_number` truncation (the bug that breaks other SupplyChain
-     * tests). 'SO-T-' + 5-char hex = 10 chars, well under varchar(20).
+     * A delivery that can really be driven: reserved stock, an assigned vehicle
+     * and a driver, then moved to the status under test. The departure guard
+     * rejects a bare row, and loading needs a dispatchable vehicle.
      */
     private function deliveryFor(User $driver, string $status = 'scheduled'): Delivery
     {
-        $customer = Customer::create([
-            'name'      => 'Test Customer ' . uniqid(),
-            'is_active' => true,
-        ]);
-
-        $so = SalesOrder::create([
-            'so_number'    => 'SO-T-' . substr(uniqid(), -5),
-            'customer_id'  => $customer->id,
-            'date'         => now()->toDateString(),
-            'subtotal'     => '10000.00',
-            'vat_amount'   => '1200.00',
-            'total_amount' => '11200.00',
-            'status'       => 'confirmed',
-            'created_by'   => $driver->id,
-        ]);
-
         $vehicle = Vehicle::create([
             'plate_number' => 'DRV-'.substr(uniqid(), -8),
             'name' => 'Driver test vehicle '.uniqid(),
@@ -76,16 +62,12 @@ class DriverDeliveryTest extends TestCase
             'capacity_kg' => '1000.00',
             'status' => 'available',
         ]);
+        [$delivery] = $this->dispatchableDelivery($driver, '3.00');
+        $delivery->forceFill([
+            'driver_id' => $driver->id, 'vehicle_id' => $vehicle->id, 'status' => $status,
+        ])->save();
 
-        return Delivery::create([
-            'delivery_number' => 'DLV-T-' . substr(uniqid(), -5),
-            'sales_order_id'  => $so->id,
-            'driver_id'       => $driver->id,
-            'vehicle_id'      => $vehicle->id,
-            'scheduled_date'  => now()->toDateString(),
-            'status'          => $status,
-            'created_by'      => $driver->id,
-        ]);
+        return $delivery->fresh();
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────
