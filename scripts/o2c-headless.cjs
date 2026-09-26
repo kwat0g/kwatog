@@ -13,10 +13,14 @@ const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
+const { createRequire } = require('node:module');
 
 const ROOT = path.resolve(__dirname, '..');
 const SPA = path.join(ROOT, 'spa');
 const { chromium } = require(path.join(SPA, 'node_modules/playwright'));
+// SPA-owned tooling (Tailwind, its Vite plugins) resolves from spa/node_modules,
+// not the repo root the runner starts in.
+const spaRequire = createRequire(path.join(SPA, 'package.json'));
 
 const RUN = (process.env.O2C_RUN_ID || `O2C${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_o2c_browser_${RUN.toLowerCase()}`;
@@ -33,7 +37,7 @@ const ENV = {
   O2C_BROWSER_DB: DB, O2C_RUN_ID: RUN, O2C_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 
-const report = { run_id: RUN, database: DB, base_url: BASE, checks: [], failures: [], http_errors: [], page_errors: [] };
+const report = { run_id: RUN, database: DB, base_url: BASE, checks: [], failures: [], http_errors: [], page_errors: [], session_recoveries: [] };
 let fixture;
 
 function check(name, ok, evidence = '') {
@@ -88,12 +92,16 @@ async function setUp() {
   }
   if (!ready) throw new Error(`The API on :${API_PORT} never answered against ${DB}.`);
   const vite = await import(pathToFileURL(path.join(SPA, 'node_modules/vite/dist/node/index.js')).href);
+  // Tailwind resolves its `content` globs from the working directory, so run
+  // the SPA toolchain from the SPA root (all runner paths are absolute).
+  process.chdir(SPA);
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    // The programmatic server does not inherit the SPA's PostCSS lookup from
-    // this process's cwd; point it at the real config so Tailwind (and the
-    // screenshots taken from it) match what users see.
-    css: { postcss: path.join(SPA, 'postcss.config.js') },
+    // A programmatic Vite server started from the repo root does not find the
+    // SPA's PostCSS/Tailwind config, so the pages render unstyled and the
+    // screenshots misrepresent the UI. Load the real plugins against an
+    // absolute config path.
+    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -108,7 +116,15 @@ async function tearDown(server) {
   // The Vite server keeps the event loop alive: close it even when keeping the
   // database, or the runner never exits and the next run cannot bind the port.
   try { await server?.close(); } catch { /* already closed */ }
-  if (KEEP) { console.log(`Kept ${DB} and API :${API_PORT} — start the SPA with: npm run dev`); return; }
+  // A failed run is the one worth inspecting: keep its database even without
+  // O2C_KEEP so the checks can be reproduced against the exact rows.
+  const dirty = report.failures.length > 0 || report.http_errors.length > 0
+    || report.session_recoveries.length > 0 || (report.csrf_recoveries?.length ?? 0) > 0;
+  if (KEEP || dirty) {
+    if (dirty && !KEEP) console.log(`Run was not clean — keeping ${DB} and API :${API_PORT} for inspection.`);
+    console.log(`Kept ${DB} and API :${API_PORT} — start the SPA with: npm run dev`);
+    return;
+  }
   stopApiServer();
   try { compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]); } catch { /* gone */ }
   try {
@@ -120,6 +136,9 @@ async function tearDown(server) {
 /* ─── Browser helpers ─────────────────────────────────────────────── */
 
 let browser;
+// Which account each browser context signed in as, so a lost session can be
+// re-established instead of failing every later check with a bare 401.
+const roleOf = new WeakMap();
 async function login(email, sessionCheck = '/auth/user') {
   browser ??= await chromium.launch({ headless: true });
   const context = await browser.newContext({ baseURL: BASE, viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Manila' });
@@ -133,10 +152,20 @@ async function login(email, sessionCheck = '/auth/user') {
     socket.send(JSON.stringify({ event: 'pusher:connection_established', data: JSON.stringify({ socket_id: '1.1', activity_timeout: 120 }) }));
   });
   const page = await context.newPage();
+  roleOf.set(context, { email, sessionCheck });
   page.on('pageerror', (e) => report.page_errors.push(`${email}: ${e.message}`));
   page.on('response', (r) => {
     if (r.status() >= 500 && r.url().includes('/api/')) report.http_errors.push(`${email} ${r.status()} ${r.request().method()} ${r.url().replace(BASE, '')}`);
   });
+  await signIn(page, email, sessionCheck);
+  return page;
+}
+
+/**
+ * Fills and submits the sign-in form, then proves a session exists. Used both
+ * for the initial login and to recover a context that lost its session.
+ */
+async function signIn(page, email, sessionCheck) {
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password', { exact: true }).fill('password');
@@ -145,13 +174,21 @@ async function login(email, sessionCheck = '/auth/user') {
   // Fail here, not three scenarios later: a login that redirected but left no
   // session turns every later check into a misleading 401. Portal accounts
   // answer on their own guard, not the staff endpoint.
-  const me = await api(page, 'GET', sessionCheck);
+  const me = await api(page, 'GET', sessionCheck, undefined, {}, { probe: false });
   if (me.status !== 200) throw new Error(`Login as ${email} left no session (GET ${sessionCheck} → ${me.status}).`);
-  return page;
 }
 
-async function api(page, method, route, body, headers = {}) {
-  return page.evaluate(async ({ method, route, body, headers }) => {
+async function api(page, method, route, body, headers = {}, options = {}) {
+  // Capture what the browser actually sent, so a 401 can be told apart from a
+  // lost session (missing Referer/Origin makes Sanctum treat it as stateless).
+  const seen = [];
+  const watch = (req) => {
+    if (req.url().includes('/api/v1') && req.method() === method) {
+      seen.push({ referer: req.headers()['referer'] ?? null, origin: req.headers()['origin'] ?? null, cookie: (req.headers()['cookie'] ?? '').includes('ogami_erp_session') });
+    }
+  };
+  page.on('request', watch);
+  const result = await page.evaluate(async ({ method, route, body, headers }) => {
     const xsrf = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1] || '');
     const r = await fetch(`/api/v1${route}`, {
       method, credentials: 'include',
@@ -161,6 +198,36 @@ async function api(page, method, route, body, headers = {}) {
     const type = r.headers.get('content-type') || '';
     return { status: r.status, body: type.includes('json') ? await r.json().catch(() => null) : { contentType: type } };
   }, { method, route, body, headers });
+  // A 401 mid-run means the browser lost its session, which otherwise shows up
+  // as a misleading downstream failure. Record the cookie state at that moment.
+  page.off('request', watch);
+  // Mirror the SPA's own 419 recovery: a session regenerated by a re-login
+  // leaves the XSRF cookie stale until it is re-primed.
+  if (result.status === 419 && !options.csrfRetried) {
+    await page.evaluate(() => fetch('/sanctum/csrf-cookie', { credentials: 'include' }).catch(() => {}));
+    const replay = await api(page, method, route, body, headers, { ...options, csrfRetried: true });
+    report.csrf_recoveries ??= [];
+    report.csrf_recoveries.push({ method, route, first: result.status, retried: replay.status });
+    return replay;
+  }
+  if (result.status === 401 && options.probe !== false) {
+    const cookies = await page.context().cookies().then((c) => c.map((x) => x.name)).catch(() => []);
+    const doc = await page.evaluate(() => ({ href: location.href, referrer: document.referrer, policy: document.referrerPolicy })).catch(() => ({}));
+    report.auth_401s ??= [];
+    report.auth_401s.push({ method, route, cookies, seen, doc });
+    // The SPA hard-redirects to /sign-in the moment any call 401s, so a role
+    // can lose its session mid-chain. Re-establish it and replay the call once;
+    // every recovery stays in the report so the anomaly is never hidden.
+    const role = roleOf.get(page.context());
+    if (role) {
+      await signIn(page, role.email, role.sessionCheck);
+      const replay = await api(page, method, route, body, headers, { probe: false, csrfRetried: false });
+      report.session_recoveries ??= [];
+      report.session_recoveries.push({ role: role.email, method, route, first: result.status, retried: replay.status });
+      return replay;
+    }
+  }
+  return result;
 }
 const msg = (r) => `${r.status} ${r.body?.message ?? ''}`.trim();
 const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -490,6 +557,13 @@ async function complaintTo8D(so) {
   try {
     server = await setUp();
     await logins();
+    // Opt-in fault injection: drop a role's server-side session rows so the
+    // recovery path in api() is exercised on demand, not only when the real
+    // intermittent loss shows up.
+    if (process.env.O2C_FAULT_SESSION_DROP) {
+      const dropped = sql(`delete from sessions where user_id=(select id from users where email='${process.env.O2C_FAULT_SESSION_DROP}') returning id`);
+      console.log(`Injected session loss for ${process.env.O2C_FAULT_SESSION_DROP} (${dropped.split('\n').filter(Boolean).length} row(s))`);
+    }
     const happy = await happyPath();
     const { so: failed, invoices } = await failedBatchIsReplacedOnce();
     await billingCorrections(failed, invoices);
@@ -497,10 +571,16 @@ async function complaintTo8D(so) {
   } catch (error) {
     check('run aborted', false, error.stack?.slice(0, 800) ?? String(error));
   } finally {
-    report.summary = { passed: report.checks.length, failed: report.failures.length, server_errors: report.http_errors.length, page_errors: report.page_errors.length };
+    report.summary = {
+      passed: report.checks.length, failed: report.failures.length,
+      server_errors: report.http_errors.length, page_errors: report.page_errors.length,
+      session_recoveries: report.session_recoveries.length, csrf_recoveries: report.csrf_recoveries?.length ?? 0,
+    };
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors → ${OUT}/report.json`);
+    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors, ${report.summary.session_recoveries} session / ${report.summary.csrf_recoveries} csrf recoveries → ${OUT}/report.json`);
+    for (const r of report.session_recoveries) console.log(`  re-signed in ${r.role} on ${r.method} ${r.route} (first ${r.first} → ${r.retried})`);
+    for (const r of report.csrf_recoveries ?? []) console.log(`  refreshed CSRF on ${r.method} ${r.route} (first ${r.first} → ${r.retried})`);
     await browser?.close();
     await tearDown(server);
     process.exitCode = report.failures.length || report.http_errors.length ? 1 : 0;

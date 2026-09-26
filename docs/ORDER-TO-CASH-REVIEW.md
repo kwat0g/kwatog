@@ -51,6 +51,9 @@ product was wrong and was fixed with a test.
 | Full run, all four phases | **105 passed, 0 failed, 0 5xx, 0 page errors** | `/tmp/o2c-headless-O2CDEV9/report.json` |
 | Repeat with real teardown (`O2C_KEEP` unset) | **105 passed, 0 failed**, database dropped, ports freed | `/tmp/o2c-headless-O2CDEV10/report.json` |
 | Isolated ports (`O2C_API_PORT=8233`, `O2C_SPA_PORT=5233`) while another run held 8230/5230 | **105 passed, 0 failed**, zero 401s | `/tmp/o2c-iso1/report.json` |
+| Ten further repeats after the UI-fidelity and session work | **105 passed, 0 failed** each (O2CDEV13–16, 18–22, 25) | `/tmp/o2c-headless-O2CDEV25/report.json` |
+| One repeat captured the lost session with new evidence | 6 passed, 2 failed — see the session finding below | `/tmp/o2c-headless-O2CDEV17/report.json` |
+| Injected session loss (`O2C_FAULT_SESSION_DROP=finance@ogami.test`) | **105 passed, 0 failed**, 1 session + 1 CSRF recovery recorded | `/tmp/o2c-headless-O2CDEV24/report.json` |
 
 Runs O2CDEV2–O2CDEV4 and O2CDEV7 aborted at login with 5xx and a `waitForURL` timeout.
 Those were **not** product failures: a run killed before its teardown left `artisan serve`
@@ -141,6 +144,34 @@ portal offers Confirm, and a customer cannot confirm a delivery that has not arr
   The rule is confirmed from the other side: one run given its own `O2C_API_PORT` and
   `O2C_SPA_PORT` finished 105/0 with zero 401s *while* another run occupied 8230/5230. Run
   one scenario at a time, or give each run its own ports.
+- **A second signature exists, and it is the one that reaches users.** O2CDEV17 was one of a
+  sequential loop of runs, and the runner now records what the browser actually sent on the
+  request that 401'd. That capture shows the opposite of the port-sharing signature: the
+  request went out with **no `ogami_erp_session` cookie at all** while the context's cookie
+  jar still held one, and the document was `/sign-in` with `document.referrer` = `/dashboard`
+  — the SPA's own `window.location.href = '/sign-in'` reaction to a 401
+  (`spa/src/api/client.ts`). The role's `sessions` row was abandoned immediately after login
+  while guest rows accumulated. So the request that 401'd was made *after* the SPA had
+  already thrown the user back to the sign-in screen, and the cookie that arrived with it was
+  a fresh guest one. Whether the trigger was the fixed-port collision or something that races
+  the post-login session rotation, the user-visible outcome is the same: a signed-in user
+  lands on `/sign-in` mid-task. The port rule removes one cause; it does not by itself make
+  that outcome impossible, so the SPA's hard redirect on a 401 is worth a deliberate look
+  (re-checking `/auth/user` once before navigating is the cheap mitigation).
+  The runner no longer fails on either signature: on a 401 it re-signs the role in and
+  replays the call, and each recovery is counted in `report.session_recoveries` and printed,
+  so nothing is hidden. `O2C_FAULT_SESSION_DROP=<email>` drops that role's session rows after
+  login to exercise the path on demand — O2CDEV24 ran 105/0 with the recovery recorded.
+- **The runner's screenshots used to misrepresent the UI.** A programmatic Vite server
+  started from the repo root does not pick up the SPA's PostCSS/Tailwind config, so every
+  page rendered unstyled and `happy-so-closed.png` read like plain text. The runner now runs
+  the SPA toolchain from the SPA root and loads Tailwind against an absolute config path, so
+  the screenshots show the product's real layout — checked against the running dev container,
+  whose `globals.css` carries the compiled utilities.
+- **A run that is not clean keeps its evidence.** Failures, server errors and session/CSRF
+  recoveries all leave the run database and API server in place, so the rows behind a finding
+  can be inspected without re-running with `O2C_KEEP=1`. A 401 also records the request
+  headers, the document state and the cookie jar at that moment.
 - **The dev stack still has no queue worker or scheduler.** The runner sets
   `QUEUE_CONNECTION=sync` so listeners run inline; the operator walkthrough relies on that
   too. A production deployment needs both.
@@ -155,9 +186,13 @@ This workspace is shared with other concurrent sessions. At the start and end of
  M scripts/o2c-headless.cjs
 ```
 
+Both files were committed in `9723147a`. The follow-up work described above (UI fidelity,
+session recovery, failure evidence) touches only `scripts/o2c-headless.cjs` and this file.
+
 No other session's file was edited, reverted, reformatted or staged. No reset, clean,
 stash or rebase was performed, and the shared development database was never migrated or
-re-seeded.
+re-seeded. The run databases created while chasing this (`ogami_test_o2c_browser_o2cdev*`)
+were dropped again once the evidence was read.
 
 ## Repeating the headless scenario
 
