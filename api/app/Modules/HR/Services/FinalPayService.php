@@ -347,7 +347,10 @@ class FinalPayService
      * keep it deducted. Settles at most $pool, loan by loan in id order —
      * the same lock order payroll uses. Pending loans cannot accept payments
      * (nothing was disbursed yet); they stay on the finalize gate until
-     * cancelled or approved.
+     * cancelled or approved — and because the settlement happens HERE, only
+     * at compute time, approving one afterwards needs a RE-RUN of this
+     * compute() before the gate clears (SeparationService tells the operator
+     * exactly that).
      */
     private function settleLoansForFinalPay(Clearance $clearance, LoanType $type, string $pool): void
     {

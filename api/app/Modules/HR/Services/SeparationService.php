@@ -463,15 +463,11 @@ class SeparationService
                 ->whereIn('status', ['active', 'pending'])
                 ->where('balance', '>', 0)
                 ->lockForUpdate()
-                ->get(['id'])
-                ->count();
+                ->get(['loan_no', 'status', 'balance']);
 
-            if ($outstandingLoans > 0) {
+            if ($outstandingLoans->isNotEmpty()) {
                 throw ValidationException::withMessages([
-                    'outstanding_loans' => [
-                        "Cannot finalize: employee has {$outstandingLoans} outstanding loan(s) with a remaining balance. "
-                        . 'Settle all loans or confirm deduction in the final pay breakdown before finalizing.',
-                    ],
+                    'outstanding_loans' => [$this->outstandingLoansMessage($outstandingLoans)],
                 ]);
             }
 
@@ -522,6 +518,50 @@ class SeparationService
 
             return $this->show($lockedClearance);
         });
+    }
+
+    /**
+     * The block message must name a remedy that EXISTS for each loan's state.
+     *
+     * "Settle all loans or confirm deduction in the final pay breakdown" was
+     * wrong for both states: a pending application cannot be settled (nothing
+     * was disbursed — LoanService::recordPayment() requires Active, while
+     * cancel() is Pending-only and does not zero the balance), and no "confirm
+     * deduction" action exists anywhere in the codebase. Final pay settles an
+     * ACTIVE loan only at compute time, so an approval arriving after the last
+     * compute leaves the balance standing and the gate refusing — with the old
+     * message pointing at two moves the operator cannot make.
+     *
+     * @param  \Illuminate\Support\Collection<int, EmployeeLoan>  $loans
+     */
+    private function outstandingLoansMessage($loans): string
+    {
+        $active  = $loans->where('status', 'active');
+        $pending = $loans->where('status', 'pending');
+
+        $lines = ["Cannot finalize: the employee has {$loans->count()} loan(s) with a remaining balance."];
+
+        if ($active->isNotEmpty()) {
+            $lines[] = 'Active (disbursed): '.$this->loanList($active)
+                .' — settle the balance, or re-run Compute final pay: it deducts and settles the loan from what the payout can recover (any residue must be settled or written off manually).';
+        }
+
+        if ($pending->isNotEmpty()) {
+            $lines[] = 'Pending (never disbursed): '.$this->loanList($pending)
+                .' — cancel or reject the application, or approve it and then re-run Compute final pay.';
+        }
+
+        return implode(' ', $lines);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, EmployeeLoan>  $loans
+     */
+    private function loanList($loans): string
+    {
+        return $loans
+            ->map(fn (EmployeeLoan $loan): string => $loan->loan_no.' (₱'.number_format((float) $loan->balance, 2).')')
+            ->implode(', ');
     }
 
     /**
