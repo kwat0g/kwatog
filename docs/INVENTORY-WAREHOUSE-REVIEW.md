@@ -2,6 +2,39 @@
 
 Audit date: 2026-09-25. The audit used isolated PHPUnit and browser databases. It did not deploy or change real account passwords.
 
+## Re-verified — 2026-09-27
+
+Re-ran the real-cookie acceptance against the current code from the fixed checkout; nothing
+new was found. The runner is now self-contained: `INVENTORY_TEST_BOOTSTRAP=1` creates and
+migrates `ogami_test_inventory_browser_<run>`, seeds the role fixture, serves a temporary API
+and Vite proxy, runs every phase in order (`issue-transfer`, `grn-qc`, `stock-count`,
+`mobile`), and tears both down.
+
+| Phase | Result | Evidence |
+| --- | --- | --- |
+| issue-transfer | 5 checks, 0 findings | `/tmp/inv-headless-INV0927A/issue-transfer/report.json` |
+| grn-qc | 7 checks, 0 findings | `/tmp/inv-headless-INV0927A/grn-qc/report.json` |
+| stock-count | 4 checks, 0 findings | `/tmp/inv-headless-INV0927A/stock-count/report.json` |
+| mobile | 3 checks, 0 findings | `/tmp/inv-headless-INV0927A/mobile/report.json` |
+
+**19 checks, 0 findings, 0 browser errors.** The run's database, API and Vite servers were
+dropped afterwards; the shared development database was never touched.
+
+```bash
+# whole audit, self-contained (needs the Docker stack up):
+INVENTORY_TEST_BOOTSTRAP=1 INVENTORY_TEST_RUN_ID=INV0927A node scripts/inventory-warehouse-headless.cjs
+
+# a single phase, or a subset:
+INVENTORY_TEST_BOOTSTRAP=1 INVENTORY_TEST_PHASES=stock-count node scripts/inventory-warehouse-headless.cjs
+```
+
+`INVENTORY_TEST_OUTPUT` defaults to `/tmp/ogami-inventory-warehouse-<run>` with one
+subdirectory per phase; `INVENTORY_TEST_API_PORT` and `INVENTORY_TEST_SPA_PORT` default to
+8210 and 5210, so give a concurrent run its own ports. `INVENTORY_TEST_KEEP=1` (or any
+failure) keeps the database for inspection. Playwright, Tailwind and the Vite plugins now
+resolve from `spa/node_modules`, so `NODE_PATH` is no longer needed. The manual multi-terminal
+recipe below still works for driving an environment you build yourself.
+
 ## Confirmed findings and fixes
 
 | Severity | Confirmed evidence | Fix |

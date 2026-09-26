@@ -1,19 +1,110 @@
 // Real-cookie Inventory acceptance runner.
-// Requires api/tests/Browser/inventory_warehouse_fixture.php in the isolated
-// browser DB and a temporary API/Vite proxy described by the audit report.
-const { chromium, expect } = require('@playwright/test');
+//
+//   node scripts/inventory-warehouse-headless.cjs
+//
+// With INVENTORY_TEST_BOOTSTRAP=1 the runner is self-contained: it creates
+// ogami_test_inventory_browser_<run>, migrates it, seeds the role fixture
+// (api/tests/Browser/inventory_warehouse_fixture.php), serves a temporary API
+// and Vite proxy, runs every phase in order, then tears both down. Without the
+// flag it points at INVENTORY_TEST_URL and INVENTORY_TEST_FIXTURE, as before.
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
+const { createRequire } = require('node:module');
 
-const BASE = process.env.INVENTORY_TEST_URL || 'http://127.0.0.1:5210';
-const RUN_ID = process.env.INVENTORY_TEST_RUN_ID || `run-${Date.now()}-${process.pid}`;
-const OUT = process.env.INVENTORY_TEST_OUTPUT || path.join('/tmp', `ogami-inventory-warehouse-${RUN_ID}`);
-const fixture = JSON.parse(fs.readFileSync(
-  process.env.INVENTORY_TEST_FIXTURE || '/tmp/inventory-warehouse-browser-fixture.json',
-  'utf8',
-));
-fs.mkdirSync(OUT, { recursive: true });
-const report = { database: fixture.database, checks: [], findings: [], artifacts: [] };
+const ROOT = path.resolve(__dirname, '..');
+const SPA = path.join(ROOT, 'spa');
+const spaRequire = createRequire(path.join(SPA, 'package.json'));
+const { chromium, expect } = spaRequire('@playwright/test');
+
+const BOOTSTRAP = process.env.INVENTORY_TEST_BOOTSTRAP === '1';
+const RUN = (process.env.INVENTORY_TEST_RUN_ID || `INV${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '');
+const DB = `ogami_test_inventory_browser_${RUN.toLowerCase()}`;
+const API_PORT = Number(process.env.INVENTORY_TEST_API_PORT || 8210);
+const SPA_PORT = Number(process.env.INVENTORY_TEST_SPA_PORT || 5210);
+let BASE = process.env.INVENTORY_TEST_URL || `http://127.0.0.1:${SPA_PORT}`;
+let OUT_ROOT = process.env.INVENTORY_TEST_OUTPUT || path.join('/tmp', `ogami-inventory-warehouse-${RUN}`);
+let OUT = OUT_ROOT;
+let fixture;
+
+/* ─── Self-contained environment (INVENTORY_TEST_BOOTSTRAP=1) ──────── */
+
+const FIXTURE_IN_CONTAINER = `/tmp/inventory-warehouse-${RUN.toLowerCase()}-fixture.json`;
+const ENV = {
+  DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
+  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
+  INVENTORY_BROWSER_DB: DB, INVENTORY_BROWSER_FIXTURE: FIXTURE_IN_CONTAINER,
+};
+const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
+const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
+const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
+
+/** Free the port so a run killed before its teardown cannot poison this one. */
+function stopApiServer() {
+  for (const pattern of [`port=${API_PORT}`, `0.0.0.0:${API_PORT}`]) {
+    try { compose(['exec', '-T', 'api', 'pkill', '-f', pattern]); } catch { /* not running */ }
+  }
+}
+
+async function setUp() {
+  fs.mkdirSync(OUT_ROOT, { recursive: true });
+  stopApiServer();
+  psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  artisan('migrate', '--force');
+  compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
+  artisan('tinker', '--execute', "require 'tests/Browser/inventory_warehouse_fixture.php';");
+  compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT_ROOT, 'fixture.json')]);
+  fixture = JSON.parse(fs.readFileSync(path.join(OUT_ROOT, 'fixture.json'), 'utf8'));
+  compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
+  const target = `http://${apiIp()}:${API_PORT}`;
+  let ready = false;
+  for (let i = 0; i < 60; i++) {
+    try {
+      const csrf = await fetch(`${target}/sanctum/csrf-cookie`);
+      const user = await fetch(`${target}/api/v1/auth/user`, { headers: { Accept: 'application/json' } });
+      if (csrf.status < 500 && user.status < 500) { ready = true; break; }
+    } catch { /* booting */ }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (!ready) throw new Error(`The API on :${API_PORT} never answered against ${DB}.`);
+  const vite = await import(pathToFileURL(path.join(SPA, 'node_modules/vite/dist/node/index.js')).href);
+  // Tailwind resolves its content globs from the working directory, so run the
+  // SPA toolchain from the SPA root; every runner path is absolute.
+  process.chdir(SPA);
+  const server = await vite.createServer({
+    configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
+    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
+    server: {
+      host: '127.0.0.1', port: SPA_PORT, strictPort: true,
+      hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
+      proxy: { '/api': { target, changeOrigin: false }, '/sanctum': { target, changeOrigin: false } },
+    },
+  });
+  await server.listen();
+  return server;
+}
+
+async function tearDown(server) {
+  try { await server?.close(); } catch { /* already closed */ }
+  if (process.env.INVENTORY_TEST_KEEP === '1' || process.exitCode) {
+    console.log(`Kept ${DB} and API :${API_PORT} for inspection.`);
+    return;
+  }
+  stopApiServer();
+  try { compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]); } catch { /* gone */ }
+  try {
+    psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
+    psql(`DROP DATABASE IF EXISTS ${DB};`);
+  } catch (e) { console.log(`Could not drop ${DB}: ${e.message}`); }
+}
+
+/* ─── Report state (reset per phase) ───────────────────────────────── */
+
+let report = { database: '', checks: [], findings: [], artifacts: [] };
 const errors = [];
 const pages = [];
 const pass = (name, evidence) => {
@@ -617,21 +708,40 @@ async function runMobile(browser) {
 }
 
 (async () => {
+  const phases = (BOOTSTRAP
+    ? (process.env.INVENTORY_TEST_PHASES || 'issue-transfer,grn-qc,stock-count,mobile')
+    : (process.env.INVENTORY_TEST_PHASE || 'issue-transfer')).split(',').map((value) => value.trim()).filter(Boolean);
+  let server;
+  try {
+    if (BOOTSTRAP) server = await setUp();
+    else fixture = JSON.parse(fs.readFileSync(process.env.INVENTORY_TEST_FIXTURE || '/tmp/inventory-warehouse-browser-fixture.json', 'utf8'));
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+    if (BOOTSTRAP) await tearDown(server);
+    return;
+  }
   const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
   try {
-    const phase = process.env.INVENTORY_TEST_PHASE || 'issue-transfer';
-    if (phase === 'baseline') await runBaseline(browser);
-    else if (phase === 'issue-transfer') { await runIssueTransfer(browser); await runTransfer(browser); }
-    else if (phase === 'transfer') await runTransfer(browser);
-    else if (phase === 'grn-qc') await runGrnQc(browser);
-    else if (phase === 'stock-count') await runStockCount(browser);
-    else if (phase === 'mobile') await runMobile(browser);
-    else throw new Error(`Unknown INVENTORY_TEST_PHASE: ${phase}`);
-    report.browserErrors = errors;
-    expect(errors, 'No uncaught browser errors').toEqual([]);
-    const reportPath = path.join(OUT, 'report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    console.log(`REPORT: ${reportPath}`);
+    for (const phase of phases) {
+      OUT = BOOTSTRAP && phases.length > 1 ? path.join(OUT_ROOT, phase) : OUT_ROOT;
+      fs.mkdirSync(OUT, { recursive: true });
+      report = { database: fixture.database, phase, checks: [], findings: [], artifacts: [] };
+      errors.length = 0;
+      pages.length = 0;
+      if (phase === 'baseline') await runBaseline(browser);
+      else if (phase === 'issue-transfer') { await runIssueTransfer(browser); await runTransfer(browser); }
+      else if (phase === 'transfer') await runTransfer(browser);
+      else if (phase === 'grn-qc') await runGrnQc(browser);
+      else if (phase === 'stock-count') await runStockCount(browser);
+      else if (phase === 'mobile') await runMobile(browser);
+      else throw new Error(`Unknown INVENTORY_TEST_PHASE: ${phase}`);
+      report.browserErrors = errors;
+      expect(errors, 'No uncaught browser errors').toEqual([]);
+      const reportPath = path.join(OUT, 'report.json');
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      console.log(`REPORT: ${reportPath}`);
+    }
   } catch (error) {
     report.failure = error instanceof Error ? error.stack : String(error);
     for (let index = 0; index < pages.length; index++) {
@@ -650,6 +760,7 @@ async function runMobile(browser) {
   } finally {
     await Promise.all(pages.map(({ context }) => context.close()));
     await browser.close();
+    if (BOOTSTRAP) await tearDown(server);
   }
 })().catch((error) => {
   console.error(error);
