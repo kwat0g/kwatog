@@ -17,7 +17,23 @@ class WelcomeNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(private readonly string $tempPassword) {}
+    /**
+     * PROTECTED and NOT readonly, on purpose — both modifiers break the queue.
+     *
+     * Illuminate\Notifications\Notification uses SerializesModels:
+     *   - `private` is rewritten as "\0{get_class($this)}\0{$name}" using the
+     *     CONCRETE class name, so a subclass (EmployeeWelcomeNotification)
+     *     cannot hydrate the parent's property. The job died on unserialize.
+     *   - `readonly` cannot be re-initialized from the child's scope, and
+     *     SerializesModels' __unserialize() writes from the child — it throws
+     *     "Cannot initialize readonly property … from scope <Child>".
+     *
+     * Either way no new hire ever received their temporary password.
+     *
+     * @see \Illuminate\Queue\SerializesModels::__serialize()
+     * @see \Illuminate\Queue\SerializesModels::__unserialize()
+     */
+    public function __construct(protected string $tempPassword) {}
 
     /**
      * @return array<int, string>
