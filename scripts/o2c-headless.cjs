@@ -10,6 +10,7 @@
 // never touched. O2C_KEEP=1 keeps the database and servers for inspection.
 const path = require('node:path');
 const fs = require('node:fs');
+const { randomUUID } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
@@ -53,8 +54,22 @@ const psql = (sql, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U'
 const sql = (query) => psql(query, DB);
 const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
 
+/**
+ * A run killed before its teardown leaves `artisan serve` bound to API_PORT,
+ * still pointing at a database that has since been dropped. Every later login
+ * then 401s (session write fails) and the cause looks like an auth bug. Free
+ * the port before starting ours, and after it is up prove the new server really
+ * answers with a database-backed request.
+ */
+function stopApiServer() {
+  for (const pattern of [`port=${API_PORT}`, `0.0.0.0:${API_PORT}`]) {
+    try { compose(['exec', '-T', 'api', 'pkill', '-f', pattern]); } catch { /* not running */ }
+  }
+}
+
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
+  stopApiServer();
   psql(`CREATE DATABASE ${DB} OWNER ogami;`);
   artisan('migrate', '--force');
   artisan('tinker', '--execute', "require 'tests/Browser/o2c_fixture.php';");
@@ -62,13 +77,23 @@ async function setUp() {
   fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
   compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
+  let ready = false;
   for (let i = 0; i < 60; i++) {
-    try { if ((await fetch(`${target}/sanctum/csrf-cookie`)).status < 500) break; } catch { /* booting */ }
+    try {
+      const csrf = await fetch(`${target}/sanctum/csrf-cookie`);
+      const user = await fetch(`${target}/api/v1/auth/user`, { headers: { Accept: 'application/json' } });
+      if (csrf.status < 500 && user.status < 500) { ready = true; break; }
+    } catch { /* booting */ }
     await new Promise((r) => setTimeout(r, 1000));
   }
+  if (!ready) throw new Error(`The API on :${API_PORT} never answered against ${DB}.`);
   const vite = await import(pathToFileURL(path.join(SPA, 'node_modules/vite/dist/node/index.js')).href);
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
+    // The programmatic server does not inherit the SPA's PostCSS lookup from
+    // this process's cwd; point it at the real config so Tailwind (and the
+    // screenshots taken from it) match what users see.
+    css: { postcss: path.join(SPA, 'postcss.config.js') },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -79,11 +104,12 @@ async function setUp() {
   return server;
 }
 
-function tearDown(server) {
-  if (KEEP) { console.log(`Kept ${DB}, API :${API_PORT} and SPA ${BASE}.`); return; }
-  try { server?.close(); } catch { /* already closed */ }
-  try { compose(['exec', '-T', 'api', 'pkill', '-f', `port=${API_PORT}`]); } catch { /* not running */ }
-  try { compose(['exec', '-T', 'api', 'pkill', '-f', `0.0.0.0:${API_PORT}`]); } catch { /* not running */ }
+async function tearDown(server) {
+  // The Vite server keeps the event loop alive: close it even when keeping the
+  // database, or the runner never exits and the next run cannot bind the port.
+  try { await server?.close(); } catch { /* already closed */ }
+  if (KEEP) { console.log(`Kept ${DB} and API :${API_PORT} — start the SPA with: npm run dev`); return; }
+  stopApiServer();
   try { compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]); } catch { /* gone */ }
   try {
     psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${DB}' AND pid <> pg_backend_pid();`);
@@ -94,7 +120,7 @@ function tearDown(server) {
 /* ─── Browser helpers ─────────────────────────────────────────────── */
 
 let browser;
-async function login(email) {
+async function login(email, sessionCheck = '/auth/user') {
   browser ??= await chromium.launch({ headless: true });
   const context = await browser.newContext({ baseURL: BASE, viewport: { width: 1440, height: 1000 }, timezoneId: 'Asia/Manila' });
   // Echo would reach the shared dev Reverb; answer the Pusher handshake locally.
@@ -116,6 +142,11 @@ async function login(email) {
   await page.getByLabel('Password', { exact: true }).fill('password');
   await page.getByRole('button', { name: /sign in/i }).click();
   await page.waitForURL((u) => !u.pathname.startsWith('/sign-in'), { timeout: 30_000 });
+  // Fail here, not three scenarios later: a login that redirected but left no
+  // session turns every later check into a misleading 401. Portal accounts
+  // answer on their own guard, not the staff endpoint.
+  const me = await api(page, 'GET', sessionCheck);
+  if (me.status !== 200) throw new Error(`Login as ${email} left no session (GET ${sessionCheck} → ${me.status}).`);
   return page;
 }
 
@@ -163,7 +194,9 @@ async function logins() {
     sales: 'crm@ogami.test', ppc: 'ppc@ogami.test', prod: 'production@ogami.test', qc: 'qc@ogami.test',
     impex: 'impex@ogami.test', warehouse: 'warehouse@ogami.test', driver: 'driver@ogami.test',
     finance: 'finance@ogami.test', cs: 'customerservice@ogami.test', customer: fixture.customer_email,
-  })) who[key] = await login(email);
+  })) {
+    who[key] = await login(email, key === 'customer' ? '/b2b/customer/me' : '/auth/user');
+  }
 }
 
 async function orderAndPlan(label, quantity) {
@@ -180,8 +213,18 @@ async function orderAndPlan(label, quantity) {
 
 async function openWorkOrder(so, label) {
   const woNumber = sql(`select wo_number from work_orders where sales_order_id=(select id from sales_orders where so_number='${so.so_number}') and status in ('planned','confirmed') order by id desc limit 1`);
-  const wo = (await api(who.prod, 'GET', `/production/work-orders?search=${woNumber}`)).body?.data?.[0];
-  check(`${label}: MRP drafted work order ${woNumber}`, !!wo, `target=${wo?.quantity_target}`);
+  // The planning listener runs inline, but the list request can still land
+  // before the draft is visible; retry once and report the API's own answer.
+  let wo;
+  let seen = 'no request';
+  for (let attempt = 0; attempt < 3 && !wo; attempt += 1) {
+    const r = await api(who.prod, 'GET', `/production/work-orders?search=${woNumber}`);
+    wo = (r.body?.data ?? []).find((x) => x.wo_number === woNumber);
+    seen = `${r.status} rows=${(r.body?.data ?? []).length} first=${(r.body?.data ?? [])[0]?.wo_number ?? '-'}`;
+    if (!wo) await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  check(`${label}: MRP drafted work order ${woNumber}`, !!wo, `${seen} target=${wo?.quantity_target}`);
+  if (!wo) return {};
   if (wo.status === 'planned') {
     const run = await api(who.ppc, 'POST', '/mrp/scheduler/run', { work_order_ids: [wo.id] });
     const ids = (run.body?.data?.scheduled ?? []).map((s) => s.id);
@@ -211,6 +254,16 @@ async function measure(number, label, { fail = false } = {}) {
 
 async function produceAndInspect(so, wo, label, outputs, { failOutgoing = false } = {}) {
   const woDb = sql(`select id from work_orders where wo_number='${wo.wo_number}'`);
+  // Production cannot record output ahead of its material: the warehouse issues
+  // what the run will consume — the planned allowance plus the rejects the
+  // operator is about to record — as it does on the shop floor.
+  const gross = outputs.reduce((n, [good, reject]) => n + good + reject, 0);
+  const issued = (gross * Number(fixture.bom_ratio)).toFixed(3);
+  let r = await api(who.warehouse, 'POST', '/inventory/material-issues', {
+    work_order_id: wo.id, issued_date: today(),
+    items: [{ item_id: fixture.resin_item, location_id: fixture.raw_location, quantity_issued: issued }],
+  }, { 'Idempotency-Key': `${RUN}-MI-${wo.wo_number}` });
+  check(`${label}: warehouse issues ${issued} kg of resin to the work order`, r.status === 201 || r.status === 200, msg(r));
   const inProcess = sql(`select inspection_number from inspections where entity_type='work_order' and entity_id=${woDb} and stage='in_process'`);
   if (inProcess) {
     const done = await measure(inProcess, `${label} in-process`);
@@ -242,11 +295,16 @@ async function dispatchAndConfirm(so, label) {
   const numbers = sql(`select delivery_number from deliveries where sales_order_id=(select id from sales_orders where so_number='${so.so_number}') and status='scheduled' order by id`).split('\n').filter(Boolean);
   check(`${label}: a delivery is drafted for each passed batch`, numbers.length > 0, numbers.join(', '));
   const vehicle = fixture.vehicle;
+  const invoices = [];
   const driverId = ((await api(who.impex, 'GET', '/supply-chain/deliveries/driver-options')).body?.data ?? [])[0]?.id;
   for (const number of numbers) {
     const d = ((await api(who.impex, 'GET', `/supply-chain/deliveries?search=${number}`)).body?.data ?? []).find((x) => x.delivery_number === number);
     let r = await api(who.impex, 'PATCH', `/supply-chain/deliveries/${d.id}/assignment`, { vehicle_id: vehicle, driver_id: driverId, reason: 'O2C browser dispatch' });
     check(`${label}: ImpEx assigns van and driver to ${number}`, r.status === 200, msg(r));
+    // Departure re-checks a physical reservation of the inspected lot; the
+    // dispatch desk makes it before the van is loaded.
+    r = await api(who.impex, 'POST', `/supply-chain/deliveries/${d.id}/reserve-stock`, { request_key: randomUUID() });
+    check(`${label}: ImpEx reserves the inspected lot for ${number}`, r.status === 200 || r.status === 201, msg(r));
     for (const next of ['loading', 'in_transit', 'delivered']) {
       r = await api(who.impex, 'PATCH', `/supply-chain/deliveries/${d.id}/status`, { status: next });
       if (!check(`${label}: ${number} → ${next}`, r.status === 200, msg(r))) break;
@@ -256,14 +314,22 @@ async function dispatchAndConfirm(so, label) {
     check(`${label}: driver uploads proof for ${number}`, (await uploadProof(who.driver, d.id)) === 200);
     r = await api(who.customer, 'POST', `/b2b/customer/deliveries/${d.id}/confirm`, { receiver_name: 'O2C receiver', receiver_position: 'Warehouse', delivery_remarks: 'received' });
     check(`${label}: customer confirms ${number} in the portal`, r.status === 200 && r.body?.data?.status === 'confirmed', msg(r));
+    // Read the bill back off the delivery itself: that is the page Finance
+    // opens, and the invoice list does not carry the sales-order link.
+    const detail = (await api(who.impex, 'GET', `/supply-chain/deliveries/${d.id}`)).body?.data;
+    invoices.push(detail?.invoice ? { ...detail.invoice, delivery_number: number } : null);
   }
-  return numbers;
+  return { numbers, invoices };
 }
 
-async function draftInvoices(so) {
-  const all = (await api(who.finance, 'GET', '/invoices?per_page=100')).body?.data ?? [];
-  return all.filter((i) => i.sales_order?.so_number === so.so_number || i.sales_order_number === so.so_number);
+/** The live invoice of a delivery, as its own detail page reports it. */
+async function invoiceOf(deliveryNumber) {
+  const d = ((await api(who.finance, 'GET', `/supply-chain/deliveries?search=${deliveryNumber}`)).body?.data ?? [])
+    .find((x) => x.delivery_number === deliveryNumber);
+  if (!d) return null;
+  return (await api(who.finance, 'GET', `/supply-chain/deliveries/${d.id}`)).body?.data?.invoice ?? null;
 }
+
 const soStatus = (so) => sql(`select status from sales_orders where so_number='${so.so_number}'`);
 async function collect(invoice, amount, key) {
   return api(who.finance, 'POST', `/invoices/${invoice.id}/collections`, {
@@ -285,9 +351,8 @@ async function happyPath() {
   const queue = (await api(who.prod, 'GET', '/dashboards/action-center')).body?.data?.items ?? [];
   check(`${label}: the checker sees both reviews in the Action Center`, results.every((x) => queue.some((i) => i.reference === x.inspection_number)), queue.filter((i) => i.kind === 'inspection_review').map((i) => i.reference).join(','));
   for (const x of results) await review(x.inspection_number, 'passed', label);
-  await dispatchAndConfirm(so, label);
-  const invoices = await draftInvoices(so);
-  check(`${label}: one draft invoice per confirmed delivery`, invoices.length === 2, invoices.map((i) => `${i.total_amount}`).join(' + '));
+  const { invoices } = await dispatchAndConfirm(so, label);
+  check(`${label}: one draft invoice per confirmed delivery`, invoices.filter(Boolean).length === 2 && invoices.every((i) => i.status === 'draft'), invoices.map((i) => i?.total_amount ?? 'none').join(' + '));
   for (const inv of invoices) {
     const f = await api(who.finance, 'PATCH', `/invoices/${inv.id}/finalize`, {});
     const c = await collect(inv, f.body?.data?.total_amount, `${RUN}-H-${inv.id}`);
@@ -330,26 +395,37 @@ async function failedBatchIsReplacedOnce() {
   await openWorkOrder(so, `${label} replacement`);
   const [ok] = await produceAndInspect(so, replacement, `${label} replacement`, [[100, 0]]);
   await review(ok.inspection_number, 'passed', `${label} replacement`);
-  await dispatchAndConfirm(so, `${label} replacement`);
-  return so;
+  const { invoices } = await dispatchAndConfirm(so, `${label} replacement`);
+  return { so, invoices };
 }
 
-async function billingCorrections(so) {
+async function billingCorrections(so, invoices) {
   const label = 'Billing';
-  let [invoice] = await draftInvoices(so);
+  let invoice = invoices.find(Boolean);
+  if (!invoice) {
+    check(`${label}: the delivered order has an invoice to correct`, false, `no draft invoice on ${so.so_number}`);
+    return;
+  }
   let r = await api(who.finance, 'PATCH', `/invoices/${invoice.id}/finalize`, {});
   check(`${label}: invoice finalized`, r.status === 200 && soStatus(so) === 'invoiced', `${msg(r)} so=${soStatus(so)}`);
   r = await api(who.finance, 'PATCH', `/invoices/${invoice.id}/cancel`, {});
   check(`${label}: an unpaid invoice can be cancelled`, r.status === 200 && r.body?.data?.status === 'cancelled', msg(r));
   check(`${label}: the order steps back to delivered`, soStatus(so) === 'delivered', soStatus(so));
-  const reversal = sql(`select count(*) from journal_entries where reference_type='invoice' and reference_id=(select id from invoices where invoice_number='${r.body?.data?.invoice_number}')`);
-  check(`${label}: cancelling posts a reversing entry`, Number(reversal) >= 2, `invoice JEs=${reversal}`);
-  const delivery = ((await api(who.finance, 'GET', `/supply-chain/deliveries?search=${so.so_number}`)).body?.data ?? [])[0]
-    ?? ((await api(who.impex, 'GET', `/supply-chain/deliveries?search=${so.so_number}`)).body?.data ?? [])[0];
+  // Cancelling reverses the invoice's own journal entry; the reversal is linked
+  // to that entry (reference_type journal_entry_reversal), not to the invoice,
+  // so the trail is read through the original entry's status.
+  const cancelledNumber = r.body?.data?.invoice_number;
+  const originalJe = sql(`select je.status from journal_entries je join invoices i on i.journal_entry_id=je.id where i.invoice_number='${cancelledNumber}'`);
+  const reversal = sql(`select count(*) from journal_entries where reference_type='journal_entry_reversal' and reference_id=(select journal_entry_id from invoices where invoice_number='${cancelledNumber}')`);
+  check(`${label}: cancelling reverses the invoice entry`, originalJe === 'reversed' && Number(reversal) === 1, `entry=${originalJe} reversal=${reversal}`);
+  // Re-bill from the delivery page, the way Finance recovers a cancelled bill.
+  const delivery = ((await api(who.finance, 'GET', `/supply-chain/deliveries?search=${invoice.delivery_number}`)).body?.data ?? [])
+    .find((x) => x.delivery_number === invoice.delivery_number);
+  if (!delivery) { check(`${label}: finance can reach the delivery`, false, invoice.delivery_number); return; }
   r = await api(who.finance, 'POST', `/supply-chain/deliveries/${delivery.id}/retry-invoice`, {});
   check(`${label}: finance re-bills the delivery from its page`, r.status === 200, `${msg(r)} handoff=${r.body?.data?.invoice_handoff?.status ?? r.body?.data?.invoice_handoff_status}`);
-  [invoice] = (await draftInvoices(so)).filter((i) => i.status === 'draft');
-  check(`${label}: a fresh draft invoice exists`, !!invoice, invoice ? invoice.total_amount : 'none');
+  invoice = await invoiceOf(invoice.delivery_number);
+  if (!check(`${label}: a fresh draft invoice exists`, !!invoice, invoice ? invoice.total_amount : 'none')) return;
   r = await api(who.finance, 'PATCH', `/invoices/${invoice.id}/finalize`, {});
   const total = r.body?.data?.total_amount;
   check(`${label}: re-billed invoice finalized`, r.status === 200, `${msg(r)} total=${total}`);
@@ -415,8 +491,8 @@ async function complaintTo8D(so) {
     server = await setUp();
     await logins();
     const happy = await happyPath();
-    const failed = await failedBatchIsReplacedOnce();
-    await billingCorrections(failed);
+    const { so: failed, invoices } = await failedBatchIsReplacedOnce();
+    await billingCorrections(failed, invoices);
     await complaintTo8D(happy);
   } catch (error) {
     check('run aborted', false, error.stack?.slice(0, 800) ?? String(error));
@@ -426,7 +502,7 @@ async function complaintTo8D(so) {
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
     console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors → ${OUT}/report.json`);
     await browser?.close();
-    tearDown(server);
+    await tearDown(server);
     process.exitCode = report.failures.length || report.http_errors.length ? 1 : 0;
   }
 })();

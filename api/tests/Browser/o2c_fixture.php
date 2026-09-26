@@ -100,6 +100,8 @@ $fixture = [
     'run_id' => $run, 'database' => $database,
     'customer' => $customer->hash_id, 'product' => $product->hash_id, 'product_code' => $product->part_number,
     'vehicle' => $vehicle->hash_id, 'customer_email' => $portal->email,
+    'resin_item' => $resin->hash_id, 'raw_location' => app('hashids')->encode((int) $rawLocation),
+    'bom_ratio' => '0.0200',
     'cash_account' => app('hashids')->encode((int) DB::table('accounts')->where('code', '1020')->value('id')),
     'revenue_account' => app('hashids')->encode((int) DB::table('accounts')->where('code', '4010')->value('id')),
     'defect_type' => DefectType::query()->orderBy('id')->firstOrFail()->hash_id,
