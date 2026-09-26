@@ -50,6 +50,7 @@ product was wrong and was fixed with a test.
 | Cancel-reversal assertion read through the entry, not the invoice | 104 passed, 1 failed | `/tmp/o2c-headless-O2CDEV8/report.json` |
 | Full run, all four phases | **105 passed, 0 failed, 0 5xx, 0 page errors** | `/tmp/o2c-headless-O2CDEV9/report.json` |
 | Repeat with real teardown (`O2C_KEEP` unset) | **105 passed, 0 failed**, database dropped, ports freed | `/tmp/o2c-headless-O2CDEV10/report.json` |
+| Isolated ports (`O2C_API_PORT=8233`, `O2C_SPA_PORT=5233`) while another run held 8230/5230 | **105 passed, 0 failed**, zero 401s | `/tmp/o2c-iso1/report.json` |
 
 Runs O2CDEV2–O2CDEV4 and O2CDEV7 aborted at login with 5xx and a `waitForURL` timeout.
 Those were **not** product failures: a run killed before its teardown left `artisan serve`
@@ -126,10 +127,20 @@ portal offers Confirm, and a customer cannot confirm a delivery that has not arr
   logged in eight roles earlier, idle for roughly two minutes — far inside the configured
   15/30-minute idle timeout — and the auth log records no logout or lockout. The first
   finance call of the chain (`finalize`) was already unauthenticated, so no chain behaviour
-  was involved. Two other repeat runs were fully green (105 checks each). Treat a cluster of
-  401s as harness session loss, not a regression, and re-run. The 401 response body and the
-  context's cookie jar at that moment are what distinguish a dropped session from an expired
-  one; neither was captured on the run that failed.
+  was involved. Two other repeat runs were fully green (105 checks each). The cookie jar
+  recorded on a 401 in an overlapping run still held the session cookie, which is what
+  pointed at the concurrency rule below: treat a cluster of 401s as harness session loss,
+  not a regression, and re-run the scenario on its own ports.
+- **Never run two of these at once.** The runner binds a fixed API port (8230) and its own
+  `setUp()` frees that port by killing whatever holds it. Two overlapping runs therefore
+  poison each other: the later run kills the earlier run's API server and re-points the port
+  at *its* database, so the earlier run's still-authenticated browsers keep sending requests
+  that now land on a database where their session id does not exist. The result is a 401
+  **with the session cookie still present** — indistinguishable, in the report, from a
+  genuine session drop. Two repeats that overlapped in time produced exactly that signature.
+  The rule is confirmed from the other side: one run given its own `O2C_API_PORT` and
+  `O2C_SPA_PORT` finished 105/0 with zero 401s *while* another run occupied 8230/5230. Run
+  one scenario at a time, or give each run its own ports.
 - **The dev stack still has no queue worker or scheduler.** The runner sets
   `QUEUE_CONNECTION=sync` so listeners run inline; the operator walkthrough relies on that
   too. A production deployment needs both.
@@ -150,17 +161,19 @@ re-seeded.
 
 ## Repeating the headless scenario
 
-1. Ensure the stack is up (`docker compose up -d`) and no `artisan serve` is holding port
-   8230 — the runner frees it itself, but a leftover server is the one condition that has
-   produced misleading 401s.
+1. Ensure the stack is up (`docker compose up -d`) and that no other run of this scenario is
+   in flight. The runner frees port 8230 itself, which is exactly what wounds a run already
+   using it — give a concurrent run its own ports.
 2. From the repo root:
 
    ```bash
    O2C_RUN_ID=<UNIQUE6TO16> O2C_OUTPUT=/tmp/o2c-headless-<UNIQUE> node scripts/o2c-headless.cjs
+   # a second run alongside the first:
+   O2C_RUN_ID=<OTHER> O2C_API_PORT=8231 O2C_SPA_PORT=5231 O2C_OUTPUT=/tmp/o2c-headless-<OTHER> \
+     node scripts/o2c-headless.cjs
    ```
 
-   Optional: `O2C_API_PORT` / `O2C_SPA_PORT` for a busy machine, `O2C_KEEP=1` to keep the
-   database and API for inspection.
+   Optional: `O2C_KEEP=1` to keep the database and API for inspection.
 3. Read `report.json` in the output directory; it carries every check with its evidence,
    plus any 5xx and page errors. Exit code is non-zero when anything failed.
 4. Drop the run's database (`ogami_test_o2c_browser_<run>`) if `O2C_KEEP=1` was used. The
