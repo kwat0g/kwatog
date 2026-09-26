@@ -132,7 +132,9 @@ class ControllerSqlLeakTest extends TestCase
             );
         }
 
-        $response->assertJson(['message' => 'Server Error']);
+        // bootstrap/app.php renders an unexpected 5xx as this fixed message;
+        // Laravel's own "Server Error" text is not what the API returns.
+        $response->assertJson(['message' => 'An unexpected error occurred.']);
     }
 
     /**
