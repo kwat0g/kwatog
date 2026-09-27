@@ -39,7 +39,9 @@ class SeparationLifecycleConcurrencyTest extends TestCase
             ['department' => 'FIN', 'item_key' => 'accountability', 'label' => 'Accountability'],
         ], 'hr');
 
-        $employee = Employee::factory()->create();
+        // Pin date_hired before the hard-coded separation date so the pre-hire
+        // guard cannot preempt the replayed-initiation behaviour under test.
+        $employee = Employee::factory()->create(['date_hired' => '2024-01-01']);
         $actor = User::factory()->create();
         $service = app(SeparationService::class);
 

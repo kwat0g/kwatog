@@ -148,7 +148,7 @@ class SeparationContractRegressionTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage("duplicate item_key 'dup'");
 
-        $this->service()->initiate(Employee::factory()->create(), [
+        $this->service()->initiate(Employee::factory()->create(['date_hired' => '2024-01-01']), [
             'separation_reason' => SeparationReason::Resigned->value,
             'separation_date' => '2026-05-20',
         ], $this->actor());
@@ -163,7 +163,7 @@ class SeparationContractRegressionTest extends TestCase
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('blank or non-string department');
 
-        $this->service()->initiate(Employee::factory()->create(), [
+        $this->service()->initiate(Employee::factory()->create(['date_hired' => '2024-01-01']), [
             'separation_reason' => SeparationReason::Resigned->value,
             'separation_date' => '2026-05-20',
         ], $this->actor());
