@@ -9,6 +9,7 @@ use App\Common\Exceptions\ForbiddenActionException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Enums\PpapElementStatus;

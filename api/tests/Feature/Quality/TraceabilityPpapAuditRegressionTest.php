@@ -212,6 +212,25 @@ class TraceabilityPpapAuditRegressionTest extends TestCase
             ->assertStatus(422);
     }
 
+    /**
+     * The PPAP index `search` filter called SearchOperator without importing it,
+     * so it resolved against the service's own namespace and every filtered
+     * request died with "Class not found". A lowercase term also pins the
+     * case-insensitive ILIKE fallback.
+     */
+    public function test_ppap_index_search_filter_matches_the_number_case_insensitively(): void
+    {
+        $wanted = $this->submission();
+        $this->submission();
+
+        $response = $this->actingAs($this->qc)
+            ->getJson('/api/v1/quality/ppap?search='.urlencode(strtolower((string) $wanted->ppap_number)))
+            ->assertOk();
+
+        $numbers = collect($response->json('data'))->pluck('ppap_number')->all();
+        $this->assertSame([$wanted->ppap_number], $numbers);
+    }
+
     private function submission(): PpapSubmission
     {
         $this->actingAs($this->qc)->postJson('/api/v1/quality/ppap', [

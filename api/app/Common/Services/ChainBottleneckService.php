@@ -774,7 +774,7 @@ class ChainBottleneckService
         try {
             return Carbon::parse((string) $raw)->toIso8601String();
         } catch (Throwable $exception) {
-            Log::warning('Chain bottleneck timestamp lookup failed.', ['exception' => $exception, 'table' => $table]);
+            Log::warning('Chain bottleneck timestamp lookup failed.', ['exception' => $exception]);
             return null;
         }
     }
@@ -823,7 +823,7 @@ class ChainBottleneckService
         try {
             return $raw instanceof Carbon ? $raw : Carbon::parse((string) $raw);
         } catch (Throwable $exception) {
-            Log::warning('Chain bottleneck count lookup failed.', ['exception' => $exception, 'table' => $table]);
+            Log::warning('Chain bottleneck count lookup failed.', ['exception' => $exception]);
             return null;
         }
     }

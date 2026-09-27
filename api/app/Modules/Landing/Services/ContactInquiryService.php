@@ -24,7 +24,7 @@ class ContactInquiryService
     ) {}
 
     /**
-     * @param  array{full_name: string, company?: string|null, email: string, phone?: string|null, message: string}  $data
+     * @param  array{full_name: string, company?: string|null, email: string, phone?: string|null, message: string, consent?: bool|null}  $data
      */
     public function create(array $data, Request $request): ContactInquiry
     {
