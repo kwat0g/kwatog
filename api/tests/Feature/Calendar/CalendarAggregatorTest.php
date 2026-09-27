@@ -10,6 +10,7 @@ use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\MRP\Models\Machine;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\LeaveTypeSeeder;
@@ -188,10 +189,13 @@ class CalendarAggregatorTest extends TestCase
         $leave = $this->approvedLeave($employee, now()->startOfMonth()->addDays(4)->toDateString());
         $leave->delete();
 
+        // The migration-added trigger requires the maintenance target to be a
+        // live machine, so the work order spans the window on a real one.
+        $machine = Machine::factory()->create();
         DB::table('maintenance_work_orders')->insert([
             'mwo_number' => 'MWO-CALENDAR-1',
             'maintainable_type' => 'machine',
-            'maintainable_id' => 999999,
+            'maintainable_id' => $machine->id,
             'type' => 'corrective',
             'priority' => 'medium',
             'description' => 'Long running maintenance',
