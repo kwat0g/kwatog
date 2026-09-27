@@ -40,6 +40,8 @@ Ogami already had supplier returns for rejected receipts and previously accepted
 | Customer Service could not finish the customer return | Disposition/completion grants and limited warehouse-tree lookup, retaining QC and Finance controls |
 | Authorized staff could lose case actions in the UI | Separate review, replacement approval and Finance permissions; collect reasons for withdrawal/review and show action failures |
 
+| Return notifications rendered as an unlabelled grey bell | The backend catalog emits `return.case_updated` and `return.truck_return_received`, but `spa/src/lib/notificationMeta.ts` had no entry for either, so both fell through to the generic bell and the `system` filter group. Both are now mapped (Returns · approvals for the case update, Returns · alerts for the quarantine count), which is exactly what the `notificationMeta` catalog-drift test asserts |
+
 ## Using the flow
 
 Customers open a delivered or confirmed delivery and choose **Report a problem**, or open **Problem reports** in their portal. Ogami staff use the same action from a GRN or PO. Select affected lines, enter actual received and defective quantities, describe the issue, and choose redelivery, credit or help deciding. Evidence is optional at submission and can be added later.
@@ -58,6 +60,17 @@ Physical return credits and shortage credits are shown separately. A draft credi
 - Sales orders currently support two decimal places. Agreement and replacement authorization reject quantities that cannot be represented without rounding; the original report keeps its exact quantity.
 - Split supplier redelivery receipts were verified in the isolated headless environment: 4 kg plus 6 kg settles a 10 kg shortage, with no premature closure or repeated allocation.
 - Evidence and email use the existing private storage and queue configuration. Failed email delivery produces internal follow-up through the existing failure notifier.
+
+### 2026-09-27 sweep
+
+A full-repository Feature sweep re-ran every module suite on a fresh database. The
+return-management paths stayed green (SupplyChain + ReturnManagement **368 passed**
+and Inventory + Quality **536 passed**), and the sweep closed the remaining
+cross-module gaps: the notification-catalog row above, plus stale fixtures in the
+B2B supplier-invoice, calendar, delivery-status-guard, payroll maker-checker and
+separation tests that had drifted behind contracts shipped since they were written.
+The API suite and the SPA gates (typecheck, lint, token audit, Vitest, production
+build) are green after those fixes.
 
 See [the experience plan](RETURN-MANAGEMENT-EXPERIENCE-PLAN.md) for the intended journeys and validation scenarios.
 
