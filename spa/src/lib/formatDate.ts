@@ -49,3 +49,12 @@ export function formatRelative(value: string | Date | null | undefined, fallback
 export function localIsoDate(d: Date = new Date()): string {
  return format(d, 'yyyy-MM-dd');
 }
+
+/**
+ * Local date-and-time for `<input type="datetime-local">`,
+ * `YYYY-MM-DDTHH:mm`. Same UTC trap as {@link localIsoDate}: building it
+ * from `toISOString()` shifts Manila's 00:30 to the previous day's 16:30.
+ */
+export function localIsoDateTime(d: Date = new Date()): string {
+ return format(d, "yyyy-MM-dd'T'HH:mm");
+}

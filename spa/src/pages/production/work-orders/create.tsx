@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
+import { localIsoDateTime } from '@/lib/formatDate';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -53,9 +54,7 @@ export default function CreateWorkOrderPage() {
  });
  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
- const now = new Date();
- now.setSeconds(0, 0);
- const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+ const today = localIsoDateTime();
 
   const form = useForm<FormValues>({
  resolver: zodResolver(schema),

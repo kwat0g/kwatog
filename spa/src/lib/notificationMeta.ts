@@ -73,7 +73,15 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'quality.inspection_awaiting_review': { icon: LuShieldCheck, group: 'approvals', label: 'Quality' },
   'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
   'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
+  // A driver-reported delivery exception needs a physical depot count before
+  // the return can be reconciled, so it is an alert rather than a status ping.
+  'chain.delivery_attempt_reported': { icon: LuTriangleAlert, group: 'alerts', label: 'Logistics' },
   'return.restocked': { icon: LuPackageCheck, group: 'system', label: 'Returns' },
+  // Goods counted back off a failed delivery into quarantine: warehouse must
+  // hold them until Quality inspects.
+  'return.truck_return_received': { icon: LuPackageCheck, group: 'alerts', label: 'Returns' },
+  // A problem report moved and needs review/follow-up from the returns team.
+  'return.case_updated': { icon: LuShieldAlert, group: 'approvals', label: 'Returns' },
   'customer.so_responded': { icon: LuClipboardCheck, group: 'approvals', label: 'Sales' },
   'customer.rma_created': { icon: LuPackageCheck, group: 'approvals', label: 'Returns' },
 
