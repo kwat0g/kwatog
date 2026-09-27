@@ -37,7 +37,7 @@ Three palettes, not four:
 |---|---|---|
 | Light | `:root` | all office routes |
 | Dark | `[data-theme="dark"]` | all office routes |
-| Floor | `[data-theme="floor"]` | factory / driver / maintenance-mobile PWAs |
+| Floor | `[data-theme="floor"]` | factory / maintenance-mobile PWAs |
 
 Floor is **route-forced** by `components/layout/TouchShell.tsx` and is never
 user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
@@ -379,10 +379,15 @@ surrounding semantic text token.
 
 ### Shop-floor PWAs
 
-Factory, driver and maintenance-mobile all render through
-`components/layout/TouchShell.tsx` — one shell, three sets of props. No sidebar.
+Factory and maintenance-mobile render through
+`components/layout/TouchShell.tsx` — one shell, two sets of props. No sidebar.
 `TouchShell` forces `[data-theme="floor"]` on mount and restores the user's own
 preference on unmount.
+
+The driver surface (`/driver`) is not a shop-floor PWA: it renders inside
+`AppLayout` with the standard sidebar and topbar, follows the user's light/dark
+preference, and keeps 44px touch controls (`size="touch"`) because the phone is
+still where most of its use happens.
 
 ---
 

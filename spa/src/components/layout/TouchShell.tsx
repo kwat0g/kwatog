@@ -13,12 +13,17 @@ import { cn } from '@/lib/cn';
 
 import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
 /**
- * The shell every touch PWA runs on — factory floor, driver, maintenance tech.
+ * The shell the shop-floor touch PWAs run on — factory floor, maintenance tech.
  *
- * All three were hand-rolled copies of the same layout, which is how they
- * drifted: the driver shell lost its `flex-col`, and its `<main>` kept the
- * bottom padding budget of a tab bar it doesn't have. Anything that should look
- * the same on all three lives here; the differences are the props.
+ * They were hand-rolled copies of the same layout, which is how they drifted
+ * apart. Anything that should look the same on both lives here; the differences
+ * are the props.
+ *
+ * The driver surface used to be the third tenant. It now renders inside
+ * AppLayout (sidebar + topbar) like every other module — the run sheet needed
+ * real navigation, and a driver switching between the two shells got two
+ * different headers for the same job. `TouchConfirmSheet`, `TouchCardSkeleton`
+ * and `useTouchSubmitLabel` are still shared with it.
  *
  * These run on a shop-floor phone or tablet, held in a glove, so hit targets are
  * the 44px minimum rather than the 32px the desktop tables use.
@@ -39,7 +44,7 @@ interface TouchShellProps {
   eyebrowIcon?: IconType;
   /** Shown when the session has no name yet, e.g. "Operator". */
   fallbackName: string;
-  /** Bottom tab bar. Omit for single-screen apps (driver). */
+  /** Bottom tab bar. Omit for single-screen apps. */
   tabs?: readonly TouchTab[];
   /**
    * Content column width. Defaults to `max-w-2xl` — right for a phone held in
@@ -205,6 +210,7 @@ export function TouchConfirmSheet({
   confirmLabel,
   variant = 'primary',
   pending,
+  className,
   children,
 }: {
   isOpen: boolean;
@@ -215,11 +221,17 @@ export function TouchConfirmSheet({
   /** `danger` for anything that records a failure, a loss, or a terminal state. */
   variant?: 'primary' | 'danger';
   pending?: boolean;
+  /**
+   * Sheet sizing. Defaults to a full-width bottom sheet, which is right on a
+   * phone. A surface that also renders on a desk screen passes a max width so
+   * the sheet does not stretch the full 1440px.
+   */
+  className?: string;
   /** What is about to happen — name the record and the magnitude. */
   children: ReactNode;
 }) {
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <BottomSheet isOpen={isOpen} onClose={onClose} title={title} className={className}>
       <div className="space-y-4">
         <div className="text-base text-secondary space-y-2">{children}</div>
         <div className="grid grid-cols-2 gap-3">

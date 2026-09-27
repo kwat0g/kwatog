@@ -20,6 +20,9 @@ export const MODULE_LABELS: Record<string, string> = {
  mrp: 'Production Planning',
  production: 'Production',
  'supply-chain': 'Supply Chain',
+ // /driver is the driver's slice of Supply Chain behind its own URL prefix, so the
+ // breadcrumb and tab title name the module it lives in rather than the job title.
+ driver: 'Supply Chain',
  purchasing: 'Procurement',
  inventory: 'Warehouse',
  quality: 'Quality Control',

@@ -1,12 +1,21 @@
+/**
+ * Receipt photo — the last step of a delivered run.
+ *
+ * Two file inputs on purpose: `capture="environment"` opens the camera app on a
+ * phone, the plain one opens the gallery. Both write into the same preview, so
+ * the driver can retake or pick an existing shot before committing the upload.
+ */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
+import { LuCamera, LuImage, LuTriangleAlert } from '@/lib/icons';
 import { driverApi } from '@/api/driver';
 import { Button } from '@/components/ui/Button';
-import { focusRing } from '@/lib/focus';
-import { cn } from '@/lib/cn';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Panel } from '@/components/ui/Panel';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const MAX_BYTES = 8 * 1024 * 1024; // mirrors backend image|max:8192
 
@@ -23,6 +32,10 @@ function describeUploadError(err: unknown): string {
  if (err.response.status === 404) return 'Delivery not found or no longer assigned to you.';
  }
  return 'Upload failed.';
+}
+
+function describeSize(bytes: number): string {
+ return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`;
 }
 
 export default function DriverPhotoCapture() {
@@ -56,15 +69,20 @@ export default function DriverPhotoCapture() {
  });
 
  if (!id) {
- return <div className="py-12 text-center text-muted">Missing delivery id.</div>;
+ return (
+ <div>
+ <PageHeader title="Receipt photo" backTo="/driver" backLabel="My deliveries" />
+ <EmptyState icon="alert-circle" title="Missing delivery" description="Open the delivery again from your list and retry the upload." />
+ </div>
+ );
  }
 
- const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+ const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
  const f = e.target.files?.[0];
  // Reset the input so picking the same file again still fires onChange.
  e.target.value = '';
  if (!f) {
- setHint('No photo selected. Tap "Take Photo" or "Choose from Gallery" to try again.');
+ setHint('No photo selected. Tap "Take photo" or "Choose from gallery" to try again.');
  return;
  }
  if (!f.type.startsWith('image/')) {
@@ -81,14 +99,20 @@ export default function DriverPhotoCapture() {
  };
 
  return (
- <div className="space-y-4">
- <Link
- to={`/driver/${id}`}
- className={cn('inline-block text-sm text-muted underline min-h-hit py-2 rounded', focusRing)}
- >
- ← Back to delivery
- </Link>
- <h1 className="text-lg font-medium text-primary">Receipt Photo</h1>
+ <div>
+ <PageHeader
+ title="Receipt photo"
+ subtitle="Signed receipt or delivery photo"
+ backTo={`/driver/${id}`}
+ backLabel="Back to delivery"
+ />
+
+ <div className="max-w-2xl space-y-4 px-5 py-4">
+ <Panel title="Capture the proof">
+ <p className="text-sm text-secondary">
+ Photograph the signed receipt, or the delivered goods with the customer&apos;s name visible. The
+ office uses it to confirm the delivery against your report.
+ </p>
 
  <input
  ref={fileRef}
@@ -106,25 +130,45 @@ export default function DriverPhotoCapture() {
  onChange={onPickFile}
  />
 
+ <div className="mt-3 overflow-hidden rounded-md border border-default bg-surface">
  {preview ? (
- <img src={preview} alt="receipt preview" className="w-full rounded-md" />
+ <img src={preview} alt="Receipt preview" className="max-h-[60vh] w-full object-contain" />
  ) : (
- <div className="aspect-[4/3] rounded-md border-2 border-dashed border-strong flex items-center justify-center text-muted">
- No photo yet
+ <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 text-muted">
+ <LuCamera size={28} aria-hidden />
+ <span className="text-sm">No photo yet</span>
  </div>
+ )}
+ </div>
+
+ {file && (
+ <p className="mt-2 text-xs text-muted">
+ <span className="font-mono tabular-nums">{describeSize(file.size)}</span> · ready to upload
+ </p>
  )}
 
  {hint && (
- <div className="text-sm text-warning-fg" role="status">
- {hint}
+ <div className="mt-3 flex items-start gap-2 rounded-md bg-warning-bg px-3 py-2 text-sm text-warning-fg" role="status">
+ <LuTriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden />
+ <span>{hint}</span>
  </div>
  )}
 
- <div className="grid grid-cols-2 gap-2">
- <Button variant="secondary" size="touch" onClick={() => fileRef.current?.click()}>
+ <div className="mt-4 grid grid-cols-2 gap-2">
+ <Button
+ variant="secondary"
+ size="touch"
+ icon={<LuCamera size={14} />}
+ onClick={() => fileRef.current?.click()}
+ >
  {preview ? 'Retake' : 'Take photo'}
  </Button>
- <Button variant="secondary" size="touch" onClick={() => galleryRef.current?.click()}>
+ <Button
+ variant="secondary"
+ size="touch"
+ icon={<LuImage size={14} />}
+ onClick={() => galleryRef.current?.click()}
+ >
  Choose from gallery
  </Button>
  </div>
@@ -132,13 +176,19 @@ export default function DriverPhotoCapture() {
  <Button
  variant="primary"
  size="touch"
- className="w-full"
- disabled={!file}
+ className="mt-2 w-full"
  loading={upload.isPending}
+ disabled={!file}
  onClick={() => upload.mutate()}
  >
- {upload.isPending ? 'Uploading…' : 'Upload photo'}
+ Upload photo
  </Button>
+
+ <p className="mt-3 text-xs text-subtle">
+ Images up to 8 MB. The photo is stored against this delivery and is visible to the office.
+ </p>
+ </Panel>
+ </div>
  </div>
  );
 }
