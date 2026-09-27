@@ -149,7 +149,7 @@ class SupplierPortalServiceTest extends TestCase
     private function makeInvoiceFixture(Vendor $vendor): array
     {
         $user = $this->makePortalUser($vendor);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $purchaseOrder = $this->makePo($vendor, 'acknowledged');
         $purchaseOrderItem = PurchaseOrderItem::create([
             'purchase_order_id' => $purchaseOrder->id,
@@ -457,7 +457,7 @@ class SupplierPortalServiceTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
         $po->forceFill(['status' => 'acknowledged'])->save();
         $poItem = PurchaseOrderItem::create([

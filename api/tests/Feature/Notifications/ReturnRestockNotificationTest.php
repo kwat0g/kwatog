@@ -11,12 +11,18 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
@@ -77,6 +83,14 @@ class ReturnRestockNotificationTest extends TestCase
     private function inspectedRma(User $by, Item $item): ReturnRequest
     {
         $customer = Customer::create(['name' => 'Notification Scenario Customer', 'payment_terms_days' => 30]);
+        // The return line's product must map to the finished-good item
+        // (items.code == products.part_number) or disposition is rejected.
+        $product = Product::create([
+            'part_number'        => (string) $item->code,
+            'name'               => 'Returned finished good',
+            'revenue_account_id' => Account::query()->where('code', '4010')->value('id'),
+        ]);
+        $item->update(['item_type' => ItemType::FinishedGood]);
         $invoice = Invoice::create([
             'invoice_number' => 'INV-NTF-' . substr(uniqid(), -5),
             'customer_id'    => $customer->id,
@@ -92,6 +106,7 @@ class ReturnRestockNotificationTest extends TestCase
         $invoiceLine = InvoiceItem::create([
             'invoice_id' => $invoice->id,
             'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'product_id' => $product->id,
             'description' => 'Returned stock',
             'quantity' => '8.00',
             'unit_price' => '100.00',
@@ -111,6 +126,7 @@ class ReturnRestockNotificationTest extends TestCase
 
         $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
+            'product_id'        => $product->id,
             'item_id'           => $item->id,
             'quantity'          => '8.000',
             'returned_quantity' => '8.000',
@@ -135,6 +151,21 @@ class ReturnRestockNotificationTest extends TestCase
             'quarantine_location_id' => $quarantine->id,
             'quarantine_movement_id' => $movement->id,
             'quarantine_status' => 'held',
+        ]);
+
+        Inspection::create([
+            'inspection_number' => 'QC-NTF-'.substr(uniqid(), -8),
+            'stage'             => InspectionStage::CustomerReturn->value,
+            'status'            => InspectionStatus::Passed->value,
+            'product_id'        => $product->id,
+            'entity_type'       => InspectionEntityType::ReturnRequest->value,
+            'entity_id'         => $rma->id,
+            'batch_quantity'    => 8,
+            'sample_size'       => 8,
+            'accept_count'      => 8,
+            'reject_count'      => 0,
+            'defect_count'      => 0,
+            'inspector_id'      => $by->id,
         ]);
 
         return $rma->load('items');

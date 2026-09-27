@@ -16,6 +16,8 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
@@ -24,6 +26,10 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
@@ -109,7 +115,7 @@ class SupplierReturnShipNotificationTest extends TestCase
     private function receivedShipment(User $by): array
     {
         $vendor   = Vendor::factory()->create(['created_by' => null]);
-        $item     = Item::factory()->create();
+        $item     = Item::factory()->create(['unit_of_measure' => 'kg']);
         $location = WarehouseLocation::factory()->create();
         // Use a leaf expense account (5010 = Direct Materials), not a header account (5000 = COGS).
         $expense  = Account::query()->where('type', 'expense')->where('code', '5010')->firstOrFail();
@@ -310,6 +316,13 @@ class SupplierReturnShipNotificationTest extends TestCase
         $loc = WarehouseLocation::factory()->create();
 
         $customer = Customer::create(['name' => 'Ship-Notify Customer', 'payment_terms_days' => 30]);
+        // The product must map to the returned finished-good item.
+        $product = Product::create([
+            'part_number'        => (string) $item->code,
+            'name'               => 'Returned finished good',
+            'revenue_account_id' => Account::query()->where('code', '4010')->value('id'),
+        ]);
+        $item->update(['item_type' => ItemType::FinishedGood]);
         $invoice = Invoice::create([
             'invoice_number' => 'INV-SN-' . substr(uniqid(), -5),
             'customer_id'    => $customer->id,
@@ -325,6 +338,7 @@ class SupplierReturnShipNotificationTest extends TestCase
         $invoiceLine = InvoiceItem::create([
             'invoice_id' => $invoice->id,
             'revenue_account_id' => Account::query()->where('code', '4010')->firstOrFail()->id,
+            'product_id' => $product->id,
             'description' => 'Returned stock',
             'quantity' => '8.00',
             'unit_price' => '100.00',
@@ -342,6 +356,7 @@ class SupplierReturnShipNotificationTest extends TestCase
         ]);
         $line = ReturnRequestItem::create([
             'return_request_id' => $rma->id,
+            'product_id'        => $product->id,
             'item_id'           => $item->id,
             'quantity'          => '8.000',
             'returned_quantity' => '8.000',
@@ -366,6 +381,21 @@ class SupplierReturnShipNotificationTest extends TestCase
             'quarantine_movement_id' => $movement->id,
             'quarantine_status' => 'held',
         ]);
+        Inspection::create([
+            'inspection_number' => 'QC-SN-'.substr(uniqid(), -8),
+            'stage'             => InspectionStage::CustomerReturn->value,
+            'status'            => InspectionStatus::Passed->value,
+            'product_id'        => $product->id,
+            'entity_type'       => InspectionEntityType::ReturnRequest->value,
+            'entity_id'         => $rma->id,
+            'batch_quantity'    => 8,
+            'sample_size'       => 8,
+            'accept_count'      => 8,
+            'reject_count'      => 0,
+            'defect_count'      => 0,
+            'inspector_id'      => $admin->id,
+        ]);
+
         $rma->load('items');
 
         $this->actingAs($admin)

@@ -350,7 +350,7 @@ class SupplierResponsePortalTest extends TestCase
     {
         $vendor = Vendor::factory()->create();
         $user = $this->makePortalUser($vendor);
-        $item = Item::factory()->create();
+        $item = Item::factory()->create(['unit_of_measure' => 'kg']);
         // Goods have landed, so the PO is receiving; VAT follows the PO.
         $po = $this->makePo($vendor, 'partially_received');
         $po->forceFill(['is_vatable' => false])->save();
