@@ -7,6 +7,7 @@ namespace Tests\Feature\Payroll;
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Database\Seeders\GovernmentTableSeeder;
@@ -64,8 +65,17 @@ class PayrollMakerCheckerTest extends TestCase
         $period = PayrollPeriod::factory()->create([
             'status' => PayrollPeriodStatus::Computed->value,
         ]);
+        // The row's employee must be inside the period window: the employee
+        // factory's random date_hired can land after the period's random end
+        // date, which makes the row ineligible and turns approve() into a
+        // spurious 'rows do not match the eligible employee set' 422.
+        $employee = Employee::factory()->create([
+            'date_hired' => \Illuminate\Support\Carbon::parse($period->period_start)
+                ->subDay()->toDateString(),
+        ]);
         \App\Modules\Payroll\Models\Payroll::factory()->create([
             'payroll_period_id' => $period->id,
+            'employee_id'       => $employee->id,
         ]);
         if ($computedBy !== null) {
             $period->forceFill(['computed_by' => $computedBy->id])->save();
