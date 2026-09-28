@@ -13,12 +13,9 @@ use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
-use App\Modules\Quality\Enums\InspectionEntityType;
-use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -105,38 +102,16 @@ class TriggerOutgoingQC implements ShouldQueue
 
                 $createdAny = false;
                 foreach ($outputs as $output) {
-                    $batchQty = (int) $output->good_count;
-                    $guardColumns = [
-                        'stage' => InspectionStage::Outgoing->value,
-                        'entity_type' => InspectionEntityType::WorkOrder->value,
-                        'entity_id' => $lockedWo->id,
-                        'work_order_output_id' => $output->id,
-                    ];
-
-                    if (Inspection::query()->where($guardColumns)->exists()) {
-                        continue;
-                    }
-
-                    try {
-                        $created[] = $this->inspections->create([
-                            'stage' => InspectionStage::Outgoing->value,
-                            'product_id' => (int) $productId,
-                            'batch_quantity' => $batchQty,
-                            'entity_type' => InspectionEntityType::WorkOrder->value,
-                            'entity_id' => $lockedWo->id,
-                            'work_order_output_id' => $output->id,
-                        ], $creator);
+                    // createForOutput is the one creation path (shared with the
+                    // qc:sweep-missing-outgoing repair): idempotent under the
+                    // (stage, work_order_output_id) partial unique index, and
+                    // surfaces the same stateful refusals (missing spec, missing
+                    // revision) for queue retry. A pre-existing row comes back
+                    // as a reuse; only a fresh insert advances the chain.
+                    $inspection = $this->inspections->createForOutput($output, $lockedWo, $creator);
+                    $created[] = $inspection;
+                    if ($inspection->wasRecentlyCreated || $inspection->completed_at === null) {
                         $createdAny = true;
-                    } catch (QueryException $e) {
-                        if ($this->isUniqueViolation($e) && Inspection::query()->where($guardColumns)->exists()) {
-                            Log::debug('TriggerOutgoingQC: duplicate output inspection suppressed', [
-                                'wo_id' => $lockedWo->id,
-                                'output_id' => $output->id,
-                            ]);
-
-                            continue;
-                        }
-                        throw $e;
                     }
                 }
 
@@ -187,18 +162,5 @@ class TriggerOutgoingQC implements ShouldQueue
             ]);
             throw $e;
         }
-    }
-
-    /**
-     * Returns true when a QueryException is caused by a unique-constraint violation.
-     * SQLSTATE 23000 / 23505 covers PostgreSQL; SQLite surfaces SQLSTATE HY000 but
-     * embeds "UNIQUE constraint failed" in the message.
-     */
-    private function isUniqueViolation(QueryException $e): bool
-    {
-        $code = (string) $e->getCode();
-
-        return str_starts_with($code, '23')
-            || str_contains($e->getMessage(), 'UNIQUE constraint failed');
     }
 }

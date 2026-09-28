@@ -22,6 +22,15 @@ Schedule::command('grn:retry-pending-incoming-qc --limit=50')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+// O2C gap — completed work orders whose output batches never received an
+// outgoing inspection (lost queue event, stateful refusal since fixed, or a
+// spec repaired after a failure). The sweep repairs what it can and escalates
+// the rest to the outgoing-QC notification roles. Hourly; idempotent.
+Schedule::command('qc:sweep-missing-outgoing --limit=50')
+    ->hourly()
+    ->withoutOverlapping(15)
+    ->onOneServer();
+
 Artisan::command('inspire', function (): void {
     echo Inspiring::quote().PHP_EOL;
 })->purpose('Display an inspiring quote');
