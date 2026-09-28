@@ -425,7 +425,8 @@ class InspectionService
 
         // Counting the sample instead of enumerating it is the point: the AQL
         // sample is inspected visually for defectives, and only a few pieces are
-        // measured. Legacy rows keep the per-unit matrix; nothing new creates one.
+        // measured. Only the three stages above flip; the return stages still
+        // enumerate the full per-unit matrix, as does anything created before this.
         $lotChecklist = in_array(
             $stage,
             [InspectionStage::Incoming, InspectionStage::InProcess, InspectionStage::Outgoing],
@@ -479,9 +480,9 @@ class InspectionService
 
                 $this->scaffoldLotChecklist($insp, $parameters, $measuredPieces);
             } else {
-                // Legacy per-unit matrix: one row per (sample × spec_item),
-                // inserted in bounded batches without holding the whole matrix
-                // in memory for a large lot. Nothing new creates one.
+                // Per-unit matrix: one row per (sample × spec_item), inserted in
+                // bounded batches without holding the whole matrix in memory for
+                // a large lot. The return stages still create these fresh.
                 $this->insertScaffoldRows(
                     $insp->id,
                     $sample,
@@ -532,7 +533,9 @@ class InspectionService
     /**
      * Patch measurement readings. Each input row is keyed by measurement id
      * and may set measured_value, is_pass, notes. Auto-evaluation overrides
-     * the explicit is_pass for numeric parameters that have a tolerance band.
+     * the explicit is_pass for numeric parameters that have a tolerance band,
+     * except on a lot-checklist piece row that carries no reading, where a
+     * non-critical row may state its own attribute result.
      *
      * @param  array<int, array{measured_value?: float|string|null, is_pass?: bool|null, notes?: string|null}>  $rows
      */
@@ -604,18 +607,33 @@ class InspectionService
                 }
 
                 if ($m->hasTolerance()) {
-                    // A tolerance-backed parameter is evidence-bearing: it
-                    // cannot be marked pass/fail without a reading, and an
-                    // explicit result may not contradict the calculated one.
+                    // A tolerance-backed parameter is evidence-bearing: where it
+                    // has a reading, that reading decides, and an explicit result
+                    // may not contradict it — a client able to assert a pass over
+                    // an out-of-tolerance reading would be writing a forged
+                    // quality record.
+                    //
+                    // The one claim a toleranced row may carry on its own is an
+                    // attribute claim with no reading at all: "inspected,
+                    // conforming", which is how a lot-checklist piece row is
+                    // ticked without a measurement. A critical characteristic is
+                    // always a measured value, and the legacy per-unit grid has no
+                    // tick surface, so neither may assert one.
                     $auto = $m->evaluate();
-                    if (array_key_exists('is_pass', $patch)
-                        && $patch['is_pass'] !== null
-                        && ($auto === null || (bool) $patch['is_pass'] !== $auto)) {
+                    $claim = $patch['is_pass'] ?? null;
+                    $mayCarryClaim = $claim !== null
+                        && ! $m->is_critical
+                        && $lockedInspection->inspection_mode === InspectionMode::LotChecklist;
+
+                    if ($claim !== null
+                        && ! $mayCarryClaim
+                        && ($auto === null || (bool) $claim !== $auto)) {
                         throw new BusinessRuleException(
                             "Measurement {$m->parameter_name} requires a result derived from its measured value.",
                         );
                     }
-                    $m->is_pass = $auto;
+
+                    $m->is_pass = $auto ?? ($mayCarryClaim ? (bool) $claim : null);
                     $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('is_pass');
                 } elseif (array_key_exists('is_pass', $patch)) {
                     // Manual visual/functional parameters use an explicit
@@ -806,6 +824,11 @@ class InspectionService
                 throw new BusinessRuleException('Cannot complete: inspection has no measurement rows.');
             }
 
+            // A row nothing has answered is neither a pass nor a fail. On a
+            // lot-checklist inspection this includes every piece row of a
+            // dimension the inspector never ticked: the tick is what records the
+            // answer (as `is_pass`), so silence here is an unanswered dimension,
+            // not a conforming one.
             $unresolved = $rows->whereNull('is_pass')->count();
             if ($unresolved > 0) {
                 throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");

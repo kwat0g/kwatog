@@ -1,7 +1,15 @@
 /**
  * Pure function to compute pass/fail verdict for lot checklist inspections.
  * Server is authoritative; this is for UI preview only.
+ *
+ * `pending` is a first-class third state: a row with neither a reading nor an
+ * explicit claim is unanswered, and an unanswered row must never preview as a
+ * pass — the server refuses to complete such an inspection, and a client that
+ * showed "will pass" over it is what shipped the 30-keystroke bug this panel
+ * exists to delete.
  */
+export type LotChecklistVerdict = 'pass' | 'fail' | 'pending';
+
 export function computeLotChecklistVerdict(
   checklistItems: Array<{ is_critical: boolean; is_pass: boolean }>,
   numericItems: Array<{
@@ -11,19 +19,18 @@ export function computeLotChecklistVerdict(
     tolerance_min: number | null;
     tolerance_max: number | null;
     /**
-     * The inspector explicitly unticked this non-critical parameter's "Within
-     * tolerance" box. That is a declaration that the dimension is out, and it
-     * must not be softened into a pass by the piece rows they left blank —
-     * a blank field cannot be read as a passing measurement.
+     * The row's claim, when it carries no reading: `true` from a ticked
+     * dimension ("inspected, conforming"), `false` from an explicit NG mark.
      *
-     * Absent means "not declared"; an unanswered parameter neither adds nor
-     * removes a defect.
+     * A claim never decides against a reading: wherever a value exists, the
+     * tolerance evaluation is the result, exactly as the server computes it.
+     * Absent (or null) means the row makes no claim.
      */
-    declared_out_of_tolerance?: boolean;
+    is_pass?: boolean | null;
   }>,
   sampleDefectCount: number,
   acceptCount: number,
-): { verdict: 'pass' | 'fail'; reason?: string } {
+): { verdict: LotChecklistVerdict; reason?: string } {
   // Fail if any critical checklist item is NG
   for (const item of checklistItems) {
     if (item.is_critical && !item.is_pass) {
@@ -31,30 +38,49 @@ export function computeLotChecklistVerdict(
     }
   }
 
-  // Collect DISTINCT pieces (sample_index values) that have at least one out-of-tolerance measurement
+  // Collect DISTINCT pieces (sample_index values) with at least one defect —
+  // an out-of-tolerance reading, or an explicit NG mark on a piece with none.
+  // A declared-out dimension contributes only the pieces it names: the tick
+  // says nothing about which part was bad, so it must not invent one defect per
+  // piece of the dimension.
   const piecesWithDefects = new Set<number>();
+  let unanswered = 0;
+
   for (const m of numericItems) {
-    if (m.declared_out_of_tolerance) {
+    if (m.measured_value !== null && m.measured_value !== '') {
+      const numValue = Number(m.measured_value);
+      const isInTolerance =
+        numValue >= (m.tolerance_min ?? -Infinity) && numValue <= (m.tolerance_max ?? Infinity);
+      if (!isInTolerance) {
+        if (m.is_critical)
+          return { verdict: 'fail', reason: 'Critical measurement out of tolerance' };
+        piecesWithDefects.add(m.sample_index);
+      }
+      continue;
+    }
+
+    if (m.is_pass === true) continue;
+    if (m.is_pass === false) {
       if (m.is_critical)
         return { verdict: 'fail', reason: 'Critical measurement out of tolerance' };
       piecesWithDefects.add(m.sample_index);
       continue;
     }
-    if (m.measured_value === null || m.measured_value === '') continue;
-    const numValue = Number(m.measured_value);
-    const isInTolerance =
-      numValue >= (m.tolerance_min ?? -Infinity) && numValue <= (m.tolerance_max ?? Infinity);
-    if (!isInTolerance) {
-      if (m.is_critical)
-        return { verdict: 'fail', reason: 'Critical measurement out of tolerance' };
-      piecesWithDefects.add(m.sample_index);
-    }
+
+    unanswered += 1;
   }
 
   // Fail if defects exceed accept count
   const defectCount = Math.max(sampleDefectCount, piecesWithDefects.size);
   if (defectCount > acceptCount) {
     return { verdict: 'fail', reason: `Defects (${defectCount}) exceed Ac (${acceptCount})` };
+  }
+
+  if (unanswered > 0) {
+    return {
+      verdict: 'pending',
+      reason: `${unanswered} measurement${unanswered === 1 ? '' : 's'} unanswered`,
+    };
   }
 
   return { verdict: 'pass' };

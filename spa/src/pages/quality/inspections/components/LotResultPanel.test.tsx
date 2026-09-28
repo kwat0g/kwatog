@@ -1,17 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { inspectionsApi } from '@/api/quality/inspections';
 import { LotResultPanel } from './LotResultPanel';
 import type { Inspection, InspectionMeasurement } from '@/types/quality';
 
 /**
- * Task 7 — the capture panel records by ticking. A non-critical dimension is one
- * tick when it is within tolerance; only a critical one keeps the per-piece
- * measured matrix, and only an explicit untick may declare a dimension out.
+ * The capture panel records by ticking. A non-critical dimension is one tick
+ * when it is within tolerance; a critical one keeps its per-piece measured
+ * matrix. Unticking reveals the dimension's pieces, and each revealed piece
+ * needs a reading or an explicit NG mark before the lot is submittable — a tick
+ * is a claim the server stores, so an unanswered dimension must block submit
+ * rather than reach `complete()` as an unresolved row.
  */
 vi.mock('@/api/quality/inspections', () => ({
   inspectionsApi: { recordLotResult: vi.fn() },
 }));
+
+const recordLotResult = vi.mocked(inspectionsApi.recordLotResult);
 
 function measurement(
   overrides: Partial<InspectionMeasurement> & { id: string; sample_index: number },
@@ -52,12 +58,26 @@ function inspectionWith(measurements: InspectionMeasurement[], rejectCount = 1):
 }
 
 const criticalDimension = [
-  measurement({ id: 'crit-1', sample_index: 1, parameter_name: 'Outer diameter', is_critical: true }),
-  measurement({ id: 'crit-2', sample_index: 2, parameter_name: 'Outer diameter', is_critical: true }),
+  measurement({
+    id: 'crit-1',
+    sample_index: 1,
+    parameter_name: 'Outer diameter',
+    is_critical: true,
+  }),
+  measurement({
+    id: 'crit-2',
+    sample_index: 2,
+    parameter_name: 'Outer diameter',
+    is_critical: true,
+  }),
 ];
 const nonCriticalDimension = [
   measurement({ id: 'nc-1', sample_index: 1, parameter_name: 'Flash' }),
   measurement({ id: 'nc-2', sample_index: 2, parameter_name: 'Flash' }),
+];
+const secondNonCriticalDimension = [
+  measurement({ id: 'nc2-1', sample_index: 1, parameter_name: 'Sink mark' }),
+  measurement({ id: 'nc2-2', sample_index: 2, parameter_name: 'Sink mark' }),
 ];
 
 function renderPanel(inspection: Inspection) {
@@ -69,6 +89,23 @@ function renderPanel(inspection: Inspection) {
   );
 }
 
+/** The per-piece readings a CTQ cannot be submitted without. */
+function fillCriticalReadings(value = '10') {
+  fireEvent.change(screen.getByLabelText('Outer diameter, piece 1 (mm)'), {
+    target: { value },
+  });
+  fireEvent.change(screen.getByLabelText('Outer diameter, piece 2 (mm)'), {
+    target: { value },
+  });
+}
+
+const submitButton = () => screen.getByRole('button', { name: 'Submit result' });
+
+beforeEach(() => {
+  recordLotResult.mockReset();
+  recordLotResult.mockResolvedValue({ status: 'awaiting_review' } as unknown as Inspection);
+});
+
 describe('LotResultPanel', () => {
   it('collapses a non-critical dimension to one tick and keeps a critical one measured per piece', () => {
     renderPanel(inspectionWith([...criticalDimension, ...nonCriticalDimension]));
@@ -78,24 +115,90 @@ describe('LotResultPanel', () => {
     expect(screen.getByLabelText('Outer diameter, piece 2 (mm)')).toBeInTheDocument();
 
     // The non-critical dimension is one tick, with no per-piece inputs behind it.
-    const tick = screen.getByLabelText('Within tolerance') as HTMLInputElement;
+    const tick = screen.getByLabelText('Flash within tolerance') as HTMLInputElement;
     expect(tick.checked).toBe(false);
     expect(screen.queryByLabelText('Flash, piece 1 (mm)')).not.toBeInTheDocument();
   });
 
-  it('reveals the piece rows when the tick is undone, and the preview then fails', () => {
+  it('renders a tick for every dimension when no dimension is critical', () => {
+    renderPanel(inspectionWith([...nonCriticalDimension, ...secondNonCriticalDimension]));
+
+    // Nothing is revealed, and every dimension still offers its answer.
+    expect(screen.getByLabelText('Flash within tolerance')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sink mark within tolerance')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Flash, piece 1 (mm)')).not.toBeInTheDocument();
+  });
+
+  it('sends the tick as an explicit is_pass on the dimension it answers', async () => {
     renderPanel(inspectionWith([...criticalDimension, ...nonCriticalDimension]));
 
-    const tick = screen.getByLabelText('Within tolerance') as HTMLInputElement;
+    fillCriticalReadings();
+    fireEvent.click(screen.getByLabelText('Flash within tolerance'));
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(recordLotResult).toHaveBeenCalledTimes(1));
+
+    const [id, payload] = recordLotResult.mock.calls[0];
+    expect(id).toBe('insp-1');
+    expect(payload.complete).toBe(true);
+    expect(payload.sample_defect_count).toBe(0);
+
+    // A tick carries the claim, and no reading — the row would otherwise stay
+    // unresolved and `complete()` would refuse the whole submission.
+    expect(payload.measurements.filter((m) => m.id.startsWith('nc-'))).toEqual([
+      { id: 'nc-1', measured_value: null, is_pass: true },
+      { id: 'nc-2', measured_value: null, is_pass: true },
+    ]);
+
+    // A reading decides for itself, so no claim is sent beside it.
+    expect(payload.measurements.filter((m) => m.id.startsWith('crit-'))).toEqual([
+      { id: 'crit-1', measured_value: '10', is_pass: null },
+      { id: 'crit-2', measured_value: '10', is_pass: null },
+    ]);
+  });
+
+  it('keeps submit disabled and counts the rows an unanswered dimension leaves open', () => {
+    renderPanel(inspectionWith([...criticalDimension, ...nonCriticalDimension]));
+
+    fillCriticalReadings();
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+
+    // Nothing is claimed for Flash, so the preview must not read as a pass and
+    // the lot must not be submittable: the server holds two unresolved rows.
+    expect(screen.queryByText('Will pass')).not.toBeInTheDocument();
+    expect(screen.getByText('2 measurements unanswered')).toBeInTheDocument();
+    expect(screen.getByText(/Missing: 2 unanswered measurement/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+  });
+
+  it('requires a reading or an NG mark on each revealed piece instead of inventing defects', () => {
+    renderPanel(inspectionWith([...criticalDimension, ...nonCriticalDimension], 0));
+    fillCriticalReadings();
+
+    const tick = screen.getByLabelText('Flash within tolerance') as HTMLInputElement;
     fireEvent.click(tick);
     expect(tick.checked).toBe(true);
-
-    // Unticking must not leave the dimension silently passing: the pieces come back
-    // for a recorded value, and the preview already counts it as out.
     fireEvent.click(tick);
     expect(tick.checked).toBe(false);
+
+    // The pieces come back for a recorded answer...
     expect(screen.getByLabelText('Flash, piece 1 (mm)')).toBeInTheDocument();
-    expect(screen.getByText('Will fail — Defects (2) exceed Ac (0)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Flash, piece 2 (mm)')).toBeInTheDocument();
+    // ...and a blank piece is not a defect: it is an unanswered row.
+    expect(screen.queryByText(/Will fail/)).not.toBeInTheDocument();
+    expect(screen.getByText('2 measurements unanswered')).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('Flash, piece 1 NG'));
+    expect(screen.getByText('Will fail — Defects (1) exceed Ac (0)')).toBeInTheDocument();
+    expect(screen.getByText(/1 unanswered measurement/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+
+    // Both pieces answered, and the sample counted: the failing lot submits.
+    fireEvent.click(screen.getByLabelText('Flash, piece 2 NG'));
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    expect(submitButton()).not.toBeDisabled();
   });
 
   it('records the sample defect count by tapping, with the number field removed', () => {

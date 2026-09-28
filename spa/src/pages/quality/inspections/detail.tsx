@@ -611,7 +611,8 @@ export default function InspectionDetailPage() {
               <div className="flex items-center gap-2">
                 <Chip variant="warning">Awaiting checker</Chip>
                 <span className="text-sm text-muted">
-                  Proposed: <span className="font-mono">{data.proposed_result ?? '—'}</span>
+                  Proposed:{' '}
+                  <span className="font-mono tabular-nums">{data.proposed_result ?? '—'}</span>
                 </span>
               </div>
             ) : isTerminal ? (

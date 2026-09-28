@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Quality;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,9 +17,11 @@ use App\Modules\Quality\Enums\InspectionOutcome;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -46,6 +49,8 @@ class OutgoingQcLotChecklistTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->seed(RolePermissionSeeder::class);
 
         $role = Role::firstOrCreate(['slug' => 'qc_inspector'], ['name' => 'QC Inspector']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
@@ -171,6 +176,202 @@ class OutgoingQcLotChecklistTest extends TestCase
             InspectionStatus::Draft,
             $this->checkedVerdict($inspection),
         );
+    }
+
+    /**
+     * A ticked dimension is evidence. "Inspected, conforming" is a different
+     * claim from a measurement, and it is the whole point of the capture panel:
+     * an inspector counts pieces, they do not type 30 numbers.
+     */
+    public function test_a_non_critical_piece_row_is_resolved_by_an_attribute_claim(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+
+        $this->svc->recordMeasurements($inspection->fresh(), $this->tickPatch($inspection), $this->user);
+
+        $ticked = $this->pieceRows($inspection, 'Flash height');
+        $this->assertCount(5, $ticked);
+        $this->assertTrue(
+            $ticked->every(fn ($r) => $r->is_pass === true),
+            'A tick is recorded as an explicit attribute claim.',
+        );
+        $this->assertTrue(
+            $ticked->every(fn ($r) => $r->measured_value === null),
+            'An attribute claim carries no reading.',
+        );
+
+        // The claim resolves the row for complete(), which refuses on any
+        // measurement left without a pass/fail.
+        $inspection->forceFill(['sample_defect_count' => 0])->save();
+        $this->assertSame(InspectionStatus::Passed, $this->checkedVerdict($inspection->fresh()));
+    }
+
+    /** The same claim reaches the service through the request: C1's end-to-end path. */
+    public function test_a_ticked_dimension_survives_the_request_validation(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+
+        $this->actingAs($this->user)
+            ->postJson(
+                "/api/v1/quality/inspections/{$inspection->hash_id}/lot-result",
+                $this->lotPayload($inspection),
+            )
+            ->assertSuccessful();
+
+        $ticked = $this->pieceRows($inspection, 'Flash height');
+        $this->assertCount(5, $ticked);
+        $this->assertTrue($ticked->every(fn ($r) => $r->is_pass === true));
+        $this->assertSame(
+            InspectionStatus::AwaitingReview,
+            $inspection->fresh()->status,
+            'The ticked dimension reaches a submittable state instead of throwing on unresolved rows.',
+        );
+    }
+
+    public function test_an_attribute_ng_claim_counts_as_a_defect(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+
+        $ng = $this->pieceRows($inspection, 'Flash height')->firstOrFail();
+
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$ng->id => ['measured_value' => null, 'is_pass' => false]],
+            $this->user,
+        );
+
+        $this->assertFalse($ng->fresh()->is_pass);
+        $this->assertSame(1, (int) $inspection->fresh()->defect_count);
+    }
+
+    public function test_a_reading_decides_over_a_contradicting_client_claim(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+
+        $row = $this->pieceRows($inspection, 'Flash height')->firstOrFail();
+
+        // A client asserting a pass over an out-of-tolerance reading cannot
+        // write a forged record: the value decides.
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$row->id => ['measured_value' => '9.0000', 'is_pass' => true]],
+            $this->user,
+        );
+
+        $stored = $row->fresh();
+        $this->assertFalse($stored->is_pass);
+        $this->assertSame('9.0000', (string) $stored->measured_value);
+    }
+
+    /** A CTQ is measured, not asserted: the rejection survives for critical rows. */
+    public function test_a_critical_reading_still_refuses_a_contradicting_claim(): void
+    {
+        $inspection = $this->outgoingInspection(batch: 2000);
+        $row = $this->pieceRows($inspection, 'Shaft OD')->firstOrFail();
+
+        $this->expectException(BusinessRuleException::class);
+
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$row->id => ['measured_value' => '10.0000', 'is_pass' => false]],
+            $this->user,
+        );
+    }
+
+    public function test_an_unanswered_row_still_blocks_completion(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+
+        $unanswered = $this->pieceRows($inspection, 'Flash height')->firstOrFail();
+
+        DB::table('inspection_measurements')
+            ->where('inspection_id', $inspection->id)
+            ->where('id', '!=', $unanswered->id)
+            ->update(['is_pass' => true, 'measured_value' => '10.0000']);
+
+        $inspection->forceFill(['sample_defect_count' => 0])->save();
+
+        $this->assertNull($unanswered->fresh()->is_pass, 'Nothing resolved the row.');
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('no pass/fail recorded');
+
+        $this->svc->complete($inspection->fresh(), $this->user);
+    }
+
+    /** The payload the capture panel sends when a dimension is ticked. */
+    private function lotPayload(Inspection $inspection): array
+    {
+        $measurements = [];
+        foreach ($inspection->measurements as $row) {
+            if (! $row->hasTolerance()) {
+                continue;
+            }
+            $measurements[] = $row->is_critical
+                // A CTQ keeps its measured reading.
+                ? ['id' => $row->hash_id, 'measured_value' => '10.0000', 'is_pass' => null]
+                // The ticked dimension: the claim, and no value.
+                : ['id' => $row->hash_id, 'measured_value' => null, 'is_pass' => true];
+        }
+
+        $checklist = $inspection->measurements
+            ->reject(fn ($r) => $r->hasTolerance())
+            ->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])
+            ->values()
+            ->all();
+
+        return [
+            'checklist' => $checklist,
+            'measurements' => $measurements,
+            'sample_defect_count' => 0,
+            'complete' => true,
+        ];
+    }
+
+    /** The same payload as a service-level row map. */
+    private function tickPatch(Inspection $inspection): array
+    {
+        $patch = [];
+        foreach ($inspection->measurements as $row) {
+            $patch[$row->id] = $row->hasTolerance()
+                ? ($row->is_critical
+                    ? ['measured_value' => '10.0000', 'is_pass' => null]
+                    : ['measured_value' => null, 'is_pass' => true])
+                : ['is_pass' => true];
+        }
+
+        return $patch;
+    }
+
+    /** @return \Illuminate\Support\Collection<int, InspectionMeasurement> */
+    private function pieceRows(Inspection $inspection, string $parameter): \Illuminate\Support\Collection
+    {
+        return InspectionMeasurement::query()
+            ->where('inspection_id', $inspection->id)
+            ->where('parameter_name', $parameter)
+            ->get();
+    }
+
+    /** A non-critical toleranced dimension: the case a tick answers with no reading. */
+    private function addNonCriticalPieceParameter(): void
+    {
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $this->spec->id,
+            'parameter_name' => 'Flash height',
+            'parameter_type' => 'dimensional',
+            'unit_of_measure' => 'mm',
+            'nominal_value' => '0.5000',
+            'tolerance_min' => '0.4000',
+            'tolerance_max' => '0.6000',
+            'is_critical' => false,
+            'sort_order' => 3,
+        ]);
+        $this->spec->ensureCurrentRevision();
     }
 
     /**
