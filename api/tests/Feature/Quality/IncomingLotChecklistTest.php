@@ -78,6 +78,10 @@ use Tests\TestCase;
  * 12. test_receive_with_qc_single_screen_works_on_lot_checklist
  *     – GrnService::receiveWithQc() → GrnService::fastCompleteInspection()
  *     sets sample_defect_count = 0 on lot_checklist before complete().
+ *
+ * 13. test_measured_pieces_* – the piece-row count comes from the
+ *     stage-agnostic quality.inspection.measured_pieces setting, falling back
+ *     to the legacy quality.incoming.measured_pieces, then to 5.
  */
 class IncomingLotChecklistTest extends TestCase
 {
@@ -529,5 +533,98 @@ class IncomingLotChecklistTest extends TestCase
         $this->assertSame(InspectionStatus::AwaitingReview, $completed->status);
         $completed = $this->review($completed, InspectionStatus::Passed->value);
         $this->assertSame(InspectionStatus::Passed, $completed->status);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Tests: measured-piece setting
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public function test_measured_pieces_comes_from_the_new_stage_agnostic_setting(): void
+    {
+        $this->setSetting('quality.inspection.measured_pieces', 3);
+        $this->setSetting('quality.incoming.measured_pieces', 5);
+
+        $inspection = $this->inspectionWithOneTolerancedParameter();
+
+        $this->assertSame(
+            3,
+            $inspection->measurements->whereNotNull('tolerance_min')->count(),
+            'The stage-agnostic setting must win over the legacy incoming-only key.',
+        );
+    }
+
+    public function test_measured_pieces_falls_back_to_the_legacy_incoming_key(): void
+    {
+        $this->setSetting('quality.inspection.measured_pieces', null);
+        $this->setSetting('quality.incoming.measured_pieces', 2);
+
+        $inspection = $this->inspectionWithOneTolerancedParameter();
+
+        $this->assertSame(2, $inspection->measurements->whereNotNull('tolerance_min')->count());
+    }
+
+    public function test_measured_pieces_falls_back_to_five_when_neither_key_is_set(): void
+    {
+        $this->setSetting('quality.inspection.measured_pieces', null);
+        $this->setSetting('quality.incoming.measured_pieces', null);
+
+        $inspection = $this->inspectionWithOneTolerancedParameter();
+
+        $this->assertSame(5, $inspection->measurements->whereNotNull('tolerance_min')->count());
+    }
+
+    /** Writes a settings row directly; null deletes it. */
+    private function setSetting(string $key, ?int $value): void
+    {
+        \Illuminate\Support\Facades\DB::table('settings')->where('key', $key)->delete();
+
+        if ($value !== null) {
+            \Illuminate\Support\Facades\DB::table('settings')->insert([
+                'key' => $key,
+                'value' => json_encode($value),
+                'group' => 'quality',
+                'label' => $key,
+                'description' => 'Test override.',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Cache::flush();
+    }
+
+    /**
+     * A plan with a single toleranced parameter, so the piece-row count is
+     * exactly the measured-piece setting.
+     */
+    private function inspectionWithOneTolerancedParameter(): Inspection
+    {
+        $plan = ItemQualityPlan::query()->create([
+            'item_id' => $this->item->id,
+            'vendor_id' => null,
+            'version' => 1,
+            'stage' => 'incoming',
+            'sampling_method' => 'aql',
+            'is_active' => true,
+            'effective_from' => now()->toDateString(),
+            'created_by' => $this->user->id,
+            'parameters' => [
+                [
+                    'parameter_name' => 'Diameter',
+                    'parameter_type' => 'dimensional',
+                    'unit_of_measure' => 'mm',
+                    'nominal_value' => '10.00',
+                    'tolerance_min' => '9.90',
+                    'tolerance_max' => '10.10',
+                    'is_critical' => true,
+                ],
+            ],
+        ]);
+
+        $grn = $this->createGrnWith($this->item, 100);
+        $grnItem = $grn->items()->first();
+        Inspection::query()->where('grn_item_id', $grnItem->id)->delete();
+
+        return $this->inspSvc->createIncomingFromPlan($plan, $grnItem, $grn, $this->user);
     }
 }

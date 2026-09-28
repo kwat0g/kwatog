@@ -283,7 +283,7 @@ class InspectionService
             // For lot-checklist mode: split parameters into checklist (no tolerance)
             // and piece rows (with tolerance).
             $timestamp = now()->toDateTimeString();
-            $measuredPieces = $this->settings->requiredInt('quality.incoming.measured_pieces', 1, 1000);
+            $measuredPieces = $this->measuredPieces();
             $checklistRows = [];
             $pieceRows = [];
 
@@ -1071,6 +1071,34 @@ class InspectionService
         }
 
         return $batchQuantity;
+    }
+
+    /**
+     * Pieces measured per toleranced parameter in a lot-checklist inspection.
+     *
+     * The single reader of both keys: the stage-agnostic setting, falling back
+     * to its incoming-only predecessor for one release. Resolving here rather
+     * than at each call site keeps the two keys from being read inconsistently.
+     */
+    private function measuredPieces(): int
+    {
+        $value = $this->settings->get('quality.inspection.measured_pieces')
+            ?? $this->settings->get('quality.incoming.measured_pieces');
+
+        if ($value === null) {
+            return 5;
+        }
+
+        if (! is_numeric($value) || (int) $value != (float) $value) {
+            throw new BusinessRuleException('Required setting quality.inspection.measured_pieces is missing or invalid.');
+        }
+
+        $pieces = (int) $value;
+        if ($pieces < 1 || $pieces > 1000) {
+            throw new BusinessRuleException('Required setting quality.inspection.measured_pieces is outside its valid range.');
+        }
+
+        return $pieces;
     }
 
     private function attachEntityContext(Inspection $inspection): Inspection
