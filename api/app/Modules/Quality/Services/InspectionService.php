@@ -280,65 +280,23 @@ class InspectionService
                 'notes' => "Quality plan v{$qualityPlan->version}; GRN {$grn->grn_number}.",
             ]);
 
-            // For lot-checklist mode: split parameters into checklist (no tolerance)
-            // and piece rows (with tolerance).
-            $timestamp = now()->toDateTimeString();
-            $measuredPieces = $this->measuredPieces();
-            $checklistRows = [];
-            $pieceRows = [];
+            $parameters = [];
 
             foreach ((array) $qualityPlan->parameters as $parameter) {
-                $hasToler = isset($parameter['tolerance_min']) && isset($parameter['tolerance_max']);
-                if (! $hasToler) {
-                    // Checklist row: sample_index = 1 only.
-                    $checklistRows[] = [
-                        'inspection_id' => $inspection->id,
-                        'inspection_spec_item_id' => null,
-                        'sample_index' => 1,
-                        'parameter_name' => $parameter['parameter_name'],
-                        'parameter_type' => $parameter['parameter_type'],
-                        'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
-                        'nominal_value' => $parameter['nominal_value'] ?? null,
-                        'tolerance_min' => null,
-                        'tolerance_max' => null,
-                        'measured_value' => null,
-                        'is_critical' => (bool) ($parameter['is_critical'] ?? false),
-                        'is_pass' => null,
-                        'notes' => $parameter['notes'] ?? null,
-                        'created_at' => $timestamp,
-                        'updated_at' => $timestamp,
-                    ];
-                } else {
-                    // Piece rows: sample_index = 1..min(measured_pieces, sample_size).
-                    for ($sampleIndex = 1; $sampleIndex <= min($measuredPieces, $sampleSize); $sampleIndex++) {
-                        $pieceRows[] = [
-                            'inspection_id' => $inspection->id,
-                            'inspection_spec_item_id' => null,
-                            'sample_index' => $sampleIndex,
-                            'parameter_name' => $parameter['parameter_name'],
-                            'parameter_type' => $parameter['parameter_type'],
-                            'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
-                            'nominal_value' => $parameter['nominal_value'] ?? null,
-                            'tolerance_min' => $parameter['tolerance_min'] ?? null,
-                            'tolerance_max' => $parameter['tolerance_max'] ?? null,
-                            'measured_value' => null,
-                            'is_critical' => (bool) ($parameter['is_critical'] ?? false),
-                            'is_pass' => null,
-                            'notes' => $parameter['notes'] ?? null,
-                            'created_at' => $timestamp,
-                            'updated_at' => $timestamp,
-                        ];
-                    }
-                }
+                $parameters[] = [
+                    'parameter_name' => trim((string) ($parameter['parameter_name'] ?? '')),
+                    'parameter_type' => $parameter['parameter_type'],
+                    'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
+                    'nominal_value' => $parameter['nominal_value'] ?? null,
+                    'tolerance_min' => $parameter['tolerance_min'] ?? null,
+                    'tolerance_max' => $parameter['tolerance_max'] ?? null,
+                    'is_critical' => (bool) ($parameter['is_critical'] ?? false),
+                    'notes' => $parameter['notes'] ?? null,
+                    'inspection_spec_item_id' => null,
+                ];
             }
 
-            $allRows = array_merge($checklistRows, $pieceRows);
-            if ($allRows !== []) {
-                // Batch insert to avoid OOM on large sets.
-                foreach (array_chunk($allRows, 500) as $batch) {
-                    InspectionMeasurement::query()->insert($batch);
-                }
-            }
+            $this->scaffoldLotChecklist($inspection, $parameters, $this->measuredPieces());
 
             GoodsReceiptNote::query()->whereKey($grn->id)->whereNull('qc_inspection_id')
                 ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
@@ -1029,6 +987,69 @@ class InspectionService
 
             return $this->show($lockedInspection->fresh());
         });
+    }
+
+    /**
+     * Scaffold a lot-checklist inspection.
+     *
+     * One checklist row (sample_index = 1, no tolerance bounds) for every
+     * parameter with no tolerance band, and `$measuredPieces` piece rows
+     * (sample_index 1..N, with bounds) for every parameter that has one. The
+     * split is not cosmetic: InspectionService::recordLotResult() rejects a
+     * checklist row carrying bounds and a piece row lacking them, so the shape
+     * written here is the shape the recording endpoint accepts.
+     *
+     * @param  iterable<array{parameter_name: string, parameter_type: string, unit_of_measure: ?string, nominal_value: mixed, tolerance_min: mixed, tolerance_max: mixed, is_critical: bool, notes: ?string, inspection_spec_item_id: ?int}>  $parameters
+     *
+     * @throws BusinessRuleException when nothing usable was supplied — an
+     *         inspection with no rows cannot be completed later.
+     */
+    private function scaffoldLotChecklist(Inspection $inspection, iterable $parameters, int $measuredPieces): void
+    {
+        $timestamp = now()->toDateTimeString();
+        $rows = [];
+
+        foreach ($parameters as $parameter) {
+            $name = trim((string) ($parameter['parameter_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $hasTolerance = $parameter['tolerance_min'] !== null && $parameter['tolerance_max'] !== null;
+            $sampleIndices = $hasTolerance
+                ? range(1, min($measuredPieces, max(1, (int) $inspection->sample_size)))
+                : [1];
+
+            foreach ($sampleIndices as $sampleIndex) {
+                $rows[] = [
+                    'inspection_id' => $inspection->id,
+                    'inspection_spec_item_id' => $parameter['inspection_spec_item_id'] ?? null,
+                    'sample_index' => $sampleIndex,
+                    'parameter_name' => $name,
+                    'parameter_type' => $parameter['parameter_type'],
+                    'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
+                    'nominal_value' => $parameter['nominal_value'] ?? null,
+                    'tolerance_min' => $hasTolerance ? $parameter['tolerance_min'] : null,
+                    'tolerance_max' => $hasTolerance ? $parameter['tolerance_max'] : null,
+                    'measured_value' => null,
+                    'is_critical' => (bool) ($parameter['is_critical'] ?? false),
+                    'is_pass' => null,
+                    'notes' => $parameter['notes'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+        }
+
+        if ($rows === []) {
+            throw new BusinessRuleException(
+                'Lot checklist inspection requires at least one inspectable parameter.'
+            );
+        }
+
+        foreach (array_chunk($rows, 500) as $batch) {
+            InspectionMeasurement::query()->insert($batch);
+        }
     }
 
     /**
