@@ -132,7 +132,11 @@ Design:
   - `defects > accept_count` → refuse — both modes, replacing the blanket `failing > 0`.
   - `per_unit` only: keep "fewer sampled units than `sample_size`" → refuse.
   - `lot_checklist` only: `sample_defect_count` must be recorded (the certificate's own
-    sample claim must exist) and at least one piece row must carry a `measured_value`.
+    sample claim must exist), and if the inspection has any tolerance-bearing piece rows,
+    every one of them must carry a `measured_value`. A spec with no toleranced parameter
+    produces no piece rows and therefore carries no extra requirement — requiring "at least
+    one measured value" would have made certificates permanently unissuable for an
+    all-visual spec.
 
 Because every reachable certificate comes from a `passed` inspection
 (`assertEligible()` requires it), the per_mode formulas can only differ where the modes'
