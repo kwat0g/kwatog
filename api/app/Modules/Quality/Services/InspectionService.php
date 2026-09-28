@@ -423,13 +423,24 @@ class InspectionService
             $reject = 1;
         }
 
+        // Counting the sample instead of enumerating it is the point: the AQL
+        // sample is inspected visually for defectives, and only a few pieces are
+        // measured. Legacy rows keep the per-unit matrix; nothing new creates one.
+        $lotChecklist = in_array(
+            $stage,
+            [InspectionStage::Incoming, InspectionStage::InProcess, InspectionStage::Outgoing],
+            true,
+        );
+        $measuredPieces = $lotChecklist ? $this->measuredPieces() : 0;
+
         return DB::transaction(function () use (
-            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output, $calibrationRecordId
+            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output, $calibrationRecordId, $lotChecklist, $measuredPieces
         ) {
             $insp = Inspection::query()->create([
                 'inspection_number' => $this->sequences->generate('inspection'),
                 'stage' => $stage->value,
                 'status' => InspectionStatus::Draft->value,
+                'inspection_mode' => ($lotChecklist ? InspectionMode::LotChecklist : InspectionMode::PerUnit)->value,
                 'product_id' => $product->id,
                 'inspection_spec_id' => $spec->id,
                 'inspection_spec_revision_id' => $spec->currentRevision?->id,
@@ -449,32 +460,53 @@ class InspectionService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // Seed one measurement row per (sample × spec_item) without
-            // retaining the complete matrix in memory for a large lot.
-            $this->insertScaffoldRows(
-                $insp->id,
-                $sample,
-                $spec->items,
-                static function (int $sampleIndex, InspectionSpecItem $item, int $inspectionId, string $timestamp): array {
-                    return [
-                        'inspection_id' => $inspectionId,
-                        'inspection_spec_item_id' => $item->id,
-                        'sample_index' => $sampleIndex,
-                        'parameter_name' => $item->parameter_name,
+            if ($lotChecklist) {
+                $parameters = [];
+
+                foreach ($spec->items as $item) {
+                    $parameters[] = [
+                        'parameter_name' => trim((string) $item->parameter_name),
                         'parameter_type' => $item->parameter_type->value,
                         'unit_of_measure' => $item->unit_of_measure,
                         'nominal_value' => $item->nominal_value,
                         'tolerance_min' => $item->tolerance_min,
                         'tolerance_max' => $item->tolerance_max,
-                        'measured_value' => null,
-                        'is_critical' => $item->is_critical,
-                        'is_pass' => null,
+                        'is_critical' => (bool) $item->is_critical,
                         'notes' => null,
-                        'created_at' => $timestamp,
-                        'updated_at' => $timestamp,
+                        'inspection_spec_item_id' => (int) $item->id,
                     ];
-                },
-            );
+                }
+
+                $this->scaffoldLotChecklist($insp, $parameters, $measuredPieces);
+            } else {
+                // Legacy per-unit matrix: one row per (sample × spec_item),
+                // inserted in bounded batches without holding the whole matrix
+                // in memory for a large lot. Nothing new creates one.
+                $this->insertScaffoldRows(
+                    $insp->id,
+                    $sample,
+                    $spec->items,
+                    static function (int $sampleIndex, InspectionSpecItem $item, int $inspectionId, string $timestamp): array {
+                        return [
+                            'inspection_id' => $inspectionId,
+                            'inspection_spec_item_id' => $item->id,
+                            'sample_index' => $sampleIndex,
+                            'parameter_name' => $item->parameter_name,
+                            'parameter_type' => $item->parameter_type->value,
+                            'unit_of_measure' => $item->unit_of_measure,
+                            'nominal_value' => $item->nominal_value,
+                            'tolerance_min' => $item->tolerance_min,
+                            'tolerance_max' => $item->tolerance_max,
+                            'measured_value' => null,
+                            'is_critical' => $item->is_critical,
+                            'is_pass' => null,
+                            'notes' => null,
+                            'created_at' => $timestamp,
+                            'updated_at' => $timestamp,
+                        ];
+                    },
+                );
+            }
 
             // Back-link the inspection onto the gated entity so that
             // downstream services (GRN accept gate, delivery release gate)

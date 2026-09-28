@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Enums;
 
 /**
- * Sprint X — Incoming QC lot-checklist mode.
+ * How an inspection's measurement rows are scaffolded.
  *
- * per_unit           — scaffold sample_size × parameters rows (default, all inspection types)
- * lot_checklist      — scaffold checklist rows + measured_pieces piece rows (incoming only)
+ * lot_checklist      — checklist rows for untoleranced parameters plus a few
+ *                      measured piece rows per toleranced parameter; the AQL
+ *                      sample is counted, not enumerated. Default for the three
+ *                      non-final stages: incoming, in-process and outgoing.
+ * per_unit           — scaffold sample_size × parameters rows, one per sampled
+ *                      unit. Legacy rows only; nothing new creates one.
  */
 enum InspectionMode: string
 {

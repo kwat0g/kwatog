@@ -263,6 +263,36 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
     }
 
+    /**
+     * The per-unit half of the same rule: a failed NON-critical row inside the
+     * acceptance number is a pass, so the certificate stands. Every other
+     * failing-row fixture in this file sets `is_critical => true`, which is why
+     * the critical-only reading of the rule went unchallenged.
+     */
+    public function test_a_per_unit_lot_with_a_non_critical_failure_inside_acceptance_is_certified(): void
+    {
+        $inspection = $this->fabricatePassedOutgoing(batch: 3, sample: 3, acceptCount: 1);
+        // Resolved, non-critical, and failed: one defect against Ac 1.
+        $this->fabricateMeasurement($inspection, 1, '3.0000', false, isCritical: false);
+        $this->fabricateMeasurement($inspection, 2, '10.0000', true);
+        $this->fabricateMeasurement($inspection, 3, '10.0000', true);
+
+        $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
+
+        $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    public function test_a_per_unit_lot_with_a_non_critical_failure_beyond_acceptance_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedOutgoing(batch: 3, sample: 3, acceptCount: 0);
+        // The same one defect, now outside a zero acceptance number.
+        $this->fabricateMeasurement($inspection, 1, '3.0000', false, isCritical: false);
+        $this->fabricateMeasurement($inspection, 2, '10.0000', true);
+        $this->fabricateMeasurement($inspection, 3, '10.0000', true);
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+    }
+
     private function assertCertificateRefused(Inspection $inspection, string $expectedCode): void
     {
         try {
@@ -303,6 +333,15 @@ class CoCEvidenceIntegrityTest extends TestCase
         }
         $this->svc->recordMeasurements($inspection, $patch, $this->user);
 
+        // Lot-checklist inspections cannot complete without a reported count.
+        // Zero is correct here and is not an attestation shortcut: this helper
+        // has just written an in-tolerance reading to every measured piece.
+        $inspection = $inspection->fresh();
+        if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
+            $inspection->forceFill(['sample_defect_count' => 0])->save();
+            $inspection = $inspection->fresh();
+        }
+
         $completed = $this->svc->complete($inspection->fresh(), $this->user);
         return $completed->status === InspectionStatus::AwaitingReview
             ? $this->svc->review($completed, InspectionStatus::Passed->value, null, $this->reviewer)
@@ -315,7 +354,7 @@ class CoCEvidenceIntegrityTest extends TestCase
      * task can write today — it is the threat the guard exists for, not a
      * convenience shortcut.
      */
-    private function fabricatePassedOutgoing(int $batch, int $sample): Inspection
+    private function fabricatePassedOutgoing(int $batch, int $sample, int $acceptCount = 1): Inspection
     {
         $inspection = Inspection::query()->create([
             'inspection_number' => 'QC-F-'.substr(uniqid(), -7),
@@ -325,8 +364,8 @@ class CoCEvidenceIntegrityTest extends TestCase
             'inspection_spec_id' => $this->spec->id,
             'batch_quantity' => $batch,
             'sample_size' => $sample,
-            'accept_count' => 1,
-            'reject_count' => 2,
+            'accept_count' => $acceptCount,
+            'reject_count' => $acceptCount + 1,
             'defect_count' => 0,
             'inspector_id' => $this->user->id,
             'started_at' => now(),
@@ -346,6 +385,7 @@ class CoCEvidenceIntegrityTest extends TestCase
         int $sampleIndex,
         ?string $measured,
         ?bool $isPass,
+        bool $isCritical = true,
     ): InspectionMeasurement {
         return InspectionMeasurement::query()->create([
             'inspection_id' => $inspection->id,
@@ -357,7 +397,7 @@ class CoCEvidenceIntegrityTest extends TestCase
             'tolerance_min' => '9.9000',
             'tolerance_max' => '10.1000',
             'measured_value' => $measured,
-            'is_critical' => true,
+            'is_critical' => $isCritical,
             'is_pass' => $isPass,
         ]);
     }
