@@ -213,9 +213,9 @@ class CoCService
      *   - defects above the acceptance number        → ditto
      *   - fewer sampled units than `sample_size`     → per-unit mode only; a
      *     lot-checklist sample is counted, not enumerated
-     *   - no reported sample_defect_count, or an unmeasured dimension
-     *     (lot-checklist mode)                       → the certificate's own
-     *     sample claim has no evidence behind it
+     *   - no reported sample_defect_count (lot-checklist only), or a toleranced
+     *     critical characteristic with no reading (any mode) → the certificate's
+     *     own sample claim has no evidence behind it
      *
      * Verified rather than trusted: this method re-reads the rows instead of
      * relying on `defect_count`, which is a snapshot taken at completion and
@@ -261,34 +261,39 @@ class CoCService
             );
         }
 
+        if ($inspection->inspection_mode === InspectionMode::LotChecklist
+            && $inspection->sample_defect_count === null) {
+            throw new InspectionCertificateException(
+                'CoC requires the number of defective pieces found in the sample to be recorded.',
+                'COC_EVIDENCE_INCOMPLETE',
+            );
+        }
+
+        // A toleranced critical characteristic is a CTQ, and IATF wants variable
+        // data on it: a toleranced critical characteristic with no number is an
+        // unbacked claim. The rule spans every mode — a per-unit row asserts
+        // exactly what a counted-lot row asserts, and a guard whose own docblock
+        // exists to catch records that did not go through the service cannot
+        // depend on the service having been used. An *untoleranced* critical row
+        // is a legitimate attribute record (a visual pass/fail check with no
+        // number), and a non-critical characteristic may be recorded as
+        // conforming by attribute — which is what the capture panel does — so
+        // the rule keeps its criticality condition and counts toleranced rows.
+        $unmeasured = $rows
+            ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance() && $row->is_critical)
+            ->filter(static fn (InspectionMeasurement $row): bool => $row->measured_value === null)
+            ->count();
+
+        if ($unmeasured > 0) {
+            throw new InspectionCertificateException(
+                "CoC requires every critical characteristic to carry a reading; {$unmeasured} row(s) have none.",
+                'COC_EVIDENCE_INCOMPLETE',
+            );
+        }
+
+        // Everything above is mode-independent except the counted-sample check;
+        // the rules that follow judge an enumerated per-unit sample.
         if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
-            // The certificate declares a sample that was counted, not
-            // enumerated, so the count itself is the evidence of that sample —
-            // and any dimension actually measured must carry its reading.
-            if ($inspection->sample_defect_count === null) {
-                throw new InspectionCertificateException(
-                    'CoC requires the number of defective pieces found in the sample to be recorded.',
-                    'COC_EVIDENCE_INCOMPLETE',
-                );
-            }
-
-            // A critical characteristic is a CTQ, and IATF wants variable data
-            // on it: a CTQ with no number is an unbacked claim. A non-critical
-            // characteristic may legitimately be recorded as conforming by
-            // attribute — ticked, no reading — which is what the capture panel
-            // does, so the rule applies to critical rows only.
-            $unmeasured = $rows
-                ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance() && $row->is_critical)
-                ->filter(static fn (InspectionMeasurement $row): bool => $row->measured_value === null)
-                ->count();
-
-            if ($unmeasured > 0) {
-                throw new InspectionCertificateException(
-                    "CoC requires every measured dimension to carry a reading; {$unmeasured} piece row(s) have none.",
-                    'COC_EVIDENCE_INCOMPLETE',
-                );
-            }
-
             return;
         }
 

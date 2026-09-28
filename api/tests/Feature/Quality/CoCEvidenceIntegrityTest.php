@@ -342,6 +342,40 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
     }
 
+    /**
+     * The same rule in `per_unit` mode, where the guard had no null-reading
+     * clause at all: only `is_pass === null` was refused, so a critical
+     * toleranced row carrying `is_pass: true` with no reading whatsoever
+     * issued a certificate.
+     *
+     * The row is not reachable through the service — `recordMeasurements`
+     * refuses a client-supplied claim on a toleranced row when `evaluate()`
+     * returns null — but the guard exists precisely for rows that did not go
+     * through the service (imports, seeds, repair scripts), so it cannot rely
+     * on the service having been used. The threat is an inconsistent database,
+     * not a hostile inspector.
+     */
+    public function test_a_per_unit_lot_with_a_critical_row_without_a_reading_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedOutgoing(batch: 1, sample: 1);
+        $this->fabricateMeasurement($inspection, 1, null, true, isCritical: true);
+
+        $rows = $inspection->fresh()->measurements;
+        $this->assertCount(1, $rows, 'Precondition: exactly one row exists to be judged.');
+        $this->assertSame(
+            InspectionMode::PerUnit,
+            $inspection->fresh()->inspection_mode,
+            'Precondition: this is the per-unit shape, not a counted lot checklist.',
+        );
+        $row = $rows->first();
+        $this->assertTrue($row->hasTolerance(), 'Precondition: the row carries bounds, so the null-reading rule applies to its shape.');
+        $this->assertTrue($row->is_critical, 'Precondition: the row is critical.');
+        $this->assertNull($row->measured_value, 'Precondition: the row carries no reading.');
+        $this->assertTrue($row->is_pass, 'Precondition: the row was ticked as conforming.');
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_INCOMPLETE');
+    }
+
     private function assertCertificateRefused(Inspection $inspection, string $expectedCode): void
     {
         try {

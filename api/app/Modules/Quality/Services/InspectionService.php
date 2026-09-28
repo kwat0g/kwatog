@@ -1070,7 +1070,7 @@ class InspectionService
                 continue;
             }
 
-            $hasTolerance = $parameter['tolerance_min'] !== null && $parameter['tolerance_max'] !== null;
+            $hasTolerance = $parameter['tolerance_min'] !== null || $parameter['tolerance_max'] !== null;
             $sampleIndices = $hasTolerance
                 ? range(1, min($measuredPieces, max(1, (int) $inspection->sample_size)))
                 : [1];

@@ -7,21 +7,28 @@ namespace Tests\Feature\Quality;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
+use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
 use App\Modules\Quality\Models\NonConformanceReport;
+use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -508,6 +515,103 @@ class IncomingLotChecklistTest extends TestCase
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Tests: one-sided tolerance windows
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * A functional parameter with a nominal must carry at least ONE tolerance
+     * bound (UpsertInspectionSpecRequest), so a one-sided window is a shape the
+     * spec form compels a user to produce. `InspectionMeasurement::hasTolerance`
+     * and `evaluate()` both treat either bound as a window, and the per-unit
+     * scaffold copies both bounds verbatim. The lot-checklist scaffold demanded
+     * BOTH and so wrote the supplied bound as null — the row lost the very
+     * number the user was required to give, became untoleranced, and (being
+     * untoleranced) was certifiable with no reading forever after.
+     */
+    public function test_a_one_bound_functional_parameter_keeps_the_bound_the_user_had_to_supply(): void
+    {
+        $inspection = $this->inspectionWithOneOneBoundFunctionalParameter();
+
+        $rows = $inspection->measurements;
+        $this->assertNotEmpty($rows, 'Precondition: the scaffold produced rows for the parameter.');
+
+        $row = $rows->first();
+        $this->assertTrue($row->is_critical, 'Precondition: the parameter is critical.');
+        $this->assertNotNull($row->nominal_value, 'Precondition: the parameter carries a nominal.');
+        $this->assertNull($row->tolerance_max, 'Precondition: the window is one-sided — no upper bound was supplied.');
+        $this->assertSame(
+            '90.0000',
+            (string) $row->tolerance_min,
+            'The bound the user was required to supply must survive the scaffold.',
+        );
+        $this->assertTrue(
+            $row->hasTolerance(),
+            'One bound is a tolerance: that is what InspectionMeasurement::hasTolerance() means by it.',
+        );
+
+        // The second-order effect, and it is intended: a parameter with a
+        // numeric window is a variable characteristic, so it takes the variable
+        // sample the default measured-pieces setting gives it — the same shape
+        // a dimensional parameter scaffolds — instead of a single checklist row.
+        $this->assertSame(5, $rows->count(), 'A numeric window scaffolds measuredPieces piece rows.');
+        $this->assertSame(
+            [1, 2, 3, 4, 5],
+            $rows->pluck('sample_index')->unique()->sort()->values()->all(),
+        );
+        $this->assertTrue($rows->every(fn ($r) => $r->tolerance_min !== null));
+    }
+
+    /**
+     * The consequence of that data loss, stated as the certificate rule: an
+     * untoleranced critical row is a legitimate attribute record and certifies
+     * with no number — which is exactly why a lost bound made a toleranced
+     * characteristic certifiable with no evidence. Once the bound survives, the
+     * row is toleranced and the null-reading refusal applies to it.
+     *
+     * Outgoing rather than incoming because a certificate is only issued for
+     * the outgoing stage.
+     */
+    public function test_a_one_bound_critical_characteristic_cannot_be_certified_without_a_reading(): void
+    {
+        $inspection = $this->outgoingInspectionWithOneOneBoundCriticalCharacteristic();
+
+        $rows = $inspection->measurements;
+        $this->assertNotEmpty($rows, 'Precondition: the scaffold produced rows for the parameter.');
+        $this->assertTrue($rows->every(fn ($r) => $r->is_critical), 'Precondition: the parameter is critical.');
+        $this->assertTrue(
+            $rows->every(fn ($r) => $r->tolerance_min !== null),
+            'Precondition: the one supplied bound survived the scaffold.',
+        );
+
+        // The capture surface records the sample as defect-free and ticks each
+        // row conforming; this is the shape an import or repair script writes.
+        foreach ($rows as $row) {
+            $row->forceFill(['is_pass' => true])->save();
+        }
+        $inspection->forceFill([
+            'sample_defect_count' => 0,
+            'status' => InspectionStatus::Passed->value,
+            'completed_at' => now(),
+            'reviewed_by' => $this->checker->id,
+            'reviewed_at' => now(),
+        ])->save();
+
+        $fresh = $inspection->fresh();
+        $this->assertSame(
+            0,
+            $fresh->measurements->whereNotNull('measured_value')->count(),
+            'Precondition: not one piece was measured.',
+        );
+
+        try {
+            app(CoCService::class)->buildBinaryForInspection($fresh);
+            $this->fail('A Certificate of Conformance was issued for a critical characteristic with no reading.');
+        } catch (InspectionCertificateException $e) {
+            $this->assertSame('COC_EVIDENCE_INCOMPLETE', $e->errorCode(), $e->getMessage());
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Tests: Integration
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -626,5 +730,95 @@ class IncomingLotChecklistTest extends TestCase
         Inspection::query()->where('grn_item_id', $grnItem->id)->delete();
 
         return $this->inspSvc->createIncomingFromPlan($plan, $grnItem, $grn, $this->user);
+    }
+
+    /**
+     * The one-sided window a functional parameter with a nominal is compelled
+     * to carry: nominal 100, minimum 90, no maximum.
+     */
+    private function inspectionWithOneOneBoundFunctionalParameter(): Inspection
+    {
+        $plan = ItemQualityPlan::query()->create([
+            'item_id' => $this->item->id,
+            'vendor_id' => null,
+            'version' => 1,
+            'stage' => 'incoming',
+            'sampling_method' => 'aql',
+            'is_active' => true,
+            'effective_from' => now()->toDateString(),
+            'created_by' => $this->user->id,
+            'parameters' => [
+                [
+                    'parameter_name' => 'Sealing force',
+                    'parameter_type' => 'functional',
+                    'unit_of_measure' => 'N',
+                    'nominal_value' => '100.00',
+                    'tolerance_min' => '90.00',
+                    'is_critical' => true,
+                ],
+            ],
+        ]);
+
+        $grn = $this->createGrnWith($this->item, 100);
+        $grnItem = $grn->items()->first();
+        Inspection::query()->where('grn_item_id', $grnItem->id)->delete();
+
+        return $this->inspSvc->createIncomingFromPlan($plan, $grnItem, $grn, $this->user);
+    }
+
+    /**
+     * The same one-sided window on an outgoing inspection, whose scaffold runs
+     * through the same `scaffoldLotChecklist()` from the product's spec.
+     */
+    private function outgoingInspectionWithOneOneBoundCriticalCharacteristic(): Inspection
+    {
+        $product = Product::create([
+            'part_number' => 'ONEB-'.substr(uniqid(), -6),
+            'name' => 'One-Bound Bushing',
+            'unit_of_measure' => 'pcs',
+            'standard_cost' => '10.00',
+            'is_active' => true,
+        ]);
+
+        $spec = InspectionSpec::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $this->user->id,
+        ]);
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Sealing force',
+            'parameter_type' => 'functional',
+            'unit_of_measure' => 'N',
+            'nominal_value' => '100.0000',
+            'tolerance_min' => '90.0000',
+            'tolerance_max' => null,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
+        $spec->ensureCurrentRevision();
+
+        $so = SalesOrder::factory()->create();
+        $wo = WorkOrder::factory()->create([
+            'product_id' => $product->id,
+            'sales_order_id' => $so->id,
+            'quantity_target' => 10,
+        ]);
+        $output = WorkOrderOutput::create([
+            'work_order_id' => $wo->id,
+            'batch_code' => 'CB-'.substr(uniqid(), -6),
+            'good_count' => 10,
+            'reject_count' => 0,
+            'recorded_at' => now(),
+            'recorded_by' => $this->user->id,
+        ]);
+
+        return $this->inspSvc->create([
+            'stage' => InspectionStage::Outgoing->value,
+            'product_id' => $product->id,
+            'batch_quantity' => 10,
+            'work_order_output_id' => $output->id,
+        ], $this->user);
     }
 }
