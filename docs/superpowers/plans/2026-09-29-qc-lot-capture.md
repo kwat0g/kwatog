@@ -53,7 +53,12 @@ Task order matters once. **Task 5 (the certificate guard) must land before Task 
   docker compose exec -T db psql -U ogami -d postgres -c "CREATE DATABASE ogami_test_verify OWNER ogami;"
   docker compose exec -T -e DB_DATABASE=ogami_test_verify api php artisan test --filter='<pattern>'
   ```
-- SPA verification for every frontend task: `cd spa && npx tsc --noEmit && npx vitest run <path>`.
+- SPA verification for every frontend task runs **in the `spa` container**, matching `make test` and `make analyse` — host and container have separate `node_modules` volumes, so a host-side run can disagree with the repo's own tooling:
+  ```
+  docker compose exec -T spa npx tsc --noEmit
+  docker compose exec -T spa npm run test:run -- <path>
+  ```
+  Start the container first if it is down: `docker compose up -d spa`.
 
 ## Migration numbering
 
@@ -1414,7 +1419,8 @@ Expected: hits at the three existing gates (lines 294, 399, 620) — all keyed o
 - [ ] **Step 5: Run the checks**
 
 ```bash
-cd spa && npx tsc --noEmit && npx vitest run src/pages/quality/inspections
+docker compose exec -T spa npx tsc --noEmit
+docker compose exec -T spa npm run test:run -- src/pages/quality/inspections
 ```
 Expected: `tsc` clean; the renamed component test and `detail.test.tsx` both pass.
 
@@ -1630,7 +1636,8 @@ In `spa/src/pages/quality/inspections/components/LotResultPanel.tsx`, immediatel
 docker compose exec -T api php artisan test --filter='IncomingLotChecklistTest|IncomingQcTriggerTest'
 ```
 ```bash
-cd spa && npx tsc --noEmit && npx vitest run src/pages/quality/inspections
+docker compose exec -T spa npx tsc --noEmit
+docker compose exec -T spa npm run test:run -- src/pages/quality/inspections
 ```
 Expected: all PASS; `tsc` clean.
 
@@ -1808,7 +1815,7 @@ describe('LotReviewPage', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd spa && npx vitest run src/pages/quality/inspections/lot-review.test.tsx
+docker compose exec -T spa npm run test:run -- src/pages/quality/inspections/lot-review.test.tsx
 ```
 Expected: FAIL — cannot resolve `./lot-review`.
 
@@ -2248,7 +2255,8 @@ If `LuListChecks` is absent, use `LuCheck` and add it to the existing `@/lib/ico
 - [ ] **Step 6: Run the checks**
 
 ```bash
-cd spa && npx tsc --noEmit && npx vitest run src/pages/quality/inspections/lot-review.test.tsx
+docker compose exec -T spa npx tsc --noEmit
+docker compose exec -T spa npm run test:run -- src/pages/quality/inspections/lot-review.test.tsx
 ```
 Expected: `tsc` clean, 5 tests pass.
 
@@ -2341,7 +2349,7 @@ describe('CreateGrnPage lot details', () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd spa && npx vitest run src/pages/inventory/grn/create.test.tsx
+docker compose exec -T spa npm run test:run -- src/pages/inventory/grn/create.test.tsx
 ```
 Expected: FAIL — "Lot number" is present before any click.
 
@@ -2470,7 +2478,8 @@ Then add a bulk control directly above the line table (immediately before the `<
 - [ ] **Step 5: Run the checks**
 
 ```bash
-cd spa && npx tsc --noEmit && npx vitest run src/pages/inventory/grn/create.test.tsx
+docker compose exec -T spa npx tsc --noEmit
+docker compose exec -T spa npm run test:run -- src/pages/inventory/grn/create.test.tsx
 ```
 Expected: `tsc` clean, test passes.
 
@@ -2501,7 +2510,9 @@ docker compose exec -T api php artisan test
 - [ ] **SPA checks:**
 
 ```bash
-cd spa && npx tsc --noEmit && npx vitest run && npm run audit:tokens
+docker compose exec -T spa npx tsc --noEmit
+docker compose exec -T spa npm run test:run
+docker compose exec -T spa npm run audit:tokens
 ```
 
 - [ ] **Manual smoke, in order:**
