@@ -12,7 +12,11 @@ namespace App\Modules\Quality\Enums;
  *                      sample is counted, not enumerated. Default for the three
  *                      non-final stages: incoming, in-process and outgoing.
  * per_unit           — scaffold sample_size × parameters rows, one per sampled
- *                      unit. Legacy rows only; nothing new creates one.
+ *                      unit. The mode for the return stages (`supplier_return`
+ *                      and `customer_return`, which the design's table does not
+ *                      cover and which still scaffold the full matrix), and for
+ *                      rows created before the lot-checklist work. Nothing in
+ *                      the incoming/in-process/outgoing path creates one.
  */
 enum InspectionMode: string
 {

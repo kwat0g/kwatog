@@ -255,6 +255,55 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_INCOMPLETE');
     }
 
+    /**
+     * The capture panel records a NON-critical toleranced parameter as an
+     * attribute — ticked as within tolerance, no number typed. That is a
+     * legitimate record (IATF wants variable data on critical characteristics,
+     * not on every characteristic), so it must not block the certificate. Left
+     * as a blanket rule, the sanctioned capture path would make outgoing
+     * certificates unissuable.
+     */
+    public function test_a_lot_checklist_with_a_non_critical_attribute_row_is_certified(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);
+        // Toleranced, resolved, ticked as within tolerance — and no reading.
+        $this->fabricateMeasurement($inspection, 1, null, true, isCritical: false);
+
+        $rows = $inspection->fresh()->measurements;
+        $this->assertCount(1, $rows, 'Precondition: exactly one row exists to be judged.');
+        $row = $rows->first();
+        $this->assertTrue($row->hasTolerance(), 'Precondition: the row carries bounds, so the null-reading rule applies to its shape.');
+        $this->assertFalse($row->is_critical, 'Precondition: the row is non-critical.');
+        $this->assertNull($row->measured_value, 'Precondition: the row carries no reading.');
+        $this->assertTrue($row->is_pass, 'Precondition: the row was ticked as within tolerance.');
+
+        $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
+
+        $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    /**
+     * The line the narrowing must hold: a critical characteristic is a CTQ, and
+     * a CTQ with no number is an unbacked claim. Same shape as the case above
+     * with only criticality flipped, so the two tests differ in exactly the
+     * condition under test.
+     */
+    public function test_a_lot_checklist_with_a_critical_row_without_a_reading_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);
+        $this->fabricateMeasurement($inspection, 1, null, true, isCritical: true);
+
+        $rows = $inspection->fresh()->measurements;
+        $this->assertCount(1, $rows, 'Precondition: exactly one row exists to be judged.');
+        $row = $rows->first();
+        $this->assertTrue($row->hasTolerance(), 'Precondition: the row carries bounds, so the null-reading rule applies to its shape.');
+        $this->assertTrue($row->is_critical, 'Precondition: the row is critical.');
+        $this->assertNull($row->measured_value, 'Precondition: the row carries no reading.');
+        $this->assertTrue($row->is_pass, 'Precondition: the row was ticked as within tolerance.');
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_INCOMPLETE');
+    }
+
     public function test_a_lot_checklist_with_a_failed_critical_row_is_refused(): void
     {
         $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);

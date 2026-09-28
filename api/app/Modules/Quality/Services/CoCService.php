@@ -272,8 +272,13 @@ class CoCService
                 );
             }
 
+            // A critical characteristic is a CTQ, and IATF wants variable data
+            // on it: a CTQ with no number is an unbacked claim. A non-critical
+            // characteristic may legitimately be recorded as conforming by
+            // attribute — ticked, no reading — which is what the capture panel
+            // does, so the rule applies to critical rows only.
             $unmeasured = $rows
-                ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance())
+                ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance() && $row->is_critical)
                 ->filter(static fn (InspectionMeasurement $row): bool => $row->measured_value === null)
                 ->count();
 
