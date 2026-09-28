@@ -41,6 +41,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -306,6 +307,50 @@ class InspectionService
     }
 
     /**
+     * Create the outgoing inspection for one good output batch — the ONE
+     * creation path shared by TriggerOutgoingQC and the
+     * qc:sweep-missing-outgoing repair, so both produce identical rows and
+     * identical refusals (missing spec, missing revision, unmeasurable
+     * product). Idempotent under the (stage, work_order_output_id) partial
+     * unique index: a concurrent creator wins, the loser re-reads and gets
+     * the existing row instead of a 500.
+     *
+     * The caller is responsible for the WO lifecycle guards (status,
+     * SO-linkage) and for holding the WO lock.
+     */
+    public function createForOutput(WorkOrderOutput $output, WorkOrder $workOrder, User $by): Inspection
+    {
+        $guard = ['stage' => InspectionStage::Outgoing->value, 'work_order_output_id' => $output->id];
+
+        $existing = Inspection::query()->where($guard)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        try {
+            return $this->create([
+                'stage' => InspectionStage::Outgoing->value,
+                'product_id' => (int) $workOrder->product_id,
+                'batch_quantity' => (int) $output->good_count,
+                'entity_type' => InspectionEntityType::WorkOrder->value,
+                'entity_id' => (int) $workOrder->id,
+                'work_order_output_id' => (int) $output->id,
+            ], $by);
+        } catch (QueryException $e) {
+            if (! self::isUniqueViolation($e)) {
+                throw $e;
+            }
+
+            $winner = Inspection::query()->where($guard)->first();
+            if (! $winner) {
+                throw $e;
+            }
+
+            return $winner;
+        }
+    }
+
+    /**
      * Open a draft inspection, applying the AQL plan for outgoing batches.
      *
      * @param  array<string, mixed>  $data  {
@@ -381,6 +426,8 @@ class InspectionService
         // inspection before the operator reaches this form. Reusing that row is
         // the safe idempotent result; inserting a second row would hit the
         // database uniqueness guard and surface as a misleading 500.
+        // A CANCELLED row is not reused: its unique slot was released by
+        // migration 0565, so a fresh inspection is created in its place.
         $existing = Inspection::query()
             ->when($stage === InspectionStage::Outgoing,
                 fn ($query) => $query->where('work_order_output_id', $output?->id),
@@ -393,6 +440,7 @@ class InspectionService
                         fn ($query) => $query->where('product_id', $product->id),
                     ),
             )
+            ->where('status', '!=', InspectionStatus::Cancelled->value)
             ->first();
         if ($existing) {
             return $this->show($existing);
@@ -595,6 +643,11 @@ class InspectionService
                     throw new BusinessRuleException('Each inspection measurement patch must be an object.');
                 }
 
+                // Captured before the patch is written onto the model: a claim
+                // may fill a blank row, never a row that already held a reading
+                // in the same call that deletes it.
+                $preExistingValue = $m->measured_value;
+
                 if (array_key_exists('measured_value', $patch)) {
                     $m->measured_value = $patch['measured_value'] === '' || $patch['measured_value'] === null
                         ? null
@@ -619,11 +672,17 @@ class InspectionService
                     // ticked without a measurement. A critical characteristic is
                     // always a measured value, and the legacy per-unit grid has no
                     // tick surface, so neither may assert one.
+                    //
+                    // "No reading" is judged on what the row held when the request
+                    // arrived, not on what the patch just left behind: otherwise a
+                    // single patch could delete the reading and assert conformance
+                    // over the gap, turning a recorded failure into a pass.
                     $auto = $m->evaluate();
                     $claim = $patch['is_pass'] ?? null;
                     $mayCarryClaim = $claim !== null
                         && ! $m->is_critical
-                        && $lockedInspection->inspection_mode === InspectionMode::LotChecklist;
+                        && $lockedInspection->inspection_mode === InspectionMode::LotChecklist
+                        && $preExistingValue === null;
 
                     if ($claim !== null
                         && ! $mayCarryClaim
@@ -745,8 +804,11 @@ class InspectionService
                         throw new BusinessRuleException('Measurement ID does not belong to this inspection.');
                     }
 
-                    // Piece rows must have a tolerance.
-                    if ($row->tolerance_min === null || $row->tolerance_max === null) {
+                    // Piece rows must have a tolerance window — a one-sided one is
+                    // a window, and the scaffold writes exactly that for a
+                    // parameter carrying a single bound. Ask the model so the two
+                    // cannot drift apart again.
+                    if (! $row->hasTolerance()) {
                         throw new BusinessRuleException('Measurement must have tolerance bounds.');
                     }
 
@@ -1057,7 +1119,7 @@ class InspectionService
      * @param  iterable<array{parameter_name: string, parameter_type: string, unit_of_measure: ?string, nominal_value: mixed, tolerance_min: mixed, tolerance_max: mixed, is_critical: bool, notes: ?string, inspection_spec_item_id: ?int}>  $parameters
      *
      * @throws BusinessRuleException when nothing usable was supplied — an
-     *         inspection with no rows cannot be completed later.
+     *                               inspection with no rows cannot be completed later.
      */
     private function scaffoldLotChecklist(Inspection $inspection, iterable $parameters, int $measuredPieces): void
     {
@@ -1147,6 +1209,17 @@ class InspectionService
         }
 
         return $batchQuantity;
+    }
+
+    /**
+     * True when a QueryException is a unique-constraint violation. SQLSTATE
+     * 23000/23505 covers PostgreSQL; SQLite surfaces HY000 but embeds the
+     * message. Same helper the chain listeners carry.
+     */
+    private static function isUniqueViolation(QueryException $e): bool
+    {
+        return str_starts_with((string) $e->getCode(), '23')
+            || str_contains($e->getMessage(), 'UNIQUE constraint failed');
     }
 
     /**
