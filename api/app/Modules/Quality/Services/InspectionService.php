@@ -35,6 +35,7 @@ use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
 use App\Modules\Quality\Support\InspectionStateMachine;
+use App\Modules\Quality\Support\LotDefectCounter;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -820,29 +821,19 @@ class InspectionService
                 throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
             }
 
-            // For lot_checklist mode, we use sample_defect_count (reported defects)
-            // combined with any critical failures. For per_unit mode, we count
-            // distinct sample indices with failures.
-            if ($lockedInspection->inspection_mode === InspectionMode::LotChecklist) {
-                if ($lockedInspection->sample_defect_count === null) {
-                    throw new BusinessRuleException(
-                        'Enter the number of defective pieces found in the sample (0 if none).'
-                    );
-                }
+            // A lot-checklist verdict is meaningless without the reported count,
+            // so the precondition is checked before anything derives from it.
+            if ($lockedInspection->inspection_mode === InspectionMode::LotChecklist
+                && $lockedInspection->sample_defect_count === null) {
+                throw new BusinessRuleException(
+                    'Enter the number of defective pieces found in the sample (0 if none).'
+                );
+            }
 
-                // Defect count is the max of reported defects and any failed piece rows.
-                // Checklist (sample_index=1, no tolerance) failures go to critical_fail.
-                $reportedDefects = (int) $lockedInspection->sample_defect_count;
-                $failedPieces = $rows
-                    ->where('is_pass', false)
-                    ->where(fn (InspectionMeasurement $r) => $r->tolerance_min !== null || $r->tolerance_max !== null)
-                    ->pluck('sample_index')
-                    ->unique()
-                    ->count();
-                $defects = max($reportedDefects, $failedPieces);
-                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-            } else {
-                // Per-unit mode: count distinct sample indices with any failure.
+            // Per-unit inspections are enumerated, so the declared sample must
+            // actually have been measured. Lot-checklist inspections count their
+            // sample instead, and their measured pieces are deliberately fewer.
+            if ($lockedInspection->inspection_mode !== InspectionMode::LotChecklist) {
                 $sampledUnits = $rows->pluck('sample_index')->unique()->count();
                 $declaredSample = (int) $lockedInspection->sample_size;
                 if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
@@ -850,10 +841,9 @@ class InspectionService
                         "Cannot complete: inspection declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
                     );
                 }
-
-                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-                $defects = $rows->where('is_pass', false)->pluck('sample_index')->unique()->count();
             }
+
+            ['defects' => $defects, 'criticalFail' => $criticalFail] = LotDefectCounter::for($lockedInspection, $rows);
 
             if ($lockedInspection->calibration_record_id) {
                 $record = CalibrationRecord::query()->find((int) $lockedInspection->calibration_record_id);
