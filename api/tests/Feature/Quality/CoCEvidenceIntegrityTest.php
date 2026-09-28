@@ -11,6 +11,7 @@ use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
+use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Exceptions\InspectionCertificateException;
@@ -198,6 +199,70 @@ class CoCEvidenceIntegrityTest extends TestCase
         $this->assertCount(1, $rows, 'One certificate number must map to one vault document.');
     }
 
+    /**
+     * A lot may pass with defects inside the acceptance number; an AQL plan
+     * exists precisely so that it can. Refusing its certificate made the two
+     * verdicts disagree in the field most likely to reach a customer.
+     */
+    public function test_a_lot_checklist_that_passed_within_acceptance_is_certified(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 1, acceptCount: 2);
+        $this->fabricateMeasurement($inspection, 1, '10.0000', true);
+        $this->fabricateMeasurement($inspection, 2, '10.0000', true);
+
+        $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
+
+        $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    public function test_a_lot_checklist_beyond_acceptance_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 3, acceptCount: 2);
+        $this->fabricateMeasurement($inspection, 1, '10.0000', true);
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+    }
+
+    /**
+     * An all-visual spec produces no piece rows at all. Requiring a measured
+     * value would make a certificate unissuable for it forever.
+     */
+    public function test_a_visual_only_lot_checklist_is_certified(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 1);
+        $this->fabricateChecklistRow($inspection, 1, true);
+
+        $this->assertSame(0, $inspection->fresh()->measurements->whereNotNull('tolerance_min')->count());
+        $out = app(CoCService::class)->buildBinaryForInspection($inspection->fresh());
+        $this->assertStringContainsString('%PDF', substr($out['contents'], 0, 8));
+    }
+
+    public function test_a_lot_checklist_without_a_reported_count_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);
+        $this->fabricateMeasurement($inspection, 1, '10.0000', true);
+        $inspection->forceFill(['sample_defect_count' => null])->save();
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_INCOMPLETE');
+    }
+
+    public function test_a_lot_checklist_with_an_unmeasured_piece_row_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);
+        // Resolved, so it clears the unresolved check, but carries no reading.
+        $this->fabricateMeasurement($inspection, 1, null, true);
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_INCOMPLETE');
+    }
+
+    public function test_a_lot_checklist_with_a_failed_critical_row_is_refused(): void
+    {
+        $inspection = $this->fabricatePassedLotChecklist(defects: 0, acceptCount: 2);
+        $this->fabricateMeasurement($inspection, 1, '3.0000', false);
+
+        $this->assertCertificateRefused($inspection->fresh(), 'COC_EVIDENCE_CONTRADICTS_VERDICT');
+    }
+
     private function assertCertificateRefused(Inspection $inspection, string $expectedCode): void
     {
         try {
@@ -295,5 +360,33 @@ class CoCEvidenceIntegrityTest extends TestCase
             'is_critical' => true,
             'is_pass' => $isPass,
         ]);
+    }
+
+    /**
+     * A passed `lot_checklist` inspection. Built from the existing fabrication
+     * because the service still creates `per_unit` outgoing inspections at this
+     * point in the plan — Task 6 flips that.
+     */
+    private function fabricatePassedLotChecklist(int $defects, int $acceptCount, int $batch = 500, int $sample = 50): Inspection
+    {
+        $inspection = $this->fabricatePassedOutgoing(batch: $batch, sample: $sample);
+
+        $inspection->forceFill([
+            'inspection_mode' => InspectionMode::LotChecklist->value,
+            'accept_count' => $acceptCount,
+            'reject_count' => $acceptCount + 1,
+            'sample_defect_count' => $defects,
+        ])->save();
+
+        return $inspection->fresh();
+    }
+
+    /** A lot-level checklist row: resolved, and deliberately without bounds. */
+    private function fabricateChecklistRow(Inspection $inspection, int $sampleIndex, bool $isPass): InspectionMeasurement
+    {
+        $row = $this->fabricateMeasurement($inspection, $sampleIndex, null, $isPass);
+        $row->forceFill(['parameter_name' => 'Packaging sealed', 'tolerance_min' => null, 'tolerance_max' => null])->save();
+
+        return $row->fresh();
     }
 }
