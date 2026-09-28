@@ -722,6 +722,7 @@ async function verifyAlignment(woDbId) {
     'every delivery reached customer-confirmed': sql(`select count(*) from deliveries where sales_order_id=${soId} and status <> 'confirmed'`) === '0',
     'every delivery has a proof of delivery': sql(`select count(*) from deliveries d where d.sales_order_id=${soId} and (select count(*) from delivery_proofs p where p.delivery_id=d.id) = 0`) === '0',
     'every delivered line references a PASSED inspection': sql(`select count(*) from delivery_items di join deliveries d on d.id=di.delivery_id where d.sales_order_id=${soId} and di.inspection_id is not null and (select status from inspections where id=di.inspection_id) <> 'passed'`) === '0',
+    'every delivered line carries an inspection reference (no vacuous NULLs)': sql(`select count(*) from delivery_items di join deliveries d on d.id=di.delivery_id where d.sales_order_id=${soId} and di.inspection_id is null`) === '0',
     'every paid invoice carries a posted journal entry': sql(`select count(*) from invoices i where i.sales_order_id=${soId} and i.status='paid' and (select status from journal_entries where id=i.journal_entry_id) <> 'posted'`) === '0',
     'paid invoice balances are zero': sql(`select count(*) from invoices where sales_order_id=${soId} and status='paid' and balance <> 0`) === '0',
     'every journal entry balances': sql(`select count(*) from (select je.id from journal_entries je join journal_entry_lines l on l.journal_entry_id=je.id group by je.id having sum(l.debit) <> sum(l.credit)) x`) === '0',
