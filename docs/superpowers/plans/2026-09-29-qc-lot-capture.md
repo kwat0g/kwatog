@@ -389,9 +389,9 @@ Leave the `$rows->isEmpty()` and `$unresolved > 0` checks untouched — they are
 - [ ] **Step 4: Confirm nothing reads the removed locals**
 
 ```bash
-grep -n "reportedDefects\|failedPieces\|sampledUnits" api/app/Modules/Quality/Services/InspectionService.php
+grep -n "reportedDefects\|failedPieces\|sampledUnits\|declaredSample" api/app/Modules/Quality/Services/InspectionService.php
 ```
-Expected: exactly one hit — the `$sampledUnits = ...` line you just added inside the `per_unit` guard.
+Expected: no hit for `reportedDefects` or `failedPieces` — those locals are gone. Hits for `sampledUnits` and `declaredSample` are expected and must all fall inside the `per_unit` guard you just added (3 lines: the assignment, the comparison, and the interpolation). Any hit outside it means a stale reference survives.
 
 - [ ] **Step 5: Run the tests to verify they still pass**
 
@@ -1567,22 +1567,22 @@ final class IncomingChecklist
 
 - [ ] **Step 4: Use it in `createIncomingForItem()`**
 
-Read the existing block first to preserve every column its insert needs:
+Read the existing block first to confirm the anchor:
 
 ```bash
-sed -n '190,240p' api/app/Modules/Quality/Services/InspectionService.php
+sed -n '196,240p' api/app/Modules/Quality/Services/InspectionService.php
 ```
 
-Then replace the part that reads the setting and builds `$checklistRows` with:
+Replace the whole block from the comment `// For lot-checklist mode, create the default checklist rows instead of` through the closing of the `if ($checklistRows !== []) { ... }` insert with:
 
 ```php
-            // The setting is operator-editable and can be empty; falling back to
-            // the built-in list is what keeps the inspection inspectable.
-            $defaultChecklist = IncomingChecklist::defaults($this->settings);
+            // The setting is operator-editable and can be emptied, mistyped or
+            // missing entirely; the built-in fallback inside `defaults()` is what
+            // keeps the inspection inspectable.
             $timestamp = now()->toDateTimeString();
             $checklistRows = [];
 
-            foreach ($defaultChecklist as $check) {
+            foreach (IncomingChecklist::defaults($this->settings) as $check) {
                 $checklistRows[] = [
                     'inspection_id' => $inspection->id,
                     'sample_index' => 1,
@@ -1594,9 +1594,15 @@ Then replace the part that reads the setting and builds `$checklistRows` with:
                     'updated_at' => $timestamp,
                 ];
             }
+
+            // `defaults()` never returns an empty list, so this guard can no
+            // longer be false. Kept as a belt-and-braces insert guard only.
+            if ($checklistRows !== []) {
+                InspectionMeasurement::query()->insert($checklistRows);
+            }
 ```
 
-Keep any additional null-valued columns the existing rows set explicitly (`tolerance_min`, `tolerance_max`, `measured_value`, `notes`), and keep the existing chunked insert as it is. Add the import `use App\Modules\Quality\Support\IncomingChecklist;`.
+The blank-name skipping and `(bool)` coercion that lived in the old loop now sit in `IncomingChecklist::normalize()`, so this loop needs neither. The inserted column set is unchanged — the old rows set exactly these eight keys and no others (`tolerance_min`, `tolerance_max`, `measured_value` and `notes` were left to their column defaults), so nothing is dropped. Add the import `use App\Modules\Quality\Support\IncomingChecklist;`.
 
 - [ ] **Step 5: Add the panel's safety strip**
 
