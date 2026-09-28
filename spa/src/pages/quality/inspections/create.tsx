@@ -28,196 +28,226 @@ import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/qua
 import { useFormSafety } from '@/hooks/useFormSafety';
 import { FormDraftBanner } from '@/components/ui/FormDraftBanner';
 import { FormActions } from '@/components/ui/FormActions';
-const schema = z.object({
- stage: z.string().min(1, 'Stage is required'),
- product_id: z.string().min(1, 'Product is required'),
- batch_quantity: z.coerce.number().int().min(1, 'Must be at least 1'),
- work_order_output_id: z.string().optional(),
- notes: z.string().max(2000).optional(),
-}).superRefine((values, ctx) => {
- if (values.stage === 'outgoing' && !values.work_order_output_id) {
- ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['work_order_output_id'], message: 'Output batch is required for outgoing inspection' });
- }
-});
+const schema = z
+  .object({
+    stage: z.string().min(1, 'Stage is required'),
+    product_id: z.string().min(1, 'Product is required'),
+    batch_quantity: z.coerce.number().int().min(1, 'Must be at least 1'),
+    work_order_output_id: z.string().optional(),
+    notes: z.string().max(2000).optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.stage === 'outgoing' && !values.work_order_output_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['work_order_output_id'],
+        message: 'Output batch is required for outgoing inspection',
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateInspectionPage() {
- const navigate = useNavigate();
- const [aqlPlan, setAqlPlan] = useState<AqlPlan | null>(null);
- const inspectionOptions = useQuery({
- queryKey: ['quality', 'inspections', 'options'],
- queryFn: () => inspectionsApi.options(),
- });
- const stages = inspectionOptions.data?.stages ?? [];
+  const navigate = useNavigate();
+  const [aqlPlan, setAqlPlan] = useState<AqlPlan | null>(null);
+  const inspectionOptions = useQuery({
+    queryKey: ['quality', 'inspections', 'options'],
+    queryFn: () => inspectionsApi.options(),
+  });
+  const stages = inspectionOptions.data?.stages ?? [];
 
   const form = useForm<FormValues>({
- resolver: zodResolver(schema),
- // Batch size is transactional input, not a catalog default.
- defaultValues: { stage: '', product_id: '', work_order_output_id: '', notes: '' },
- });
- const {
- register, handleSubmit, watch, setValue, formState: { errors },
- } = form;
+    resolver: zodResolver(schema),
+    // Batch size is transactional input, not a catalog default.
+    defaultValues: { stage: '', product_id: '', work_order_output_id: '', notes: '' },
+  });
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = form;
 
- const stage = watch('stage');
- const productId = watch('product_id');
- const batchQty = watch('batch_quantity');
- const samplingMethod = inspectionOptions.data?.sampling_methods?.find((method) => method.stage === stage);
+  const stage = watch('stage');
+  const productId = watch('product_id');
+  const batchQty = watch('batch_quantity');
+  const samplingMethod = inspectionOptions.data?.sampling_methods?.find(
+    (method) => method.stage === stage,
+  );
 
- const workOrderOutputs = useQuery({
- queryKey: ['quality', 'inspection-output-options', productId],
- queryFn: () => inspectionsApi.workOrderOutputs(productId),
- enabled: stage === 'outgoing' && Boolean(productId),
- });
- const outputId = watch('work_order_output_id');
- const selectedOutput = workOrderOutputs.data?.find((output) => output.id === outputId);
- const selectedGoodCount = selectedOutput?.good_count;
+  const workOrderOutputs = useQuery({
+    queryKey: ['quality', 'inspection-output-options', productId],
+    queryFn: () => inspectionsApi.workOrderOutputs(productId),
+    enabled: stage === 'outgoing' && Boolean(productId),
+  });
+  const outputId = watch('work_order_output_id');
+  const selectedOutput = workOrderOutputs.data?.find((output) => output.id === outputId);
+  const selectedGoodCount = selectedOutput?.good_count;
 
- useEffect(() => {
-  if (stage === 'outgoing' && selectedGoodCount) {
-   setValue('batch_quantity', selectedGoodCount, { shouldValidate: true, shouldDirty: true });
-  }
- }, [selectedGoodCount, setValue, stage]);
+  useEffect(() => {
+    if (stage === 'outgoing' && selectedGoodCount) {
+      setValue('batch_quantity', selectedGoodCount, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [selectedGoodCount, setValue, stage]);
 
- // Live preview AQL sample plan only for outgoing.
- useQuery({
- queryKey: ['quality', 'aql-preview', stage, batchQty],
- queryFn: async () => {
- if (stage !== 'outgoing' || !batchQty || batchQty < 1) {
- setAqlPlan(null);
- return null;
- }
- const plan = await inspectionsApi.aqlPreview(Number(batchQty));
- setAqlPlan(plan);
- return plan;
- },
- enabled: stage === 'outgoing' && Number(batchQty) > 0,
- });
+  // Live preview AQL sample plan only for outgoing.
+  useQuery({
+    queryKey: ['quality', 'aql-preview', stage, batchQty],
+    queryFn: async () => {
+      if (stage !== 'outgoing' || !batchQty || batchQty < 1) {
+        setAqlPlan(null);
+        return null;
+      }
+      const plan = await inspectionsApi.aqlPreview(Number(batchQty));
+      setAqlPlan(plan);
+      return plan;
+    },
+    enabled: stage === 'outgoing' && Number(batchQty) > 0,
+  });
 
- const products = useQuery({
- queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
- queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
- });
+  const products = useQuery({
+    queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
+    queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
+  });
 
- const submit = useMutation({
- mutationFn: (data: CreateInspectionData) => inspectionsApi.create(data),
- onSuccess: (insp) => {
- toast.success(`Inspection ${insp.inspection_number} opened`);
- navigate(`/quality/inspections/${insp.id}`);
- },
- onError: (e: AxiosError<{ message?: string }>) => {
- toast.error(e.response?.data?.message ?? 'Failed to open inspection');
- },
- });
- const safety = useFormSafety({ form, saved: submit.isSuccess });
+  const submit = useMutation({
+    mutationFn: (data: CreateInspectionData) => inspectionsApi.create(data),
+    onSuccess: (insp) => {
+      toast.success(`Inspection ${insp.inspection_number} opened`);
+      navigate(`/quality/inspections/${insp.id}`);
+    },
+    onError: (e: AxiosError<{ message?: string }>) => {
+      toast.error(e.response?.data?.message ?? 'Failed to open inspection');
+    },
+  });
+  const safety = useFormSafety({ form, saved: submit.isSuccess });
 
- return (
- <div>
- <PageHeader title="Open inspection" subtitle="Sample plan is computed when stage is outgoing" />
+  return (
+    <div>
+      <PageHeader
+        backTo="/quality/inspections"
+        backLabel="Back to inspections"
+        title="Open inspection"
+      />
       <FormDraftBanner safety={safety} />
- <form
- onSubmit={handleSubmit((v) =>
- submit.mutate({
- stage: v.stage as InspectionStage,
- product_id: v.product_id,
- batch_quantity: Number(v.batch_quantity),
- work_order_output_id: v.stage === 'outgoing' ? v.work_order_output_id : undefined,
- notes: v.notes,
- })
- , onFormInvalid<FormValues>())}
- className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
- >
- <div className="col-span-2 space-y-4">
- <Panel title="Inspection details">
- <div className="grid grid-cols-2 gap-3">
- <Select label="Stage" required {...register('stage')} error={errors.stage?.message}>
- <option value="">— Select —</option>
- {stages.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
- </Select>
- <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
- <option value="">Select…</option>
- {products.data?.data?.map((p) => (
- <option key={p.id} value={p.id}>
- {p.part_number} — {p.name}
- </option>
- ))}
- </Select>
- <Input
- label="Batch quantity"
- type="number"
- min={1}
- required
- readOnly={stage === 'outgoing'}
- helper={stage === 'outgoing' ? 'Taken from the selected output batch.' : undefined}
- {...register('batch_quantity')}
- error={errors.batch_quantity?.message}
- />
- {stage === 'outgoing' && (
- <Select
- label="Output batch"
- required
- {...register('work_order_output_id')}
- error={errors.work_order_output_id?.message}
- disabled={!productId || workOrderOutputs.isLoading}
- >
- <option value="">
- {!productId ? 'Select a product first…' : workOrderOutputs.isLoading ? 'Loading output batches…' : 'Select…'}
- </option>
- {workOrderOutputs.data?.map((output) => (
- <option key={output.id} value={output.id}>
- {output.batch_code ?? 'Unlabelled batch'} — {output.work_order?.wo_number ?? 'WO'} — good {output.good_count}
- </option>
- ))}
- </Select>
- )}
- </div>
- <Textarea label="Notes" rows={3} {...register('notes')} error={errors.notes?.message} />
- </Panel>
- </div>
+      <form
+        onSubmit={handleSubmit(
+          (v) =>
+            submit.mutate({
+              stage: v.stage as InspectionStage,
+              product_id: v.product_id,
+              batch_quantity: Number(v.batch_quantity),
+              work_order_output_id: v.stage === 'outgoing' ? v.work_order_output_id : undefined,
+              notes: v.notes,
+            }),
+          onFormInvalid<FormValues>(),
+        )}
+        className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+      >
+        <div className="col-span-2 space-y-4">
+          <Panel title="Inspection details">
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Stage" required {...register('stage')} error={errors.stage?.message}>
+                <option value="">— Select —</option>
+                {stages.map((stage) => (
+                  <option key={stage.value} value={stage.value}>
+                    {stage.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Product"
+                required
+                {...register('product_id')}
+                error={errors.product_id?.message}
+              >
+                <option value="">Select…</option>
+                {products.data?.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.part_number} — {p.name}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Batch quantity"
+                type="number"
+                min={1}
+                required
+                readOnly={stage === 'outgoing'}
+                helper={stage === 'outgoing' ? 'Taken from the selected output batch.' : undefined}
+                {...register('batch_quantity')}
+                error={errors.batch_quantity?.message}
+              />
+              {stage === 'outgoing' && (
+                <Select
+                  label="Output batch"
+                  required
+                  {...register('work_order_output_id')}
+                  error={errors.work_order_output_id?.message}
+                  disabled={!productId || workOrderOutputs.isLoading}
+                >
+                  <option value="">
+                    {!productId
+                      ? 'Select a product first…'
+                      : workOrderOutputs.isLoading
+                        ? 'Loading output batches…'
+                        : 'Select…'}
+                  </option>
+                  {workOrderOutputs.data?.map((output) => (
+                    <option key={output.id} value={output.id}>
+                      {output.batch_code ?? 'Unlabelled batch'} —{' '}
+                      {output.work_order?.wo_number ?? 'WO'} — good {output.good_count}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+            <Textarea label="Notes" rows={3} {...register('notes')} error={errors.notes?.message} />
+          </Panel>
+        </div>
 
- <div>
- <Panel title="Sample plan" meta={samplingMethod?.label ?? '—'}>
- {stage === 'outgoing' ? (
- aqlPlan ? (
- <dl className="space-y-2 text-sm">
- <div className="flex justify-between">
- <dt className="text-muted">Code letter</dt>
- <dd className="font-mono tabular-nums">{aqlPlan.code}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Sample size</dt>
- <dd className="font-mono tabular-nums">{aqlPlan.sample_size}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Accept (Ac)</dt>
- <dd className="font-mono tabular-nums">{aqlPlan.accept}</dd>
- </div>
- <div className="flex justify-between">
- <dt className="text-muted">Reject (Re)</dt>
- <dd className="font-mono tabular-nums">{aqlPlan.reject}</dd>
- </div>
- </dl>
- ) : (
- <p className="text-xs text-muted">Enter a batch quantity to preview the plan.</p>
- )
- ) : (
- <p className="text-xs text-muted">
- {samplingMethod?.label ?? 'The selected stage uses the configured sampling method.'}
- </p>
- )}
- </Panel>
- </div>
+        <div>
+          <Panel title="Sample plan" meta={samplingMethod?.label ?? '—'}>
+            {stage === 'outgoing' ? (
+              aqlPlan ? (
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Code letter</dt>
+                    <dd className="font-mono tabular-nums">{aqlPlan.code}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Sample size</dt>
+                    <dd className="font-mono tabular-nums">{aqlPlan.sample_size}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Accept (Ac)</dt>
+                    <dd className="font-mono tabular-nums">{aqlPlan.accept}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted">Reject (Re)</dt>
+                    <dd className="font-mono tabular-nums">{aqlPlan.reject}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="text-xs text-muted">No plan computed</p>
+              )
+            ) : (
+              <p className="text-xs text-muted">{samplingMethod?.label ?? '—'}</p>
+            )}
+          </Panel>
+        </div>
 
- <FormActions>
- <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
- Cancel
- </Button>
- <Button variant="primary" type="submit" loading={submit.isPending}>
- Open inspection
- </Button>
- </FormActions>
- </form>
- </div>
- );
+        <FormActions>
+          <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" loading={submit.isPending}>
+            Open inspection
+          </Button>
+        </FormActions>
+      </form>
+    </div>
+  );
 }

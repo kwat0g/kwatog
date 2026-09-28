@@ -1,8 +1,17 @@
 /**
- * Incoming lot checklist — inspector ticks lot-level checks, enters defective pieces found
- * in the AQL sample, and measures a few pieces. Server is authoritative for the verdict.
+ * Lot result panel — the capture surface for `lot_checklist` inspections (incoming,
+ * in-process and outgoing).
+ *
+ * The inspector ticks the lot-level checks, taps the number of defective pieces found
+ * in the AQL sample, and answers each dimension: a non-critical dimension is one tick
+ * when it is within tolerance, a critical one (a CTQ) is a measured value per piece.
+ * Unticking a non-critical dimension reveals its piece rows so a dimension known to be
+ * out stays a recorded reading instead of a blank cell.
+ *
+ * The server is authoritative for the result; the chip at the bottom is a preview of
+ * what `computeLotChecklistVerdict` expects the server to compute.
  */
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { LuCheck, LuSave } from '@/lib/icons';
 import toast from 'react-hot-toast';
@@ -16,7 +25,8 @@ import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import type { Inspection } from '@/types/quality';
+import { focusRing } from '@/lib/focus';
+import type { Inspection, InspectionMeasurement } from '@/types/quality';
 import { computeLotChecklistVerdict } from './computeLotChecklistVerdict';
 
 interface ChecklistDraft {
@@ -32,18 +42,37 @@ interface MeasurementDraft {
   dirty: boolean;
 }
 
-interface LotChecklistProps {
+interface LotResultPanelProps {
   inspection: Inspection;
   isTerminal: boolean;
 }
 
-export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistProps) {
+/** Above this many rejectable pieces a row of taps is slower than typing the count. */
+const MAX_TAP_TARGETS = 6;
+
+/** Server-side evidence, not local draft state: a saved reading is never hidden. */
+const hasRecordedReading = (measurements: InspectionMeasurement[]): boolean =>
+  measurements.some((m) => m.measured_value !== null);
+
+export function LotResultPanel({ inspection, isTerminal }: LotResultPanelProps) {
   const qc = useQueryClient();
   const [checklistDrafts, setChecklistDrafts] = useState<Record<string, ChecklistDraft>>({});
   const [measurementDrafts, setMeasurementDrafts] = useState<Record<string, MeasurementDraft>>({});
+  /**
+   * Per-parameter answer for non-critical dimensions, keyed by parameter name.
+   * `true` = ticked "within tolerance"; `false` = the inspector unticked it, which
+   * reveals the piece rows and declares the dimension out; absent = not answered yet.
+   *
+   * The absence of an answer is its own state: a fresh panel must not read as either
+   * conforming or non-conforming, so nothing is asserted on the inspector's behalf.
+   */
+  const [parameterTicks, setParameterTicks] = useState<Record<string, boolean | undefined>>({});
   const [sampleDefectCount, setSampleDefectCount] = useState<string>('');
   const [sampleDefectDirty, setSampleDefectDirty] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  // Ticks are local-only (the API persists no field for them), so they survive a
+  // background refetch but are dropped when the panel moves to another inspection.
+  const seededFor = useRef<string | null>(null);
 
   // Memoize filtered measurements to avoid infinite render loop
   const checklistMeasurements = useMemo(
@@ -63,6 +92,18 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
     () => Array.from(new Set(numericMeasurements.map((m) => m.sample_index))).sort((a, b) => a - b),
     [numericMeasurements],
   );
+
+  // Group numeric measurements by parameter_name using a Map to preserve order
+  const groupedMeasurements = useMemo(() => {
+    const map = new Map<string, InspectionMeasurement[]>();
+    for (const m of numericMeasurements) {
+      if (!map.has(m.parameter_name)) {
+        map.set(m.parameter_name, []);
+      }
+      map.get(m.parameter_name)!.push(m);
+    }
+    return map;
+  }, [numericMeasurements]);
 
   // Seed drafts when inspection loads
   useEffect(() => {
@@ -91,7 +132,54 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
       inspection.sample_defect_count == null ? '' : String(inspection.sample_defect_count),
     );
     setSampleDefectDirty(false);
+
+    if (seededFor.current !== inspection.id) {
+      setParameterTicks({});
+      seededFor.current = inspection.id;
+    }
   }, [inspection, checklistMeasurements, numericMeasurements]);
+
+  const isCriticalParameter = (measurements: InspectionMeasurement[]): boolean =>
+    Boolean(measurements[0]?.is_critical);
+
+  /**
+   * A dimension shows its piece rows when it is critical (a CTQ keeps its
+   * variable-data matrix), when the inspector unticked it, or when the server
+   * already holds readings for it — saved evidence is never hidden behind a tick.
+   */
+  const isParameterRevealed = (
+    paramName: string,
+    measurements: InspectionMeasurement[],
+  ): boolean => {
+    if (isCriticalParameter(measurements)) return true;
+    if (parameterTicks[paramName] === false) return true;
+    return parameterTicks[paramName] === undefined && hasRecordedReading(measurements);
+  };
+
+  const pieceColumns = Array.from(groupedMeasurements.entries()).some(([paramName, measurements]) =>
+    isParameterRevealed(paramName, measurements),
+  )
+    ? sampleIndices
+    : [];
+
+  const setWithinTolerance = (
+    paramName: string,
+    measurements: InspectionMeasurement[],
+    withinTolerance: boolean,
+  ) => {
+    setParameterTicks((s) => ({ ...s, [paramName]: withinTolerance }));
+    if (!withinTolerance) return;
+    // Ticking speaks for the whole dimension and records no readings: the payload
+    // sends null for every row, so clear the local numbers rather than leaving
+    // values the operator cannot see.
+    setMeasurementDrafts((s) => {
+      const next = { ...s };
+      for (const m of measurements) {
+        if (next[m.id]) next[m.id] = { ...next[m.id], measured_value: '', dirty: true };
+      }
+      return next;
+    });
+  };
 
   // Compute verdict for preview
   const checklistForVerdictCompute = checklistMeasurements.map((m) => ({
@@ -104,6 +192,8 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
     measured_value: measurementDrafts[m.id]?.measured_value ?? null,
     tolerance_min: m.tolerance_min,
     tolerance_max: m.tolerance_max,
+    // Only an explicit untick declares a dimension out — an unanswered one is silent.
+    declared_out_of_tolerance: parameterTicks[m.parameter_name] === false,
   }));
   const sampleDefectNum = sampleDefectCount === '' ? 0 : Number(sampleDefectCount);
   const { verdict, reason } = computeLotChecklistVerdict(
@@ -116,14 +206,18 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
   const allChecklistDirty = Object.values(checklistDrafts).some((d) => d.dirty);
   const allMeasurementDirty = Object.values(measurementDrafts).some((d) => d.dirty);
   const isDirty = allChecklistDirty || allMeasurementDirty || sampleDefectDirty;
+  // A tick on its own has nothing to persist, but it is operator input: the panel
+  // is no longer "not started" once one is set.
+  const isTouched = isDirty || Object.values(parameterTicks).some((tick) => tick !== undefined);
 
   const uncheckedCount = checklistMeasurements.filter(
     (m) => !(checklistDrafts[m.id]?.is_pass ?? true),
   ).length;
 
-  // Check if all numeric measurements are filled
-  const hasUnfilledNumeric = numericMeasurements.some(
-    (m) => !measurementDrafts[m.id] || measurementDrafts[m.id].measured_value.trim() === '',
+  // Only a critical dimension blocks submission: its measured pieces are the
+  // evidence IATF wants on a CTQ, and a blank cell there is no evidence at all.
+  const hasUnfilledCritical = numericMeasurements.some(
+    (m) => m.is_critical && (measurementDrafts[m.id]?.measured_value ?? '').trim() === '',
   );
 
   // Check if sample defect count is a valid whole number
@@ -132,28 +226,16 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
     (/^\d+$/.test(sampleDefectCount) && Number(sampleDefectCount) <= inspection.sample_size);
   const isDefectCountBlank = sampleDefectCount === '';
 
-  const canSubmit = isValidDefectCount && !isDefectCountBlank && !hasUnfilledNumeric;
+  const canSubmit = isValidDefectCount && !isDefectCountBlank && !hasUnfilledCritical;
 
-  const getMissingFieldsMessage = () => {
-    const missing = [];
-    if (isDefectCountBlank) missing.push('Enter defective pieces found');
-    else if (!isValidDefectCount)
-      missing.push(`Defective pieces must be a whole number 0–${inspection.sample_size}`);
-    if (hasUnfilledNumeric) missing.push('Fill all measurements');
-    return missing.length > 0 ? missing.join(' · ') : '';
-  };
-
-  // Group numeric measurements by parameter_name using a Map to preserve order
-  const groupedMeasurements = useMemo(() => {
-    const map = new Map<string, typeof numericMeasurements>();
-    for (const m of numericMeasurements) {
-      if (!map.has(m.parameter_name)) {
-        map.set(m.parameter_name, []);
-      }
-      map.get(m.parameter_name)!.push(m);
-    }
-    return map;
-  }, [numericMeasurements]);
+  const missingFields = [
+    isDefectCountBlank
+      ? 'sample defect count'
+      : !isValidDefectCount
+        ? `sample defect count (whole number 0–${inspection.sample_size})`
+        : null,
+    hasUnfilledCritical ? 'critical measurements' : null,
+  ].filter(Boolean);
 
   const recordResult = useMutation({
     mutationFn: (complete: boolean) => {
@@ -206,6 +288,13 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
   const saving = recordResult.isPending && recordResult.variables === false;
   const submitting = recordResult.isPending && recordResult.variables === true;
 
+  // A row of taps beats a number pad for the hand-counted sample; past six
+  // rejectable pieces the row stops being faster than typing the count.
+  const tapTargets =
+    Number.isFinite(inspection.reject_count) && inspection.reject_count <= MAX_TAP_TARGETS
+      ? Array.from({ length: inspection.reject_count + 1 }, (_, i) => i)
+      : null;
+
   return (
     <div className="space-y-4">
       {/* Summary strip */}
@@ -232,10 +321,10 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
         </dl>
       </Panel>
 
-      {/* Section 1: Lot checklist */}
+      {/* Lot checklist */}
       {checklistMeasurements.length > 0 && (
         <Panel
-          title="1 · Lot checklist"
+          title="Checklist"
           meta={`${checklistMeasurements.length} item${checklistMeasurements.length === 1 ? '' : 's'}`}
         >
           <div className="space-y-2">
@@ -324,53 +413,68 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
         </Panel>
       )}
 
-      {/* Section 2: Sample check */}
-      <Panel title="2 · Sample check">
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            Pull <span className="font-mono font-medium">{inspection.sample_size}</span> pieces at
-            random and inspect them visually.
-          </p>
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-2xs uppercase tracking-wider text-muted mb-1">
-                Defective pieces found
-              </label>
-              <Input
-                fieldSize="sm"
-                type="number"
-                min="0"
-                max={inspection.sample_size}
-                disabled={isTerminal}
-                value={sampleDefectCount}
-                onChange={(e) => {
-                  setSampleDefectCount(e.target.value);
-                  setSampleDefectDirty(true);
-                }}
-                aria-label="Defective pieces found"
-                className="font-mono tabular-nums"
-              />
+      {/* Sample check */}
+      <Panel title="Sample">
+        <div>
+          <span className="block text-2xs uppercase tracking-wider text-muted mb-1.5">
+            Defective pieces found
+          </span>
+          {tapTargets ? (
+            <div
+              role="group"
+              aria-label="Defective pieces found"
+              className="flex flex-wrap gap-1.5"
+            >
+              {tapTargets.map((count) => {
+                const selected = sampleDefectCount === String(count);
+                return (
+                  <button
+                    key={count}
+                    type="button"
+                    disabled={isTerminal}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setSampleDefectCount(String(count));
+                      setSampleDefectDirty(true);
+                    }}
+                    className={cn(
+                      'h-7 min-w-[2.25rem] px-2.5 rounded-md border text-xs font-mono tabular-nums cursor-pointer transition-colors duration-fast',
+                      focusRing,
+                      selected
+                        ? 'border-accent bg-accent text-accent-fg font-medium'
+                        : 'border-default bg-canvas text-primary hover:bg-elevated',
+                      isTerminal && 'opacity-60 cursor-not-allowed',
+                    )}
+                  >
+                    {count}
+                  </button>
+                );
+              })}
             </div>
-            {!isTerminal && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setSampleDefectCount('0');
-                  setSampleDefectDirty(true);
-                }}
-              >
-                None found (0)
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Input
+              fieldSize="sm"
+              type="number"
+              min="0"
+              max={inspection.sample_size}
+              disabled={isTerminal}
+              value={sampleDefectCount}
+              onChange={(e) => {
+                setSampleDefectCount(e.target.value);
+                setSampleDefectDirty(true);
+              }}
+              aria-label="Defective pieces found"
+              containerClassName="max-w-32"
+              className="font-mono tabular-nums"
+            />
+          )}
         </div>
       </Panel>
 
-      {/* Section 3: Measurements */}
+      {/* Measurements */}
       {numericMeasurements.length > 0 && (
         <Panel
-          title="3 · Measurements"
+          title="Measurements"
           meta={`${numericMeasurements.length} dimension${numericMeasurements.length === 1 ? '' : 's'} · ${sampleIndices.length} piece${sampleIndices.length === 1 ? '' : 's'}`}
           noPadding
         >
@@ -380,7 +484,7 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
                 <Th>Parameter</Th>
                 <Th align="right">Nominal</Th>
                 <Th align="right">Tolerance</Th>
-                {sampleIndices.map((idx) => (
+                {pieceColumns.map((idx) => (
                   <Th key={`piece-${idx}`} align="right">
                     Piece {idx}
                   </Th>
@@ -388,83 +492,119 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
               </tr>
             </thead>
             <tbody>
-              {Array.from(groupedMeasurements.entries()).map(([paramName, measurements]) => {
-                const numericTol =
-                  measurements[0]?.tolerance_min !== null && measurements[0]?.tolerance_max !== null
-                    ? `${measurements[0].tolerance_min} … ${measurements[0].tolerance_max}`
-                    : '—';
+              {Array.from(groupedMeasurements.entries()).map(
+                ([paramName, measurements], groupIndex) => {
+                  const first = measurements[0];
+                  const isCritical = isCriticalParameter(measurements);
+                  const revealed = isParameterRevealed(paramName, measurements);
+                  const numericTol =
+                    first?.tolerance_min !== null && first?.tolerance_max !== null
+                      ? `${first.tolerance_min} … ${first.tolerance_max}`
+                      : '—';
 
-                return (
-                  <tr key={paramName} className={trCls}>
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <span>{paramName}</span>
-                        {measurements[0]?.is_critical && <Chip variant="danger">Critical</Chip>}
-                        <span className="text-2xs uppercase text-muted">
-                          {measurements[0]?.parameter_type_label ?? measurements[0]?.parameter_type}
-                        </span>
-                      </div>
-                    </Td>
-                    <Td align="right" mono>
-                      {measurements[0]?.nominal_value ?? '—'}{' '}
-                      {measurements[0]?.unit_of_measure ?? ''}
-                    </Td>
-                    <Td align="right" mono>
-                      {numericTol}
-                    </Td>
-                    {sampleIndices.map((sampleIdx) => {
-                      const m = measurements.find((n) => n.sample_index === sampleIdx);
-                      if (!m) {
+                  const label = (
+                    <div className="flex items-center gap-2">
+                      <span>{paramName}</span>
+                      {isCritical && <Chip variant="danger">Critical</Chip>}
+                      <span className="text-2xs uppercase text-muted">
+                        {first?.parameter_type_label ?? first?.parameter_type}
+                      </span>
+                    </div>
+                  );
+
+                  if (!revealed) {
+                    return (
+                      <tr key={paramName} className={trCls}>
+                        <Td>{label}</Td>
+                        <Td align="right" mono>
+                          {first?.nominal_value ?? '—'} {first?.unit_of_measure ?? ''}
+                        </Td>
+                        <Td align="right" mono>
+                          {numericTol}
+                        </Td>
+                        {pieceColumns.length > 0 && (
+                          <Td colSpan={pieceColumns.length}>
+                            {isTerminal ? (
+                              <span className="text-muted">—</span>
+                            ) : (
+                              <Checkbox
+                                id={`cb-tol-${groupIndex}`}
+                                checked={parameterTicks[paramName] === true}
+                                onChange={(e) =>
+                                  setWithinTolerance(paramName, measurements, e.target.checked)
+                                }
+                                label="Within tolerance"
+                              />
+                            )}
+                          </Td>
+                        )}
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <tr key={paramName} className={trCls}>
+                      <Td>{label}</Td>
+                      <Td align="right" mono>
+                        {first?.nominal_value ?? '—'} {first?.unit_of_measure ?? ''}
+                      </Td>
+                      <Td align="right" mono>
+                        {numericTol}
+                      </Td>
+                      {pieceColumns.map((sampleIdx) => {
+                        const m = measurements.find((n) => n.sample_index === sampleIdx);
+                        if (!m) {
+                          return (
+                            <Td key={`${paramName}-${sampleIdx}`} align="right" mono>
+                              —
+                            </Td>
+                          );
+                        }
+
+                        const draft = measurementDrafts[m.id];
+                        if (!draft) return null;
+
+                        const draftNum =
+                          draft.measured_value.trim() === '' ? null : Number(draft.measured_value);
+                        const isOutOfTolerance =
+                          draftNum !== null &&
+                          ((m.tolerance_min !== null && draftNum < m.tolerance_min) ||
+                            (m.tolerance_max !== null && draftNum > m.tolerance_max));
+
                         return (
-                          <Td key={`${paramName}-${sampleIdx}`} align="right" mono>
-                            —
+                          <Td
+                            key={`${paramName}-${sampleIdx}`}
+                            align="right"
+                            mono
+                            className={isOutOfTolerance ? 'text-danger-fg' : ''}
+                          >
+                            <Input
+                              fieldSize="sm"
+                              type="number"
+                              step="any"
+                              disabled={isTerminal}
+                              aria-label={`${paramName}, piece ${sampleIdx}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
+                              containerClassName="inline-flex w-20"
+                              className="text-right font-mono tabular-nums"
+                              value={draft.measured_value}
+                              onChange={(e) =>
+                                setMeasurementDrafts((s) => ({
+                                  ...s,
+                                  [m.id]: {
+                                    ...s[m.id],
+                                    measured_value: e.target.value,
+                                    dirty: true,
+                                  },
+                                }))
+                              }
+                            />
                           </Td>
                         );
-                      }
-
-                      const draft = measurementDrafts[m.id];
-                      if (!draft) return null;
-
-                      const draftNum =
-                        draft.measured_value.trim() === '' ? null : Number(draft.measured_value);
-                      const isOutOfTolerance =
-                        draftNum !== null &&
-                        ((m.tolerance_min !== null && draftNum < m.tolerance_min) ||
-                          (m.tolerance_max !== null && draftNum > m.tolerance_max));
-
-                      return (
-                        <Td
-                          key={`${paramName}-${sampleIdx}`}
-                          align="right"
-                          mono
-                          className={isOutOfTolerance ? 'text-danger-fg' : ''}
-                        >
-                          <Input
-                            fieldSize="sm"
-                            type="number"
-                            step="any"
-                            disabled={isTerminal}
-                            aria-label={`${paramName}, piece ${sampleIdx}${m.unit_of_measure ? ` (${m.unit_of_measure})` : ''}`}
-                            containerClassName="inline-flex w-20"
-                            className="text-right font-mono tabular-nums"
-                            value={draft.measured_value}
-                            onChange={(e) =>
-                              setMeasurementDrafts((s) => ({
-                                ...s,
-                                [m.id]: {
-                                  ...s[m.id],
-                                  measured_value: e.target.value,
-                                  dirty: true,
-                                },
-                              }))
-                            }
-                          />
-                        </Td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+                      })}
+                    </tr>
+                  );
+                },
+              )}
             </tbody>
           </table>
         </Panel>
@@ -474,10 +614,10 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
           checklist is all-unticked, which would otherwise preview as a failure. */}
       {!isTerminal && (
         <Panel>
-          {!isDirty &&
+          {!isTouched &&
           isDefectCountBlank &&
           checklistMeasurements.every((m) => m.is_pass === null) ? (
-            <Chip variant="neutral">Not started — tick each item that is OK</Chip>
+            <Chip variant="neutral">Not started</Chip>
           ) : (
             <Chip variant={verdict === 'pass' ? 'success' : 'danger'}>
               {verdict === 'pass' ? 'Will pass' : reason ? `Will fail — ${reason}` : 'Will fail'}
@@ -545,7 +685,9 @@ export function IncomingLotChecklist({ inspection, isTerminal }: LotChecklistPro
                 Submit result
               </Button>
             </div>
-            {!canSubmit && <p className="text-2xs text-muted">{getMissingFieldsMessage()}</p>}
+            {!canSubmit && missingFields.length > 0 && (
+              <p className="text-2xs text-muted">Missing: {missingFields.join(' · ')}</p>
+            )}
           </div>
         </Panel>
       )}

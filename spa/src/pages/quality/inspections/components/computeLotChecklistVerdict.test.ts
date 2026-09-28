@@ -8,6 +8,8 @@ type NumericItem = {
   measured_value: string | null;
   tolerance_min: number | null;
   tolerance_max: number | null;
+  /** The inspector unticked the parameter's "Within tolerance" box. */
+  declared_out_of_tolerance?: boolean;
 };
 
 describe('computeLotChecklistVerdict', () => {
@@ -130,6 +132,84 @@ describe('computeLotChecklistVerdict', () => {
       },
     ];
     const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('pass');
+  });
+
+  it('fails a non-critical dimension declared out of tolerance even with no reading typed', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [
+      {
+        is_critical: false,
+        sample_index: 1,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+        declared_out_of_tolerance: true,
+      },
+    ];
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 0);
+    expect(result.verdict).toBe('fail');
+    expect(result.reason).toContain('Defects (1) exceed Ac (0)');
+  });
+
+  it('counts each piece of a declared-out dimension as a defect', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [1, 2].map((sample_index) => ({
+      is_critical: false,
+      sample_index,
+      measured_value: '',
+      tolerance_min: 8,
+      tolerance_max: 12,
+      declared_out_of_tolerance: true,
+    }));
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 1);
+    expect(result.verdict).toBe('fail');
+    expect(result.reason).toContain('Defects (2) exceed Ac (1)');
+  });
+
+  it('lets a declared-out dimension pass while it stays within the accept limit', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [
+      {
+        is_critical: false,
+        sample_index: 1,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+        declared_out_of_tolerance: true,
+      },
+    ];
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('pass');
+  });
+
+  it('fails a critical dimension declared out of tolerance', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [
+      {
+        is_critical: true,
+        sample_index: 1,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+        declared_out_of_tolerance: true,
+      },
+    ];
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('fail');
+    expect(result.reason).toContain('Critical measurement out of tolerance');
+  });
+
+  it('does not count an unanswered parameter as a defect', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [1, 2, 3].map((sample_index) => ({
+      is_critical: false,
+      sample_index,
+      measured_value: null,
+      tolerance_min: 8,
+      tolerance_max: 12,
+    }));
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 1);
     expect(result.verdict).toBe('pass');
   });
 
