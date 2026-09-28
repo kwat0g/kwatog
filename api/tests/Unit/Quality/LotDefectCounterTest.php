@@ -73,6 +73,24 @@ class LotDefectCounterTest extends TestCase
     }
 
     /**
+     * Regression pin: `sample_index` identifies the PIECE in lot_checklist mode,
+     * so several failing parameters on one piece are one defect, not several.
+     * Counting them separately inflates the count past accept_count and
+     * over-rejects a lot.
+     */
+    public function test_duplicate_checklist_rows_on_one_piece_count_once(): void
+    {
+        [$inspection, $rows] = $this->inspection(InspectionMode::LotChecklist->value, 0, [
+            ['is_pass' => false, 'tolerance_min' => '9.9', 'tolerance_max' => '10.1', 'sample_index' => 7],
+            ['is_pass' => false, 'tolerance_min' => '9.9', 'tolerance_max' => '10.1', 'sample_index' => 7],
+        ]);
+
+        $counted = LotDefectCounter::for($inspection, $rows);
+
+        $this->assertSame(1, $counted['defects']);
+    }
+
+    /**
      * Regression pin: `Collection::where('is_pass', false)` matches null rows
      * because `null == false` is true in PHP. An unresolved row is not a defect.
      */
@@ -111,6 +129,24 @@ class LotDefectCounterTest extends TestCase
         $counted = LotDefectCounter::for($inspection, $rows);
 
         $this->assertTrue($counted['criticalFail']);
+    }
+
+    /**
+     * Regression pin: the commonest real-world case is a critical dimension
+     * measured within tolerance. A critical row that PASSED must not raise the
+     * flag, or a conforming lot is rejected.
+     */
+    public function test_a_conforming_critical_row_does_not_raise_the_critical_flag(): void
+    {
+        [$inspection, $rows] = $this->inspection(InspectionMode::LotChecklist->value, 0, [
+            ['is_pass' => true, 'is_critical' => true, 'tolerance_min' => '9.9', 'tolerance_max' => '10.1'],
+            ['is_pass' => true, 'is_critical' => false, 'tolerance_min' => '9.9', 'tolerance_max' => '10.1'],
+        ]);
+
+        $counted = LotDefectCounter::for($inspection, $rows);
+
+        $this->assertFalse($counted['criticalFail']);
+        $this->assertSame(0, $counted['defects']);
     }
 
     public function test_per_unit_mode_counts_distinct_failing_pieces(): void

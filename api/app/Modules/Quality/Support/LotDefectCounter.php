@@ -12,11 +12,12 @@ use Illuminate\Support\Collection;
 /**
  * The one implementation of the lot verdict arithmetic.
  *
- * A pass is `! criticalFail && defects <= accept_count`. Both the completion
- * path (InspectionService::complete) and the certificate evidence guard
- * (CoCService::assertEvidenceSupportsCertificate) read the count from here, so
- * a lot cannot pass inspection on one formula and be refused a certificate on
- * another.
+ * It computes the two inputs to a lot verdict — the defect count and whether a
+ * critical characteristic failed — so the completion path
+ * (InspectionService::complete) and the certificate evidence guard
+ * (CoCService::assertEvidenceSupportsCertificate) cannot disagree on them. The
+ * caller applies the acceptance number: a lot passes when the count is within
+ * accept_count and no critical row failed.
  *
  * Every comparison against is_pass is strict (`=== false`). Loose comparison
  * is a trap here: `Collection::where('is_pass', false)` matches rows whose
@@ -32,18 +33,18 @@ final class LotDefectCounter
     public static function for(Inspection $inspection, Collection $rows): array
     {
         $criticalFail = $rows->contains(
-            static fn (InspectionMeasurement $row): bool => (bool) $row->is_critical && $row->is_pass === false
+            static fn (InspectionMeasurement $row): bool => $row->is_critical && $row->is_pass === false
         );
 
         $failed = static fn (InspectionMeasurement $row): bool => $row->is_pass === false;
-        $hasTolerance = static fn (InspectionMeasurement $row): bool => $row->tolerance_min !== null || $row->tolerance_max !== null;
 
         if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
             // Reported defects cover the whole AQL sample the inspector counted;
             // piece rows are the few dimensions actually measured. The larger of
             // the two is the lot's defect count.
             $reported = (int) ($inspection->sample_defect_count ?? 0);
-            $failedPieces = $rows->filter($failed)->filter($hasTolerance)
+            $failedPieces = $rows->filter($failed)
+                ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance())
                 ->pluck('sample_index')->unique()->count();
 
             return ['defects' => max($reported, $failedPieces), 'criticalFail' => $criticalFail];
