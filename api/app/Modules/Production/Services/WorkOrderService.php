@@ -43,6 +43,12 @@ use App\Modules\Production\Models\WoOperation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Support\WorkOrderStateMachine;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Enums\NcrSource;
+use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -331,6 +337,7 @@ class WorkOrderService
                 throw new BusinessRuleException('Assigned mold is not available.');
             }
             $this->assertMachineNotOccupied($lockedWo, $machine);
+            $this->assertMoldNotOccupied($lockedWo, $mold);
 
             $machine->update([
                 'status' => MachineStatus::Running->value,
@@ -492,7 +499,6 @@ class WorkOrderService
             if (! $machine || ! $mold) {
                 throw new BusinessRuleException('Cannot resume a work order without an assigned machine and mold.');
             }
-            $this->assertMachineNotOccupied($lockedWo, $machine);
             if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
                 throw new BusinessRuleException(
                     "Assigned machine {$machine->machine_code} is currently {$machine->status?->value} and cannot resume production. Repair or restore the machine first."
@@ -501,6 +507,8 @@ class WorkOrderService
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
                 throw new BusinessRuleException('Assigned mold is not available to resume production.');
             }
+            $this->assertMachineNotOccupied($lockedWo, $machine);
+            $this->assertMoldNotOccupied($lockedWo, $mold);
             $machine->update([
                 'status' => MachineStatus::Running->value,
                 'current_work_order_id' => $lockedWo->id,
@@ -616,6 +624,16 @@ class WorkOrderService
             }
             $this->assertTransition($lockedWo, WorkOrderStatus::Closed);
             $from = $lockedWo->status?->value ?? 'completed';
+
+            // A closed work order is terminal: after this no inspection can be
+            // completed against it and no NCR can drive a disposition. Closing
+            // with either open would freeze the IATF quality record unfinished
+            // — the WO read as done while its quality gate had not spoken, and
+            // capacity planning treated the run as fully resolved. Only a
+            // terminal inspection whose NCR loop (if any) has concluded may be
+            // closed over.
+            $this->assertQualityGateSettled($lockedWo);
+
             $lockedWo->update(['status' => WorkOrderStatus::Closed->value]);
             $closed = $this->show($lockedWo->fresh());
             $this->recordStatusChange($closed, $from, WorkOrderStatus::Closed->value);
@@ -995,6 +1013,90 @@ class WorkOrderService
     }
 
     /**
+     * PR-04 — runtime occupancy gate for the MOLD, mirroring
+     * assertMachineNotOccupied(). Pausing frees the machine but deliberately
+     * leaves the mold InUse, and an InUse mold reads as available to the
+     * capacity scheduler — so between a pause and a resume the same mold can
+     * be promised to another work order on another press. Neither a resume of
+     * the paused work order nor a fresh start may then bind a mold that is
+     * actively running a different one: one physical mold cannot sit in two
+     * machines, and both WOs would increment current_shot_count, corrupting
+     * the rated-shot-life accounting (M050).
+     */
+    private function assertMoldNotOccupied(WorkOrder $wo, Mold $mold): void
+    {
+        $occupant = WorkOrder::query()
+            ->where('mold_id', $mold->id)
+            ->where('id', '!=', (int) $wo->id)
+            ->whereIn('status', [
+                WorkOrderStatus::Confirmed->value,
+                WorkOrderStatus::InProgress->value,
+            ])
+            ->orderBy('id')
+            ->first(['id', 'wo_number']);
+
+        if ($occupant) {
+            throw new BusinessRuleException(
+                "Mold {$mold->mold_code} is currently bound to work order {$occupant->wo_number}. "
+                .'Complete or pause that work order first.'
+            );
+        }
+    }
+
+    /**
+     * A completed work order may only close once its quality evidence is
+     * settled: every in-process/outgoing inspection must be terminal, and an
+     * NCR opened from a failed outgoing inspection must be closed or
+     * cancelled before the WO record reads as fully resolved.
+     *
+     * TriggerOutgoingQC accepts Closed as a replay-compatible source, so the
+     * inspections being terminal (not merely absent) is the load-bearing
+     * condition — an auto-created inspection the checker has not reviewed
+     * must block the close.
+     */
+    private function assertQualityGateSettled(WorkOrder $wo): void
+    {
+        $unsettled = Inspection::query()
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', (int) $wo->id)
+            ->whereNotIn('status', [
+                InspectionStatus::Passed->value,
+                InspectionStatus::Failed->value,
+                InspectionStatus::Cancelled->value,
+            ])
+            ->orderBy('id')
+            ->pluck('inspection_number');
+
+        if ($unsettled->isNotEmpty()) {
+            throw new BusinessRuleException(
+                "Work order {$wo->wo_number} cannot close: inspection(s) "
+                .$unsettled->implode(', ').' have no final result yet. '
+                .'Complete or cancel them before closing.'
+            );
+        }
+
+        $openNcrs = NonConformanceReport::query()
+            ->where('source', NcrSource::InspectionFail->value)
+            ->whereNotNull('inspection_id')
+            ->whereHas('inspection', fn ($q) => $q
+                ->where('entity_type', InspectionEntityType::WorkOrder->value)
+                ->where('entity_id', (int) $wo->id))
+            ->whereNotIn('status', [
+                NcrStatus::Closed->value,
+                NcrStatus::Cancelled->value,
+            ])
+            ->orderBy('id')
+            ->pluck('ncr_number');
+
+        if ($openNcrs->isNotEmpty()) {
+            throw new BusinessRuleException(
+                "Work order {$wo->wo_number} cannot close: NCR(s) "
+                .$openNcrs->implode(', ').' are still open. Resolve the disposition and CAPA first.'
+            );
+        }
+    }
+
+    /**
      * Reserve every BOM line of $wo. For each material, pick the location
      * with the largest available stock; if the chosen location can't cover
      * the BOM quantity, the reservation is split across the locations with
@@ -1133,6 +1235,7 @@ class WorkOrderService
                     'status' => ReservationStatus::Released->value,
                     'released_at' => Carbon::now(),
                 ]);
+
                 continue;
             }
             if (! $reservationPlan || ! $reservationPlan['backed']) {
@@ -1151,6 +1254,7 @@ class WorkOrderService
                     'status' => ReservationStatus::Released->value,
                     'released_at' => Carbon::now(),
                 ]);
+
                 continue;
             }
 
@@ -1166,6 +1270,7 @@ class WorkOrderService
                     'status' => ReservationStatus::Released->value,
                     'released_at' => Carbon::now(),
                 ]);
+
                 continue;
             }
 
@@ -1248,6 +1353,7 @@ class WorkOrderService
                     'status' => ReservationStatus::Released->value,
                     'released_at' => Carbon::now(),
                 ]);
+
                 continue;
             }
             $this->stock->release((int) $res->item_id, (int) $res->location_id, (string) $res->quantity);
