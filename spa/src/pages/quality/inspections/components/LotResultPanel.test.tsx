@@ -81,11 +81,16 @@ const secondNonCriticalDimension = [
 ];
 
 function renderPanel(inspection: Inspection) {
+  return render(panel(inspection));
+}
+
+/** The same tree, for tests that re-render the panel with fresher server state. */
+function panel(inspection: Inspection) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  return (
     <QueryClientProvider client={client}>
       <LotResultPanel inspection={inspection} isTerminal={false} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 
@@ -222,5 +227,149 @@ describe('LotResultPanel', () => {
     expect(
       screen.getByLabelText('Defective pieces found', { selector: 'input' }),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * A tick answers a blank row. A row the server already answered is not blank:
+   * a recorded NG is evidence, and a fresh mount is exactly when it is easiest to
+   * lose it — the previous implementation showed a clean tick and sent
+   * `is_pass: true` over it, silently turning a found failure into a pass.
+   */
+  it('keeps a recorded NG visible on a fresh mount and never sends it as a pass', async () => {
+    const savedNg = [
+      measurement({
+        id: 'ng-1',
+        sample_index: 1,
+        parameter_name: 'Flash',
+        is_pass: false,
+      }),
+    ];
+    renderPanel(inspectionWith([...criticalDimension, ...savedNg], 2));
+
+    // The recorded failure is on screen: the NG is pressed, and there is no clean
+    // tick to overwrite it with.
+    expect(screen.getByLabelText('Flash, piece 1 NG')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByLabelText('Flash within tolerance')).not.toBeInTheDocument();
+    // The row is answered by the server's own record, not left blank.
+    expect(screen.queryByText(/measurements unanswered/)).not.toBeInTheDocument();
+
+    fillCriticalReadings();
+    fireEvent.click(screen.getByRole('button', { name: '1' }));
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(recordLotResult).toHaveBeenCalledTimes(1));
+
+    const [, payload] = recordLotResult.mock.calls[0];
+    expect(payload.measurements).toEqual([
+      { id: 'crit-1', measured_value: '10', is_pass: null },
+      { id: 'crit-2', measured_value: '10', is_pass: null },
+      // The failure survives the round trip instead of becoming a conforming claim.
+      { id: 'ng-1', measured_value: null, is_pass: false },
+    ]);
+  });
+
+  /**
+   * The gate and the payload are one expression: whatever the panel counts as
+   * unanswered is what the request leaves unresolved, so submit can never be
+   * enabled where the server refuses with `422 … no pass/fail recorded`.
+   */
+  it('agrees with the payload about which rows are unanswered', async () => {
+    renderPanel(inspectionWith([...criticalDimension, ...nonCriticalDimension]));
+    fillCriticalReadings();
+
+    // Untick Flash to reveal its pieces: each one now owes an answer.
+    const tick = screen.getByLabelText('Flash within tolerance');
+    fireEvent.click(tick);
+    fireEvent.click(tick);
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+
+    const flashOne = screen.getByLabelText('Flash, piece 1 (mm)');
+    const flashTwo = screen.getByLabelText('Flash, piece 2 (mm)');
+    fireEvent.change(flashOne, { target: { value: '10' } });
+    fireEvent.change(flashTwo, { target: { value: '10' } });
+    expect(submitButton()).not.toBeDisabled();
+
+    // Typed, then cleared: the cell is blank again and the row owes an answer.
+    fireEvent.change(flashOne, { target: { value: '' } });
+
+    expect(screen.getByText('1 measurement unanswered')).toBeInTheDocument();
+    expect(screen.getByText(/Missing: 1 unanswered measurement/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+    expect(recordLotResult).not.toHaveBeenCalled();
+
+    // Answering the row moves the gate and the preview together, and the payload
+    // carries exactly those answers — the reading and the claim.
+    fireEvent.click(screen.getByLabelText('Flash, piece 1 NG'));
+    expect(submitButton()).not.toBeDisabled();
+    expect(recordLotResult).not.toHaveBeenCalled();
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(recordLotResult).toHaveBeenCalledTimes(1));
+
+    const [, payload] = recordLotResult.mock.calls[0];
+    expect(payload.measurements.filter((m) => m.id.startsWith('nc-'))).toEqual([
+      { id: 'nc-1', measured_value: null, is_pass: false },
+      { id: 'nc-2', measured_value: '10', is_pass: null },
+    ]);
+  });
+
+  it('sends the answer the server already holds, for a cleared cell and a stored claim', async () => {
+    const mixed = [
+      measurement({
+        id: 'nc-1',
+        sample_index: 1,
+        parameter_name: 'Flash',
+        measured_value: 10,
+      }),
+      measurement({ id: 'nc-2', sample_index: 2, parameter_name: 'Flash', is_pass: true }),
+    ];
+    renderPanel(inspectionWith([...criticalDimension, ...mixed]));
+    fillCriticalReadings();
+
+    // Clearing the cell does not blank the row: the reading the server holds is
+    // what both the gate and the payload fall back to.
+    fireEvent.change(screen.getByLabelText('Flash, piece 1 (mm)'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+
+    expect(screen.queryByText(/measurements unanswered/)).not.toBeInTheDocument();
+    expect(submitButton()).not.toBeDisabled();
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(recordLotResult).toHaveBeenCalledTimes(1));
+
+    const [, payload] = recordLotResult.mock.calls[0];
+    expect(payload.measurements.filter((m) => m.id.startsWith('nc-'))).toEqual([
+      { id: 'nc-1', measured_value: '10', is_pass: null },
+      { id: 'nc-2', measured_value: null, is_pass: true },
+    ]);
+  });
+
+  /** A tick never overwrites a reading: where one exists, the reading is sent. */
+  it('sends the reading, not the claim, when a ticked dimension has a recorded value', async () => {
+    const { rerender } = renderPanel(
+      inspectionWith([...criticalDimension, ...nonCriticalDimension]),
+    );
+
+    fireEvent.click(screen.getByLabelText('Flash within tolerance'));
+    expect(screen.getByLabelText('Flash within tolerance')).toBeChecked();
+
+    // Another session records a reading for the dimension while this panel is open.
+    const recorded = [
+      measurement({ id: 'nc-1', sample_index: 1, parameter_name: 'Flash', measured_value: 10 }),
+      measurement({ id: 'nc-2', sample_index: 2, parameter_name: 'Flash', measured_value: 10 }),
+    ];
+    rerender(panel(inspectionWith([...criticalDimension, ...recorded])));
+
+    fillCriticalReadings();
+    fireEvent.click(screen.getByRole('button', { name: '0' }));
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(recordLotResult).toHaveBeenCalledTimes(1));
+
+    const [, payload] = recordLotResult.mock.calls[0];
+    expect(payload.measurements.filter((m) => m.id.startsWith('nc-'))).toEqual([
+      { id: 'nc-1', measured_value: '10', is_pass: null },
+      { id: 'nc-2', measured_value: '10', is_pass: null },
+    ]);
   });
 });

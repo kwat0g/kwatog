@@ -57,9 +57,9 @@ interface LotResultPanelProps {
 /** Above this many rejectable pieces a row of taps is slower than typing the count. */
 const MAX_TAP_TARGETS = 6;
 
-/** Server-side evidence, not local draft state: a saved reading is never hidden. */
-const hasRecordedReading = (measurements: InspectionMeasurement[]): boolean =>
-  measurements.some((m) => m.measured_value !== null);
+/** Server-side evidence, not local draft state: a saved reading or a saved claim is never hidden. */
+const hasServerEvidence = (measurements: InspectionMeasurement[]): boolean =>
+  measurements.some((m) => m.measured_value !== null || m.is_pass !== null);
 
 export function LotResultPanel({ inspection, isTerminal }: LotResultPanelProps) {
   const qc = useQueryClient();
@@ -175,12 +175,13 @@ export function LotResultPanel({ inspection, isTerminal }: LotResultPanelProps) 
   /**
    * A dimension shows its piece rows when it is critical (a CTQ keeps its
    * variable-data matrix), when the inspector unticked it, or when the server
-   * already holds readings for it — saved evidence is never hidden behind a tick.
+   * already holds evidence for it — a saved reading or a saved claim is never
+   * hidden behind a tick.
    */
   const isParameterRevealed = (key: string, measurements: InspectionMeasurement[]): boolean => {
     if (isCriticalParameter(measurements)) return true;
     if (parameterTicks[key] === false) return true;
-    return parameterTicks[key] === undefined && hasRecordedReading(measurements);
+    return parameterTicks[key] === undefined && hasServerEvidence(measurements);
   };
 
   // Every dimension renders its answer cell, so the piece columns belong to the
@@ -224,17 +225,26 @@ export function LotResultPanel({ inspection, isTerminal }: LotResultPanelProps) 
    * The claim the panel records for one row: `true` from a ticked dimension,
    * `false` from an explicit NG mark, and null wherever a reading decides for
    * itself — a claim never overrides a value, on the client or on the server.
+   * Where the inspector has not spoken and the server already holds a claim,
+   * that claim is the row's answer: evidence the panel did not create still is
+   * evidence, and it must survive the round trip instead of being re-asked.
    */
   const claimFor = (m: InspectionMeasurement): boolean | null => {
     const draft = measurementDrafts[m.id];
     if ((draft?.measured_value ?? '').trim() !== '') return null;
     if (draft?.ng) return false;
-    return rowTicks.get(m.id) === true ? true : null;
+    const tick = rowTicks.get(m.id);
+    if (tick !== undefined) return tick === true ? true : null;
+    // A claim-only row echoes its stored claim; a row with a reading has no
+    // claim — the reading decides, and the stored `is_pass` beside it was the
+    // tolerance's verdict, not an inspector's claim to re-send.
+    return m.measured_value === null ? (m.is_pass ?? null) : null;
   };
 
   /**
    * Answered means the server can resolve the row's `is_pass` from what is sent: a
-   * reading (the tolerance decides), a tick, an NG mark, or a reading already saved.
+   * reading (the tolerance decides), a tick, an NG mark, or evidence already saved
+   * (a stored reading or a stored claim).
    */
   const isAnswered = (m: InspectionMeasurement): boolean => {
     if (claimFor(m) !== null) return true;
@@ -318,8 +328,9 @@ export function LotResultPanel({ inspection, isTerminal }: LotResultPanelProps) 
           return {
             id: m.id,
             // A ticked dimension sends its claim and no reading; a revealed row
-            // sends whichever of the two it has, never both.
-            measured_value: claim === true || value === '' ? null : value,
+            // sends whichever of the two it has, never both — and a row the
+            // inspector left silent echoes the evidence the server already holds.
+            measured_value: claim === true ? null : value !== '' ? value : (m.measured_value === null ? null : String(m.measured_value)),
             is_pass: claim,
           };
         }),
