@@ -23,6 +23,7 @@ use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Services\InspectionService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -182,6 +183,10 @@ class OutgoingQcLotChecklistTest extends TestCase
      * A ticked dimension is evidence. "Inspected, conforming" is a different
      * claim from a measurement, and it is the whole point of the capture panel:
      * an inspector counts pieces, they do not type 30 numbers.
+     *
+     * This is also the control for the two erasure tests above and below: with
+     * no reading on the row, a claim is exactly what a tick must still be able
+     * to record.
      */
     public function test_a_non_critical_piece_row_is_resolved_by_an_attribute_claim(): void
     {
@@ -267,6 +272,79 @@ class OutgoingQcLotChecklistTest extends TestCase
         $this->assertSame('9.0000', (string) $stored->measured_value);
     }
 
+    /**
+     * A tick fills a blank row; it never overwrites a recorded reading. The
+     * claim arrives in the same request that would delete the value, so the
+     * value has to be the authority: otherwise one PATCH turns a recorded
+     * failure into a pass and drops the defect count with it.
+     */
+    public function test_a_claim_cannot_erase_an_out_of_tolerance_reading(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+        $row = $this->pieceRows($inspection, 'Flash height')->firstOrFail();
+
+        // A failing reading, recorded by an earlier successful call.
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$row->id => ['measured_value' => '0.9000']],
+            $this->user,
+        );
+        $this->assertFalse($row->fresh()->is_pass);
+        $this->assertSame(1, (int) $inspection->fresh()->defect_count);
+
+        // The rewrite: erase the value and assert conformance in one call.
+        try {
+            $this->svc->recordMeasurements(
+                $inspection->fresh(),
+                [$row->id => ['measured_value' => null, 'is_pass' => true]],
+                $this->user,
+            );
+            $this->fail('A claim must not overwrite a stored reading.');
+        } catch (BusinessRuleException) {
+            // Expected: refused as a whole, so the row keeps its evidence.
+        }
+
+        $stored = $row->fresh();
+        $this->assertSame('0.9000', (string) $stored->measured_value, 'The reading survives.');
+        $this->assertFalse($stored->is_pass, 'The failure is still recorded.');
+        $this->assertSame(
+            1,
+            (int) $inspection->fresh()->defect_count,
+            'A refused request must not clear the defect it was trying to erase.',
+        );
+    }
+
+    /** The same rule, the other direction: a claim cannot erase a passing reading. */
+    public function test_a_claim_cannot_erase_an_in_tolerance_reading(): void
+    {
+        $this->addNonCriticalPieceParameter();
+        $inspection = $this->outgoingInspection(batch: 2000);
+        $row = $this->pieceRows($inspection, 'Flash height')->firstOrFail();
+
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$row->id => ['measured_value' => '0.5000']],
+            $this->user,
+        );
+        $this->assertTrue($row->fresh()->is_pass);
+
+        try {
+            $this->svc->recordMeasurements(
+                $inspection->fresh(),
+                [$row->id => ['measured_value' => null, 'is_pass' => false]],
+                $this->user,
+            );
+            $this->fail('A claim must not overwrite a stored reading.');
+        } catch (BusinessRuleException) {
+            // Expected.
+        }
+
+        $stored = $row->fresh();
+        $this->assertSame('0.5000', (string) $stored->measured_value);
+        $this->assertTrue($stored->is_pass, 'The conforming reading still decides.');
+    }
+
     /** A CTQ is measured, not asserted: the rejection survives for critical rows. */
     public function test_a_critical_reading_still_refuses_a_contradicting_claim(): void
     {
@@ -302,6 +380,92 @@ class OutgoingQcLotChecklistTest extends TestCase
         $this->expectExceptionMessage('no pass/fail recorded');
 
         $this->svc->complete($inspection->fresh(), $this->user);
+    }
+
+    /**
+     * A one-sided window is still a window. A functional parameter may carry a
+     * single bound (`UpsertInspectionSpecRequest` requires only that much), and
+     * the scaffold treats it as toleranced — so the recorder must accept the
+     * rows the scaffold writes, or the lot cannot be captured at all.
+     */
+    public function test_a_one_bound_piece_row_is_capturable(): void
+    {
+        $product = Product::create([
+            'part_number' => '1B-'.substr(uniqid(), -6),
+            'name' => 'Relay Cover',
+            'unit_of_measure' => 'pcs',
+            'standard_cost' => '1.00',
+            'is_active' => true,
+        ]);
+        $spec = InspectionSpec::create([
+            'product_id' => $product->id,
+            'version' => 1,
+            'is_active' => true,
+            'created_by' => $this->user->id,
+        ]);
+        // Functional, critical, nominal with a lower bound only: `90 … +∞`.
+        InspectionSpecItem::create([
+            'inspection_spec_id' => $spec->id,
+            'parameter_name' => 'Holding pressure',
+            'parameter_type' => 'functional',
+            'unit_of_measure' => 'bar',
+            'nominal_value' => '90.0000',
+            'tolerance_min' => '90.0000',
+            'tolerance_max' => null,
+            'is_critical' => true,
+            'sort_order' => 1,
+        ]);
+        $spec->ensureCurrentRevision();
+
+        // The row the scaffold reads: one bound, and it is the lower one.
+        $item = $spec->items->firstOrFail();
+        $this->assertSame('90.0000', (string) $item->tolerance_min);
+        $this->assertNull($item->tolerance_max);
+
+        $inspection = $this->outgoingInspection(batch: 2000, product: $product);
+        $pieceRows = $inspection->measurements->whereNotNull('tolerance_min');
+
+        $this->assertGreaterThan(
+            1,
+            $pieceRows->count(),
+            'A one-bound parameter still scaffolds the measured pieces, not a one-row matrix.',
+        );
+        $this->assertCount(0, $inspection->measurements->whereNull('tolerance_min'));
+
+        $row = $pieceRows->firstOrFail();
+        $this->svc->recordMeasurements(
+            $inspection->fresh(),
+            [$row->id => ['measured_value' => '95.0000']],
+            $this->user,
+        );
+
+        $this->assertSame('95.0000', (string) $row->fresh()->measured_value);
+        $this->assertTrue($row->fresh()->is_pass, 'The single bound decides the reading.');
+
+        // The lot is capturable end to end, not merely readable through the
+        // service: the recording endpoint used to reject these rows outright.
+        $fresh = $this->outgoingInspection(batch: 2000, product: $product);
+        $rows = $fresh->measurements;
+
+        $this->actingAs($this->user)
+            ->postJson(
+                "/api/v1/quality/inspections/{$fresh->hash_id}/lot-result",
+                [
+                    'checklist' => [],
+                    'measurements' => $rows
+                        ->map(fn ($r) => ['id' => $r->hash_id, 'measured_value' => '95.0000'])
+                        ->values()
+                        ->all(),
+                    'sample_defect_count' => 0,
+                    'complete' => true,
+                ],
+            )
+            ->assertSuccessful();
+
+        $this->assertTrue(
+            $rows->every(fn ($r) => $r->fresh()->measured_value === '95.0000'),
+            'Every scaffolded piece row accepted its reading.',
+        );
     }
 
     /** The payload the capture panel sends when a dimension is ticked. */
@@ -348,8 +512,8 @@ class OutgoingQcLotChecklistTest extends TestCase
         return $patch;
     }
 
-    /** @return \Illuminate\Support\Collection<int, InspectionMeasurement> */
-    private function pieceRows(Inspection $inspection, string $parameter): \Illuminate\Support\Collection
+    /** @return Collection<int, InspectionMeasurement> */
+    private function pieceRows(Inspection $inspection, string $parameter): Collection
     {
         return InspectionMeasurement::query()
             ->where('inspection_id', $inspection->id)
@@ -403,11 +567,12 @@ class OutgoingQcLotChecklistTest extends TestCase
         )->status;
     }
 
-    private function outgoingInspection(int $batch): Inspection
+    private function outgoingInspection(int $batch, ?Product $product = null): Inspection
     {
+        $product ??= $this->product;
         $so = SalesOrder::factory()->create();
         $wo = WorkOrder::factory()->create([
-            'product_id' => $this->product->id,
+            'product_id' => $product->id,
             'sales_order_id' => $so->id,
             'quantity_target' => $batch,
         ]);
@@ -422,7 +587,7 @@ class OutgoingQcLotChecklistTest extends TestCase
 
         return $this->svc->create([
             'stage' => InspectionStage::Outgoing->value,
-            'product_id' => $this->product->id,
+            'product_id' => $product->id,
             'batch_quantity' => $batch,
             'work_order_output_id' => $output->id,
         ], $this->user);
