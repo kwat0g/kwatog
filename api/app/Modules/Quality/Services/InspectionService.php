@@ -35,11 +35,13 @@ use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
 use App\Modules\Quality\Support\InspectionStateMachine;
+use App\Modules\Quality\Support\LotDefectCounter;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -279,71 +281,73 @@ class InspectionService
                 'notes' => "Quality plan v{$qualityPlan->version}; GRN {$grn->grn_number}.",
             ]);
 
-            // For lot-checklist mode: split parameters into checklist (no tolerance)
-            // and piece rows (with tolerance).
-            $timestamp = now()->toDateTimeString();
-            $measuredPieces = $this->settings->requiredInt('quality.incoming.measured_pieces', 1, 1000);
-            $checklistRows = [];
-            $pieceRows = [];
+            $parameters = [];
 
             foreach ((array) $qualityPlan->parameters as $parameter) {
-                $hasToler = isset($parameter['tolerance_min']) && isset($parameter['tolerance_max']);
-                if (! $hasToler) {
-                    // Checklist row: sample_index = 1 only.
-                    $checklistRows[] = [
-                        'inspection_id' => $inspection->id,
-                        'inspection_spec_item_id' => null,
-                        'sample_index' => 1,
-                        'parameter_name' => $parameter['parameter_name'],
-                        'parameter_type' => $parameter['parameter_type'],
-                        'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
-                        'nominal_value' => $parameter['nominal_value'] ?? null,
-                        'tolerance_min' => null,
-                        'tolerance_max' => null,
-                        'measured_value' => null,
-                        'is_critical' => (bool) ($parameter['is_critical'] ?? false),
-                        'is_pass' => null,
-                        'notes' => $parameter['notes'] ?? null,
-                        'created_at' => $timestamp,
-                        'updated_at' => $timestamp,
-                    ];
-                } else {
-                    // Piece rows: sample_index = 1..min(measured_pieces, sample_size).
-                    for ($sampleIndex = 1; $sampleIndex <= min($measuredPieces, $sampleSize); $sampleIndex++) {
-                        $pieceRows[] = [
-                            'inspection_id' => $inspection->id,
-                            'inspection_spec_item_id' => null,
-                            'sample_index' => $sampleIndex,
-                            'parameter_name' => $parameter['parameter_name'],
-                            'parameter_type' => $parameter['parameter_type'],
-                            'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
-                            'nominal_value' => $parameter['nominal_value'] ?? null,
-                            'tolerance_min' => $parameter['tolerance_min'] ?? null,
-                            'tolerance_max' => $parameter['tolerance_max'] ?? null,
-                            'measured_value' => null,
-                            'is_critical' => (bool) ($parameter['is_critical'] ?? false),
-                            'is_pass' => null,
-                            'notes' => $parameter['notes'] ?? null,
-                            'created_at' => $timestamp,
-                            'updated_at' => $timestamp,
-                        ];
-                    }
-                }
+                $parameters[] = [
+                    'parameter_name' => trim((string) ($parameter['parameter_name'] ?? '')),
+                    'parameter_type' => $parameter['parameter_type'],
+                    'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
+                    'nominal_value' => $parameter['nominal_value'] ?? null,
+                    'tolerance_min' => $parameter['tolerance_min'] ?? null,
+                    'tolerance_max' => $parameter['tolerance_max'] ?? null,
+                    'is_critical' => (bool) ($parameter['is_critical'] ?? false),
+                    'notes' => $parameter['notes'] ?? null,
+                    'inspection_spec_item_id' => null,
+                ];
             }
 
-            $allRows = array_merge($checklistRows, $pieceRows);
-            if ($allRows !== []) {
-                // Batch insert to avoid OOM on large sets.
-                foreach (array_chunk($allRows, 500) as $batch) {
-                    InspectionMeasurement::query()->insert($batch);
-                }
-            }
+            $this->scaffoldLotChecklist($inspection, $parameters, $this->measuredPieces());
 
             GoodsReceiptNote::query()->whereKey($grn->id)->whereNull('qc_inspection_id')
                 ->update(['qc_inspection_id' => $inspection->id, 'updated_at' => now()]);
 
             return $this->show($inspection);
         });
+    }
+
+    /**
+     * Create the outgoing inspection for one good output batch — the ONE
+     * creation path shared by TriggerOutgoingQC and the
+     * qc:sweep-missing-outgoing repair, so both produce identical rows and
+     * identical refusals (missing spec, missing revision, unmeasurable
+     * product). Idempotent under the (stage, work_order_output_id) partial
+     * unique index: a concurrent creator wins, the loser re-reads and gets
+     * the existing row instead of a 500.
+     *
+     * The caller is responsible for the WO lifecycle guards (status,
+     * SO-linkage) and for holding the WO lock.
+     */
+    public function createForOutput(WorkOrderOutput $output, WorkOrder $workOrder, User $by): Inspection
+    {
+        $guard = ['stage' => InspectionStage::Outgoing->value, 'work_order_output_id' => $output->id];
+
+        $existing = Inspection::query()->where($guard)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        try {
+            return $this->create([
+                'stage' => InspectionStage::Outgoing->value,
+                'product_id' => (int) $workOrder->product_id,
+                'batch_quantity' => (int) $output->good_count,
+                'entity_type' => InspectionEntityType::WorkOrder->value,
+                'entity_id' => (int) $workOrder->id,
+                'work_order_output_id' => (int) $output->id,
+            ], $by);
+        } catch (QueryException $e) {
+            if (! self::isUniqueViolation($e)) {
+                throw $e;
+            }
+
+            $winner = Inspection::query()->where($guard)->first();
+            if (! $winner) {
+                throw $e;
+            }
+
+            return $winner;
+        }
     }
 
     /**
@@ -422,6 +426,8 @@ class InspectionService
         // inspection before the operator reaches this form. Reusing that row is
         // the safe idempotent result; inserting a second row would hit the
         // database uniqueness guard and surface as a misleading 500.
+        // A CANCELLED row is not reused: its unique slot was released by
+        // migration 0565, so a fresh inspection is created in its place.
         $existing = Inspection::query()
             ->when($stage === InspectionStage::Outgoing,
                 fn ($query) => $query->where('work_order_output_id', $output?->id),
@@ -434,6 +440,7 @@ class InspectionService
                         fn ($query) => $query->where('product_id', $product->id),
                     ),
             )
+            ->where('status', '!=', InspectionStatus::Cancelled->value)
             ->first();
         if ($existing) {
             return $this->show($existing);
@@ -464,13 +471,25 @@ class InspectionService
             $reject = 1;
         }
 
+        // Counting the sample instead of enumerating it is the point: the AQL
+        // sample is inspected visually for defectives, and only a few pieces are
+        // measured. Only the three stages above flip; the return stages still
+        // enumerate the full per-unit matrix, as does anything created before this.
+        $lotChecklist = in_array(
+            $stage,
+            [InspectionStage::Incoming, InspectionStage::InProcess, InspectionStage::Outgoing],
+            true,
+        );
+        $measuredPieces = $lotChecklist ? $this->measuredPieces() : 0;
+
         return DB::transaction(function () use (
-            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output, $calibrationRecordId
+            $stage, $product, $spec, $batchQty, $sample, $code, $accept, $reject, $by, $data, $output, $calibrationRecordId, $lotChecklist, $measuredPieces
         ) {
             $insp = Inspection::query()->create([
                 'inspection_number' => $this->sequences->generate('inspection'),
                 'stage' => $stage->value,
                 'status' => InspectionStatus::Draft->value,
+                'inspection_mode' => ($lotChecklist ? InspectionMode::LotChecklist : InspectionMode::PerUnit)->value,
                 'product_id' => $product->id,
                 'inspection_spec_id' => $spec->id,
                 'inspection_spec_revision_id' => $spec->currentRevision?->id,
@@ -490,32 +509,53 @@ class InspectionService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            // Seed one measurement row per (sample × spec_item) without
-            // retaining the complete matrix in memory for a large lot.
-            $this->insertScaffoldRows(
-                $insp->id,
-                $sample,
-                $spec->items,
-                static function (int $sampleIndex, InspectionSpecItem $item, int $inspectionId, string $timestamp): array {
-                    return [
-                        'inspection_id' => $inspectionId,
-                        'inspection_spec_item_id' => $item->id,
-                        'sample_index' => $sampleIndex,
-                        'parameter_name' => $item->parameter_name,
+            if ($lotChecklist) {
+                $parameters = [];
+
+                foreach ($spec->items as $item) {
+                    $parameters[] = [
+                        'parameter_name' => trim((string) $item->parameter_name),
                         'parameter_type' => $item->parameter_type->value,
                         'unit_of_measure' => $item->unit_of_measure,
                         'nominal_value' => $item->nominal_value,
                         'tolerance_min' => $item->tolerance_min,
                         'tolerance_max' => $item->tolerance_max,
-                        'measured_value' => null,
-                        'is_critical' => $item->is_critical,
-                        'is_pass' => null,
+                        'is_critical' => (bool) $item->is_critical,
                         'notes' => null,
-                        'created_at' => $timestamp,
-                        'updated_at' => $timestamp,
+                        'inspection_spec_item_id' => (int) $item->id,
                     ];
-                },
-            );
+                }
+
+                $this->scaffoldLotChecklist($insp, $parameters, $measuredPieces);
+            } else {
+                // Per-unit matrix: one row per (sample × spec_item), inserted in
+                // bounded batches without holding the whole matrix in memory for
+                // a large lot. The return stages still create these fresh.
+                $this->insertScaffoldRows(
+                    $insp->id,
+                    $sample,
+                    $spec->items,
+                    static function (int $sampleIndex, InspectionSpecItem $item, int $inspectionId, string $timestamp): array {
+                        return [
+                            'inspection_id' => $inspectionId,
+                            'inspection_spec_item_id' => $item->id,
+                            'sample_index' => $sampleIndex,
+                            'parameter_name' => $item->parameter_name,
+                            'parameter_type' => $item->parameter_type->value,
+                            'unit_of_measure' => $item->unit_of_measure,
+                            'nominal_value' => $item->nominal_value,
+                            'tolerance_min' => $item->tolerance_min,
+                            'tolerance_max' => $item->tolerance_max,
+                            'measured_value' => null,
+                            'is_critical' => $item->is_critical,
+                            'is_pass' => null,
+                            'notes' => null,
+                            'created_at' => $timestamp,
+                            'updated_at' => $timestamp,
+                        ];
+                    },
+                );
+            }
 
             // Back-link the inspection onto the gated entity so that
             // downstream services (GRN accept gate, delivery release gate)
@@ -541,7 +581,9 @@ class InspectionService
     /**
      * Patch measurement readings. Each input row is keyed by measurement id
      * and may set measured_value, is_pass, notes. Auto-evaluation overrides
-     * the explicit is_pass for numeric parameters that have a tolerance band.
+     * the explicit is_pass for numeric parameters that have a tolerance band,
+     * except on a lot-checklist piece row that carries no reading, where a
+     * non-critical row may state its own attribute result.
      *
      * @param  array<int, array{measured_value?: float|string|null, is_pass?: bool|null, notes?: string|null}>  $rows
      */
@@ -601,6 +643,11 @@ class InspectionService
                     throw new BusinessRuleException('Each inspection measurement patch must be an object.');
                 }
 
+                // Captured before the patch is written onto the model: a claim
+                // may fill a blank row, never a row that already held a reading
+                // in the same call that deletes it.
+                $preExistingValue = $m->measured_value;
+
                 if (array_key_exists('measured_value', $patch)) {
                     $m->measured_value = $patch['measured_value'] === '' || $patch['measured_value'] === null
                         ? null
@@ -613,18 +660,39 @@ class InspectionService
                 }
 
                 if ($m->hasTolerance()) {
-                    // A tolerance-backed parameter is evidence-bearing: it
-                    // cannot be marked pass/fail without a reading, and an
-                    // explicit result may not contradict the calculated one.
+                    // A tolerance-backed parameter is evidence-bearing: where it
+                    // has a reading, that reading decides, and an explicit result
+                    // may not contradict it — a client able to assert a pass over
+                    // an out-of-tolerance reading would be writing a forged
+                    // quality record.
+                    //
+                    // The one claim a toleranced row may carry on its own is an
+                    // attribute claim with no reading at all: "inspected,
+                    // conforming", which is how a lot-checklist piece row is
+                    // ticked without a measurement. A critical characteristic is
+                    // always a measured value, and the legacy per-unit grid has no
+                    // tick surface, so neither may assert one.
+                    //
+                    // "No reading" is judged on what the row held when the request
+                    // arrived, not on what the patch just left behind: otherwise a
+                    // single patch could delete the reading and assert conformance
+                    // over the gap, turning a recorded failure into a pass.
                     $auto = $m->evaluate();
-                    if (array_key_exists('is_pass', $patch)
-                        && $patch['is_pass'] !== null
-                        && ($auto === null || (bool) $patch['is_pass'] !== $auto)) {
+                    $claim = $patch['is_pass'] ?? null;
+                    $mayCarryClaim = $claim !== null
+                        && ! $m->is_critical
+                        && $lockedInspection->inspection_mode === InspectionMode::LotChecklist
+                        && $preExistingValue === null;
+
+                    if ($claim !== null
+                        && ! $mayCarryClaim
+                        && ($auto === null || (bool) $claim !== $auto)) {
                         throw new BusinessRuleException(
                             "Measurement {$m->parameter_name} requires a result derived from its measured value.",
                         );
                     }
-                    $m->is_pass = $auto;
+
+                    $m->is_pass = $auto ?? ($mayCarryClaim ? (bool) $claim : null);
                     $hasMeaningfulResultEdit = $hasMeaningfulResultEdit || $m->isDirty('is_pass');
                 } elseif (array_key_exists('is_pass', $patch)) {
                     // Manual visual/functional parameters use an explicit
@@ -736,8 +804,11 @@ class InspectionService
                         throw new BusinessRuleException('Measurement ID does not belong to this inspection.');
                     }
 
-                    // Piece rows must have a tolerance.
-                    if ($row->tolerance_min === null || $row->tolerance_max === null) {
+                    // Piece rows must have a tolerance window — a one-sided one is
+                    // a window, and the scaffold writes exactly that for a
+                    // parameter carrying a single bound. Ask the model so the two
+                    // cannot drift apart again.
+                    if (! $row->hasTolerance()) {
                         throw new BusinessRuleException('Measurement must have tolerance bounds.');
                     }
 
@@ -815,34 +886,29 @@ class InspectionService
                 throw new BusinessRuleException('Cannot complete: inspection has no measurement rows.');
             }
 
+            // A row nothing has answered is neither a pass nor a fail. On a
+            // lot-checklist inspection this includes every piece row of a
+            // dimension the inspector never ticked: the tick is what records the
+            // answer (as `is_pass`), so silence here is an unanswered dimension,
+            // not a conforming one.
             $unresolved = $rows->whereNull('is_pass')->count();
             if ($unresolved > 0) {
                 throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
             }
 
-            // For lot_checklist mode, we use sample_defect_count (reported defects)
-            // combined with any critical failures. For per_unit mode, we count
-            // distinct sample indices with failures.
-            if ($lockedInspection->inspection_mode === InspectionMode::LotChecklist) {
-                if ($lockedInspection->sample_defect_count === null) {
-                    throw new BusinessRuleException(
-                        'Enter the number of defective pieces found in the sample (0 if none).'
-                    );
-                }
+            // A lot-checklist verdict is meaningless without the reported count,
+            // so the precondition is checked before anything derives from it.
+            if ($lockedInspection->inspection_mode === InspectionMode::LotChecklist
+                && $lockedInspection->sample_defect_count === null) {
+                throw new BusinessRuleException(
+                    'Enter the number of defective pieces found in the sample (0 if none).'
+                );
+            }
 
-                // Defect count is the max of reported defects and any failed piece rows.
-                // Checklist (sample_index=1, no tolerance) failures go to critical_fail.
-                $reportedDefects = (int) $lockedInspection->sample_defect_count;
-                $failedPieces = $rows
-                    ->where('is_pass', false)
-                    ->where(fn (InspectionMeasurement $r) => $r->tolerance_min !== null || $r->tolerance_max !== null)
-                    ->pluck('sample_index')
-                    ->unique()
-                    ->count();
-                $defects = max($reportedDefects, $failedPieces);
-                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-            } else {
-                // Per-unit mode: count distinct sample indices with any failure.
+            // Per-unit inspections are enumerated, so the declared sample must
+            // actually have been measured. Lot-checklist inspections count their
+            // sample instead, and their measured pieces are deliberately fewer.
+            if ($lockedInspection->inspection_mode !== InspectionMode::LotChecklist) {
                 $sampledUnits = $rows->pluck('sample_index')->unique()->count();
                 $declaredSample = (int) $lockedInspection->sample_size;
                 if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
@@ -850,10 +916,9 @@ class InspectionService
                         "Cannot complete: inspection declares a sample of {$declaredSample} unit(s) but only {$sampledUnits} were measured.",
                     );
                 }
-
-                $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
-                $defects = $rows->where('is_pass', false)->pluck('sample_index')->unique()->count();
             }
+
+            ['defects' => $defects, 'criticalFail' => $criticalFail] = LotDefectCounter::for($lockedInspection, $rows);
 
             if ($lockedInspection->calibration_record_id) {
                 $record = CalibrationRecord::query()->find((int) $lockedInspection->calibration_record_id);
@@ -1042,6 +1107,69 @@ class InspectionService
     }
 
     /**
+     * Scaffold a lot-checklist inspection.
+     *
+     * One checklist row (sample_index = 1, no tolerance bounds) for every
+     * parameter with no tolerance band, and `$measuredPieces` piece rows
+     * (sample_index 1..N, with bounds) for every parameter that has one. The
+     * split is not cosmetic: InspectionService::recordLotResult() rejects a
+     * checklist row carrying bounds and a piece row lacking them, so the shape
+     * written here is the shape the recording endpoint accepts.
+     *
+     * @param  iterable<array{parameter_name: string, parameter_type: string, unit_of_measure: ?string, nominal_value: mixed, tolerance_min: mixed, tolerance_max: mixed, is_critical: bool, notes: ?string, inspection_spec_item_id: ?int}>  $parameters
+     *
+     * @throws BusinessRuleException when nothing usable was supplied — an
+     *                               inspection with no rows cannot be completed later.
+     */
+    private function scaffoldLotChecklist(Inspection $inspection, iterable $parameters, int $measuredPieces): void
+    {
+        $timestamp = now()->toDateTimeString();
+        $rows = [];
+
+        foreach ($parameters as $parameter) {
+            $name = trim((string) ($parameter['parameter_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $hasTolerance = $parameter['tolerance_min'] !== null || $parameter['tolerance_max'] !== null;
+            $sampleIndices = $hasTolerance
+                ? range(1, min($measuredPieces, max(1, (int) $inspection->sample_size)))
+                : [1];
+
+            foreach ($sampleIndices as $sampleIndex) {
+                $rows[] = [
+                    'inspection_id' => $inspection->id,
+                    'inspection_spec_item_id' => $parameter['inspection_spec_item_id'] ?? null,
+                    'sample_index' => $sampleIndex,
+                    'parameter_name' => $name,
+                    'parameter_type' => $parameter['parameter_type'],
+                    'unit_of_measure' => $parameter['unit_of_measure'] ?? null,
+                    'nominal_value' => $parameter['nominal_value'] ?? null,
+                    'tolerance_min' => $hasTolerance ? $parameter['tolerance_min'] : null,
+                    'tolerance_max' => $hasTolerance ? $parameter['tolerance_max'] : null,
+                    'measured_value' => null,
+                    'is_critical' => (bool) ($parameter['is_critical'] ?? false),
+                    'is_pass' => null,
+                    'notes' => $parameter['notes'] ?? null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+        }
+
+        if ($rows === []) {
+            throw new BusinessRuleException(
+                'Lot checklist inspection requires at least one inspectable parameter.'
+            );
+        }
+
+        foreach (array_chunk($rows, 500) as $batch) {
+            InspectionMeasurement::query()->insert($batch);
+        }
+    }
+
+    /**
      * Insert a sample × parameter scaffold in bounded batches.
      *
      * @param  iterable<mixed>  $parameters
@@ -1081,6 +1209,45 @@ class InspectionService
         }
 
         return $batchQuantity;
+    }
+
+    /**
+     * True when a QueryException is a unique-constraint violation. SQLSTATE
+     * 23000/23505 covers PostgreSQL; SQLite surfaces HY000 but embeds the
+     * message. Same helper the chain listeners carry.
+     */
+    private static function isUniqueViolation(QueryException $e): bool
+    {
+        return str_starts_with((string) $e->getCode(), '23')
+            || str_contains($e->getMessage(), 'UNIQUE constraint failed');
+    }
+
+    /**
+     * Pieces measured per toleranced parameter in a lot-checklist inspection.
+     *
+     * The single reader of both keys: the stage-agnostic setting, falling back
+     * to its incoming-only predecessor for one release. Resolving here rather
+     * than at each call site keeps the two keys from being read inconsistently.
+     */
+    private function measuredPieces(): int
+    {
+        $value = $this->settings->get('quality.inspection.measured_pieces')
+            ?? $this->settings->get('quality.incoming.measured_pieces');
+
+        if ($value === null) {
+            return 5;
+        }
+
+        if (! is_numeric($value) || (int) $value != (float) $value) {
+            throw new BusinessRuleException('Required setting quality.inspection.measured_pieces is missing or invalid.');
+        }
+
+        $pieces = (int) $value;
+        if ($pieces < 1 || $pieces > 1000) {
+            throw new BusinessRuleException('Required setting quality.inspection.measured_pieces is outside its valid range.');
+        }
+
+        return $pieces;
     }
 
     private function attachEntityContext(Inspection $inspection): Inspection

@@ -10,11 +10,13 @@ use App\Common\Services\Pdf\PdfRenderService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Quality\Enums\InspectionMode;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Exceptions\InspectionCertificateException;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Support\LotDefectCounter;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -205,34 +207,36 @@ class CoCService
      * (imports, console tasks, direct SQL, a cascade that removed rows). Any
      * of the following means the certificate would misstate its own evidence:
      *
-     *   - no measurement rows at all               → nothing was measured
-     *   - a row with is_pass = null                → the lot is part-inspected
-     *   - a row with is_pass = false               → evidence contradicts the verdict
-     *   - fewer sampled units than `sample_size`   → fewer units than declared
+     *   - no measurement rows at all                 → nothing was measured
+     *   - a row with is_pass = null                  → the lot is part-inspected
+     *   - a critical row with is_pass = false        → evidence contradicts the verdict
+     *   - defects above the acceptance number        → ditto
+     *   - fewer sampled units than `sample_size`     → per-unit mode only; a
+     *     lot-checklist sample is counted, not enumerated
+     *   - no reported sample_defect_count (lot-checklist only), or a toleranced
+     *     critical characteristic with no reading (any mode) → the certificate's
+     *     own sample claim has no evidence behind it
      *
      * Verified rather than trusted: this method re-reads the rows instead of
      * relying on `defect_count`, which is a snapshot taken at completion and
-     * does not track later edits to the evidence.
+     * does not track later edits to the evidence. The defect count comes from
+     * LotDefectCounter, the same implementation the completion verdict uses, so
+     * a lot cannot pass on one formula and be refused a certificate on another.
      */
     private function assertEvidenceSupportsCertificate(Inspection $inspection): void
     {
-        $stats = InspectionMeasurement::query()
+        $rows = InspectionMeasurement::query()
             ->where('inspection_id', $inspection->getKey())
-            ->selectRaw('count(*) as total')
-            ->selectRaw('count(*) filter (where is_pass is null) as unresolved')
-            ->selectRaw('count(*) filter (where is_pass = false) as failing')
-            ->selectRaw('count(distinct sample_index) as sampled_units')
-            ->first();
+            ->get();
 
-        $total = (int) ($stats->total ?? 0);
-        if ($total < 1) {
+        if ($rows->isEmpty()) {
             throw new InspectionCertificateException(
                 'CoC requires recorded inspection measurements; this inspection has none.',
                 'COC_NO_MEASUREMENT_EVIDENCE',
             );
         }
 
-        $unresolved = (int) ($stats->unresolved ?? 0);
+        $unresolved = $rows->filter(static fn (InspectionMeasurement $row): bool => $row->is_pass === null)->count();
         if ($unresolved > 0) {
             throw new InspectionCertificateException(
                 "CoC requires every sampled measurement to be resolved; {$unresolved} have no pass/fail recorded.",
@@ -240,15 +244,60 @@ class CoCService
             );
         }
 
-        $failing = (int) ($stats->failing ?? 0);
-        if ($failing > 0) {
+        $counted = LotDefectCounter::for($inspection, $rows);
+
+        if ($counted['criticalFail']) {
             throw new InspectionCertificateException(
-                "CoC cannot be issued: {$failing} recorded measurement(s) failed, which contradicts the passed verdict.",
+                'CoC cannot be issued: a critical characteristic was recorded as failed.',
                 'COC_EVIDENCE_CONTRADICTS_VERDICT',
             );
         }
 
-        $sampledUnits = (int) ($stats->sampled_units ?? 0);
+        if ($counted['defects'] > (int) $inspection->accept_count) {
+            throw new InspectionCertificateException(
+                "CoC cannot be issued: the recorded evidence ({$counted['defects']} defect(s)) "
+                ."exceeds the acceptance number (Ac {$inspection->accept_count}).",
+                'COC_EVIDENCE_CONTRADICTS_VERDICT',
+            );
+        }
+
+        if ($inspection->inspection_mode === InspectionMode::LotChecklist
+            && $inspection->sample_defect_count === null) {
+            throw new InspectionCertificateException(
+                'CoC requires the number of defective pieces found in the sample to be recorded.',
+                'COC_EVIDENCE_INCOMPLETE',
+            );
+        }
+
+        // A toleranced critical characteristic is a CTQ, and IATF wants variable
+        // data on it: a toleranced critical characteristic with no number is an
+        // unbacked claim. The rule spans every mode — a per-unit row asserts
+        // exactly what a counted-lot row asserts, and a guard whose own docblock
+        // exists to catch records that did not go through the service cannot
+        // depend on the service having been used. An *untoleranced* critical row
+        // is a legitimate attribute record (a visual pass/fail check with no
+        // number), and a non-critical characteristic may be recorded as
+        // conforming by attribute — which is what the capture panel does — so
+        // the rule keeps its criticality condition and counts toleranced rows.
+        $unmeasured = $rows
+            ->filter(static fn (InspectionMeasurement $row): bool => $row->hasTolerance() && $row->is_critical)
+            ->filter(static fn (InspectionMeasurement $row): bool => $row->measured_value === null)
+            ->count();
+
+        if ($unmeasured > 0) {
+            throw new InspectionCertificateException(
+                "CoC requires every critical characteristic to carry a reading; {$unmeasured} row(s) have none.",
+                'COC_EVIDENCE_INCOMPLETE',
+            );
+        }
+
+        // Everything above is mode-independent except the counted-sample check;
+        // the rules that follow judge an enumerated per-unit sample.
+        if ($inspection->inspection_mode === InspectionMode::LotChecklist) {
+            return;
+        }
+
+        $sampledUnits = $rows->pluck('sample_index')->unique()->count();
         $declaredSample = (int) $inspection->sample_size;
         if ($declaredSample > 0 && $sampledUnits < $declaredSample) {
             throw new InspectionCertificateException(

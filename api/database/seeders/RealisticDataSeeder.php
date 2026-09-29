@@ -583,7 +583,10 @@ class RealisticDataSeeder extends Seeder
         foreach ($products as $pid) {
             $base = $this->rand(800, 4000);
             for ($m = 11; $m >= 0; $m--) {
-                $month = $now->subMonths($m);
+                // NoOverflow: subMonths() overflows on day 29-31 (Feb 29 -> Mar 1),
+                // duplicating a month vs demand_forecasts unique. Same convention
+                // as the leave/payroll seeders below.
+                $month = $now->subMonthsNoOverflow($m);
                 // Trend + seasonal wobble.
                 $trend = (int) ($base * (1 + (11 - $m) * 0.02));
                 $forecast = $trend + $this->rand(-200, 200);

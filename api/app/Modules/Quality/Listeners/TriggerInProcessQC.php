@@ -14,6 +14,7 @@ use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -43,6 +44,7 @@ class TriggerInProcessQC implements ShouldQueue
         try {
             if ($event->to !== WorkOrderStatus::InProgress->value) {
                 app(ChainListenerRunService::class)->recordOutcome('skipped', 'stale_or_not_in_process_transition');
+
                 return;
             }
 
@@ -66,12 +68,18 @@ class TriggerInProcessQC implements ShouldQueue
                 }
 
                 // Idempotent — if an in-process inspection already exists, skip.
+                // A CANCELLED one does not count: its slot is reusable (migration
+                // 0565 released the unique claim), so a WO whose in-process QC
+                // was cancelled in error can still get its inspection.
                 $existing = Inspection::query()
                     ->where('stage', InspectionStage::InProcess->value)
                     ->where('entity_type', InspectionEntityType::WorkOrder->value)
                     ->where('entity_id', $lockedWo->id)
+                    ->where('status', '!=', InspectionStatus::Cancelled->value)
                     ->exists();
-                if ($existing) return null;
+                if ($existing) {
+                    return null;
+                }
 
                 // quantity_target is required for new work orders. Legacy rows can
                 // still be incomplete; never invent a production batch quantity or
@@ -101,17 +109,19 @@ class TriggerInProcessQC implements ShouldQueue
                     // inspection while the WO lock is still held. The service
                     // loads the active spec and seeds measurement rows.
                     $created = $this->inspections->create([
-                        'stage'          => InspectionStage::InProcess->value,
-                        'product_id'     => (int) $productId,
+                        'stage' => InspectionStage::InProcess->value,
+                        'product_id' => (int) $productId,
                         'batch_quantity' => $batchQty,
-                        'entity_type'    => InspectionEntityType::WorkOrder->value,
-                        'entity_id'      => $lockedWo->id,
-                        'notes'         => "Auto-created from WO {$lockedWo->wo_number} start.",
+                        'entity_type' => InspectionEntityType::WorkOrder->value,
+                        'entity_id' => $lockedWo->id,
+                        'notes' => "Auto-created from WO {$lockedWo->wo_number} start.",
                     ], $creator);
                 } catch (QueryException $e) {
                     // A direct/manual insert may have won the unique race. The
                     // listener remains replay-safe without hiding other failures.
-                    if (self::isUniqueViolation($e)) return null;
+                    if (self::isUniqueViolation($e)) {
+                        return null;
+                    }
                     throw $e;
                 }
 
@@ -123,6 +133,7 @@ class TriggerInProcessQC implements ShouldQueue
                     'skipped',
                     'in_process_inspection_already_present_or_source_not_actionable',
                 );
+
                 return;
             }
 
@@ -135,13 +146,13 @@ class TriggerInProcessQC implements ShouldQueue
                     ->get();
 
                 app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [
-                    'title'       => 'In-process QC required',
-                    'message'     => "In-process QC required for WO {$wo->wo_number}.",
+                    'title' => 'In-process QC required',
+                    'message' => "In-process QC required for WO {$wo->wo_number}.",
                     // Open the inspection itself; the WO page is one more click.
-                    'link_to'     => $created ? "/quality/inspections/{$created->hash_id}" : "/production/work-orders/{$wo->hash_id}",
+                    'link_to' => $created ? "/quality/inspections/{$created->hash_id}" : "/production/work-orders/{$wo->hash_id}",
                     'entity_type' => 'work_order',
-                    'entity_id'   => $wo->hash_id,
-                    'wo_number'   => $wo->wo_number,
+                    'entity_id' => $wo->hash_id,
+                    'wo_number' => $wo->wo_number,
                 ]);
             } catch (\Throwable $e) {
                 Log::debug('TriggerInProcessQC notification failed', ['error' => $e->getMessage()]);
@@ -164,6 +175,7 @@ class TriggerInProcessQC implements ShouldQueue
     private static function isUniqueViolation(QueryException $e): bool
     {
         $code = (string) $e->getCode();
+
         return str_starts_with($code, '23')
             || str_contains($e->getMessage(), 'UNIQUE constraint failed');
     }

@@ -8,6 +8,11 @@ type NumericItem = {
   measured_value: string | null;
   tolerance_min: number | null;
   tolerance_max: number | null;
+  /**
+   * The row's own claim when it carries no reading: `true` from a ticked
+   * dimension, `false` from an explicit NG mark. A reading decides for itself.
+   */
+  is_pass?: boolean | null;
 };
 
 describe('computeLotChecklistVerdict', () => {
@@ -118,7 +123,7 @@ describe('computeLotChecklistVerdict', () => {
     expect(result.reason).toContain('Defects (2) exceed Ac (1)');
   });
 
-  it('handles null measured values', () => {
+  it('reports pending rather than passing when a value is missing', () => {
     const checklist: ChecklistItem[] = [{ is_critical: false, is_pass: true }];
     const numeric: NumericItem[] = [
       {
@@ -130,7 +135,94 @@ describe('computeLotChecklistVerdict', () => {
       },
     ];
     const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('pending');
+    expect(result.reason).toContain('1 measurement unanswered');
+  });
+
+  it('resolves a row by its claim when it carries no reading', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [1, 2].map((sample_index) => ({
+      is_critical: false,
+      sample_index,
+      measured_value: null,
+      tolerance_min: 8,
+      tolerance_max: 12,
+      is_pass: true,
+    }));
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 0);
     expect(result.verdict).toBe('pass');
+  });
+
+  it('counts each piece an explicit NG mark names as one defect', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [1, 2].map((sample_index) => ({
+      is_critical: false,
+      sample_index,
+      measured_value: null,
+      tolerance_min: 8,
+      tolerance_max: 12,
+      is_pass: false,
+    }));
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 1);
+    expect(result.verdict).toBe('fail');
+    expect(result.reason).toContain('Defects (2) exceed Ac (1)');
+  });
+
+  it('stays pending while any piece of a declared-out dimension is unclaimed', () => {
+    // Unticking a dimension reveals its pieces; it does not itself declare
+    // defects, so a blank piece leaves the lot unresolved rather than failing.
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [
+      {
+        is_critical: false,
+        sample_index: 1,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+        is_pass: false,
+      },
+      {
+        is_critical: false,
+        sample_index: 2,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+      },
+    ];
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('pending');
+    expect(result.reason).toContain('1 measurement unanswered');
+  });
+
+  it('fails a critical piece marked NG with no reading', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [
+      {
+        is_critical: true,
+        sample_index: 1,
+        measured_value: null,
+        tolerance_min: 8,
+        tolerance_max: 12,
+        is_pass: false,
+      },
+    ];
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 2);
+    expect(result.verdict).toBe('fail');
+    expect(result.reason).toContain('Critical measurement out of tolerance');
+  });
+
+  it('reports pending while a parameter is unanswered', () => {
+    const checklist: ChecklistItem[] = [];
+    const numeric: NumericItem[] = [1, 2, 3].map((sample_index) => ({
+      is_critical: false,
+      sample_index,
+      measured_value: null,
+      tolerance_min: 8,
+      tolerance_max: 12,
+    }));
+    const result = computeLotChecklistVerdict(checklist, numeric, 0, 1);
+    expect(result.verdict).toBe('pending');
+    expect(result.reason).toContain('3 measurements unanswered');
   });
 
   it('passes when all measured values are in tolerance', () => {

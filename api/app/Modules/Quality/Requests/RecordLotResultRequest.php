@@ -23,7 +23,7 @@ class RecordLotResultRequest extends FormRequest
      *     ...
      *   ]
      *   measurements: [
-     *     { id: <hash_id>, measured_value?: number },
+     *     { id: <hash_id>, measured_value?: number, is_pass?: bool },
      *     ...
      *   ]
      *   sample_defect_count: int (0..sample_size) — may be null on a draft
@@ -94,6 +94,11 @@ class RecordLotResultRequest extends FormRequest
                 'decimal:0,4',
                 'between:-99999999.9999,99999999.9999',
             ],
+            // A piece row's own answer, used where there is no reading to decide
+            // it: a ticked dimension ("inspected, conforming") or an explicit NG
+            // mark. The service is what accepts or refuses it — the rule only
+            // keeps the field from being stripped before the service sees it.
+            'measurements.*.is_pass' => ['nullable', 'boolean'],
 
             'sample_defect_count' => [
                 Rule::requiredIf(fn () => $this->boolean('complete')),

@@ -16,8 +16,10 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderOutput;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -312,14 +314,34 @@ class WoOperationService
                     );
                 }
 
-                $this->inspections->create([
-                    'stage' => InspectionStage::InProcess->value,
-                    'product_id' => (int) $workOrder->product_id,
-                    'batch_quantity' => max(1, (int) ($locked->qty_completed ?: $workOrder->quantity_target)),
-                    'entity_type' => InspectionEntityType::WorkOrder->value,
-                    'entity_id' => $workOrder->id,
-                    'notes' => "Required by operation {$locked->operation_name} completion.",
-                ], $creator);
+                // Two workers completing two qc_required operations of the same
+                // WO concurrently can both pass InspectionService::create()'s
+                // check-then-insert guard; the (stage, entity_type, entity_id)
+                // partial unique index then refuses the loser. Re-read the
+                // winner's row instead of surfacing a raw 500 — one in-process
+                // inspection per WO is the contract, whoever inserted it.
+                try {
+                    $this->inspections->create([
+                        'stage' => InspectionStage::InProcess->value,
+                        'product_id' => (int) $workOrder->product_id,
+                        'batch_quantity' => max(1, (int) ($locked->qty_completed ?: $workOrder->quantity_target)),
+                        'entity_type' => InspectionEntityType::WorkOrder->value,
+                        'entity_id' => $workOrder->id,
+                        'notes' => "Required by operation {$locked->operation_name} completion.",
+                    ], $creator);
+                } catch (QueryException $e) {
+                    $isUnique = str_starts_with((string) $e->getCode(), '23')
+                        || str_contains($e->getMessage(), 'UNIQUE constraint failed');
+                    $alreadyThere = Inspection::query()
+                        ->where('stage', InspectionStage::InProcess->value)
+                        ->where('entity_type', InspectionEntityType::WorkOrder->value)
+                        ->where('entity_id', $workOrder->id)
+                        ->exists();
+
+                    if (! $isUnique || ! $alreadyThere) {
+                        throw $e;
+                    }
+                }
             }
 
             $locked->update([

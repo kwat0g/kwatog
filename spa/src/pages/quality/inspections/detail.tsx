@@ -33,7 +33,7 @@ import { Input } from '@/components/ui/Input';
 import { SpecToleranceBar } from '@/components/ui/SpecToleranceBar';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/formatDate';
-import { IncomingLotChecklist } from './components/IncomingLotChecklist';
+import { LotResultPanel } from './components/LotResultPanel';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> =
   {
@@ -249,6 +249,11 @@ export default function InspectionDetailPage() {
   const isTerminal = ['awaiting_review', 'passed', 'failed', 'cancelled'].includes(data.status);
   const dirtyCount = Object.values(drafts).filter((d) => d.dirty).length;
   const unresolvedCount = (data.measurements ?? []).filter((m) => m.is_pass === null).length;
+  // Lot-checklist captures live in the panel, not in `drafts`, so the status line
+  // reads their progress from the saved payload instead.
+  const lotChecklistStarted =
+    data.sample_defect_count != null ||
+    (data.measurements ?? []).some((m) => m.is_pass !== null || m.measured_value !== null);
 
   const updateDraft = (mId: string, patch: Partial<RowDraft>) => {
     setDrafts((s) => ({ ...s, [mId]: { ...s[mId], ...patch, dirty: true } }));
@@ -271,6 +276,8 @@ export default function InspectionDetailPage() {
   return (
     <div>
       <PageHeader
+        backTo="/quality/inspections"
+        backLabel="Back to inspections"
         title={
           <span>
             {data.inspection_number}
@@ -281,9 +288,9 @@ export default function InspectionDetailPage() {
         }
         subtitle={
           data.product
-            ? `${data.product.part_number} — ${data.product.name} (${stageLabel ?? data.stage})`
+            ? `${data.product.part_number} — ${data.product.name}`
             : data.item
-              ? `${data.item.code} — ${data.item.name} (${stageLabel ?? data.stage})`
+              ? `${data.item.code} — ${data.item.name}`
               : (stageLabel ?? data.stage)
         }
         actions={
@@ -292,32 +299,32 @@ export default function InspectionDetailPage() {
               <>
                 {/* The lot checklist carries its own Save draft / Submit result. */}
                 {data.inspection_mode !== 'lot_checklist' && (
-                <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<LuSave size={14} />}
-                  loading={save.isPending}
-                  disabled={dirtyCount === 0}
-                  onClick={() => save.mutate()}
-                >
-                  Save ({dirtyCount})
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<LuCheck size={14} />}
-                  disabled={unresolvedCount > 0 || dirtyCount > 0}
-                  title={
-                    dirtyCount > 0
-                      ? 'Save your measurement edits before completing — completion is computed from saved evidence.'
-                      : undefined
-                  }
-                  onClick={() => setConfirmComplete(true)}
-                >
-                  Complete
-                </Button>
-                </>
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<LuSave size={14} />}
+                      loading={save.isPending}
+                      disabled={dirtyCount === 0}
+                      onClick={() => save.mutate()}
+                    >
+                      Save ({dirtyCount})
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<LuCheck size={14} />}
+                      disabled={unresolvedCount > 0 || dirtyCount > 0}
+                      title={
+                        dirtyCount > 0
+                          ? 'Save your measurement edits before completing — completion is computed from saved evidence.'
+                          : undefined
+                      }
+                      onClick={() => setConfirmComplete(true)}
+                    >
+                      Complete
+                    </Button>
+                  </>
                 )}
                 <Button
                   variant="secondary"
@@ -397,7 +404,7 @@ export default function InspectionDetailPage() {
         <div className="col-span-2 space-y-4">
           {/* Lot checklist mode */}
           {data.inspection_mode === 'lot_checklist' ? (
-            <IncomingLotChecklist inspection={data} isTerminal={isTerminal} />
+            <LotResultPanel inspection={data} isTerminal={isTerminal} />
           ) : (
             <>
               <Panel title="Sample plan">
@@ -441,15 +448,11 @@ export default function InspectionDetailPage() {
                   </div>
                   <div>
                     <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
-                    <dd className="font-mono tabular-nums">
-                      {formatDateTime(data.started_at)}
-                    </dd>
+                    <dd className="font-mono tabular-nums">{formatDateTime(data.started_at)}</dd>
                   </div>
                   <div>
                     <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
-                    <dd className="font-mono tabular-nums">
-                      {formatDateTime(data.completed_at)}
-                    </dd>
+                    <dd className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</dd>
                   </div>
                 </dl>
               </Panel>
@@ -605,38 +608,29 @@ export default function InspectionDetailPage() {
         <div className="space-y-4">
           <Panel title="Status">
             {data.status === 'awaiting_review' ? (
-              <p className="text-sm text-muted">
-                Submitted — proposed <strong>{data.proposed_result ?? '—'}</strong>. Waiting for a
-                checker other than the inspector to approve or overturn the result.
-              </p>
-            ) : isTerminal ? (
-              <p className="text-sm">
-                Inspection finalised on{' '}
-                <span className="font-mono tabular-nums">
-                  {formatDateTime(data.completed_at)}
+              <div className="flex items-center gap-2">
+                <Chip variant="warning">Awaiting checker</Chip>
+                <span className="text-sm text-muted">
+                  Proposed:{' '}
+                  <span className="font-mono tabular-nums">{data.proposed_result ?? '—'}</span>
                 </span>
-                .
-              </p>
-            ) : data.inspection_mode === 'lot_checklist' ? (
-              <p className="text-sm text-muted">
-                Tick each checklist item that is OK, enter the defective pieces found in the
-                sample, then submit the result.
-              </p>
+              </div>
+            ) : isTerminal ? (
+              <div className="text-sm text-muted">
+                Finalised{' '}
+                <span className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</span>
+              </div>
+            ) : data.inspection_mode === 'lot_checklist' && !lotChecklistStarted ? (
+              <Chip variant="neutral">Not started</Chip>
             ) : unresolvedCount > 0 ? (
-              <p className="text-sm text-muted">
-                {unresolvedCount} measurement{unresolvedCount === 1 ? '' : 's'} still pending.
-                Complete is disabled until every sampled unit has a pass/fail recorded.
-              </p>
+              <Chip variant="warning">{unresolvedCount} pending</Chip>
             ) : data.defect_count > data.accept_count ? (
-              <p className="text-sm text-danger-fg">
-                Defects ({data.defect_count}) exceed Ac ({data.accept_count}). Completing now will
-                mark this inspection as <strong>failed</strong>.
-              </p>
+              <Chip variant="danger">
+                Defects <span className="font-mono tabular-nums">{data.defect_count}</span> &gt; Ac{' '}
+                <span className="font-mono tabular-nums">{data.accept_count}</span> — will fail
+              </Chip>
             ) : (
-              <p className="text-sm text-success-fg">
-                All measurements have a recorded result. Completing will compute the final
-                inspection outcome as <strong>passed</strong>.
-              </p>
+              <Chip variant="success">Ready to complete</Chip>
             )}
           </Panel>
 

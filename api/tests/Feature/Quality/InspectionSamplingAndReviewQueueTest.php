@@ -77,7 +77,14 @@ class InspectionSamplingAndReviewQueueTest extends TestCase
         $inspection = Inspection::query()->where('entity_id', $wo->id)->where('stage', 'in_process')->firstOrFail();
         $this->assertSame(5000, (int) $inspection->batch_quantity);
         $this->assertSame(5, (int) $inspection->sample_size);
-        $this->assertSame(10, InspectionMeasurement::query()->where('inspection_id', $inspection->id)->count(), '5 pieces × 2 parameters');
+        // Lot-checklist shape: five measured pieces for the toleranced
+        // parameter plus one checklist row for the visual one — not
+        // `sample_size × parameters`.
+        $this->assertSame(
+            6,
+            InspectionMeasurement::query()->where('inspection_id', $inspection->id)->count(),
+            '5 measured pieces + 1 checklist row',
+        );
     }
 
     public function test_in_process_sample_never_exceeds_the_work_order(): void

@@ -9,6 +9,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Production\Enums\ProductionReceiptHandoffStatus;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,6 +43,12 @@ class WorkOrderOutput extends Model
     public function workOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class);
+    }
+
+    /** Every QC inspection raised against this output batch (outgoing). */
+    public function inspections(): HasMany
+    {
+        return $this->hasMany(Inspection::class, 'work_order_output_id');
     }
 
     public function recorder(): BelongsTo

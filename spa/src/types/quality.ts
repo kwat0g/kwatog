@@ -190,6 +190,12 @@ export interface RecordLotResultData {
   measurements: Array<{
     id: string;
     measured_value: string | null;
+    /**
+     * The row's answer when it carries no reading: `true` for a ticked dimension
+     * ("inspected, conforming"), `false` for an explicit NG mark. Null leaves the
+     * reading in charge — the server refuses a claim that contradicts one.
+     */
+    is_pass?: boolean | null;
   }>;
   sample_defect_count: number | null;
   complete: boolean;

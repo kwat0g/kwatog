@@ -135,6 +135,11 @@ class InspectionCalibrationEvidenceTest extends TestCase
         // Equipment becomes overdue before completion
         $cal->update(['status' => CalibrationStatus::Overdue]);
 
+        // A lot-checklist inspection needs its reported count before any other
+        // completion precondition is reachable; supply it so the calibration
+        // gate is the failure under test.
+        $inspection->forceFill(['sample_defect_count' => 0])->save();
+
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('measuring equipment BORE-GAUGE-002 is overdue');
 
