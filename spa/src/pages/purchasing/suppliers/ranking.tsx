@@ -194,7 +194,7 @@ export default function SupplierRankingPage() {
         <EmptyState
           icon="alert-circle"
           title="Failed to load supplier ranking"
-          description="Something went wrong while loading the selected period."
+          description="This data could not be loaded. Check your connection and try again."
           action={
             <Button variant="secondary" onClick={() => refetch()}>
               Retry

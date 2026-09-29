@@ -148,7 +148,7 @@ export default function NotificationPreferencesPage() {
  <EmptyState
  icon="alert-circle"
  title="Couldn't load your preferences"
- description="An error occurred while loading your notification settings. Please try again."
+ description="This data could not be loaded. Check your connection and try again."
  action={
  <Button
  variant="secondary"
