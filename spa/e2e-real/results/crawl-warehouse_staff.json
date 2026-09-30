@@ -1,0 +1,1942 @@
+[
+ {
+  "route": "/assets/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/assets/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers",
+  "role": "warehouse_staff",
+  "finalUrl": "/careers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers/track",
+  "role": "warehouse_staff",
+  "finalUrl": "/careers/track",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/cookies",
+  "role": "warehouse_staff",
+  "finalUrl": "/cookies",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/products",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/complaints",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/complaints/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/customers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/inquiries",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/inquiries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/price-agreements",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/price-agreements",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/price-agreements/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/price-agreements/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/products",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/crm/products/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/products/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/sales-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/crm/sales-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/accounting",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/admin",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/admin",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/default",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/default",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/finance",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/hr",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/hr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/plant-manager",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/dashboard/ppc",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/ppc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/purchasing",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/purchasing",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/quality",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/quality",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/scorecard",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/scorecard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/warehouse",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/driver",
+  "role": "warehouse_staff",
+  "finalUrl": "/driver",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory",
+  "role": "warehouse_staff",
+  "finalUrl": "/factory",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory/qc",
+  "role": "warehouse_staff",
+  "finalUrl": "/factory/qc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/recruitment",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/applications",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/recruitment/applications",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/postings",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/recruitment/postings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/postings/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/recruitment/postings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/separations",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/separations",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/skills",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/skills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/training/matrix",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/hr/trainings",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/trainings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/trainings/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/hr/trainings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/dashboard",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/grn",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/grn",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/grn/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/grn/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/items",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/items/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/items/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/material-issues",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/inventory/mrb",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/mrb",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/picking",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/picking",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ap-aging",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/ap-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ar-aging",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/ar-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/balance-sheet",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/balance-sheet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/bills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/bills/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/coa",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/coa/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/credit-notes",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/credit-notes",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/customers",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/customers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/customers/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/income-statement",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/income-statement",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/invoices",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/invoices/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/invoices/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/journal-entries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/periods",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/periods",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/portal-access",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/portal-access",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/trial-balance",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/vendors",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/vendors",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/vendors/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/accounting/vendors/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/action-center",
+  "role": "warehouse_staff",
+  "finalUrl": "/action-center",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/operations-health",
+  "role": "warehouse_staff",
+  "finalUrl": "/admin/operations-health",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/users-roles",
+  "role": "warehouse_staff",
+  "finalUrl": "/admin/users",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/assets",
+  "role": "warehouse_staff",
+  "finalUrl": "/assets",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/scanner",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/inventory/stock-adjustments",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/stock-adjustments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-adjustments/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/stock-adjustments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-count",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/stock-count",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-levels",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/stock-levels",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/transfer-orders",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/transfer-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse",
+  "role": "warehouse_staff",
+  "finalUrl": "/inventory/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse-map",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/maintenance",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/downtime",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/downtime",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/mobile",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/mobile",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/schedules",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/schedules/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/maintenance/work-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/boms",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/boms",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/boms/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/boms/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/machines",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/machines",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/machines/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/machines/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/molds",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/molds",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/mrp/molds/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/mrp/plans",
+  "role": "warehouse_staff",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/notifications",
+  "role": "warehouse_staff",
+  "finalUrl": "/notifications",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/privacy",
+  "role": "warehouse_staff",
+  "finalUrl": "/privacy",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/dashboard",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/oee",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/oee",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/routings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/routings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/schedule",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/schedule",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/work-orders",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/work-orders/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/production/work-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/purchasing",
+  "role": "warehouse_staff",
+  "finalUrl": "/purchasing/purchase-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/calibration",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/calibration",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/calibration/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/quality/capability",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/capability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/dashboard",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/inspection-specs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/inspection-specs/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspections",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/inspections",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspections/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/inspections/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/ncr-templates",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/ncr-templates/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/ncrs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/effectiveness",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/ncrs/effectiveness",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/new",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/ncrs/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/traceability",
+  "role": "warehouse_staff",
+  "finalUrl": "/quality/traceability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/reset-password",
+  "role": "warehouse_staff",
+  "finalUrl": "/dashboard/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/documents",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/documents",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/dtr",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/dtr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leave",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/leave",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leaves",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/leaves",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/loans",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/loans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/me",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/me",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/notification-preferences",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/notification-preferences",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/notification-preferences",
+    "method": "GET",
+    "status": 403
+   },
+   {
+    "url": "http://localhost/api/v1/notification-preferences/options",
+    "method": "GET",
+    "status": 403
+   },
+   {
+    "url": "http://localhost/api/v1/notification-preferences",
+    "method": "GET",
+    "status": 403
+   },
+   {
+    "url": "http://localhost/api/v1/notification-preferences/options",
+    "method": "GET",
+    "status": 403
+   }
+  ]
+ },
+ {
+  "route": "/self-service/overtime",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/overtime",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/profile",
+  "role": "warehouse_staff",
+  "finalUrl": "/self-service/profile",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/deliveries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/fleet",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/fleet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/shipments",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/shipments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/supply-chain/shipments/create",
+  "role": "warehouse_staff",
+  "finalUrl": "/supply-chain/shipments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/terms",
+  "role": "warehouse_staff",
+  "finalUrl": "/terms",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ }
+]

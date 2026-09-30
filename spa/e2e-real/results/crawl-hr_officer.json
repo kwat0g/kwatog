@@ -1,0 +1,1863 @@
+[
+ {
+  "route": "/assets/create",
+  "role": "hr_officer",
+  "finalUrl": "/assets/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers",
+  "role": "hr_officer",
+  "finalUrl": "/careers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers/track",
+  "role": "hr_officer",
+  "finalUrl": "/careers/track",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/cookies",
+  "role": "hr_officer",
+  "finalUrl": "/cookies",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm",
+  "role": "hr_officer",
+  "finalUrl": "/crm/products",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints",
+  "role": "hr_officer",
+  "finalUrl": "/crm/complaints",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints/new",
+  "role": "hr_officer",
+  "finalUrl": "/crm/complaints/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers",
+  "role": "hr_officer",
+  "finalUrl": "/crm/customers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers/create",
+  "role": "hr_officer",
+  "finalUrl": "/crm/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/inquiries",
+  "role": "hr_officer",
+  "finalUrl": "/crm/inquiries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/price-agreements",
+  "role": "hr_officer",
+  "finalUrl": "/crm/price-agreements",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/price-agreements/create",
+  "role": "hr_officer",
+  "finalUrl": "/crm/price-agreements/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/products",
+  "role": "hr_officer",
+  "finalUrl": "/crm/products",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/products/create",
+  "role": "hr_officer",
+  "finalUrl": "/crm/products/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders",
+  "role": "hr_officer",
+  "finalUrl": "/crm/sales-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders/create",
+  "role": "hr_officer",
+  "finalUrl": "/crm/sales-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/hr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/accounting",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/dashboard/admin",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/admin",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/default",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/default",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/finance",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/hr",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/hr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/plant-manager",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/plant-manager",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/ppc",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/ppc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/purchasing",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/purchasing",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ap-aging",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/ap-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ar-aging",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/ar-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/balance-sheet",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/balance-sheet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/bills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/bills/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/coa",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/coa/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/credit-notes",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/credit-notes",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/customers",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/customers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/customers/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/income-statement",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/income-statement",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/invoices",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/invoices",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/invoices/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/invoices/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/journal-entries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/periods",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/periods",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/portal-access",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/portal-access",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/trial-balance",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/vendors",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/vendors",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/vendors/create",
+  "role": "hr_officer",
+  "finalUrl": "/accounting/vendors/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/action-center",
+  "role": "hr_officer",
+  "finalUrl": "/action-center",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/operations-health",
+  "role": "hr_officer",
+  "finalUrl": "/admin/operations-health",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/users-roles",
+  "role": "hr_officer",
+  "finalUrl": "/admin/users",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/assets",
+  "role": "hr_officer",
+  "finalUrl": "/assets",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/self-service/documents",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/documents",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/dtr",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/dtr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leave",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/leave",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leaves",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/leaves",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/loans",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/loans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/me",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/me",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/notification-preferences",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/notification-preferences",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/overtime",
+  "role": "hr_officer",
+  "finalUrl": "/self-service/overtime",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/profile",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/supply-chain",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries/create",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/deliveries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/fleet",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/fleet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/shipments",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/shipments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/shipments/create",
+  "role": "hr_officer",
+  "finalUrl": "/supply-chain/shipments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/terms",
+  "role": "hr_officer",
+  "finalUrl": "/terms",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/quality",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/quality",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/scorecard",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/scorecard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/warehouse",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/driver",
+  "role": "hr_officer",
+  "finalUrl": "/driver",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory",
+  "role": "hr_officer",
+  "finalUrl": "/factory",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory/qc",
+  "role": "hr_officer",
+  "finalUrl": "/factory/qc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment",
+  "role": "hr_officer",
+  "finalUrl": "/hr/recruitment",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/applications",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/hr/recruitment/postings",
+  "role": "hr_officer",
+  "finalUrl": "/hr/recruitment/postings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/postings/create",
+  "role": "hr_officer",
+  "finalUrl": "/hr/recruitment/postings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/separations",
+  "role": "hr_officer",
+  "finalUrl": "/hr/separations",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/skills",
+  "role": "hr_officer",
+  "finalUrl": "/hr/skills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/training/matrix",
+  "role": "hr_officer",
+  "finalUrl": "/hr/training/matrix",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/trainings",
+  "role": "hr_officer",
+  "finalUrl": "/hr/trainings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/trainings/create",
+  "role": "hr_officer",
+  "finalUrl": "/hr/trainings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/dashboard",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/inventory/grn",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/grn",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/grn/create",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/grn/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/items",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/items/create",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/items/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/material-issues",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues/create",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/material-issues/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/mrb",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/mrb",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/picking",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/picking",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/scanner",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/scanner",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-adjustments",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/stock-adjustments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-adjustments/create",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/stock-adjustments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-count",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/stock-count",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-levels",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/stock-levels",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/transfer-orders",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/transfer-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse",
+  "role": "hr_officer",
+  "finalUrl": "/inventory/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse-map",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/maintenance",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/downtime",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/downtime",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/mobile",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/mobile",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/schedules",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules/create",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/schedules/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders/create",
+  "role": "hr_officer",
+  "finalUrl": "/maintenance/work-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/mrp/boms",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/mrp/boms/create",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/boms/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/machines",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/machines",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/machines/create",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/machines/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/molds",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/molds",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/molds/create",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/molds/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/plans",
+  "role": "hr_officer",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/notifications",
+  "role": "hr_officer",
+  "finalUrl": "/notifications",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/privacy",
+  "role": "hr_officer",
+  "finalUrl": "/privacy",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production",
+  "role": "hr_officer",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/dashboard",
+  "role": "hr_officer",
+  "finalUrl": "/production/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/oee",
+  "role": "hr_officer",
+  "finalUrl": "/production/oee",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings",
+  "role": "hr_officer",
+  "finalUrl": "/production/routings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings/create",
+  "role": "hr_officer",
+  "finalUrl": "/production/routings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/schedule",
+  "role": "hr_officer",
+  "finalUrl": "/production/schedule",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/work-orders",
+  "role": "hr_officer",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/production/work-orders/create",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/purchasing",
+  "role": "hr_officer",
+  "finalUrl": "/purchasing/purchase-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality",
+  "role": "hr_officer",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/calibration",
+  "role": "hr_officer",
+  "finalUrl": "/quality/calibration",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/calibration/new",
+  "role": "hr_officer",
+  "finalUrl": "/quality/calibration/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/capability",
+  "role": "hr_officer",
+  "finalUrl": "/quality/capability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/dashboard",
+  "role": "hr_officer",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs",
+  "role": "hr_officer",
+  "finalUrl": "/quality/inspection-specs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs/new",
+  "role": "hr_officer",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/quality/inspections",
+  "role": "hr_officer",
+  "finalUrl": "/quality/inspections",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspections/new",
+  "role": "hr_officer",
+  "finalUrl": "/quality/inspections/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates",
+  "role": "hr_officer",
+  "finalUrl": "/quality/ncr-templates",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates/new",
+  "role": "hr_officer",
+  "finalUrl": "/quality/ncr-templates/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs",
+  "role": "hr_officer",
+  "finalUrl": "/quality/ncrs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/effectiveness",
+  "role": "hr_officer",
+  "finalUrl": "/quality/ncrs/effectiveness",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/new",
+  "role": "hr_officer",
+  "finalUrl": "/quality/ncrs/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/traceability",
+  "role": "hr_officer",
+  "finalUrl": "/quality/traceability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/reset-password",
+  "role": "hr_officer",
+  "finalUrl": "/dashboard/hr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ }
+]

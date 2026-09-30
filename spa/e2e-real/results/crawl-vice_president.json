@@ -1,0 +1,1858 @@
+[
+ {
+  "route": "/assets/create",
+  "role": "vice_president",
+  "finalUrl": "/assets/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers",
+  "role": "vice_president",
+  "finalUrl": "/careers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/careers/track",
+  "role": "vice_president",
+  "finalUrl": "/careers/track",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/cookies",
+  "role": "vice_president",
+  "finalUrl": "/cookies",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm",
+  "role": "vice_president",
+  "finalUrl": "/crm/products",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints",
+  "role": "vice_president",
+  "finalUrl": "/crm/complaints",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/complaints/new",
+  "role": "vice_president",
+  "finalUrl": "/crm/complaints/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers",
+  "role": "vice_president",
+  "finalUrl": "/crm/customers",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/customers/create",
+  "role": "vice_president",
+  "finalUrl": "/crm/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/inquiries",
+  "role": "vice_president",
+  "finalUrl": "/crm/inquiries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/notifications?per_page=8&unread_only=0",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/crm/price-agreements",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/crm/price-agreements/create",
+  "role": "vice_president",
+  "finalUrl": "/crm/price-agreements/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/products",
+  "role": "vice_president",
+  "finalUrl": "/crm/products",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/products/create",
+  "role": "vice_president",
+  "finalUrl": "/crm/products/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders",
+  "role": "vice_president",
+  "finalUrl": "/crm/sales-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/crm/sales-orders/create",
+  "role": "vice_president",
+  "finalUrl": "/crm/sales-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/plant-manager",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/accounting",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/admin",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/admin",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/default",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/dashboard/finance",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/finance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/hr",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/hr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/plant-manager",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/plant-manager",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/ppc",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/ppc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/purchasing",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/purchasing",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/scanner",
+  "role": "vice_president",
+  "finalUrl": "/inventory/scanner",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-adjustments",
+  "role": "vice_president",
+  "finalUrl": "/inventory/stock-adjustments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-adjustments/create",
+  "role": "vice_president",
+  "finalUrl": "/inventory/stock-adjustments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-count",
+  "role": "vice_president",
+  "finalUrl": "/inventory/stock-count",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/stock-levels",
+  "role": "vice_president",
+  "finalUrl": "/inventory/stock-levels",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/transfer-orders",
+  "role": "vice_president",
+  "finalUrl": "/inventory/transfer-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse",
+  "role": "vice_president",
+  "finalUrl": "/inventory/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/warehouse-map",
+  "role": "vice_president",
+  "finalUrl": "/inventory/warehouse-map",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/downtime",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/maintenance/mobile",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/mobile",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/schedules",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/schedules/create",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/schedules/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/maintenance/work-orders/create",
+  "role": "vice_president",
+  "finalUrl": "/maintenance/work-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp",
+  "role": "vice_president",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/boms",
+  "role": "vice_president",
+  "finalUrl": "/mrp/boms",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/boms/create",
+  "role": "vice_president",
+  "finalUrl": "/mrp/boms/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/machines",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/mrp/machines/create",
+  "role": "vice_president",
+  "finalUrl": "/mrp/machines/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/molds",
+  "role": "vice_president",
+  "finalUrl": "/mrp/molds",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/molds/create",
+  "role": "vice_president",
+  "finalUrl": "/mrp/molds/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/mrp/plans",
+  "role": "vice_president",
+  "finalUrl": "/mrp/plans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/notifications",
+  "role": "vice_president",
+  "finalUrl": "/notifications",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/privacy",
+  "role": "vice_president",
+  "finalUrl": "/privacy",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting",
+  "role": "vice_president",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ap-aging",
+  "role": "vice_president",
+  "finalUrl": "/accounting/ap-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/ar-aging",
+  "role": "vice_president",
+  "finalUrl": "/accounting/ar-aging",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/balance-sheet",
+  "role": "vice_president",
+  "finalUrl": "/accounting/balance-sheet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills",
+  "role": "vice_president",
+  "finalUrl": "/accounting/bills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/bills/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/bills/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa",
+  "role": "vice_president",
+  "finalUrl": "/accounting/coa",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": true,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/coa/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/coa/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/credit-notes",
+  "role": "vice_president",
+  "finalUrl": "/accounting/credit-notes",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/customers",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/customers/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/customers/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/income-statement",
+  "role": "vice_president",
+  "finalUrl": "/accounting/income-statement",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/invoices",
+  "role": "vice_president",
+  "finalUrl": "/accounting/invoices",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/invoices/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/invoices/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries",
+  "role": "vice_president",
+  "finalUrl": "/accounting/journal-entries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/journal-entries/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/journal-entries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/periods",
+  "role": "vice_president",
+  "finalUrl": "/accounting/periods",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/portal-access",
+  "role": "vice_president",
+  "finalUrl": "/accounting/portal-access",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/accounting/trial-balance",
+  "role": "vice_president",
+  "finalUrl": "/accounting/trial-balance",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/accounting/statements/trial-balance?from=2026-09-01&to=2026-09-30",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/accounting/statements/trial-balance?from=2026-09-01&to=2026-09-30",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/vendors",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/accounting/vendors/create",
+  "role": "vice_president",
+  "finalUrl": "/accounting/vendors/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/action-center",
+  "role": "vice_president",
+  "finalUrl": "/action-center",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/operations-health",
+  "role": "vice_president",
+  "finalUrl": "/admin/operations-health",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/admin/users-roles",
+  "role": "vice_president",
+  "finalUrl": "/admin/users",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/assets",
+  "role": "vice_president",
+  "finalUrl": "/assets",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/quality",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/quality",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/scorecard",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/scorecard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/dashboard/warehouse",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/warehouse",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/driver",
+  "role": "vice_president",
+  "finalUrl": "/driver",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory",
+  "role": "vice_president",
+  "finalUrl": "/factory",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/factory/qc",
+  "role": "vice_president",
+  "finalUrl": "/factory/qc",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment",
+  "role": "vice_president",
+  "finalUrl": "/hr/recruitment",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/applications",
+  "role": "vice_president",
+  "finalUrl": "/hr/recruitment/applications",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/postings",
+  "role": "vice_president",
+  "finalUrl": "/hr/recruitment/postings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/recruitment/postings/create",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/hr/separations",
+  "role": "vice_president",
+  "finalUrl": "/hr/separations",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/skills",
+  "role": "vice_president",
+  "finalUrl": "/hr/skills",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/training/matrix",
+  "role": "vice_president",
+  "finalUrl": "/hr/training/matrix",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/trainings",
+  "role": "vice_president",
+  "finalUrl": "/hr/trainings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/hr/trainings/create",
+  "role": "vice_president",
+  "finalUrl": "/hr/trainings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory",
+  "role": "vice_president",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/dashboard",
+  "role": "vice_president",
+  "finalUrl": "/inventory/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/grn",
+  "role": "vice_president",
+  "finalUrl": "/inventory/grn",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/grn/create",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/inventory/items",
+  "role": "vice_president",
+  "finalUrl": "/inventory/items",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/items/create",
+  "role": "vice_president",
+  "finalUrl": "/inventory/items/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues",
+  "role": "vice_president",
+  "finalUrl": "/inventory/material-issues",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/material-issues/create",
+  "role": "vice_president",
+  "finalUrl": "/inventory/material-issues/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/mrb",
+  "role": "vice_president",
+  "finalUrl": "/inventory/mrb",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/inventory/picking",
+  "role": "vice_president",
+  "finalUrl": "/inventory/picking",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production",
+  "role": "vice_president",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/dashboard",
+  "role": "vice_president",
+  "finalUrl": "/production/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/oee",
+  "role": "vice_president",
+  "finalUrl": "/production/oee",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings",
+  "role": "vice_president",
+  "finalUrl": "/production/routings",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/routings/create",
+  "role": "vice_president",
+  "finalUrl": "/production/routings/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/schedule",
+  "role": "vice_president",
+  "finalUrl": "/production/schedule",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/work-orders",
+  "role": "vice_president",
+  "finalUrl": "/production/work-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/production/work-orders/create",
+  "role": "vice_president",
+  "finalUrl": "/production/work-orders/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/purchasing",
+  "role": "vice_president",
+  "finalUrl": "/purchasing/purchase-orders",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality",
+  "role": "vice_president",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/calibration",
+  "role": "vice_president",
+  "finalUrl": "/quality/calibration",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user/preferences",
+    "method": "PATCH",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/broadcasting/auth",
+    "method": "POST",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/business-policies",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/dashboards/badges",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/quality/calibration/new",
+  "role": "vice_president",
+  "finalUrl": "/sign-in",
+  "bouncedToLogin": true,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+   "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+  ],
+  "failedApi": [
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/auth/user",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/contact",
+    "method": "GET",
+    "status": 429
+   },
+   {
+    "url": "http://localhost/api/v1/landing/content",
+    "method": "GET",
+    "status": 429
+   }
+  ]
+ },
+ {
+  "route": "/quality/capability",
+  "role": "vice_president",
+  "finalUrl": "/quality/capability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/dashboard",
+  "role": "vice_president",
+  "finalUrl": "/quality/dashboard",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs",
+  "role": "vice_president",
+  "finalUrl": "/quality/inspection-specs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspection-specs/new",
+  "role": "vice_president",
+  "finalUrl": "/quality/inspection-specs/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspections",
+  "role": "vice_president",
+  "finalUrl": "/quality/inspections",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/inspections/new",
+  "role": "vice_president",
+  "finalUrl": "/quality/inspections/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates",
+  "role": "vice_president",
+  "finalUrl": "/quality/ncr-templates",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncr-templates/new",
+  "role": "vice_president",
+  "finalUrl": "/quality/ncr-templates/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs",
+  "role": "vice_president",
+  "finalUrl": "/quality/ncrs",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/effectiveness",
+  "role": "vice_president",
+  "finalUrl": "/quality/ncrs/effectiveness",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/ncrs/new",
+  "role": "vice_president",
+  "finalUrl": "/quality/ncrs/new",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/quality/traceability",
+  "role": "vice_president",
+  "finalUrl": "/quality/traceability",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/reset-password",
+  "role": "vice_president",
+  "finalUrl": "/dashboard/plant-manager",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service",
+  "role": "vice_president",
+  "finalUrl": "/self-service",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/documents",
+  "role": "vice_president",
+  "finalUrl": "/self-service/documents",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/dtr",
+  "role": "vice_president",
+  "finalUrl": "/self-service/dtr",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leave",
+  "role": "vice_president",
+  "finalUrl": "/self-service/leave",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/leaves",
+  "role": "vice_president",
+  "finalUrl": "/self-service/leaves",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/loans",
+  "role": "vice_president",
+  "finalUrl": "/self-service/loans",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/me",
+  "role": "vice_president",
+  "finalUrl": "/self-service/me",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/notification-preferences",
+  "role": "vice_president",
+  "finalUrl": "/self-service/notification-preferences",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/overtime",
+  "role": "vice_president",
+  "finalUrl": "/self-service/overtime",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/self-service/profile",
+  "role": "vice_president",
+  "finalUrl": "/self-service/profile",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/deliveries",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/deliveries/create",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/deliveries/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/fleet",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/fleet",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/shipments",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/shipments",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/supply-chain/shipments/create",
+  "role": "vice_president",
+  "finalUrl": "/supply-chain/shipments/create",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ },
+ {
+  "route": "/terms",
+  "role": "vice_president",
+  "finalUrl": "/terms",
+  "bouncedToLogin": false,
+  "blank": false,
+  "forbidden": false,
+  "consoleErrors": [],
+  "failedApi": []
+ }
+]

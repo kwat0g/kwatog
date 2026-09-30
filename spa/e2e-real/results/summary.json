@@ -6,8 +6,8 @@
       "test",
       "-c",
       "playwright.real.config.ts",
-      "--project=real-chromium",
-      "e2e-real/auth.roles.spec.ts"
+      "e2e-real/crawl-roles.spec.ts",
+      "--workers=4"
     ],
     "configFile": "/home/ubuntu/code/kwatog/spa/playwright.real.config.ts",
     "rootDir": "/home/ubuntu/code/kwatog/spa/e2e-real",
@@ -21,7 +21,7 @@
     "grepInvert": null,
     "maxFailures": 0,
     "metadata": {
-      "actualWorkers": 1
+      "actualWorkers": 4
     },
     "preserveOutput": "always",
     "projects": [
@@ -30,7 +30,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 4
         },
         "id": "real-chromium",
         "name": "real-chromium",
@@ -64,611 +64,3084 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.63.0",
-    "workers": 1,
+    "workers": 4,
     "webServer": null
   },
   "suites": [
     {
-      "title": "auth.roles.spec.ts",
-      "file": "auth.roles.spec.ts",
+      "title": "crawl-roles.spec.ts",
+      "file": "crawl-roles.spec.ts",
       "column": 0,
       "line": 0,
-      "specs": [],
-      "suites": [
+      "specs": [
         {
-          "title": "real-backend role sign-in",
-          "file": "auth.roles.spec.ts",
-          "line": 13,
-          "column": 6,
-          "specs": [
+          "title": "vice_president: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
             {
-              "title": "UI sign-in form works end to end (system_admin)",
-              "ok": true,
-              "tags": [],
-              "tests": [
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
                 {
-                  "timeout": 90000,
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 158009,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:47:20.451Z",
                   "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 3971,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:06.310Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
+                  "attachments": []
                 }
               ],
-              "id": "14cdf2de05e204e773f3-3abb2dbdc41200ee1e22",
-              "file": "auth.roles.spec.ts",
-              "line": 14,
-              "column": 3
-            },
-            {
-              "title": "role session bootstraps: vice_president",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1942,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:10.426Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-fb081d48508d12160e2f",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: hr_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1961,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:12.395Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-dcfcccf6fa3e5420c9e5",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: finance_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1958,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:14.378Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-a69b3c12eb382f2520af",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: production_manager",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1996,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:16.356Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-7256f5e3ac7aa694e377",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: ppc_head",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1972,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:18.377Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-83337eb324f650d61118",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: purchasing_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 2013,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:20.376Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-1771e9981356252aed64",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: warehouse_staff",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 2011,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:22.411Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-796c5ac45953b19ffc7c",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: qc_inspector",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1991,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:24.446Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-d0806dd5c3645c36cb3b",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: maintenance_tech",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 2006,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:26.460Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-965470aeba28cc8e4a55",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: impex_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 2054,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:28.492Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-b5332b092ec5cf476e2b",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: department_head",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 2070,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:30.568Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-58508811889b10c700f5",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: sales_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1915,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:32.658Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-bb5c8bf2b1df80e818a1",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: customer_service_officer",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1975,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:34.594Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-03be19358cabcbded715",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: driver",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1912,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:36.593Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-b5bbcdc1c2322f14df50",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "role session bootstraps: employee",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 1911,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:38.547Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-60fc788a7c3796590838",
-              "file": "auth.roles.spec.ts",
-              "line": 29,
-              "column": 5
-            },
-            {
-              "title": "wrong password is rejected (no session)",
-              "ok": true,
-              "tags": [],
-              "tests": [
-                {
-                  "timeout": 90000,
-                  "annotations": [],
-                  "expectedStatus": "passed",
-                  "projectId": "real-chromium",
-                  "projectName": "real-chromium",
-                  "results": [
-                    {
-                      "workerIndex": 0,
-                      "parallelIndex": 0,
-                      "status": "passed",
-                      "duration": 835,
-                      "errors": [],
-                      "stdout": [],
-                      "stderr": [],
-                      "retry": 0,
-                      "startTime": "2026-09-29T23:34:40.486Z",
-                      "annotations": [],
-                      "attachments": []
-                    }
-                  ],
-                  "status": "expected"
-                }
-              ],
-              "id": "14cdf2de05e204e773f3-ded3822b3c98bd4d77c7",
-              "file": "auth.roles.spec.ts",
-              "line": 49,
-              "column": 3
+              "status": "expected"
             }
-          ]
+          ],
+          "id": "ea5f33ff5464f7c4699e-1127256463c59a82fdf4",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "vice_president: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 156570,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:47:20.330Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-2c8b7ddec09178fa3afe",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "vice_president: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 158942,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:47:20.568Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-9a619e36688f80ea6298",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "vice_president: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 157704,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:47:20.459Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-1b08f8f0593d8f10244d",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "vice_president: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 87552,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:49:57.118Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-3ad8e4bd122431a778e3",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "vice_president: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 109226,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:49:58.393Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-bc7f91a23a93ac7ba8bb",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 87421,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:49:58.676Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-4979ff3e00e296381adc",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 85570,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:49:59.753Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-00d3ce7eaad7cdc2c45f",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 136979,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:51:24.743Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-2a55acd5801cbeec3f24",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 137749,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:51:25.357Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-c24136053ce6ae57dce2",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 138136,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:51:26.136Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-4e23c5d836f51872416a",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "hr_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 110185,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:51:47.674Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-6b8764a15c45289f1146",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 152917,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:53:37.898Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-e049b75ce991b30826a4",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 152732,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:53:41.761Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-33814d1c7e78aa689182",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 152493,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:53:43.150Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-a596f7f9009e07704b0f",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 152318,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:53:44.335Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-1265cfd5c59226adaeee",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 103022,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:56:10.855Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-939822197c679ef2bd9f",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "finance_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 125151,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:56:14.521Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-40ba09d98cefd16cb774",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 101170,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:56:15.677Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-2e8297395b600b02918e",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 101854,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:56:16.690Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-53061db7c8c36dc93a49",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 173574,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:57:53.923Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-1a57294b6f85611b7325",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 172269,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:57:56.886Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-7dbc37ea7dff32375099",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 173019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:57:58.625Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-e84ce72b8c5cc1514401",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "production_manager: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 157004,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T02:58:19.709Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-9af9f0ad24113b410db5",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 152087,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:00:47.537Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-6b0aa715cb258d87c9f3",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 152012,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:00:49.205Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-c3da08e1d04f7a31206a",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 152961,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:00:51.703Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-e280755f41964d16ce3f",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 152379,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:00:56.754Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-afd24a956581799f389b",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 135738,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:03:19.655Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-7ce1ba5b6fc22cda7e42",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "ppc_head: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 107133,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:03:21.252Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-a71198887a3fafe17f8e",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 85125,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:03:24.702Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-9e6be1ef460067b9c278",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 82792,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:03:29.157Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-49c86d40446ebd1a8d4b",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 137310,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:04:49.856Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-15ff936c2708c69c6763",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 136706,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:04:51.981Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-49caf067bb1ef11e20f6",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 171586,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:05:08.424Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-1ce58d9b359250263a1a",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "purchasing_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 92359,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:05:35.490Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-293d942fce42e14131ff",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 151173,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:07:07.213Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-815a414b21e32823dea9",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 137868,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:07:07.898Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-462577808944a986c8e5",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 138868,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:07:08.723Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-8cf7b9f0af5a1ef02efa",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 153914,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:08:00.065Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-78a8829132cbf7606d4d",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 101389,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:09:25.809Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-6c9ca64666ceb07ff07e",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "warehouse_staff: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 121092,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:09:27.627Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-d9fb1aaf26fb3c1bd9dd",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 83766,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:09:38.437Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-4579e513516cb8b944d6",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 152329,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:10:34.033Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-bdb311d68b2012e7a2ca",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 139817,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:11:02.243Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-5b3c39bd9a85f0e901e3",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 140961,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:11:07.229Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-dda0328a4e96f593770d",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 202924,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:11:28.765Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-dfcc1a81d9fe49514955",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "qc_inspector: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 93501,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:13:06.392Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-dc785302d635d93fe037",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 87512,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:13:22.091Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-147bff900e82cf0429eb",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 85279,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:13:28.219Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-74a21d538f2df26b8fa9",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 123373,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:14:39.927Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-c0f5105b4725b841be75",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 165710,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:14:49.634Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-7646bb9905195eb9dfb2",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 165945,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:14:51.737Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-92cf2e529842629ed305",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "maintenance_tech: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 112093,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:14:53.530Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-0b5e097c7097254d74fb",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 100781,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:16:43.330Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-fe1f9dc1bc9586319e23",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 87976,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:16:45.660Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-2b5df93a0e728511e64e",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 172090,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:17:35.378Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-f67760d5e4077050bddb",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 156774,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:17:37.748Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-4150a41f1add7ea9c807",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 152932,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:18:13.679Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-0ce874887ee2528486a2",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "impex_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 125688,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:18:24.137Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-f35644940bf890d5cc58",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 134146,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:20:14.557Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-eae8611eb888c9bf84ff",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 136179,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:20:27.512Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-650f895c97fabf13c209",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 135118,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:20:29.871Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-583c0bffd0d194028eaa",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 133660,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:20:46.651Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-40fe4f41decfb5347d2c",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 98885,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:22:28.738Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-3e6064f03520dd935b35",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "department_head: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 105768,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:22:43.733Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-cc5ad2d8508d8b30f73f",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 84304,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:22:45.023Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-374dc2b1a76dacf99a20",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 83665,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:23:00.356Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-199ba18bfd3ed1a5cc66",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 138824,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:24:07.698Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-6c62bbe5441fbe719fba",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 137442,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:24:09.355Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-3d62a9088096603a4753",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 166827,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:24:24.053Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-472b582fb0549ae1824b",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "sales_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 112083,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:24:29.538Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-7fba98df239df9c46c32",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 136587,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:26:21.660Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-0e9eecdc5f57e44d6956",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 135816,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:26:26.554Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-57be9e576ed47ef09ebf",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 136601,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:26:26.833Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-edfba07d36583e3cbf04",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 152752,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:27:10.923Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-3b14f47942f8dad273b4",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 101663,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:28:38.280Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-3becd87d42614bca4d28",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "customer_service_officer: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 120733,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:28:42.398Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-070e9539e830032db8bf",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 86009,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:28:43.466Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-8b6f89bb337aea262ea9",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 136056,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:29:43.717Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-73ea7080a1a0cd651d64",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 120656,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:30:09.504Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-cd400fdfabf078064384",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 170344,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:30:19.987Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-ec8caf547db096179195",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 153229,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:30:43.186Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-e04c28557b0bb311dd11",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "driver: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 91691,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:31:59.807Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-982a5a370b1407fe2c67",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 1/6 (/accounting … /assets)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 87787,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:32:10.191Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-a6eb81120adac67712e5",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 2/6 (/assets/create … /dashboard/purchasing)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 151532,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:33:10.379Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-60fbfc41888502a3073c",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 3/6 (/dashboard/quality … /inventory/picking)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 151279,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:33:16.446Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-19c825896f232d7b374c",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 4/6 (/inventory/scanner … /privacy)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
+                  "status": "passed",
+                  "duration": 151354,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:33:31.534Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-64b2220098b63365a640",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 5/6 (/production … /reset-password)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 183242,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:33:38.020Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-8d8702c378febdcf7220",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
+        },
+        {
+          "title": "employee: chunk 6/6 (/self-service … /terms)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "real-chromium",
+              "projectName": "real-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 90629,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-30T03:35:41.939Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea5f33ff5464f7c4699e-7cec3b03d3465411c791",
+          "file": "crawl-roles.spec.ts",
+          "line": 60,
+          "column": 5
         }
       ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-29T23:34:05.109Z",
-    "duration": 36332.248,
-    "expected": 17,
+    "startTime": "2026-09-30T02:47:18.562Z",
+    "duration": 2994750.088,
+    "expected": 90,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0
