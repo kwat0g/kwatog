@@ -75,7 +75,7 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Production | done (crawl-roles) | O2C fixture (output leg) | PASS | — | — |
 | Quality | done (crawl-roles) | O2C fixture (outgoing QC leg) | PASS | — | — |
 | Payroll | done (crawl-roles) | H2R chain test | PASS | — | — |
-| Loans | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Loans | done (crawl-roles) | Loans chain test | PASS | — | — |
 | Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | PASS | — | — |
 | Inventory | done (crawl-roles) | exercised via O2C fixture | PASS | — | — |
 | MRP | done (crawl-roles) | pending | UNVERIFIED | — | — |
@@ -88,7 +88,7 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
 | Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
 
-Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test, 1/1 — 56 assertions).
+Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test 1/1 + Loans chain test 2/2 — the H2R financial leg).
 
 Role crawl: **90/90 passed (49.9m)** — all 15 employee roles × 6 probes
 (authenticated load, console errors, HTTP failures, blank pages, 404 pages,
@@ -250,6 +250,37 @@ test_multi_product_return_stages_one_inspection_per_product`
   `ApprovalService::submit` 404s without the workflow definition row.
 - `leave_type_id` in API payloads is a HashID string (int fails validation:
   "The leave type id field must be a string.").
+
+### Loans (`LoansChainTest`, 2/2, commit ca54c7a2)
+- hr_officer raises loans (holds the whole loans module); employees can
+  preview amortization unauthenticated-role but not request.
+- cash_advance chain: department_head → finance_officer → vice_president;
+  company_loan inserts production_manager as step 2. The VP is row-scoped via
+  chain participation (`LoanAccessPolicy::isChainParticipant`), NOT global —
+  only system_admin/finance_officer/hr_officer are global loan operators.
+- **Two refusal layers with different statuses:** the service's own
+  `canDecide` row-scope guard fires FIRST (422 BusinessRuleException — e.g. a
+  production_manager on a cash_advance, where he is not a chain participant);
+  ApprovalService's step-role guard fires second (403
+  ForbiddenActionException — e.g. a dept-head double-tap, wrong-order step).
+  Which status a wrong-actor probe gets depends on which layer sees it first.
+- Loan payments carry the idempotency key in the **`Idempotency-Key` HEADER**
+  — `RecordLoanPaymentRequest::prepareForValidation` OVERWRITES the body
+  field with the header (same contract as bills, opposite of collections).
+- Payments only on Active loans; amount ≤ ledger-derived balance; aggregates
+  (total_paid/balance/status Paid) rebuilt from the immutable payment ledger
+  under the row lock; replay returns the original payment row.
+- GL (only when `modules.accounting=true`): disbursement = debit 1110
+  receivable / credit 1020 cash (4020 interest line only if interest > 0);
+  manual repayment = debit cash / credit receivable. Codes from
+  ChartOfAccountsSeeder via `accounting.accounts.loan_*` settings.
+- Write-off is finance-only maker-checker: `loans.write_off.request` (finance)
+  then a DIFFERENT `loans.write_off.approve` holder (second finance; VP and
+  dept head hold neither slug → 403). Requires Active status + positive
+  balance + reason/evidence.
+- EmployeeLoan model: `disbursement_journal_entry_id` (0538); LoanPayment FK
+  is `loan_id` (not employee_loan_id); JE lines cast debit/credit decimal:2.
+- Document sequences: LN-YYYYMM-NNNN (loan), CA-YYYYMM-NNNN (cash advance).
 
 ## 6. Full-suite runs
 
