@@ -772,6 +772,15 @@ class BillService
             $lockedBill = Bill::query()->lockForUpdate()->findOrFail($bill->id);
             $lockedPayment = BillPayment::query()->lockForUpdate()->findOrFail($payment->id);
             $this->assertPaymentBelongsToBill($lockedPayment, $lockedBill);
+            // Refuse at EVERY step, not only the payout. The bill state is
+            // checked before any approval record is written: a cancelled bill
+            // must never accumulate approval bookkeeping for a payment that
+            // can never post (the final-step guard below stays as the
+            // race-proof backstop, re-reading the locked row after each
+            // chain step).
+            if ($lockedBill->status === BillStatus::Cancelled) {
+                throw new BusinessRuleException('Cannot approve a payment on a cancelled bill.');
+            }
             if ($lockedPayment->status !== BillPaymentStatus::PendingApproval) {
                 throw new BusinessRuleException('Only pending payment requests can be approved.');
             }

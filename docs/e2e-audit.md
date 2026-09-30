@@ -114,10 +114,14 @@ test_multi_product_return_stages_one_inspection_per_product`
    **FIXED:** migration `0566_repair_return_inspection_uniqueness_index`
    restores the conjunction (per-product keys + cancelled rows release their
    slot); chunk 055 re-run green (62/62); dev DB migrated.
-3. **Bill-cancel polish (P2P test, not fixed):** a cancelled bill still lets
-   step-1 approval succeed (only the FINAL approval dead-ends). Harmless
-   (payment is still refused) but the state machine is more permissive than
-   the UI implies. Left as-is; noted for the owner.
+3. **Bill-cancel approval leak — FIXED.** A cancelled bill used to let the
+   step-1 payment approval SUCCEED (only the final, payout step refused). No
+   money could move, but the dead bill accumulated approval bookkeeping — a
+   payment on a cancelled bill could show one approver's sign-off in history.
+   `BillService::approvePayment()` now refuses at EVERY step, before any
+   approval record is written (the final-step guard stays as the locked-row
+   race backstop). Pinned by `ProcureToPayChainTest` step-1+final 422 probes
+   plus a no-approver-written assertion.
 
 ## 4. Questions for owner (business rule ambiguous — behavior left unchanged)
 
@@ -165,6 +169,12 @@ test_multi_product_return_stages_one_inspection_per_product`
   pick leaf asset accounts (cashAccount() helper, whereNotExists subquery).
 - Bill cancel is **PATCH** `/api/v1/bills/{bill}/cancel`; allowed while
   `amount_paid` is zero even with a pending reservation; refused once paid.
+- Payment approval on a cancelled bill refuses at EVERY chain step (not just
+  the payout): `approvePayment()` checks the locked bill state before writing
+  any approval record. Note: `ApprovalService::submit()` PRE-CREATES the
+  chain's pending step rows at submission — the audit invariant is "no
+  approver_id/action written", not "no rows exist". `approvable_type` carries
+  the FQCN (no morph map is enforced).
 - Bill routes are `/api/v1/bills/...` (not `/api/v1/accounting/bills/...`).
 
 ### Order-to-Cash (`OrderToCashChainTest`, 5/5, commit 2a407e9a)

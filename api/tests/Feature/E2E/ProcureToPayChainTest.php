@@ -537,20 +537,30 @@ class ProcureToPayChainTest extends TestCase
         $bill->refresh();
         $this->assertSame(BillStatus::Cancelled->value, $bill->status->value);
 
-        // The orphaned reservation must dead-end: the FINAL approval — the
-        // only step that moves money — is refused against a cancelled bill.
-        // (Step-1 approvals may still be recorded as bookkeeping; the guard
-        // sits exactly at the payout. Flagged as a polish item, not a leak.)
+        // The orphaned reservation must dead-end at EVERY approval step, not
+        // just the payout: even step 1 refuses, so a dead bill never
+        // accumulates approval bookkeeping for a payment that can never post.
         $this->actingAs($this->financeChecker)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
-            ->assertSuccessful();
+            ->assertStatus(422);
 
+        // And the final step stays refused too (defense in depth).
         $this->actingAs($this->vp)
             ->postJson("/api/v1/bills/{$bill->hash_id}/payments/{$payment->hash_id}/approve")
             ->assertStatus(422);
         $payment->refresh();
-        $this->assertNotSame(BillPaymentStatus::Posted->value, $payment->status->value,
+        $this->assertSame(BillPaymentStatus::PendingApproval->value, $payment->status->value,
             'a pending payment on a cancelled bill must never post');
+
+        // No approval may be RECORDED for the dead payment. The chain's
+        // pending step rows are pre-created at submission (approvable_type is
+        // the FQCN — no morph map is enforced); the refusal must have kept
+        // every one of them 'pending' — no approver, no action, no timestamp.
+        $this->assertSame(0, \App\Common\Models\ApprovalRecord::query()
+            ->where('approvable_type', \App\Modules\Accounting\Models\BillPayment::class)
+            ->where('approvable_id', $payment->id)
+            ->whereNotNull('approver_id')
+            ->count());
     }
 
     // ------------------------------------------------------------------
