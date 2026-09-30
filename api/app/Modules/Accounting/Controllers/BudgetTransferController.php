@@ -31,7 +31,7 @@ class BudgetTransferController extends Controller
             'status' => ['nullable', Rule::enum(BudgetTransferStatus::class)],
         ]);
 
-        $query = BudgetTransfer::with(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver'])
+        $query = BudgetTransfer::with(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter'])
             ->orderByDesc('created_at');
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -65,7 +65,7 @@ class BudgetTransferController extends Controller
     /** Show a single transfer. */
     public function show(BudgetTransfer $budgetTransfer): JsonResponse
     {
-        $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver']);
+        $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver', 'rejecter']);
 
         return response()->json([
             'success' => true,

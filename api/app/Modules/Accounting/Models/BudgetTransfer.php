@@ -28,6 +28,7 @@ class BudgetTransfer extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'approved_at' => 'datetime',
+        'rejected_at' => 'datetime',
     ];
 
     public function fromLine(): BelongsTo
@@ -48,5 +49,10 @@ class BudgetTransfer extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejecter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 }

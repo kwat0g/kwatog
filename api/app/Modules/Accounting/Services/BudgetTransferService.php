@@ -11,6 +11,7 @@ use App\Modules\Accounting\Enums\BudgetTransferStatus;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\BudgetTransfer;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -114,7 +115,7 @@ class BudgetTransferService
                 'approved_at' => now(),
             ])->save();
 
-            return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver']);
+            return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver', 'rejecter']);
         });
     }
 
@@ -129,11 +130,11 @@ class BudgetTransferService
 
             $locked->forceFill([
                 'status' => BudgetTransferStatus::Rejected->value,
-                'approved_by' => $userId,
-                'approved_at' => now(),
+                'rejected_by' => $userId,
+                'rejected_at' => now(),
             ])->save();
 
-            return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver']);
+            return $locked->fresh()->load(['fromLine.account', 'fromLine.budget', 'toLine.account', 'toLine.budget', 'requester', 'approver', 'rejecter']);
         });
     }
 
@@ -174,6 +175,13 @@ class BudgetTransferService
         }
         if ((int) $fromBudget->fiscal_year_id !== (int) $toBudget->fiscal_year_id) {
             throw new BusinessRuleException('A transfer must stay inside one fiscal year.');
+        }
+        // A budget can outlive its year as active/approved while the fiscal
+        // year itself is closed; money must not move in a closed year.
+        $yearIds = array_unique([(int) $fromBudget->fiscal_year_id, (int) $toBudget->fiscal_year_id]);
+        $liveYears = FiscalYear::query()->whereIn('id', $yearIds)->where('status', 'active')->count();
+        if ($liveYears !== count($yearIds)) {
+            throw new BusinessRuleException('Transfers are refused once their fiscal year is closed.');
         }
         if ((string) $fromBudget->budget_type !== (string) $toBudget->budget_type) {
             throw new BusinessRuleException('A transfer must stay inside one budget type.');

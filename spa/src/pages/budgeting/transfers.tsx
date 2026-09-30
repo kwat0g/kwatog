@@ -156,7 +156,9 @@ export default function BudgetTransferListPage() {
                           </div>
                         ) : (
                           <span className="text-xs text-muted">
-                            {transfer.approved_by ? `by ${transfer.approved_by.name}` : '—'}
+                            {transfer.status === 'approved' && transfer.approved_by ? `by ${transfer.approved_by.name}` : null}
+                            {transfer.status === 'rejected' && transfer.rejected_by ? `rejected by ${transfer.rejected_by.name}` : null}
+                            {transfer.status !== 'approved' && transfer.status !== 'rejected' ? '—' : null}
                           </span>
                         )}
                       </Td>

@@ -47,6 +47,11 @@ class BudgetTransferResource extends JsonResource
                 'name' => $this->approver?->name,
             ]),
             'approved_at' => $this->approved_at?->toISOString(),
+            'rejected_by' => $this->whenLoaded('rejecter', fn () => [
+                'id' => $this->rejecter?->hash_id,
+                'name' => $this->rejecter?->name,
+            ]),
+            'rejected_at' => $this->rejected_at?->toISOString(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

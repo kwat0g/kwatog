@@ -144,6 +144,9 @@ class BudgetTransferTest extends TestCase
         $service->reject($rejected, $checker->id);
         // Rejection moves nothing; the earlier approved 10.00 stays moved.
         $this->assertSame('90.00', $from->fresh()->jan);
+        // The rejection is attributed to the rejecter, never the approver.
+        $this->assertSame($checker->id, (int) $rejected->fresh()->rejected_by);
+        $this->assertNull($rejected->fresh()->approved_by);
         try {
             $service->approve($rejected->fresh(), $checker->id);
             $this->fail('Approving a rejected transfer must be refused.');
@@ -183,6 +186,15 @@ class BudgetTransferTest extends TestCase
             $this->fail('Cross-type transfer must be refused.');
         } catch (BusinessRuleException) {
             $this->addToAssertionCount(1);
+        }
+
+        // A live budget in a closed year cannot move money either.
+        FiscalYear::query()->whereKey($from->budget->fiscal_year_id)->update(['status' => 'closed']);
+        try {
+            $service->request($payload, $maker->id);
+            $this->fail('Transfer in a closed fiscal year must be refused.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('closed', $exception->getMessage());
         }
     }
 
