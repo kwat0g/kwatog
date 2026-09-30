@@ -73,11 +73,11 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | SupplyChain | done (crawl-roles) | O2C chain test | PASS | — | — |
 | CRM | done (crawl-roles) | O2C chain test (SO leg) | PASS | — | — |
 | Production | done (crawl-roles) | O2C fixture + MRP chain (WO lifecycle) | PASS | — | — |
-| Quality | done (crawl-roles) | O2C fixture (outgoing QC leg) | PASS | — | — |
+| Quality | done (crawl-roles) | QualityGate chain test (incoming QC leg) | PASS | 2 (below) | — |
 | Payroll | done (crawl-roles) | H2R chain test | PASS | — | — |
 | Loans | done (crawl-roles) | Loans chain test | PASS | — | — |
 | Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | PASS | — | — |
-| Inventory | done (crawl-roles) | exercised via O2C fixture | PASS | — | — |
+| Inventory | done (crawl-roles) | QualityGate chain test (GRN legs) | PASS | — | — |
 | MRP | done (crawl-roles) | MRP chain test | PASS | — | — |
 | B2B portal | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Forecasting | done (crawl-roles) | pending | UNVERIFIED | — | — |
@@ -88,7 +88,7 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
 | Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
 
-Chains: C1 PASS (O2C test 5/5 + MRP chain test 2/2 — the planning leg) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test 1/1 + Loans chain test 2/2 — the H2R financial leg).
+Chains: C1 PASS (O2C test 5/5 + MRP chain test 2/2 — the planning leg) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test 1/1 + Loans chain test 2/2 — the H2R financial leg). The IATF quality gates ride C1/C2: incoming QC proven in the QualityGate chain test (2/2, 55 assertions), outgoing QC in the O2C test.
 
 Role crawl: **90/90 passed (49.9m)** — all 15 employee roles × 6 probes
 (authenticated load, console errors, HTTP failures, blank pages, 404 pages,
@@ -122,6 +122,19 @@ test_multi_product_return_stages_one_inspection_per_product`
    approval record is written (the final-step guard stays as the locked-row
    race backstop). Pinned by `ProcureToPayChainTest` step-1+final 422 probes
    plus a no-approver-written assertion.
+4. **Duplicate NCR on a failed inspection 500s — FIXED.** Migration 0478's
+   `ncr_inspection_unique` (one NCR per inspection, ever) had no domain-rule
+   mirror: a second NCR POST for the same inspection died as an uncaught 23505
+   → HTTP 500. `NcrService::create()` now refuses duplicates as a 422 business
+   rule (constraint stays as the concurrency backstop). Pinned by the
+   QualityGate chain test.
+5. **Use-as-is concession could be self-granted by the failing inspector —
+   FIXED.** Incoming-QC staging pre-assigns `inspector_id` = the warehouse
+   RECEIVER (TriggerIncomingQC), while the QC inspector only authors the
+   failing result. The concession guard compared only `inspector_id`, so the
+   real failing inspector could grant their own use-as-is. Now blocks both
+   the assigned inspector and any `result_authors` row (same predicate
+   `InspectionService::review()` uses). Pinned by the QualityGate chain test.
 
 ## 4. Questions for owner (business rule ambiguous — behavior left unchanged)
 
@@ -146,10 +159,38 @@ test_multi_product_return_stages_one_inspection_per_product`
 4. **Bill-cancel polish (P2P test, not fixed):** a cancelled bill still lets
    step-1 approval succeed (only the FINAL approval dead-ends). Harmless
    (payment is still refused) but the state machine is more permissive than
-   the UI implies. Left as-is; noted for the owner.
+   the UI implies. Left as-is; noted for the owner. → RESOLVED since: see
+   Finding 3 — the permissive step-1 path was hardened to refuse at every
+   step (owner-approved polish, commit 09611d6f).
+
+
 
 ## 5. Chain-test contract notes (hard-won, for future test authors)
 
+### Quality gate (`QualityGateChainTest`, 2/2)
+- GRN incoming QC is **maker-checker**: the staged inspection starts Draft,
+  `POST /inspections/{id}/lot-result` (checklist rows + `complete`) lands it
+  at `awaiting_review`, and a SECOND user confirms via PATCH
+  `/inspections/{id}/review` `{decision: passed|failed, remarks?}`. Reviewer
+  = maker or any result author → 403. Only then do the chain listeners fire.
+- Pass gate: `AcceptGrnOnIncomingQcPass` → `GrnService::settleIncomingQc()`
+  accepts the pending_qc GRN. Fail gate: with MRB review on (default,
+  `quality.incoming_failure.mrb_review`), the GRN is NOT auto-rejected — it
+  HOLDS at pending_qc (`awaiting_mrb`) until the NCR's MRB disposition
+  (`PATCH /ncrs/{id}/disposition`) settles it. use_as_is/rework → accept,
+  return_to_supplier/scrap → mrb_accepted_quantity (default 0) kept, rest
+  rejected. The MRB decision is final once the receipt settled against it.
+- MRB decider needs `quality.ncr.manage` (qc_inspector holds it;
+  production_manager does NOT — it only has inspections.review).
+- The concession guard checks BOTH `inspector_id` and `result_authors` —
+  staging pre-assigns the receiver as inspector, so comparing inspector_id
+  alone misses the real failing inspector (fixed defect, Finding 6).
+- Duplicate NCR per inspection → 422 (Finding 5).
+- CoC is OUTGOING-only: GET `/inspections/{id}/coc` on an incoming
+  inspection 422s `COC_STAGE_INVALID` even with a pass + full evidence.
+- Wrong-time probes that pass: accept before QC decides (422), accept a
+  terminal GRN (422), close NCR without disposition/CAPA (422), actions on a
+  closed NCR (422), warehouse staff posting terminal QC results (403).
 ### Procure-to-Pay (`ProcureToPayChainTest`, 6/6, commit e21be332)
 - Auto-bill listener `AutoCreateBillOnGrnAccepted` needs an automation actor:
   seed an active system_admin + `app(SettingsService::class)->set('system.

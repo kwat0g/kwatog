@@ -109,6 +109,23 @@ class NcrService
             $inspection = ! empty($data['inspection_id'])
                 ? Inspection::query()->with('measurements')->find((int) $data['inspection_id'])
                 : null;
+
+            // Mirror the ncr_inspection_unique constraint as a domain rule: one
+            // NCR per inspection, ever. Without this guard a duplicate dies as
+            // an uncaught 23505 and the API answers 500 instead of a business
+            // rule; the constraint stays as the concurrency backstop.
+            if ($inspection !== null) {
+                $existing = NonConformanceReport::query()
+                    ->where('inspection_id', $inspection->id)
+                    ->first();
+                if ($existing !== null) {
+                    throw new BusinessRuleException(
+                        "Inspection {$inspection->inspection_number} already has NCR {$existing->ncr_number}; "
+                        .'one NCR is raised per inspection.'
+                    );
+                }
+            }
+
             $defectSignature = (string) ($data['defect_signature'] ?? '');
             if ($defectSignature === '') {
                 $defectSignature = $inspection
@@ -384,11 +401,12 @@ class NcrService
         }
         $inspection = $ncr->inspection;
 
-        // A concession overrides a failed verdict; the inspector who failed
-        // the lot cannot also be the one who waives it.
+        // A concession overrides a failed verdict; neither the row's assigned
+        // inspector (pre-staged as the receiver) nor whoever actually authored
+        // the failing result may waive it.
         if ($disposition === NcrDisposition::UseAsIs
-            && $inspection->inspector_id
-            && (int) $by->id === (int) $inspection->inspector_id) {
+            && ((int) $inspection->inspector_id === (int) $by->id
+                || $inspection->hasResultAuthorId((int) $by->id))) {
             throw new BusinessRuleException(
                 'Use-as-is is a concession: it must be granted by someone other than the inspector who failed the lot.'
             );
