@@ -277,3 +277,19 @@ test_multi_product_return_stages_one_inspection_per_product`
   bundled into chunk 063 (not isolated as planned) and still passed at 128M;
   the OOM co-runner condition did not materialize this run. Keep the
   isolation plan for future runs as insurance.
+- 2026-09-30 FINAL CONFIRMATION run (all three fixes in: NotificationCatalog,
+  0566 index, bill-approval guard; 64 chunks incl. the three E2E chain tests
+  and the OOM-prone unit file isolated as its own chunk):
+  parallel pass had 17 lock-affected chunks (streams started synchronized —
+  chunks 1–12 collided in their `migrate:fresh` windows; every failing summary
+  chunk had 53200 errors). **Serial rerun of those 17 chunks: 1,115 tests
+  passed, 0 failed, 0 lock errors.** Across both logs: ~4,546 test executions
+  passed. All three E2E chain tests PASS in the parallel run itself. The
+  suite is green with all fixes in.
+  - Operational lesson: two streams launched simultaneously stay
+    synchronized long enough to collide on early chunks. A start offset
+    (sleep 60–120 on stream 2) or inter-chunk jitter would reduce even the
+    remaining transient carnage; serial rerun of affected chunks remains the
+    deterministic fallback and classification rule (53200 + failing summary
+    ⇒ infrastructure; any real failure shows real assertions and a specific
+    test).
