@@ -72,13 +72,13 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Purchasing | done (crawl-roles) | P2P chain test | PASS | — | — |
 | SupplyChain | done (crawl-roles) | O2C chain test | PASS | — | — |
 | CRM | done (crawl-roles) | O2C chain test (SO leg) | PASS | — | — |
-| Production | done (crawl-roles) | O2C fixture (output leg) | PASS | — | — |
+| Production | done (crawl-roles) | O2C fixture + MRP chain (WO lifecycle) | PASS | — | — |
 | Quality | done (crawl-roles) | O2C fixture (outgoing QC leg) | PASS | — | — |
 | Payroll | done (crawl-roles) | H2R chain test | PASS | — | — |
 | Loans | done (crawl-roles) | Loans chain test | PASS | — | — |
 | Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | PASS | — | — |
 | Inventory | done (crawl-roles) | exercised via O2C fixture | PASS | — | — |
-| MRP | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| MRP | done (crawl-roles) | MRP chain test | PASS | — | — |
 | B2B portal | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Forecasting | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Returns | done (crawl-roles) | pending | UNVERIFIED | — | — |
@@ -88,7 +88,7 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
 | Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
 
-Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test 1/1 + Loans chain test 2/2 — the H2R financial leg).
+Chains: C1 PASS (O2C test 5/5 + MRP chain test 2/2 — the planning leg) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test 1/1 + Loans chain test 2/2 — the H2R financial leg).
 
 Role crawl: **90/90 passed (49.9m)** — all 15 employee roles × 6 probes
 (authenticated load, console errors, HTTP failures, blank pages, 404 pages,
@@ -281,6 +281,30 @@ test_multi_product_return_stages_one_inspection_per_product`
 - EmployeeLoan model: `disbursement_journal_entry_id` (0538); LoanPayment FK
   is `loan_id` (not employee_loan_id); JE lines cast debit/credit decimal:2.
 - Document sequences: LN-YYYYMM-NNNN (loan), CA-YYYYMM-NNNN (cash advance).
+
+### MRP (`MrpChainTest`, 2/2, commit 7e6499c2)
+- Confirming an SO dispatches `RunAutomaticMrpJob` (sync in tests) — the run
+  row's `triggered_by` is **'automatic'** (the reason string
+  'sales_order_confirmed' rides `summary`, not the trigger column).
+- Full-shortage plan: `shortages_found=1`, `auto_pr_count=1`,
+  `draft_wo_count=1`; one consolidated DRAFT auto-PR carrying the exact gross
+  requirement; one planned root WO per SO line with BOM-exploded materials.
+- Missing-BOM product: plan stays Active with a `missing_bom` diagnostic but
+  produces NO PR and NO WO — demand visible, nothing ordered.
+- Rerun reconciliation (stock now covers demand): new plan version supersedes
+  the old, the planned root WO is REUSED and repointed to the new plan (never
+  duplicated), and the stale draft auto-PR is CANCELLED — the purchasing
+  queue never shows demand that no longer exists.
+- `POST /mrp/runs` returns **202 Accepted** (ppc_head holds mrp.runs.trigger;
+  sales_officer 403).
+- WO confirm requires BOTH machine and mold (422), the mold must belong to
+  the WO's product (422), and confirm RESERVES materials
+  (`material_reservations` via Inventory). Double confirm → 409
+  (IllegalLifecycleTransition). start() flips the machine to running.
+- ppc_head authors BOMs over HTTP (`POST /mrp/boms`, hash-id product_id +
+  items.*.item_id); the BomResource returns hash_id — decode it, never cast.
+- Namespace traps: `Customer` is Accounting's (NOT CRM); WarehouseLocation
+  has NO warehouse_id column (zone is enough for stock fixtures).
 
 ## 6. Full-suite runs
 
