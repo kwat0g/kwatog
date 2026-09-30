@@ -7,6 +7,8 @@ namespace App\Common\Services;
 use App\Common\Support\DepartmentScope;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
@@ -54,7 +56,7 @@ use Illuminate\Support\Facades\Schema;
  *
  *   1. Queries start from the **Eloquent model**, never `DB::table()`. The model
  *      carries `SoftDeletes`, so archived rows are excluded by the same global
- *      scope the module lists rely on (M009-F03). Eight of the eleven searched
+ *      scope the module lists rely on (M009-F03). Eight of the fourteen searched
  *      tables are soft-deletable; `DB::table()` saw all of their tombstones.
  *   2. Any group whose list service applies a row-level scope applies the SAME
  *      scope here, through the SAME shared helper — `DepartmentScope` for
@@ -79,14 +81,14 @@ use Illuminate\Support\Facades\Schema;
  * `MAX_SOURCE_QUERIES`. Every SELECT is `LIMIT $perGroup`, so the row ceiling
  * for one request is `MAX_SOURCE_QUERIES * $perGroup`. Measured on the dev
  * dataset (200 employees, single-digit orders) as a system_admin — the widest
- * possible caller, all eleven groups active: 22 queries, 22–50 ms wall clock.
+ * possible caller, all fourteen groups active: 28 queries. Wall clock scales with the ceiling above.
  *
  * A leading-wildcard `ILIKE` cannot use a B-tree index, so each group is a
  * sequential scan of its table (confirmed by `EXPLAIN ANALYZE`: 2.2 ms over 200
  * employee rows). That is acceptable at this scale and will NOT be at
  * production scale on the transaction tables. The fix is a trigram (`pg_trgm`
  * GIN) or full-text index — deliberately not added here: it needs `CREATE
- * EXTENSION` rights, spans eleven tables owned by other modules, and the index
+ * EXTENSION` rights, spans fourteen tables owned by other modules, and the index
  * choice should be driven by a plan measured on production-sized data, which
  * this environment does not have.
  *
@@ -123,10 +125,11 @@ class GlobalSearchService
 {
     /**
      * Source queries this service may issue for one term — one per searchable
-     * group. A documented ceiling rather than a runtime guard: the point is that
-     * a twelfth group is a deliberate widening of every caller's request budget.
+     * group. A documented ceiling rather than a runtime guard: the point is
+     * that a fourteenth group is a deliberate widening of every caller's
+     * request budget (budgets + budget transfers joined as groups 13–14).
      */
-    public const MAX_SOURCE_QUERIES = 12;
+    public const MAX_SOURCE_QUERIES = 14;
 
     /**
      * Group type => the module toggle(s) that own its records — M009-F09.
@@ -152,6 +155,8 @@ class GlobalSearchService
         'customer'       => ['accounting', 'crm'],
         'vendor'         => ['accounting'],
         'ncr'            => ['quality'],
+        'budget'         => ['budgeting'],
+        'budget_transfer' => ['budgeting'],
     ];
 
     public function __construct(
@@ -476,6 +481,50 @@ class GlobalSearchService
                 'sublabel' => $r->severity ? 'Severity: '.$this->scalar($r->severity) : null,
                 'status'   => $this->scalar($r->status),
                 'url'      => '/quality/ncrs/'.$h->encode((int) $r->id),
+            ])->all());
+        }
+
+        // Budgets -------------------------------------------------------------
+        // The module's own list applies no row scope (finance/VP see every
+        // budget), so the permission gate below is already the whole
+        // visibility rule — the same justification ReturnManagement carries
+        // in ApprovalTypeRegistry. Never re-derive visibility by role here.
+        if ($this->moduleEnabled('budget', $enabled) && $user->hasPermission('budgeting.view') && Schema::hasTable('budgets')) {
+            $q = Budget::query()
+                ->select('budgets.id', 'budgets.name', 'budgets.status')
+                ->where(fn ($w) => $w
+                    ->where('budgets.name', $like, $term));
+
+            $rows = $this->rank($q, 'budgets.name', 'budgets.name', $normalizedQuery)
+                ->limit($perGroup)->get();
+
+            $groups[] = $this->wrap('Budgets', 'budget', $rows->map(fn ($r) => [
+                'id'       => $h->encode((int) $r->id),
+                'label'    => $r->name,
+                'sublabel' => null,
+                'status'   => $this->scalar($r->status),
+                'url'      => '/budgeting/'.$h->encode((int) $r->id),
+            ])->all());
+        }
+
+        // Budget transfers ----------------------------------------------------
+        if ($this->moduleEnabled('budget_transfer', $enabled) && $user->hasPermission('budgeting.view') && Schema::hasTable('budget_transfers')) {
+            $q = BudgetTransfer::query()
+                ->select('budget_transfers.id', 'budget_transfers.transfer_number',
+                    'budget_transfers.status', 'budget_transfers.reason')
+                ->where(fn ($w) => $w
+                    ->where('budget_transfers.transfer_number', $like, $term)
+                    ->orWhere('budget_transfers.reason', $like, $term));
+
+            $rows = $this->rank($q, 'budget_transfers.transfer_number', null, $normalizedQuery)
+                ->limit($perGroup)->get();
+
+            $groups[] = $this->wrap('Budget transfers', 'budget_transfer', $rows->map(fn ($r) => [
+                'id'       => $h->encode((int) $r->id),
+                'label'    => $r->transfer_number,
+                'sublabel' => $r->reason !== null && $r->reason !== '' ? mb_substr((string) $r->reason, 0, 60) : null,
+                'status'   => $this->scalar($r->status),
+                'url'      => '/budgeting/transfers',
             ])->all());
         }
 

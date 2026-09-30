@@ -501,6 +501,7 @@ export const SECTIONS: NavSection[] = [
         icon: LuWallet,
         feature: 'budgeting',
         permission: 'budgeting.view',
+        badgeKey: 'pending_budgets',
       },
       {
         to: '/accounting/invoices',

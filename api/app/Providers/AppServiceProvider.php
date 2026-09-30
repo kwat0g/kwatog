@@ -24,6 +24,8 @@ use App\Modules\Accounting\Listeners\EmailPartyOnCreditNoteFinalized;
 use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\Accounting\Listeners\RunBudgetActualsSyncOnRequested;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
@@ -288,6 +290,8 @@ class AppServiceProvider extends ServiceProvider
             ReturnRequest::class,
             Invoice::class,
             Bill::class,
+            Budget::class,
+            BudgetTransfer::class,
         ] as $badgeModel) {
             $badgeModel::observe(BadgeInvalidationObserver::class);
         }

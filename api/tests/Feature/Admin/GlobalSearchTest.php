@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetLineItem;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
@@ -562,9 +567,11 @@ class GlobalSearchTest extends TestCase
         'customer'       => ['accounting', 'crm'],
         'vendor'         => ['accounting'],
         'ncr'            => ['quality'],
+        'budget'         => ['budgeting'],
+        'budget_transfer' => ['budgeting'],
     ];
 
-    private const OWNING_FEATURES = ['hr', 'crm', 'purchasing', 'production', 'accounting', 'inventory', 'quality'];
+    private const OWNING_FEATURES = ['hr', 'crm', 'purchasing', 'production', 'accounting', 'inventory', 'quality', 'budgeting'];
 
     public function test_switching_a_module_off_hides_exactly_its_own_search_groups(): void
     {
@@ -600,7 +607,7 @@ class GlobalSearchTest extends TestCase
     {
         // The permission gate cannot catch this: hasPermission() short-circuits
         // to true for system_admin, so the feature gate is the only thing
-        // standing between a fully switched-off system and eleven result groups.
+        // standing between a fully switched-off system and fourteen result groups.
         $admin = $this->admin();
         $this->seedOnePerGroup(Department::factory()->create(), $admin);
 
@@ -652,7 +659,7 @@ class GlobalSearchTest extends TestCase
      * Every seeded role × every searchable group, measured through HTTP.
      *
      * `search.global` is ONE permission held by seven roles, and this endpoint
-     * queries eleven tables. The failure mode it exists to prevent is a group
+     * queries fourteen tables. The failure mode it exists to prevent is a group
      * added later without a permission check, which would be invisible to every
      * other test here: they all assert one group at a time. This asserts the
      * whole row — a caller sees a group if and only if it holds that group's
@@ -674,6 +681,8 @@ class GlobalSearchTest extends TestCase
             'customer'       => 'accounting.customers.view',
             'vendor'         => 'accounting.vendors.view',
             'ncr'            => 'quality.ncr.view',
+            'budget'         => 'budgeting.view',
+            'budget_transfer' => 'budgeting.view',
         ];
         $this->assertSame(
             array_keys(self::GROUP_FEATURES),
@@ -713,7 +722,7 @@ class GlobalSearchTest extends TestCase
     public function test_global_search_permission_alone_opens_no_module(): void
     {
         // maintenance_tech is the live example: it holds search.global and not
-        // one of the eleven gates, so its record search is legitimately empty.
+        // one of the fourteen gates, so its record search is legitimately empty.
         $bare = $this->userWithPermissions(['search.global']);
         $this->seedOnePerGroup(Department::factory()->create(), $bare);
 
@@ -768,6 +777,44 @@ class GlobalSearchTest extends TestCase
         Customer::factory()->create(['name' => "{$marker} Motors {$k}"]);
         Vendor::factory()->create(['name' => "{$marker} Supply {$k}"]);
         NonConformanceReport::factory()->create(['ncr_number' => "NCR-{$marker}{$k}"]);
+
+        // Budgeting has no row scope: any budgeting.view holder sees every
+        // budget, so fixtures need no department tailoring.
+        $fiscalYear = FiscalYear::factory()->create([
+            'year' => 2050 + $k,
+            'status' => 'active',
+            'start_date' => (2050 + $k).'-01-01',
+            'end_date' => (2050 + $k).'-12-31',
+        ]);
+        $budget = Budget::factory()->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => $department->id,
+            'name' => "{$marker} budget {$k}",
+        ]);
+        $lineAccounts = [];
+        foreach (['a', 'b'] as $suffix) {
+            $lineAccount = Account::create([
+                'code' => "GS{$k}{$suffix}",
+                'name' => "{$marker} account {$k}{$suffix}",
+                'type' => 'expense',
+                'normal_balance' => 'debit',
+                'is_active' => true,
+            ]);
+            $lineAccounts[] = BudgetLineItem::create([
+                'budget_id' => $budget->id,
+                'account_id' => $lineAccount->id,
+                'jan' => '100.00',
+            ]);
+        }
+        BudgetTransfer::create([
+            'transfer_number' => "BT-{$marker}{$k}",
+            'from_line_item_id' => $lineAccounts[0]->id,
+            'to_line_item_id' => $lineAccounts[1]->id,
+            'month' => 'jan',
+            'amount' => '10.00',
+            'reason' => "{$marker} rebalance {$k}",
+            'requested_by' => $author->id,
+        ]);
     }
 
     private function admin(): User

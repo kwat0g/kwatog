@@ -11,6 +11,8 @@ use App\Common\Support\DepartmentScope;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
@@ -102,6 +104,8 @@ class BadgeService
         'pending_returns' => 'return_management',
         'draft_invoices' => 'accounting',
         'overdue_bills' => 'accounting',
+        'pending_budgets' => 'budgeting',
+        'pending_transfers' => 'budgeting',
     ];
 
     public function __construct(private readonly SettingsService $settings) {}
@@ -562,6 +566,26 @@ class BadgeService
                     ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
                     ->whereNotNull('due_date')
                     ->where('due_date', '<', today())
+                    ->count(),
+            ],
+
+            // Finance > Budgeting — submitted budgets awaiting a checker.
+            'pending_budgets' => [
+                'permissions' => ['budgeting.approve'],
+                'label'       => 'Budgets',
+                'description' => 'Submitted budgets awaiting approval',
+                'counter'     => fn (): int => Budget::query()
+                    ->where('status', 'submitted')
+                    ->count(),
+            ],
+
+            // Finance > Budgeting — transfer requests awaiting a checker.
+            'pending_transfers' => [
+                'permissions' => ['budgeting.approve'],
+                'label'       => 'Budget transfers',
+                'description' => 'Budget transfers awaiting approval',
+                'counter'     => fn (): int => BudgetTransfer::query()
+                    ->where('status', 'pending')
                     ->count(),
             ],
         ];

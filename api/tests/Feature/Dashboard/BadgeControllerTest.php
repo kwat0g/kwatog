@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Dashboard;
 
 use App\Common\Models\ApprovalRecord;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetLineItem;
+use App\Modules\Accounting\Models\BudgetTransfer;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -409,5 +414,73 @@ class BadgeControllerTest extends TestCase
             'mrb_holds', 'shipments', 'mrp_plans', 'pending_returns',
             'draft_invoices', 'overdue_bills', 'training_upcoming', 'open_postings',
         ];
+    }
+
+    public function test_budgeting_badges_track_submitted_budgets_and_pending_transfers(): void
+    {
+        $employee = Role::where('slug', 'employee')->firstOrFail();
+        $emp = User::factory()->create(['role_id' => $employee->id]);
+        $empResp = $this->actingAs($emp, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertArrayNotHasKey('pending_budgets', $empResp);
+        $this->assertArrayNotHasKey('pending_transfers', $empResp);
+
+        $vp = User::factory()->create([
+            'role_id' => Role::where('slug', 'vice_president')->value('id'),
+        ]);
+        $vpResp = $this->actingAs($vp, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(0, $vpResp['pending_budgets']['count']);
+        $this->assertSame(0, $vpResp['pending_transfers']['count']);
+
+        $maker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $fiscalYear = FiscalYear::factory()->create([
+            'year' => 2026, 'status' => 'active',
+            'start_date' => '2026-01-01', 'end_date' => '2026-12-31',
+        ]);
+        $budgets = app(\App\Modules\Accounting\Services\BudgetService::class);
+        $draftOneLineBudget = function (string $name) use ($budgets, $fiscalYear): array {
+            $account = Account::create([
+                'code' => 'BG-'.substr(uniqid(), -6),
+                'name' => $name,
+                'type' => 'expense',
+                'normal_balance' => 'debit',
+                'is_active' => true,
+            ]);
+            $budget = $budgets->create([
+                'fiscal_year_id' => $fiscalYear->id,
+                'department_id' => Department::factory()->create()->id,
+                'budget_type' => 'operating',
+                'name' => $name.' '.substr(uniqid(), -4),
+            ], [['account_id' => $account->id, 'jan' => '500.00']]);
+
+            return [$budget, $budget->lineItems()->firstOrFail()->fresh()];
+        };
+
+        // Two budgets stay submitted: the pending_budgets badge counts them.
+        [$stuckA] = $draftOneLineBudget('Badge submitted A');
+        [$stuckB] = $draftOneLineBudget('Badge submitted B');
+        $budgets->submit($stuckA, $maker->id);
+        $budgets->submit($stuckB, $maker->id);
+
+        // A second pair goes all the way active so a transfer can pend on it.
+        [$liveA, $lineA] = $draftOneLineBudget('Badge live A');
+        [$liveB, $lineB] = $draftOneLineBudget('Badge live B');
+        $budgets->approve($budgets->submit($liveA, $maker->id)->fresh(), $vp->id);
+        $budgets->approve($budgets->submit($liveB, $maker->id)->fresh(), $vp->id);
+        app(\App\Modules\Accounting\Services\BudgetTransferService::class)->request([
+            'from_line_item_id' => $lineA->id,
+            'to_line_item_id' => $lineB->id,
+            'month' => 'jan',
+            'amount' => '50.00',
+            'reason' => 'Badge probe transfer.',
+        ], $maker->id);
+
+        $tracked = $this->actingAs($vp, 'sanctum')
+            ->getJson('/api/v1/dashboards/badges')->assertOk()->json('data');
+        $this->assertSame(2, $tracked['pending_budgets']['count']);
+        $this->assertSame(1, $tracked['pending_transfers']['count']);
     }
 }
