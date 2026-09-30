@@ -7,6 +7,7 @@ use App\Modules\Accounting\Controllers\AccountingOptionsController;
 use App\Modules\Accounting\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
+use App\Modules\Accounting\Controllers\BudgetTransferController;
 use App\Modules\Accounting\Controllers\CreditNoteController;
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
@@ -164,6 +165,14 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::post('/{budget}/reject', [BudgetController::class, 'reject'])->middleware('permission:budgeting.approve');
             Route::post('/{budget}/close', [BudgetController::class, 'close'])->middleware('permission:budgeting.manage');
             Route::delete('/{budget}', [BudgetController::class, 'destroy'])->middleware('permission:budgeting.manage');
+        });
+
+        Route::prefix('budget-transfers')->group(function () {
+            Route::get('/', [BudgetTransferController::class, 'index'])->middleware('permission:budgeting.view');
+            Route::get('/{budgetTransfer}', [BudgetTransferController::class, 'show'])->middleware('permission:budgeting.view');
+            Route::post('/', [BudgetTransferController::class, 'store'])->middleware('permission:budgeting.manage');
+            Route::post('/{budgetTransfer}/approve', [BudgetTransferController::class, 'approve'])->middleware('permission:budgeting.approve');
+            Route::post('/{budgetTransfer}/reject', [BudgetTransferController::class, 'reject'])->middleware('permission:budgeting.approve');
         });
 
     });
