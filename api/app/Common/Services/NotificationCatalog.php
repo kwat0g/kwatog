@@ -167,6 +167,7 @@ final class NotificationCatalog
                 ['key' => 'chain.in_process_qc_required', 'label' => 'In-process QC required', 'description' => 'A work order started and needs periodic in-process sampling.'],
                 ['key' => 'production.wo_completed', 'label' => 'Work order completed', 'description' => 'A production work order has finished. Outgoing QC is next.'],
                 ['key' => 'chain.outgoing_qc_required', 'label' => 'Outgoing QC required', 'description' => 'A finished work order needs AQL sampling before it can ship.'],
+                ['key' => 'chain.outgoing_qc_missing', 'label' => 'Outgoing QC missing escalation', 'description' => 'A completed work order shipped its output without a recorded outgoing inspection and was escalated for repair.'],
                 ['key' => 'quality.inspection_failed', 'label' => 'QC inspection failed', 'description' => 'A quality inspection failed. An NCR may be required.'],
                 ['key' => 'quality.inspection_awaiting_review', 'label' => 'QC result awaiting review', 'description' => 'An inspector finished a result that needs a second person to check it before it is final.'],
                 ['key' => 'chain.delivery_drafted', 'label' => 'Delivery drafted', 'description' => 'Outgoing QC passed and a delivery draft is ready to pick and dispatch.'],
