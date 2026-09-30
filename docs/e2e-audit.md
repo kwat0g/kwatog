@@ -74,14 +74,16 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | CRM | done (crawl-roles) | O2C chain test (SO leg) | PASS | — | — |
 | Production | done (crawl-roles) | O2C fixture + MRP chain (WO lifecycle) | PASS | — | — |
 | Quality | done (crawl-roles) | QualityGate chain test (incoming QC leg) | PASS | 2 (below) | — |
-| Payroll | done (crawl-roles) | H2R chain test | PASS | — | — |
+| Payroll | done (crawl-roles) | H2R chain test + BusinessProcessAudit test 1 (disbursement walk) | PASS | — | — |
+| Warehouse (Inventory ops) | done (crawl-roles) | BusinessProcessAudit test 4 (map/GRN/issue/transfer/count) | PASS | — | — |
+| Bidding (RFQ) | done (crawl-roles) | BusinessProcessAudit test 2 (sealed RFQ→award→PO) | PASS | — | — |
 | Loans | done (crawl-roles) | Loans chain test | PASS | — | — |
 | Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | PASS | — | — |
 | Inventory | done (crawl-roles) | QualityGate chain test (GRN legs) | PASS | — | — |
 | MRP | done (crawl-roles) | MRP chain test | PASS | — | — |
-| B2B portal | done (crawl-roles) | pending | UNVERIFIED | — | — |
-| Forecasting | done (crawl-roles) | pending | UNVERIFIED | — | — |
-| Returns | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| B2B portal | done (crawl-roles) | BusinessProcessAudit test 3 (supplier PO→ship→invoice) | PASS | — | — |
+| Forecasting | done (crawl-roles) | BusinessProcessAudit test 6 (module + forecast.* widgets per role) | PASS | — | — |
+| Returns | done (crawl-roles) | BusinessProcessAudit test 5 (RMA walk) | PASS | — | — |
 | Assets | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Maintenance | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Dashboard | done (crawl-roles) | pending | UNVERIFIED | — | — |
@@ -166,6 +168,42 @@ test_multi_product_return_stages_one_inspection_per_product`
 
 
 ## 5. Chain-test contract notes (hard-won, for future test authors)
+
+### Business-process audit (`BusinessProcessAuditTest`, 6/6, 132 assertions)
+- **Payroll disbursement walk:** hr creates + computes, resolves anomaly flags
+  (`payroll.anomalies.review` — hr holds it, finance does NOT), finance approves
+  + finalizes (bank file + GL listeners fire) → mark-disbursed is REFUSED until a
+  disbursement proof (file + `disbursement_date` + amount == payable net) is
+  uploaded → then Disbursed. Re-disbursing 422s.
+- **Bidding:** RFQ close-now is refused while invited suppliers have not
+  responded; comparison ranks on allocated DELIVERED cost (freight can beat a
+  lower unit price); award creates one draft PO per vendor and stamps
+  invitation status awarded/not_awarded; second award 422s.
+- **B2B:** cross-vendor PO access is 403 (not 404); acknowledge = accept-as-
+  ordered → shipments allowed → receive needs the SEGREGATED flow (warehouse
+  stages with qc.result=pending — warehouse lacks quality.inspections.manage so
+  a terminal verdict 403s — QC maker records lot-result, independent checker
+  reviews) → submit-invoice attaches the supplier invoice number to the
+  auto-staged draft bill; a second invoice 422s.
+- **Warehouse:** receive-goods fixes unit cost at the PO price (12.00 → 422
+  "price differences are settled on the supplier bill"); UOM must match the
+  item's (`pcs` ≠ `KG` without a conversion); stock-count sessions snapshot
+  every stocked bin at start and EVERY line must be counted before completion;
+  variance approval AND session completion are both maker-checker (creator
+  cannot approve/complete their own).
+- **Returns:** stockable customer returns need an inventory ITEM + SO-line
+  provenance (`source_sales_order_item_id`) or the create 422s; inspect needs
+  an active InspectionSpec (else manual_required); the staged return inspection
+  must be answered (measurements) + completed PASSED before a restock dispose.
+- **Forecasting:** manual override is upsert-per (product, customer, year,
+  month); MRP projection honours `include_forecast_in_mrp` + is_active; the
+  three `forecast.*` dashboard widgets (seeded by DashboardWidgetSeeder) are
+  permission-derived — hr_officer/production_manager/qc_inspector/system_admin
+  qualify via hr.employees.view / quality.view; finance via
+  accounting.dashboard.view; purchasing_officer and employee do NOT (pinned).
+- **Guard hygiene:** switching between the supplier_portal token guard and web
+  users requires `$this->app['auth']->forgetGuards()` or the stale token 401s
+  the next web request.
 
 ### Quality gate (`QualityGateChainTest`, 2/2)
 - GRN incoming QC is **maker-checker**: the staged inspection starts Draft,
