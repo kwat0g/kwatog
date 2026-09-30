@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse } from '@/types';
-import type { Budget, BudgetOverview, BudgetVsActual, BudgetCheckAvailability, BudgetSyncRun, FiscalYear } from '@/types/budgeting';
+import type { Budget, BudgetOverview, BudgetVsActual, BudgetCheckAvailability, BudgetSyncRun, BudgetTransfer, FiscalYear } from '@/types/budgeting';
 
 export interface BudgetListParams {
  fiscal_year_id?: string;
@@ -91,5 +91,21 @@ export const budgetingApi = {
  client.get<{ data: BudgetCheckAvailability }>('/budgets/check-availability', {
  params: { department_id: departmentId, amount, fiscal_year_id: fiscalYearId },
  }).then((r) => r.data.data),
+
+  // Budget Transfers (virement)
+  transfers: (params?: { status?: string; page?: number; per_page?: number }) =>
+  client.get<PaginatedResponse<BudgetTransfer>>('/budget-transfers', { params }).then((r) => r.data),
+
+  transfer: (id: string) =>
+  client.get<ApiSuccess<BudgetTransfer>>(`/budget-transfers/${id}`).then((r) => r.data.data),
+
+  requestTransfer: (data: { from_line_item_id: string; to_line_item_id: string; month: string; amount: string; reason: string }) =>
+  client.post<ApiSuccess<BudgetTransfer>>('/budget-transfers', data).then((r) => r.data.data),
+
+  approveTransfer: (id: string) =>
+  client.post(`/budget-transfers/${id}/approve`).then((r) => r.data),
+
+  rejectTransfer: (id: string) =>
+  client.post(`/budget-transfers/${id}/reject`).then((r) => r.data),
 
 };

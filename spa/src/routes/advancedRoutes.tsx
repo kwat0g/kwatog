@@ -14,6 +14,8 @@ const BudgetCreatePage = lazy(() => import('@/pages/budgeting/create'));
 const BudgetDetailPage = lazy(() => import('@/pages/budgeting/detail'));
 const DepartmentBudgetDetailPage = lazy(() => import('@/pages/budgeting/departments'));
 const BudgetVsActualPage = lazy(() => import('@/pages/budgeting/budget-vs-actual'));
+const BudgetTransferListPage = lazy(() => import('@/pages/budgeting/transfers'));
+const BudgetTransferCreatePage = lazy(() => import('@/pages/budgeting/transfer-create'));
 
 // ADV12 — Return Management (RMA)
 const ReturnManagementListPage = lazy(() => import('@/pages/return-management/list'));
@@ -68,6 +70,22 @@ export const advancedRoutes = (
         element={
           <PermissionGuard permission="budgeting.manage">
             <BudgetCreatePage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/budgeting/transfers"
+        element={
+          <PermissionGuard permission="budgeting.view">
+            <BudgetTransferListPage />
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/budgeting/transfers/create"
+        element={
+          <PermissionGuard permission="budgeting.manage">
+            <BudgetTransferCreatePage />
           </PermissionGuard>
         }
       />

@@ -56,6 +56,33 @@ export interface BudgetLineItem {
  variance: string;
 }
 
+export interface BudgetTransferLine {
+  id: string;
+  account_code?: string;
+  account_name?: string;
+  annual_total?: string | null;
+  budget_id?: string | null;
+  budget_name?: string | null;
+  department?: string | null;
+}
+
+export interface BudgetTransfer {
+  id: string;
+  transfer_number: string;
+  month: string;
+  amount: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  status_label?: string;
+  from_line?: BudgetTransferLine | null;
+  to_line?: BudgetTransferLine | null;
+  requested_by?: { id: string; name: string } | null;
+  approved_by?: { id: string; name: string } | null;
+  approved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 
 export interface BudgetOverview {
  total_allocated: string;

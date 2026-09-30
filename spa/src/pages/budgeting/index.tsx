@@ -124,6 +124,9 @@ export default function BudgetOverviewPage() {
                 Create Budget
               </Button>
             )}
+            <Button variant="secondary" size="sm" onClick={() => navigate('/budgeting/transfers')}>
+              Transfers
+            </Button>
           </div>
         }
       />
