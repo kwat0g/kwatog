@@ -496,6 +496,13 @@ export const SECTIONS: NavSection[] = [
         permission: 'dashboard.accounting.view',
       },
       {
+        to: '/budgeting',
+        label: 'Budgeting',
+        icon: LuWallet,
+        feature: 'budgeting',
+        permission: 'budgeting.view',
+      },
+      {
         to: '/accounting/invoices',
         label: 'Accounts Receivable Invoices',
         icon: InvoiceIcon,

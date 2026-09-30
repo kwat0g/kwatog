@@ -298,9 +298,9 @@ describe('role-aligned sidebar permissions', () => {
     }
   });
 
-  it('keeps the Finance sidebar focused on the dashboard, invoices, bills, vendors, and primary statements', () => {
+  it('keeps the Finance sidebar focused on the dashboard, budgeting, invoices, bills, vendors, and primary statements', () => {
     const finance = {
-      permissions: new Set(['dashboard.accounting.view']),
+      permissions: new Set(['dashboard.accounting.view', 'budgeting.view']),
       features: allFeatures,
       roleSlug: 'finance_officer',
     };
@@ -312,12 +312,15 @@ describe('role-aligned sidebar permissions', () => {
 
     expect(isNavItemVisible(item('/dashboard/finance'), finance)).toBe(true);
     expect(isNavItemVisible(item('/dashboard/finance'), employee)).toBe(false);
+    expect(isNavItemVisible(item('/budgeting'), finance)).toBe(true);
+    expect(isNavItemVisible(item('/budgeting'), employee)).toBe(false);
 
     const financePaths = SECTIONS.find((section) => section.label === 'Finance')?.items.map(
       (entry) => entry.to,
     );
     expect(financePaths).toEqual([
       '/dashboard/finance',
+      '/budgeting',
       '/accounting/invoices',
       '/accounting/bills',
       '/accounting/vendors',
