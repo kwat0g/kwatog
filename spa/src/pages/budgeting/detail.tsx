@@ -345,7 +345,7 @@ export default function BudgetDetailPage() {
         onClose={() => setConfirmClose(false)}
         onConfirm={() => closeMutation.mutate()}
         title="Close budget period?"
-        description="No further changes or transfers will be allowed."
+        description="Closed budgets are read-only. Adjust with a supplemental budget for the same department."
         variant="warning"
         confirmLabel="Close"
         pending={closeMutation.isPending}

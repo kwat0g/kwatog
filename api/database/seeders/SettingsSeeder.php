@@ -420,7 +420,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'accounting.accounts.pagibig_employer_expense_code', 'value' => '6050', 'group' => 'accounting', 'label' => 'Pag-IBIG Employer Expense Account Code', 'description' => 'Payroll GL account mapping.'],
             ['key' => 'accounting.accounts.payroll_cash_code', 'value' => '1010', 'group' => 'accounting', 'label' => 'Payroll Cash Account Code', 'description' => 'Chart-of-accounts mapping used for payroll net-pay disbursements.'],
             ['key' => 'accounting.delivery_confirmed.notification_roles', 'value' => ['finance_officer'], 'group' => 'accounting', 'label' => 'Delivery Confirmed Notification Roles', 'description' => 'Roles notified when a delivery is confirmed.'],
-            ['key' => 'budgeting.enforcement_mode', 'value' => 'warn', 'group' => 'budgeting', 'label' => 'Budget Enforcement Mode', 'description' => 'off, warn, or block when spend exceeds budget.'],
+            ['key' => 'budgeting.enforcement_mode', 'value' => 'warn', 'group' => 'budgeting', 'label' => 'Budget Enforcement Mode', 'description' => 'Default warn: over-ceiling spend is logged and needs acknowledgment before PR/PO approval. Set to block to hard-stop over-ceiling submissions; off disables the gate.'],
             ['key' => 'accounting.je_self_post_limit', 'value' => 0, 'group' => 'accounting', 'label' => 'Journal Entry Self-Post Limit', 'description' => 'Manual journal total below which maker-checker may be bypassed.'],
             ['key' => 'inventory.adjustment_approval_threshold', 'value' => 0, 'group' => 'inventory', 'label' => 'Inventory Adjustment Approval Threshold', 'description' => 'Absolute adjustment value above which approval is required.'],
             ['key' => 'inventory.over_receipt_tolerance_pct', 'value' => 0, 'group' => 'inventory', 'label' => 'Over-Receipt Tolerance (%)', 'description' => 'Allowed receipt overage as a percentage of ordered quantity.'],
@@ -484,7 +484,7 @@ class SettingsSeeder extends Seeder
             'return_management' => ['Return Management',    'RMA requests, return processing, and credit memos.'],
             'b2b_portals'       => ['B2B Portals',          'Supplier and customer self-service portals.'],
             'forecasting'       => ['Forecasting',          'Demand forecasts, stock-out projections, and forecast accuracy.'],
-            'budgeting'         => ['Budgeting',            'Budgets, budget line items, revisions, and transfers.'],
+            'budgeting'         => ['Budgeting',            'Budgets, budget line items, and fiscal years.'],
         ];
 
         foreach ($modules as $slug => [$label, $description]) {
