@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Support\BudgetConsumptionLevel;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -118,6 +119,17 @@ class BudgetService
             $this->assertTransition($locked, 'active');
             if ((int) $locked->submitted_by === $userId) {
                 throw new BusinessRuleException('The user who submitted a budget cannot approve the same budget.');
+            }
+            // Maker-checker by role, not just by user: a second holder of the
+            // submitting role (e.g. another finance_officer) must not clear a
+            // budget their own role raised. Finance keeps the PR/PO
+            // budget-acknowledgment grant; budget activation itself needs a
+            // different role (vice_president). Compares raw role ids so the
+            // rule holds even when role names change.
+            $submitter = User::query()->find($locked->submitted_by);
+            $approver = User::query()->findOrFail($userId);
+            if ($submitter !== null && (int) $submitter->role_id === (int) $approver->role_id) {
+                throw new BusinessRuleException('Budget approval requires a different role than the submitting role.');
             }
 
             $locked->load('lineItems');

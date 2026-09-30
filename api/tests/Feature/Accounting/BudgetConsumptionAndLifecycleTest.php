@@ -136,6 +136,34 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         $service->approve($submitted, $submitter->id);
     }
 
+    public function test_budget_approval_requires_a_role_other_than_the_submitter_role(): void
+    {
+        $fiscalYear = $this->currentFiscalYear();
+        $account = $this->expenseAccount();
+        $service = app(BudgetService::class);
+        $budget = $service->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'SoD role test',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+
+        $submitter = User::factory()->withRole('finance_officer')->create();
+        $sameRole = User::factory()->withRole('finance_officer')->create();
+        $checker = User::factory()->withRole('vice_president')->create();
+        $submitted = $service->submit($budget, $submitter->id);
+
+        try {
+            $service->approve($submitted, $sameRole->id);
+            $this->fail('A second holder of the submitting role must not approve the budget.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('different role', $exception->getMessage());
+        }
+
+        $approved = $service->approve($submitted->fresh(), $checker->id);
+        $this->assertSame('active', $approved->status);
+    }
+
     public function test_commitments_are_derived_from_open_purchase_orders_and_bills(): void
     {
         $fiscalYear = $this->currentFiscalYear();
