@@ -65,30 +65,35 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 
 | Module | UI crawl | Chain/API test | Verdict | Findings fixed | Open |
 |---|---|---|---|---|---|
-| Auth/RBAC | done (auth.roles) | pending | — | — | — |
-| HR | pending | pending | UNVERIFIED | — | — |
-| Attendance | pending | pending | UNVERIFIED | — | — |
-| Leave | pending | pending | UNVERIFIED | — | — |
-| Payroll | pending | pending | UNVERIFIED | — | — |
-| Loans | pending | pending | UNVERIFIED | — | — |
-| Accounting | pending | pending | UNVERIFIED | — | — |
-| Inventory | pending | pending | UNVERIFIED | — | — |
-| Purchasing | pending | pending | UNVERIFIED | — | — |
-| SupplyChain | pending | pending | UNVERIFIED | — | — |
-| Production | pending | pending | UNVERIFIED | — | — |
-| MRP | pending | pending | UNVERIFIED | — | — |
-| CRM | pending | pending | UNVERIFIED | — | — |
-| B2B portal | pending | pending | UNVERIFIED | — | — |
-| Forecasting | pending | pending | UNVERIFIED | — | — |
-| Returns | pending | pending | UNVERIFIED | — | — |
-| Assets | pending | pending | UNVERIFIED | — | — |
-| Quality | pending | pending | UNVERIFIED | — | — |
-| Maintenance | pending | pending | UNVERIFIED | — | — |
-| Dashboard | pending | pending | UNVERIFIED | — | — |
-| Admin | pending | pending | UNVERIFIED | — | — |
-| Landing | pending | pending | UNVERIFIED | — | — |
+| Auth/RBAC | done (auth.roles 17/17) | exercised by all chain tests | PASS | — | — |
+| HR | done (crawl-roles) | H2R chain test | TESTING | — | — |
+| Leave | done (crawl-roles) | H2R chain test | TESTING | — | — |
+| Accounting | done (crawl-roles) | P2P + O2C chain tests | PASS | — | — |
+| Purchasing | done (crawl-roles) | P2P chain test | PASS | — | — |
+| SupplyChain | done (crawl-roles) | O2C chain test | PASS | — | — |
+| CRM | done (crawl-roles) | O2C chain test (SO leg) | PASS | — | — |
+| Production | done (crawl-roles) | O2C fixture (output leg) | PASS | — | — |
+| Quality | done (crawl-roles) | O2C fixture (outgoing QC leg) | PASS | — | — |
+| Payroll | done (crawl-roles) | H2R chain test | TESTING | — | — |
+| Loans | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | TESTING | — | — |
+| Inventory | done (crawl-roles) | exercised via O2C fixture | PASS | — | — |
+| MRP | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| B2B portal | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Forecasting | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Returns | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Assets | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Maintenance | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Dashboard | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
+| Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
 
-Chains: C1 UNVERIFIED · C2 UNVERIFIED · C3 UNVERIFIED.
+Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 TESTING (H2R test in progress).
+
+Role crawl: **90/90 passed (49.9m)** — all 15 employee roles × 6 probes
+(authenticated load, console errors, HTTP failures, blank pages, 404 pages,
+nav reachability), plus admin crawl of 170 static routes clean. Results in
+`spa/e2e-real/results/crawl-*.json` + `summary.json`.
 
 ## 3. Findings log (defect → severity → status → test → fix)
 
@@ -96,8 +101,117 @@ Chains: C1 UNVERIFIED · C2 UNVERIFIED · C3 UNVERIFIED.
 
 ## 4. Questions for owner (business rule ambiguous — behavior left unchanged)
 
-(none yet)
+1. **Quality verdict-only capture (WIP in tree, NOT mine):** LotResultPanel
+   PASS/FAIL buttons + InspectionService/CoCService relaxation allow recording
+   an inspection verdict without actual measurements on critical rows. This
+   contradicts the CLAUDE.md rule "Outgoing QC: AQL 0.65 Level II. Actual
+   measurements for critical dimensions" and weakens the IATF 16949 story that
+   is the thesis differentiator. Verified consistent locally (56 quality+auth
+   tests pass), but flagged as an owner decision, not silently reverted.
+2. **Sidebar peek preference (WIP in tree, NOT mine):** migration 0500 + User
+   model/request/resource/factory + SPA Sidebar/Topbar/AppLayout/auth.ts add a
+   `sidebar_peek` user preference. Consistent and tested (spa tsc clean,
+   UserPreferencesTest green); listed for visibility only.
+3. **PG shared-memory lock ceiling (infrastructure, not app defect):**
+   concurrent RefreshDatabase streams each run `migrate:fresh` (DROP of ~190
+   tables). 7 parallel streams → `SQLSTATE[53200] out of shared memory /
+   max_locks_per_transaction` → mass "failed (0 assertions)" carnage. **4
+   streams also hit it.** PG limits deliberately not raised (out of scope);
+   suite re-run on 2 streams instead (c1/c2 logs `/tmp/r1.log`, `/tmp/r2.log`
+   in-container).
+4. **Bill-cancel polish (P2P test, not fixed):** a cancelled bill still lets
+   step-1 approval succeed (only the FINAL approval dead-ends). Harmless
+   (payment is still refused) but the state machine is more permissive than
+   the UI implies. Left as-is; noted for the owner.
 
-## 5. Full-suite runs
+## 5. Chain-test contract notes (hard-won, for future test authors)
+
+### Procure-to-Pay (`ProcureToPayChainTest`, 6/6, commit e21be332)
+- Auto-bill listener `AutoCreateBillOnGrnAccepted` needs an automation actor:
+  seed an active system_admin + `app(SettingsService::class)->set('system.
+  automation.actor_roles', ['system_admin'])`.
+- Bill-payment idempotency key rides the **`Idempotency-Key` HEADER**
+  (`StoreBillPaymentRequest::prepareForValidation` merges header into body);
+  collections instead take `idempotency_key` in the **BODY**. Inconsistent
+  surfaces, both now pinned by tests.
+- `withHeaders()` must precede `postJson()` on the actingAs chain —
+  TestResponse has no withHeaders; postJson executes immediately.
+- Self-approval guard is USER-level: the finance who records a payment can
+  never approve it (ForbiddenActionException 403) — a second finance_officer
+  is the step-1 checker. bill_payment chain = finance_officer → vice_president.
+- "Header" account = any account with children (`PostingAccountResolver`
+  checks `Account::where('parent_id', $account->id)->exists()`); posting to a
+  header 422s "is a header account and cannot receive new postings" — tests
+  pick leaf asset accounts (cashAccount() helper, whereNotExists subquery).
+- Bill cancel is **PATCH** `/api/v1/bills/{bill}/cancel`; allowed while
+  `amount_paid` is zero even with a pending reservation; refused once paid.
+- Bill routes are `/api/v1/bills/...` (not `/api/v1/accounting/bills/...`).
+
+### Order-to-Cash (`OrderToCashChainTest`, 5/5, commit 2a407e9a)
+- SO create FormRequest resolves HashIDs (hashIdFields: customer_id, items.*.
+  product_id) — send hash_ids, not ints. SO needs an active **PriceAgreement**
+  per customer+product+delivery date else 422.
+- `Tests\Support\ReceivesProductionOutput::dispatchableDelivery()` builds its
+  own confirmed SO + WO + output + FG receipt + passed outgoing inspection +
+  delivery; returns `[Delivery, Item, WarehouseLocation]`.
+- Delivery walk: PATCH `/supply-chain/deliveries/{id}/assignment` (vehicle +
+  driver + reason, Scheduled only) → PATCH `/status` loading → in_transit →
+  delivered (jumping scheduled→delivered 422s) → POST `/confirm` is
+  **proof-gated** (422 without proof; proof = multipart POST `/proofs` with
+  `Storage::fake('local')`). Confirm auto-stages a draft invoice;
+  re-confirm of a Confirmed delivery is a deliberate idempotent 200.
+- Invoice finalize is delivery-gated (needs SO + Confirmed delivery else 422)
+  and assigns `invoice_number`; double finalize 422s.
+- Collections: POST `/invoices/{id}/collections`, model is
+  `App\Modules\Accounting\Models\Collection` (NOT InvoiceCollection); full →
+  Paid, partial → Partial, over-balance → 422; carry `journal_entry_id`.
+- **refresh() trap (cost ~30min):** `Model::refresh()` re-loads all loaded
+  relation NAMES; `show()` sets computed `preparation` via setRelation() which
+  is NOT a real relation → subsequent refresh() throws
+  RelationNotFoundException. In tests re-read via
+  `Delivery::query()->findOrFail($id)`. App-side "fixes" were made then
+  REVERTED — resource `$this->preparation ?? []` is already safe.
+
+### Hire-to-Retire (`HireToRetireChainTest`, in progress)
+- `hr_separation` is a permission MODULE, not a role — hr_officer holds
+  `hr.separation.initiate` + `hr.clearance.sign` via `module('hr_separation')`.
+  There is no separate separation role.
+- Employee create: POST `/api/v1/hr/employees`, StoreEmployeeRequest needs the
+  full field set (name regex letters-only, birth ≥15y, `^09\d{9}$` mobile,
+  hash-encoded department_id/position_id, pay_type monthly →
+  basic_monthly_salary required, date_hired ≤ today). Returns 201.
+- Leave: POST `/api/v1/leaves/requests` — store authorize: filer must hold
+  leave.approve_hr OR employee_id == user->employee_id (self). `submit()`
+  requires pre-seeded `EmployeeLeaveBalance` rows per year ("Leave balance is
+  not initialized for {year}"). Leave windows: `leave.request.past_window_days`
+  (30) / `future_window_days` (365) seeded by migration 0318, NOT by
+  SettingsSeeder. VL (default_balance 15, requires_document false) avoids
+  document upload.
+- Dept-head approval needs an Employee row in the SAME department
+  (`assertDepartmentDecisionScope`); a holder of leave.approve_hr bypasses it.
+  Wrong department → 403 (ForbiddenActionException). approve-hr before
+  approve-dept → 422; double approve-dept → 422. Approved consumes the
+  balance and marks attendance rows on_leave.
+- Separation: POST `/api/v1/hr/employees/{employee}/separation` with
+  `{separation_date, separation_reason, remarks}`; needs setting
+  `hr.separation.clearance_checklist` (set via SettingsService). Refuses date
+  < hire_date, already-separated, duplicate open clearance. Employee status →
+  on_leave on initiation.
+- Checklist item department labels resolve against the departments table
+  (exact/prefix); an unresolvable label is HR-fallback-signer-only. signItem()
+  sets item status **'cleared'** (not 'signed'); last item flips clearance to
+  completed. Signing another department's item as a dept head → 422
+  (BusinessRuleException from the per-department gate).
+
+## 6. Full-suite runs
 
 - 2026-09-29: recon only, no suite run yet.
+- 2026-09-30 run 1 (4 streams, ogami_test_c1..c4): **lock carnage** — even 4
+  concurrent RefreshDatabase streams hit the PG `max_locks_per_transaction`
+  ceiling (~815 `SQLSTATE[53200]` per stream, ~466 files failing mostly with
+  "failed (0 assertions)"). Classified infrastructure, not regressions.
+- 2026-09-30 run 2 (2 streams, ogami_test_c1/c2, logs `/tmp/r1.log`/`/tmp/r2.log`):
+  IN FLIGHT — first 12 chunks clean, zero lock errors. Final classification
+  to be appended when the run completes. Unit file
+  `tests/Unit/ScheduledExportArtifactServiceTest.php` stays its own chunk
+  (OOMs at 128M alongside others; 128M PHP limit preserved per constraint).
