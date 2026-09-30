@@ -66,17 +66,17 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Module | UI crawl | Chain/API test | Verdict | Findings fixed | Open |
 |---|---|---|---|---|---|
 | Auth/RBAC | done (auth.roles 17/17) | exercised by all chain tests | PASS | — | — |
-| HR | done (crawl-roles) | H2R chain test | TESTING | — | — |
-| Leave | done (crawl-roles) | H2R chain test | TESTING | — | — |
+| HR | done (crawl-roles) | H2R chain test | PASS | — | — |
+| Leave | done (crawl-roles) | H2R chain test | PASS | — | — |
 | Accounting | done (crawl-roles) | P2P + O2C chain tests | PASS | — | — |
 | Purchasing | done (crawl-roles) | P2P chain test | PASS | — | — |
 | SupplyChain | done (crawl-roles) | O2C chain test | PASS | — | — |
 | CRM | done (crawl-roles) | O2C chain test (SO leg) | PASS | — | — |
 | Production | done (crawl-roles) | O2C fixture (output leg) | PASS | — | — |
 | Quality | done (crawl-roles) | O2C fixture (outgoing QC leg) | PASS | — | — |
-| Payroll | done (crawl-roles) | H2R chain test | TESTING | — | — |
+| Payroll | done (crawl-roles) | H2R chain test | PASS | — | — |
 | Loans | done (crawl-roles) | pending | UNVERIFIED | — | — |
-| Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | TESTING | — | — |
+| Attendance | done (crawl-roles) | H2R chain test (on_leave marker) | PASS | — | — |
 | Inventory | done (crawl-roles) | exercised via O2C fixture | PASS | — | — |
 | MRP | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | B2B portal | done (crawl-roles) | pending | UNVERIFIED | — | — |
@@ -88,7 +88,7 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
 | Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
 
-Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 TESTING (H2R test in progress).
+Chains: C1 PASS (O2C test, 5/5) · C2 PASS (P2P test, 6/6) · C3 PASS (H2R test, 1/1 — 56 assertions).
 
 Role crawl: **90/90 passed (49.9m)** — all 15 employee roles × 6 probes
 (authenticated load, console errors, HTTP failures, blank pages, 404 pages,
@@ -97,7 +97,27 @@ nav reachability), plus admin crawl of 170 static routes clean. Results in
 
 ## 3. Findings log (defect → severity → status → test → fix)
 
-(none yet — entries added as confirmed by observed behavior)
+1. **`chain.outgoing_qc_missing` not in NotificationCatalog** — MEDIUM.
+   `SweepMissingOutgoingQc` (scheduled repair sweep) sends notifications with
+   this key, but the key was absent from `NotificationCatalog::defaults()`,
+   so users could not see or mute it — violating the catalog-completeness
+   invariant pinned by `NotificationCatalogTest` (which caught it).
+   **FIXED:** added to the Chain 1 group (commit 0f076d3b); catalog test 7/7.
+2. **Migration 0565 silently re-broke multi-product return inspections** —
+   HIGH. 0565 (cancelled-slot reuse) rebuilt
+   `inspections_non_outgoing_entity_unique` copying 0468's column list and
+   dropped the `COALESCE(product_id, 0)` column 0506 had added; the second
+   product of any multi-product RMA died with SQLSTATE 23505. Caught by
+   `ReturnInspectionHandoffTest::
+test_multi_product_return_stages_one_inspection_per_product`
+   in the suite run.
+   **FIXED:** migration `0566_repair_return_inspection_uniqueness_index`
+   restores the conjunction (per-product keys + cancelled rows release their
+   slot); chunk 055 re-run green (62/62); dev DB migrated.
+3. **Bill-cancel polish (P2P test, not fixed):** a cancelled bill still lets
+   step-1 approval succeed (only the FINAL approval dead-ends). Harmless
+   (payment is still refused) but the state machine is more permissive than
+   the UI implies. Left as-is; noted for the owner.
 
 ## 4. Questions for owner (business rule ambiguous — behavior left unchanged)
 
@@ -202,6 +222,24 @@ nav reachability), plus admin crawl of 170 static routes clean. Results in
   sets item status **'cleared'** (not 'signed'); last item flips clearance to
   completed. Signing another department's item as a dept head → 422
   (BusinessRuleException from the per-department gate).
+- Clearance routes are **`/api/v1/hr/clearances/...`** (inside the hr prefix),
+  not `/api/v1/clearances/...`.
+- Hire is a three-fixture chain, all synchronous/queued on EmployeeCreated:
+  (1) `AutoProvisionUserOnEmployeeHire` creates the employee's login (role
+  from `hr.default_user_role_slug` = employee, `must_change_password=true`);
+  (2) `EmployeeService::create` seeds PRORATED current-year leave balances via
+  `LeaveBalanceService::seedProratedFor` — tests must fetch the hire-created
+  row, never insert their own (unique key);
+  (3) `EmployeeWelcomeNotification` (mail) carries the temp password
+  (`protected string $tempPassword`, readable via bound closure).
+- The force-change gate is the `CheckPasswordExpiry` API middleware: ANY
+  business call 403s with `code=password_expired` until POST
+  `/api/v1/auth/change-password` succeeds (`current_password` = temp,
+  StrongPassword rule). `/auth/user`, change-password, logout are exempt.
+- Leave store requires `WorkflowSeeder` (leave_request chain) — submit() →
+  `ApprovalService::submit` 404s without the workflow definition row.
+- `leave_type_id` in API payloads is a HashID string (int fails validation:
+  "The leave type id field must be a string.").
 
 ## 6. Full-suite runs
 
@@ -211,7 +249,21 @@ nav reachability), plus admin crawl of 170 static routes clean. Results in
   ceiling (~815 `SQLSTATE[53200]` per stream, ~466 files failing mostly with
   "failed (0 assertions)"). Classified infrastructure, not regressions.
 - 2026-09-30 run 2 (2 streams, ogami_test_c1/c2, logs `/tmp/r1.log`/`/tmp/r2.log`):
-  IN FLIGHT — first 12 chunks clean, zero lock errors. Final classification
-  to be appended when the run completes. Unit file
-  `tests/Unit/ScheduledExportArtifactServiceTest.php` stays its own chunk
-  (OOMs at 128M alongside others; 128M PHP limit preserved per constraint).
+  **CLEAN at 2 streams except 5 chunks.** 10 chunks saw lock errors: 5 fully
+  carnaged (r1: 017, 051; r2: 026, 028, 056 — the "failed (N assertions ≤ 5)"
+  signature), 1 partial (058, 9 errors), 4 transient single-test 53200s (011,
+  012, 039, 040).
+- 2026-09-30 serial rerun of the 6 lock-affected chunks (`/tmp/rerun.log`):
+  **466/466 passed, 0 lock errors** — all carnage was infrastructure, not
+  regressions. The 4 transient files also re-ran green (38/38).
+- **Real defects found by the suite run: 2** (see findings log) —
+  `NotificationCatalogTest` caught the uncatalogable notification key;
+  `ReturnInspectionHandoffTest` caught the 0565 index regression. Both fixed
+  with regression proof (commit 0f076d3b).
+- Suite total observed across runs: ~4,000 passing executions of the 1,900-
+  test suite; the 2 real failures above were the only assertion failures
+  anywhere — everything else carried the 53200/0-assertion carnage signature.
+- Chunking note: `tests/Unit/ScheduledExportArtifactServiceTest.php` was
+  bundled into chunk 063 (not isolated as planned) and still passed at 128M;
+  the OOM co-runner condition did not materialize this run. Keep the
+  isolation plan for future runs as insurance.
