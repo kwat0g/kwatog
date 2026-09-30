@@ -63,13 +63,13 @@ class BudgetTransferController extends Controller
     }
 
     /** Show a single transfer. */
-    public function show(BudgetTransfer $transfer): JsonResponse
+    public function show(BudgetTransfer $budgetTransfer): JsonResponse
     {
-        $transfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver']);
+        $budgetTransfer->load(['fromLine.account', 'fromLine.budget.department', 'toLine.account', 'toLine.budget.department', 'requester', 'approver']);
 
         return response()->json([
             'success' => true,
-            'data' => new BudgetTransferResource($transfer),
+            'data' => new BudgetTransferResource($budgetTransfer),
             'error' => null,
             'meta' => null,
         ]);
@@ -105,17 +105,17 @@ class BudgetTransferController extends Controller
     }
 
     /** Approve a pending transfer and apply the movement (checker). */
-    public function approve(BudgetTransfer $transfer): JsonResponse
+    public function approve(BudgetTransfer $budgetTransfer): JsonResponse
     {
-        $transfer = $this->transfers->approve($transfer, (int) auth()->id());
+        $transfer = $this->transfers->approve($budgetTransfer, (int) auth()->id());
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }
 
     /** Reject a pending transfer; nothing moves. */
-    public function reject(BudgetTransfer $transfer): JsonResponse
+    public function reject(BudgetTransfer $budgetTransfer): JsonResponse
     {
-        $transfer = $this->transfers->reject($transfer, (int) auth()->id());
+        $transfer = $this->transfers->reject($budgetTransfer, (int) auth()->id());
 
         return response()->json(['success' => true, 'data' => new BudgetTransferResource($transfer), 'error' => null, 'meta' => null]);
     }

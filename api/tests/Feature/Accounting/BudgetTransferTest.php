@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\BudgetTransferService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Models\Role;
 use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,6 +19,12 @@ use Tests\TestCase;
 class BudgetTransferTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+    }
 
     public function test_request_then_approve_moves_the_month_bucket(): void
     {
@@ -177,6 +184,43 @@ class BudgetTransferTest extends TestCase
         } catch (BusinessRuleException) {
             $this->addToAssertionCount(1);
         }
+    }
+
+    public function test_transfer_http_endpoints_bind_hash_ids_and_enforce_roles(): void
+    {
+        [$service, $maker, $checker, $from, $to] = $this->livePair('1000.00', '1000.00');
+
+        // Maker requests over HTTP with line hash ids.
+        $create = $this->actingAs($maker)->postJson('/api/v1/budget-transfers', [
+            'from_line_item_id' => $from->hash_id,
+            'to_line_item_id' => $to->hash_id,
+            'month' => 'jan',
+            'amount' => '25.00',
+            'reason' => 'HTTP binding probe transfer.',
+        ])->assertCreated();
+        $hash = $create->json('data.id');
+        $this->assertNotEmpty($hash);
+
+        // Show resolves the same hash (route-model binding).
+        $this->actingAs($maker)->getJson("/api/v1/budget-transfers/{$hash}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending');
+
+        // Same-role checker is refused over HTTP with the sentence.
+        $sameRole = User::factory()->withRole('finance_officer')->create();
+        $this->actingAs($sameRole)->postJson("/api/v1/budget-transfers/{$hash}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('errors.error.0', 'Transfer approval requires a different role than the requesting role.');
+
+        // Cross-role checker applies.
+        $this->actingAs($checker)->postJson("/api/v1/budget-transfers/{$hash}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+        $this->assertSame('975.00', $from->fresh()->jan);
+
+        // A role without the grant cannot even list.
+        $outsider = User::factory()->withRole('employee')->create();
+        $this->actingAs($outsider)->getJson('/api/v1/budget-transfers')->assertForbidden();
     }
 
     /**
