@@ -242,6 +242,117 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         $this->assertNotNull(Budget::query()->find($kept->id));
     }
 
+    public function test_budgets_require_an_active_fiscal_year(): void
+    {
+        $service = app(BudgetService::class);
+        $account = $this->expenseAccount();
+        $draftYear = FiscalYear::factory()->create([
+            'year' => 2031,
+            'status' => 'draft',
+            'start_date' => '2031-01-01',
+            'end_date' => '2031-12-31',
+        ]);
+        $payload = [
+            'fiscal_year_id' => $draftYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Wrong year',
+        ];
+        try {
+            $service->create($payload, [['account_id' => $account->id, 'jan' => '10.00']]);
+            $this->fail('Allocating to a draft fiscal year must be refused.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('active fiscal year', $exception->getMessage());
+        }
+
+        $liveYear = $this->currentFiscalYear();
+        $budget = $service->create([
+            'fiscal_year_id' => $liveYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Year guard',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+
+        try {
+            $service->updateDraft($budget, ['fiscal_year_id' => $draftYear->id]);
+            $this->fail('Retargeting a draft to a non-active year must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $maker = User::factory()->create();
+        $pending = $service->create([
+            'fiscal_year_id' => $liveYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Year guard submit',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+        $liveYear->forceFill(['status' => 'closed'])->save();
+        try {
+            $service->submit($pending, $maker->id);
+            $this->fail('Submitting into a closed year must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+    }
+
+    public function test_live_duplicate_names_are_refused_but_closed_ones_are_not(): void
+    {
+        $service = app(BudgetService::class);
+        $account = $this->expenseAccount();
+        $fiscalYear = $this->currentFiscalYear();
+        $department = Department::factory()->create();
+        $make = fn (string $name, ?int $departmentId): Budget => $service->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => $departmentId,
+            'budget_type' => 'operating',
+            'name' => $name,
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+
+        $first = $make('Maintenance ops', $department->id);
+        try {
+            $make('maintenance OPS', $department->id);
+            $this->fail('A second live budget with the same name must be refused.');
+        } catch (BusinessRuleException $exception) {
+            $this->assertStringContainsString('supplemental', $exception->getMessage());
+        }
+
+        // Same name, different department: allowed (distinct pool).
+        $other = $make('Maintenance ops', null);
+        $this->assertSame('draft', $other->fresh()->status);
+
+        // Same name, different year: allowed.
+        $nextYear = FiscalYear::factory()->create([
+            'year' => 2032,
+            'status' => 'active',
+            'start_date' => '2032-01-01',
+            'end_date' => '2032-12-31',
+        ]);
+        $next = $service->create([
+            'fiscal_year_id' => $nextYear->id,
+            'department_id' => $department->id,
+            'budget_type' => 'operating',
+            'name' => 'Maintenance ops',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+        $this->assertSame('draft', $next->fresh()->status);
+
+        // After close, the name is reusable in the same pool.
+        $first->forceFill(['status' => 'active'])->save();
+        $service->close($first->fresh());
+        $replacement = $make('Maintenance ops', $department->id);
+        $this->assertSame('draft', $replacement->fresh()->status);
+
+        // Renaming a draft onto a live name is refused (self excluded).
+        try {
+            $service->updateDraft($other, ['department_id' => $department->id, 'name' => 'Maintenance ops']);
+            $this->fail('Renaming onto a live duplicate must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+        $service->updateDraft($other, ['name' => 'Maintenance ops v2']);
+        $this->assertSame('Maintenance ops v2', $other->fresh()->name);
+    }
+
     public function test_commitments_are_derived_from_open_purchase_orders_and_bills(): void
     {
         $fiscalYear = $this->currentFiscalYear();
@@ -324,6 +435,7 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
     private function currentFiscalYear(): FiscalYear
     {
         return FiscalYear::factory()->create([
+            'year' => 2026,
             'status' => 'active',
             'start_date' => '2026-01-01',
             'end_date' => '2026-12-31',

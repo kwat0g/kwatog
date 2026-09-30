@@ -45,6 +45,10 @@ class BudgetService
     public function create(array $data, array $lineItems): Budget
     {
         return DB::transaction(function () use ($data, $lineItems): Budget {
+            $fiscalYear = FiscalYear::query()->findOrFail((int) $data['fiscal_year_id']);
+            $this->assertFiscalYearActive($fiscalYear);
+            $this->assertNoLiveDuplicate(null, (int) $data['fiscal_year_id'], $data['department_id'] ?? null, (string) $data['name']);
+
             $lineItems = $this->normaliseLineItems($lineItems, (string) ($data['budget_type'] ?? ''));
             $data['total_allocated'] = $this->totalAllocated($lineItems);
             unset($data['line_items']);
@@ -72,7 +76,17 @@ class BudgetService
                 'fiscal_year_id', 'department_id', 'budget_type', 'name',
             ]));
             if (isset($attributes['fiscal_year_id'])) {
-                FiscalYear::query()->findOrFail((int) $attributes['fiscal_year_id']);
+                $fiscalYear = FiscalYear::query()->findOrFail((int) $attributes['fiscal_year_id']);
+                $this->assertFiscalYearActive($fiscalYear);
+            }
+
+            if (array_key_exists('fiscal_year_id', $attributes) || array_key_exists('department_id', $attributes) || array_key_exists('name', $attributes)) {
+                $this->assertNoLiveDuplicate(
+                    (int) $locked->getKey(),
+                    (int) ($attributes['fiscal_year_id'] ?? $locked->fiscal_year_id),
+                    array_key_exists('department_id', $attributes) ? $attributes['department_id'] : $locked->department_id,
+                    (string) ($attributes['name'] ?? $locked->name),
+                );
             }
 
             if ($lineItems !== null) {
@@ -99,6 +113,7 @@ class BudgetService
         return DB::transaction(function () use ($budget, $userId): Budget {
             $locked = Budget::query()->lockForUpdate()->findOrFail($budget->getKey());
             $this->assertTransition($locked, 'submitted');
+            $this->assertFiscalYearActive($locked->fiscalYear()->firstOrFail());
             $locked->load('lineItems');
             $this->normaliseLineItems($locked->lineItems->map(fn (BudgetLineItem $line): array => $line->toArray())->all(), (string) $locked->budget_type);
             $locked->forceFill([
@@ -424,6 +439,42 @@ class BudgetService
     {
         if ((string) $budget->status !== $status) {
             throw new BusinessRuleException("Only {$status} budgets can be edited.");
+        }
+    }
+
+    private function assertFiscalYearActive(FiscalYear $fiscalYear): void
+    {
+        if ((string) $fiscalYear->status !== 'active') {
+            throw new BusinessRuleException('Budgets can only be allocated to an active fiscal year.');
+        }
+    }
+
+    /**
+     * Accidental-double guard, not a ceiling control. A deliberate ceiling
+     * change stays possible through a distinctly-named supplemental budget,
+     * which still needs cross-role activation (see approve()), so this
+     * refuses only a second live budget with the same name in the same
+     * department and year. Closed budgets never block: re-budgeting after a
+     * close is legitimate. Checked inside the caller's transaction; the
+     * residual double-click race is sequential in practice and any survivor
+     * still faces the activation gate.
+     */
+    private function assertNoLiveDuplicate(?int $ignoreId, int $fiscalYearId, mixed $departmentId, string $name): void
+    {
+        $query = Budget::query()
+            ->where('fiscal_year_id', $fiscalYearId)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])
+            ->where('status', '!=', 'closed');
+        if ($departmentId === null || $departmentId === '') {
+            $query->whereNull('department_id');
+        } else {
+            $query->where('department_id', (int) $departmentId);
+        }
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+        if ($query->exists()) {
+            throw new BusinessRuleException('A live budget with this name already exists for the department and fiscal year. Use a distinct name for supplemental budgets.');
         }
     }
 }
