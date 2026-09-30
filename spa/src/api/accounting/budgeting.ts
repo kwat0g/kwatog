@@ -59,8 +59,14 @@ export const budgetingApi = {
  submit: (id: string) =>
  client.post(`/budgets/${id}/submit`).then((r) => r.data),
 
- approve: (id: string) =>
- client.post(`/budgets/${id}/approve`).then((r) => r.data),
+  approve: (id: string) =>
+  client.post(`/budgets/${id}/approve`).then((r) => r.data),
+
+  reject: (id: string, reason: string) =>
+  client.post(`/budgets/${id}/reject`, { reason }).then((r) => r.data),
+
+  destroy: (id: string) =>
+  client.delete(`/budgets/${id}`).then((r) => r.data),
 
  close: (id: string) =>
  client.post(`/budgets/${id}/close`).then((r) => r.data),

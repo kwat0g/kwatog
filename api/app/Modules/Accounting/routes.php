@@ -161,7 +161,9 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
             Route::put('/{budget}', [BudgetController::class, 'update'])->middleware('permission:budgeting.manage');
             Route::post('/{budget}/submit', [BudgetController::class, 'submit'])->middleware('permission:budgeting.manage');
             Route::post('/{budget}/approve', [BudgetController::class, 'approve'])->middleware('permission:budgeting.approve');
+            Route::post('/{budget}/reject', [BudgetController::class, 'reject'])->middleware('permission:budgeting.approve');
             Route::post('/{budget}/close', [BudgetController::class, 'close'])->middleware('permission:budgeting.manage');
+            Route::delete('/{budget}', [BudgetController::class, 'destroy'])->middleware('permission:budgeting.manage');
         });
 
     });

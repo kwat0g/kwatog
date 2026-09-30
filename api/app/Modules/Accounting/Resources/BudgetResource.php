@@ -41,6 +41,12 @@ class BudgetResource extends JsonResource
                 'name' => $this->approvedBy?->name,
             ]),
             'approved_at'      => $this->approved_at?->toISOString(),
+            'rejected_by'      => $this->whenLoaded('rejectedBy', fn () => [
+                'id'   => $this->rejectedBy?->hash_id,
+                'name' => $this->rejectedBy?->name,
+            ]),
+            'rejected_at'      => $this->rejected_at?->toISOString(),
+            'rejection_reason' => $this->rejection_reason,
             'line_items'       => BudgetLineItemResource::collection($this->whenLoaded('lineItems')),
             'created_at'       => $this->created_at,
             'updated_at'       => $this->updated_at,

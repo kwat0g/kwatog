@@ -164,6 +164,84 @@ class BudgetConsumptionAndLifecycleTest extends TestCase
         $this->assertSame('active', $approved->status);
     }
 
+    public function test_submitted_budget_can_be_rejected_to_draft_with_a_reason(): void
+    {
+        $fiscalYear = $this->currentFiscalYear();
+        $account = $this->expenseAccount();
+        $service = app(BudgetService::class);
+        $budget = $service->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Reject test',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+
+        $submitter = User::factory()->withRole('finance_officer')->create();
+        $checker = User::factory()->withRole('vice_president')->create();
+        $submitted = $service->submit($budget, $submitter->id);
+
+        $rejected = $service->reject($submitted, $checker->id, 'Rework the Q3 spread.');
+        $this->assertSame('draft', $rejected->status);
+        $this->assertSame('Rework the Q3 spread.', $rejected->rejection_reason);
+        $this->assertSame($checker->id, (int) $rejected->rejected_by);
+        // Submitter history survives the return so the maker is still known.
+        $this->assertSame($submitter->id, (int) $rejected->submitted_by);
+
+        // A fresh submission clears the previous rejection round.
+        $resubmitted = $service->submit($rejected, $submitter->id);
+        $this->assertSame('submitted', $resubmitted->status);
+        $this->assertNull($resubmitted->rejection_reason);
+
+        try {
+            $service->reject($resubmitted, $checker->id, '  ');
+            $this->fail('Rejecting without a reason must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $active = $service->approve($resubmitted->fresh(), $checker->id);
+        try {
+            $service->reject($active, $checker->id, 'Too late to send back.');
+            $this->fail('Rejecting a non-submitted budget must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+    }
+
+    public function test_only_draft_budgets_can_be_deleted(): void
+    {
+        $fiscalYear = $this->currentFiscalYear();
+        $account = $this->expenseAccount();
+        $service = app(BudgetService::class);
+        $budget = $service->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Delete me',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+        $lineId = $budget->lineItems->first()->id;
+
+        $service->deleteDraft($budget);
+        $this->assertNull(Budget::query()->find($budget->id));
+        $this->assertNull(BudgetLineItem::query()->find($lineId));
+
+        $kept = $service->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => null,
+            'budget_type' => 'operating',
+            'name' => 'Keep me',
+        ], [['account_id' => $account->id, 'jan' => '10.00']]);
+        $maker = User::factory()->create();
+        $submitted = $service->submit($kept, $maker->id);
+        try {
+            $service->deleteDraft($submitted);
+            $this->fail('Deleting a submitted budget must be refused.');
+        } catch (BusinessRuleException) {
+            $this->addToAssertionCount(1);
+        }
+        $this->assertNotNull(Budget::query()->find($kept->id));
+    }
+
     public function test_commitments_are_derived_from_open_purchase_orders_and_bills(): void
     {
         $fiscalYear = $this->currentFiscalYear();

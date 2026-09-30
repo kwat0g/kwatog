@@ -22,7 +22,7 @@ class BudgetService
     /** @var array<string, list<string>> */
     private const TRANSITIONS = [
         'draft' => ['submitted'],
-        'submitted' => ['active'],
+        'submitted' => ['active', 'draft'],
         // approved is retained for legacy rows created before the active
         // naming was introduced.
         'approved' => ['closed'],
@@ -105,6 +105,10 @@ class BudgetService
                 'status' => 'submitted',
                 'submitted_by' => $userId,
                 'submitted_at' => now(),
+                // A fresh submission round clears the previous rejection.
+                'rejected_by' => null,
+                'rejected_at' => null,
+                'rejection_reason' => null,
             ])->save();
 
             return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
@@ -148,6 +152,45 @@ class BudgetService
     public function close(Budget $budget): Budget
     {
         return $this->transition($budget, 'closed');
+    }
+
+    /**
+     * Return a submitted budget to draft with a recorded reason.
+     *
+     * The submitter's identity is kept as history; a re-submit overwrites
+     * it. No role check here: returning work to the maker cannot activate
+     * money, so any checker (approve-grant holder) may send it back.
+     */
+    public function reject(Budget $budget, int $userId, string $reason): Budget
+    {
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) < 5 || mb_strlen($reason) > 1000) {
+            throw new BusinessRuleException('A rejection reason between 5 and 1000 characters is required.');
+        }
+
+        return DB::transaction(function () use ($budget, $userId, $reason): Budget {
+            $locked = Budget::query()->lockForUpdate()->findOrFail($budget->getKey());
+            $this->assertTransition($locked, 'draft');
+            $locked->forceFill([
+                'status' => 'draft',
+                'rejected_by' => $userId,
+                'rejected_at' => now(),
+                'rejection_reason' => $reason,
+            ])->save();
+
+            return $locked->fresh()->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
+        });
+    }
+
+    /** Permanently delete a draft budget and its line items. */
+    public function deleteDraft(Budget $budget): void
+    {
+        DB::transaction(function () use ($budget): void {
+            $locked = Budget::query()->lockForUpdate()->findOrFail($budget->getKey());
+            $this->assertStatus($locked, 'draft');
+            // Line items fall away through the cascade on budget_line_items.
+            $locked->delete();
+        });
     }
 
     /** Check budget consumption level and return warning severity. */

@@ -175,7 +175,7 @@ class BudgetController extends Controller
     /** Show a single budget with line items. */
     public function show(Budget $budget): JsonResponse
     {
-        $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy']);
+        $budget->load(['fiscalYear', 'department', 'lineItems.account', 'submittedBy', 'approvedBy', 'rejectedBy']);
         $this->consumption->hydrate(collect([$budget]));
 
         return response()->json([
@@ -269,6 +269,23 @@ class BudgetController extends Controller
     {
         $budget = $this->budgetService->approve($budget, (int) auth()->id());
         return response()->json(['success' => true, 'data' => new BudgetResource($budget), 'error' => null, 'meta' => null]);
+    }
+
+    /** Return a submitted budget to draft with a reason. */
+    public function reject(Request $request, Budget $budget): JsonResponse
+    {
+        $validated = $request->validate(['reason' => 'required|string|min:5|max:1000']);
+        $budget = $this->budgetService->reject($budget, (int) auth()->id(), $validated['reason']);
+
+        return response()->json(['success' => true, 'data' => new BudgetResource($budget), 'error' => null, 'meta' => null]);
+    }
+
+    /** Delete a draft budget and its line items. */
+    public function destroy(Budget $budget): JsonResponse
+    {
+        $this->budgetService->deleteDraft($budget);
+
+        return response()->json(null, 204);
     }
 
     /** Close a budget. */

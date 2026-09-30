@@ -24,8 +24,11 @@ export interface Budget {
  status_label?: string;
  submitted_by?: { id: string; name: string } | null;
  submitted_at?: string | null;
- approved_by?: { id: string; name: string } | null;
- approved_at?: string | null;
+  approved_by?: { id: string; name: string } | null;
+  approved_at?: string | null;
+  rejected_by?: { id: string; name: string } | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
  line_items?: BudgetLineItem[];
  created_at: string;
  updated_at: string;

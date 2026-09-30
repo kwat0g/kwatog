@@ -8,6 +8,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -16,7 +17,7 @@ import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 import { reportMutationError } from '@/lib/formErrors';
-import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck, LuPencil } from '@/lib/icons';
+import { LuArrowLeft, LuSend, LuCircleX, LuCircleCheck, LuPencil, LuUndo2, LuTrash2 } from '@/lib/icons';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -54,6 +55,8 @@ export default function BudgetDetailPage() {
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmReject, setConfirmReject] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const budgetQuery = useQuery<Budget>({
     queryKey: ['budget', id],
@@ -97,6 +100,26 @@ export default function BudgetDetailPage() {
     onError: (error) => reportMutationError(error, 'Could not close the budget.'),
   });
 
+  const rejectMutation = useMutation({
+    mutationFn: (reason: string) => budgetingApi.reject(id!, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget', id] });
+      toast.success('Budget returned to draft.');
+      setConfirmReject(false);
+    },
+    onError: (error) => reportMutationError(error, 'Could not return the budget to draft.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => budgetingApi.destroy(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      toast.success('Draft budget deleted.');
+      navigate('/budgeting');
+    },
+    onError: (error) => reportMutationError(error, 'Could not delete the draft budget.'),
+  });
+
   if (isLoading) return <SkeletonDetail />;
   // A failed fetch used to render "Budget not found", telling the user the
   // record was gone when the request had simply errored.
@@ -107,6 +130,8 @@ export default function BudgetDetailPage() {
 
   const canSubmit = budget.status === 'draft' && canManage;
   const canApproveAction = budget.status === 'submitted' && canApprove;
+  const canReject = budget.status === 'submitted' && canApprove;
+  const canDelete = budget.status === 'draft' && canManage;
   const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
 
   return (
@@ -151,6 +176,16 @@ export default function BudgetDetailPage() {
                 <LuPencil size={14} /> Edit
               </Button>
             )}
+            {canDelete && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setConfirmDelete(true)}
+                loading={deleteMutation.isPending}
+              >
+                <LuTrash2 size={14} /> Delete
+              </Button>
+            )}
             {canSubmit && (
               <Button
                 size="sm"
@@ -169,6 +204,15 @@ export default function BudgetDetailPage() {
                 loading={approveMutation.isPending}
               >
                 <LuCircleCheck size={14} /> Approve
+              </Button>
+            )}
+            {canReject && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setConfirmReject(true)}
+              >
+                <LuUndo2 size={14} /> Return to draft
               </Button>
             )}
             {canClose && (
@@ -297,7 +341,7 @@ export default function BudgetDetailPage() {
       </Panel>
 
       {/* Approval Info */}
-      {(budget.submitted_by || budget.approved_by) && (
+      {(budget.submitted_by || budget.approved_by || budget.rejected_by) && (
         <Panel title="Approval History">
           <div className="space-y-2 text-sm">
             {budget.submitted_by && (
@@ -310,11 +354,23 @@ export default function BudgetDetailPage() {
               </div>
             )}
             {budget.approved_by && (
-              <div className="flex items-center justify-between py-1.5">
+              <div className="flex items-center justify-between py-1.5 border-b border-default/50">
                 <span className="text-secondary">Approved by</span>
                 <span>
                   {budget.approved_by.name}{' '}
                   {budget.approved_at ? `on ${formatDate(budget.approved_at)}` : ''}
+                </span>
+              </div>
+            )}
+            {budget.rejected_by && (
+              <div className="flex items-center justify-between py-1.5">
+                <span className="text-secondary">Returned to draft by</span>
+                <span className="text-right">
+                  {budget.rejected_by.name}{' '}
+                  {budget.rejected_at ? `on ${formatDate(budget.rejected_at)}` : ''}
+                  {budget.rejection_reason && (
+                    <span className="block text-xs text-muted">{budget.rejection_reason}</span>
+                  )}
                 </span>
               </div>
             )}
@@ -349,6 +405,28 @@ export default function BudgetDetailPage() {
         variant="warning"
         confirmLabel="Close"
         pending={closeMutation.isPending}
+      />
+      <ReasonDialog
+        isOpen={confirmReject}
+        onClose={() => setConfirmReject(false)}
+        onConfirm={(reason) => rejectMutation.mutateAsync(reason)}
+        title="Return budget to draft?"
+        description="The maker can rework and resubmit. The reason is recorded in the approval history."
+        reasonLabel="Return reason"
+        reasonPlaceholder="What must change before this can be approved?"
+        confirmLabel="Return to draft"
+        variant="warning"
+        pending={rejectMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        title="Delete this draft budget?"
+        description="The draft and its line items are permanently removed. This cannot be undone."
+        variant="danger"
+        confirmLabel="Delete draft"
+        pending={deleteMutation.isPending}
       />
     </div>
   );

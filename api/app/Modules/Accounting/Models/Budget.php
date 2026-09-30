@@ -35,11 +35,15 @@ class Budget extends Model
         'submitted_at',
         'approved_by',
         'approved_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'submitted_at' => 'datetime',
         'approved_at'  => 'datetime',
+        'rejected_at'  => 'datetime',
     ];
 
     public function fiscalYear(): BelongsTo
@@ -66,6 +70,11 @@ class Budget extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(\App\Modules\Auth\Models\User::class, 'approved_by');
+    }
+
+    public function rejectedBy(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Auth\Models\User::class, 'rejected_by');
     }
 
     /**
