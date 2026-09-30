@@ -461,6 +461,17 @@ export default function PurchaseRequestDetailPage() {
             />
           </Panel>
         )}
+        {data.budget_context && (
+          <div className="flex items-center justify-between gap-4 rounded-md border border-default/50 px-4 py-2.5 text-sm">
+            <div className="text-muted">
+              Department budget{data.department ? ` · ${data.department.name}` : ''}
+            </div>
+            <div className="font-mono tabular-nums">
+              {formatPeso(data.budget_context.available)} available
+              <span className="text-muted"> of {formatPeso(data.budget_context.allocated)} ({data.budget_context.utilization_pct}% used)</span>
+            </div>
+          </div>
+        )}
         {data.budget_warning_level && (
           <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-bg/10 px-4 py-3 text-sm">
             <div>

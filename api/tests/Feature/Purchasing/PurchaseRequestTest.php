@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Purchasing;
 
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Budget;
+use App\Modules\Accounting\Models\BudgetLineItem;
+use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -272,5 +277,58 @@ class PurchaseRequestTest extends TestCase
         $this->assertDatabaseMissing('purchase_orders', ['purchase_request_id' => $pr->id]);
         $this->assertSame('approved', $pr->fresh()->status->value);
         $this->assertNotNull($line->id);
+    }
+
+    public function test_pr_detail_embeds_own_department_budget_context_without_budgeting_grant(): void
+    {
+        $head = $this->makeUserWithRole('department_head');
+        $this->assertFalse($head->hasPermission('budgeting.view'));
+
+        $fiscalYear = FiscalYear::factory()->create([
+            'year' => 2026,
+            'status' => 'active',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+        ]);
+        $department = Department::factory()->create();
+        $account = Account::create([
+            'code' => 'BX-'.substr(uniqid(), -6),
+            'name' => 'PR context expense',
+            'type' => 'expense',
+            'normal_balance' => 'debit',
+            'is_active' => true,
+        ]);
+        Budget::factory()->create([
+            'fiscal_year_id' => $fiscalYear->id,
+            'department_id' => $department->id,
+            'status' => 'active',
+            'total_allocated' => '1000.00',
+            'total_spent' => '0.00',
+            'total_committed' => '0.00',
+        ]);
+        BudgetLineItem::create([
+            'budget_id' => Budget::query()->latest('id')->first()->id,
+            'account_id' => $account->id,
+            'jan' => '1000.00',
+        ]);
+
+        $pr = PurchaseRequest::factory()->create([
+            'requested_by' => $head->id,
+            'department_id' => $department->id,
+        ]);
+
+        $this->actingAs($head)
+            ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.budget_context.allocated', '1000.00')
+            ->assertJsonPath('data.budget_context.available', '1000.00')
+            ->assertJsonPath('data.budget_context.level', 'ok');
+
+        // Another head sees neither the PR nor, through it, the department's
+        // position: the document gate holds, so the context cannot leak.
+        $stranger = $this->makeUserWithRole('department_head');
+        $this->actingAs($stranger)
+            ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
+            ->assertForbidden();
     }
 }

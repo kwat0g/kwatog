@@ -334,6 +334,15 @@ export interface PurchaseRequest {
   budget_warning_level?: string | null;
   budget_warning_message?: string | null;
   budget_acknowledged_at?: string | null;
+  /** Own-department position; present on detail only, no budgeting grant needed. */
+  budget_context?: {
+    allocated: string;
+    spent: string;
+    committed: string;
+    available: string;
+    utilization_pct: number;
+    level: string;
+  } | null;
   total_estimated_amount: string;
   actions?: {
     can_view: boolean;

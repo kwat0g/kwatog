@@ -99,6 +99,73 @@ class BudgetEnforcementService
         };
     }
 
+    /**
+     * Machine-readable department position for embedding in documents the
+     * spender already opens (PR detail). Returns null when there is nothing
+     * to show (no fiscal year or no live budgets) so callers omit the block.
+     *
+     * Scoped by construction: the caller passes the document's own
+     * department, which that document's access policy already gates, so no
+     * budgeting.* grant is consulted and no cross-department list leaks.
+     * The position is always "now" (current fiscal year unless one is
+     * given), even for documents raised in a prior year.
+     *
+     * @return array{allocated:string,spent:string,committed:string,available:string,utilization_pct:float,level:string}|null
+     */
+    public function departmentSnapshot(int $departmentId, ?int $fiscalYearId = null): ?array
+    {
+        $fyId = $fiscalYearId ?? app(BudgetService::class)->getCurrentFiscalYear()?->id;
+        if (! $fyId) {
+            return null;
+        }
+
+        $budgets = Budget::with('lineItems')
+            ->byFiscalYear($fyId)
+            ->byDepartment($departmentId)
+            ->active()
+            ->get();
+        if ($budgets->isEmpty()) {
+            return null;
+        }
+
+        $this->consumption->hydrate($budgets);
+
+        $available = Money::zero();
+        $spent = Money::zero();
+        $committed = Money::zero();
+        $allocated = Money::zero();
+        foreach ($budgets as $budget) {
+            $available = Money::add($available, $budget->available);
+            $spent = Money::add($spent, (string) $budget->total_spent);
+            $committed = Money::add($committed, (string) $budget->total_committed);
+            $allocated = Money::add($allocated, (string) $budget->total_allocated);
+        }
+
+        $level = BudgetConsumptionLevel::classify(
+            Money::add($spent, $committed),
+            $allocated,
+            [
+                'warning' => $this->settings->requiredFloat('budget.warning_ratio', 0, 1),
+                'critical' => $this->settings->requiredFloat('budget.critical_ratio', $this->settings->requiredFloat('budget.warning_ratio', 0, 1), 1),
+                'exhausted' => $this->settings->requiredFloat('budget.exhausted_ratio', $this->settings->requiredFloat('budget.critical_ratio', 0, 1)),
+                'overdrawn' => $this->settings->requiredFloat('budget.overdrawn_ratio', $this->settings->requiredFloat('budget.exhausted_ratio', 0)),
+            ],
+        );
+
+        return [
+            'allocated' => $allocated,
+            'spent' => $spent,
+            'committed' => $committed,
+            'available' => $available,
+            // DISPLAY ONLY — same rounding caveat as checkAvailability(): never
+            // a decision input; gates use BudgetConsumptionLevel on amounts.
+            'utilization_pct' => Money::isZero($allocated)
+                ? 0.0
+                : round(((float) Money::add($spent, $committed) / (float) $allocated) * 100, 1),
+            'level' => $level,
+        ];
+    }
+
     public function assess(Model $document, int $departmentId, string $amount, ?int $fiscalYearId = null): array
     {
         [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fiscalYearId);

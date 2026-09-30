@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Resources;
 
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -48,6 +49,13 @@ class PurchaseRequestResource extends JsonResource
             'budget_warning_level' => $this->budget_warning_level,
             'budget_warning_message' => $this->budget_warning_message,
             'budget_acknowledged_at' => optional($this->budget_acknowledged_at)->toIso8601String(),
+            // Spender visibility without a budgeting grant: the document's
+            // own department position, computed only on the detail route
+            // (never per row on lists) and gated by the PR access policy at
+            // the controller, so no cross-department list can leak.
+            'budget_context' => $request->route('purchaseRequest') !== null && $this->department_id
+                ? app(BudgetEnforcementService::class)->departmentSnapshot((int) $this->department_id)
+                : null,
             'total_estimated_amount' => $this->totalEstimatedAmount(),
             'requester' => $this->whenLoaded('requester', fn () => $this->requester ? [
                 'id' => $this->requester->hash_id,
