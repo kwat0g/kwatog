@@ -85,6 +85,7 @@ class DatabaseSeeder extends Seeder
                 ComprehensiveDemoSeeder::class,
                 RealisticDataSeeder::class,
                 GoldenPathDemoSeeder::class,
+                DemoRfqBudgetSeeder::class,
             ]);
         }
     }
