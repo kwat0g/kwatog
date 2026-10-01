@@ -738,7 +738,6 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const collapsed = useSidebarStore((s) => s.collapsed);
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const peek = useSidebarStore((s) => s.peek);
-  const setPeek = useSidebarStore((s) => s.setPeek);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -872,7 +871,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const collapseAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
-    setModules({ pathname, activeSectionLabel, expanded: [] });
+    setModules({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
   };
 
   const toggleModule = (label: string) => {
@@ -938,12 +937,6 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
             );
           })}
         </nav>
-        {!compact && (
-          <label className="flex items-center gap-2 px-4 py-3 text-xs text-muted">
-            <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} className={focusRingInset} />
-            Peek sidebar
-          </label>
-        )}
       </>
     );
   };

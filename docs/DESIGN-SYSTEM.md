@@ -371,7 +371,7 @@ No rail tooltips, grid texture, or decorative section dividers.
 Modules follow the active route. Inactive modules start collapsed; opening an
 unvisited module peeks for five seconds. Visiting it keeps it open until navigation
 changes modules or the user collapses it. A sticky **Collapse all** control closes
-every module. **Ctrl+.** toggles the desktop rail or mobile drawer.
+inactive modules while keeping the active module expanded. **Ctrl+.** toggles the desktop rail or mobile drawer.
 
 ### Icons
 

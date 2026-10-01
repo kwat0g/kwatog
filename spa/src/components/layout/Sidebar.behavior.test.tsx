@@ -35,8 +35,11 @@ it('expands the active module, expires unvisited peeks, and keeps visited module
   act(() => vi.advanceTimersByTime(5000));
   expect(production).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: 'Production Planning (MRP)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
-  expect(production).toHaveAttribute('aria-expanded', 'false');
+  expect(production).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('checkbox', { name: 'Peek sidebar' })).not.toBeInTheDocument();
 });
 
 it('widens the rail after 150ms and reveals labels on keyboard focus', () => {
