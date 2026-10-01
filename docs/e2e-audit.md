@@ -84,8 +84,8 @@ test DB only (`ogami_test*`); reversible migrations only, called out in final re
 | B2B portal | done (crawl-roles) | BusinessProcessAudit test 3 (supplier PO→ship→invoice) | PASS | — | — |
 | Forecasting | done (crawl-roles) | BusinessProcessAudit test 6 (module + forecast.* widgets per role) | PASS | — | — |
 | Returns | done (crawl-roles) | BusinessProcessAudit test 5 (RMA walk) | PASS | — | — |
-| Assets | done (crawl-roles) | pending | UNVERIFIED | — | — |
-| Maintenance | done (crawl-roles) | pending | UNVERIFIED | — | — |
+| Assets | done (crawl-roles) | AssetsMaintenanceAudit test a (lifecycle + two-phase disposal) | PASS | — | — |
+| Maintenance | done (crawl-roles) | AssetsMaintenanceAudit tests b+c (WO walk, preventive schedule + mold reset) | PASS | — | — |
 | Dashboard | done (crawl-roles) | pending | UNVERIFIED | — | — |
 | Admin | done (crawl-admin 170 routes) | pending | PASS (crawl) | — | — |
 | Landing | done (crawl-roles) | pending | PASS (crawl) | — | — |
@@ -384,6 +384,52 @@ test_multi_product_return_stages_one_inspection_per_product`
   items.*.item_id); the BomResource returns hash_id — decode it, never cast.
 - Namespace traps: `Customer` is Accounting's (NOT CRM); WarehouseLocation
   has NO warehouse_id column (zone is enough for stock fixtures).
+
+### Assets + Maintenance (`AssetsMaintenanceAuditTest`, 3/3, 54 assertions)
+- Assets disposal is **two-phase** (AS-03): POST `/assets/{id}/dispose` only
+  stamps proposal columns — status stays Active and NO JE exists. The chain is
+  finance_officer (step 1) → vice_president (step 2); the 4-line JE (proceeds,
+  accumulated-depreciation reversal, cost removal, loss/gain) posts only when
+  fully approved. Self-approval is USER-level: the requesting finance gets 403
+  on their own request — a SECOND finance officer is the step-1 checker. VP
+  jumping to step 1 → 403 (ForbiddenActionException). Disposing a Disposed
+  asset → 422. Disposal JE `reference_type` is the Asset FQCN; account codes
+  come from SettingsSeeder (1010 cash / 1410 accum dep / 1400 cost / 6120 loss
+  / 4030 gain).
+- Depreciation: POST `/asset-depreciations/run` {year,month} (finance only;
+  production_manager 403). StraightLine 12000/5y = 200.00/month; `runForMonth`
+  asserts prior periods complete unless backfill. QR payload GET
+  `/assets/{id}/qr` returns asset_code + self URL (assets.view: finance,
+  maintenance_tech, ppc_head, production_manager, system_admin, VP).
+- Namespace traps: `Machine`/`Mold` live in **MRP** (`App\Modules\MRP\Models\...`),
+  NOT Maintenance — that module owns only WO/Schedule/usage models.
+  `MachineDowntime` lives in **Production**.
+- MWO create request DECODES the hashed polymorphic target itself
+  (`StoreMaintenanceWorkOrderRequest::prepareForValidation` → HashIdFilter
+  keyed on maintainable_type) — send `maintainable_id` as the Machine/Mold
+  hash_id, never the int. Initial status `open` (enum: open / assigned /
+  in_progress / completed / cancelled).
+- MWO walk: create (maintenance.wo.create — maintenance_tech) → assign
+  (maintenance.wo.assign — ONLY system_admin) → start/complete
+  (maintenance.wo.complete). Start refuses 422 while the machine is running or
+  has an active production WO, and the refused start must NOT advance the WO
+  (the transition rolls back with the transaction). Start opens an OPEN-ENDED
+  `machine_downtimes` row (maintenance_order_id, end_time null) and flips the
+  machine to maintenance; complete closes the downtime (end_time set) and
+  restores idle. Logs/spare-parts share the same gate; the spare-part item
+  MUST be `item_type='spare_part'` else 422, and the issue draws down
+  StockLevel at WAC (cost accumulates on the WO).
+- Mold completion resets `current_shot_count` to 0 (+ MoldHistory
+  maintenance_completed row) and never releases a mold production still owns.
+- Schedules: POST/DELETE `/maintenance/schedules` gated
+  `maintenance.schedules.manage` (only system_admin; prod manager 403 on both);
+  interval hours|days|shots; delete is 204 soft delete. Downtime analytics
+  (`/maintenance/downtime-analytics/*`) gated maintenance.view (prod manager
+  reads). Condition-readings routes intentionally hidden (scope cut, no IoT).
+- Wrong-actor probes that hold: employee cannot create MWOs (403), finance
+  cannot start (403), production_manager cannot manage schedules or run
+  depreciation (403). Regression: tests/Feature/Assets + tests/Feature/
+  Maintenance suites 106 passed (484 assertions).
 
 ## 6. Full-suite runs
 
