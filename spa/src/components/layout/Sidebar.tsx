@@ -39,6 +39,7 @@ import {
   LuDatabase,
   LuListChecks,
   LuStore,
+  LuChevronDown,
 } from '@/lib/icons';
 import {
   WorkflowIcon,
@@ -60,8 +61,9 @@ import {
   FleetIcon,
 } from '@/lib/icons';
 
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { Badge } from '@/components/ui/Badge';
@@ -735,6 +737,30 @@ interface SidebarProps {
 export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }: SidebarProps) {
   const collapsed = useSidebarStore((s) => s.collapsed);
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
+  const peek = useSidebarStore((s) => s.peek);
+  const setPeek = useSidebarStore((s) => s.setPeek);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
+  const peekTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const visited = useRef(new Set<string>());
+  const navId = useId();
+  const rail = collapsed && !(peek && hovered) && !focused;
+
+  useEffect(() => {
+    clearTimeout(hoverTimer.current);
+    setHovered(false);
+  }, [collapsed, peek]);
+
+  const clearHover = () => {
+    clearTimeout(hoverTimer.current);
+    setHovered(false);
+  };
+
+  useEffect(() => () => {
+    clearTimeout(hoverTimer.current);
+    peekTimers.current.forEach(clearTimeout);
+  }, []);
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
   const { pathname } = useLocation();
 
@@ -755,18 +781,35 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
 
   const mobileDrawerRef = useRef<HTMLElement>(null);
 
-  // Move focus into the drawer on open and close it on Escape.
+  // Keep focus inside the mobile drawer and return it to its opener.
   useEffect(() => {
     if (!mobileOpen) return;
-    mobileDrawerRef.current?.focus();
+    const previous = document.activeElement;
+    const drawer = mobileDrawerRef.current;
+    drawer?.focus();
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
         setMobileOpen(false);
       }
+      if (e.key === 'Tab' && drawer) {
+        const controls = drawer.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled])');
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === drawer)) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
     }
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
   }, [mobileOpen, setMobileOpen]);
 
   // Polish Task S2 — dynamic badge counts for every gated nav item.
@@ -783,8 +826,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     [visibility],
   );
 
-  // Filter sections to only those with visible items so the active-section
-  // detection and collapsed-rail dividers don't reference hidden groups.
+  // Only accessible modules participate in route matching and disclosure.
   const visibleSections = useMemo(
     () =>
       SECTIONS.map((section) => ({
@@ -816,101 +858,122 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     [matched, visibleSections],
   );
 
-  const sidebarContent = (
-    <nav className="py-3">
-      {visibleSections.map((section, idx) => {
-        const isActiveSection = activeSectionLabel === section.label;
-        return (
-          <div key={section.label} className="mb-3">
-            {/* Collapsed rail: thin divider between icon groups */}
-            {collapsed && !mobileOpen && idx > 0 && (
-              <div className="mx-3 mb-2 border-t border-default" aria-hidden />
-            )}
+  const [modules, setModules] = useState({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
+  if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel) {
+    setModules({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
+  }
 
-            {/* Expanded: section header with accent dot */}
-            {(!collapsed || mobileOpen) && (
-              <div
-                className={cn(
-                  'px-4 mb-1 flex items-center gap-1.5 text-2xs uppercase tracking-widest font-medium',
-                  isActiveSection ? 'text-primary' : 'text-muted',
-                )}
-              >
-                <span
-                  className={cn(
-                    'inline-block h-1.5 w-1.5 rounded-full',
-                    isActiveSection ? 'bg-accent' : 'bg-subtle',
-                  )}
-                  aria-hidden
-                />
-                {section.label}
-              </div>
-            )}
+  useEffect(() => {
+    if (activeSectionLabel) visited.current.add(activeSectionLabel);
+    peekTimers.current.forEach(clearTimeout);
+    peekTimers.current.clear();
+  }, [pathname, activeSectionLabel]);
 
-            <ul className="flex flex-col">
-              {section.visibleItems.map((item) => {
-                const entry = getBadge(item.badgeKey);
-                return (
-                  <li key={item.to}>
-                    {' '}
-                    {collapsed && !mobileOpen ? (
-                      <Tooltip
-                        content={`${entry?.description ?? item.label}${entry?.count ? ` · ${entry.count}` : ''}`}
-                        side="right"
-                      >
-                        <NavLink
-                          item={item}
-                          active={isActive(item.to)}
-                          collapsed
-                          badgeOverride={entry?.count}
-                          badgeVariant={entry?.severity}
-                          badgeDescription={entry?.description}
-                        />
-                      </Tooltip>
-                    ) : (
-                      <NavLink
-                        item={item}
-                        active={isActive(item.to)}
-                        badgeOverride={entry?.count}
-                        badgeVariant={entry?.severity}
-                        badgeDescription={entry?.description}
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+  const collapseAll = () => {
+    peekTimers.current.forEach(clearTimeout);
+    peekTimers.current.clear();
+    setModules({ pathname, activeSectionLabel, expanded: [] });
+  };
+
+  const toggleModule = (label: string) => {
+    clearTimeout(peekTimers.current.get(label));
+    peekTimers.current.delete(label);
+    const open = !modules.expanded.includes(label);
+    setModules({ pathname, activeSectionLabel, expanded: open ? [...modules.expanded, label] : modules.expanded.filter((entry) => entry !== label) });
+    if (open && !visited.current.has(label)) {
+      const expire = () => {
+        // Give keyboard users time to finish navigating the module.
+        const group = document.getElementById(`${navId}-${mobileOpen ? 'mobile' : 'desktop'}-${label}`);
+        if (group?.contains(document.activeElement)) {
+          peekTimers.current.set(label, setTimeout(expire, 500));
+          return;
+        }
+        setModules((current) => ({ ...current, expanded: current.expanded.filter((entry) => entry !== label) }));
+        peekTimers.current.delete(label);
+      };
+      peekTimers.current.set(label, setTimeout(expire, 5000));
+    }
+  };
+
+  const sidebarContent = (mobile = false) => {
+    const compact = !mobile && rail;
+    return (
+      <>
+        {!compact && (
+          <div className="sticky top-0 z-10 bg-canvas px-2 py-2">
+            <button type="button" onClick={collapseAll} className={cn('flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary', focusRingInset)}>
+              <LuChevronDown size={14} className="rotate-180" aria-hidden /> Collapse all
+            </button>
           </div>
-        );
-      })}
-    </nav>
-  );
+        )}
+        <nav aria-label="Modules" className="py-3">
+          {visibleSections.map((section) => {
+            const open = modules.expanded.includes(section.label);
+            const id = `${navId}-${mobile ? 'mobile' : 'desktop'}-${section.label}`;
+            return (
+              <div key={section.label} data-module={section.label} className="mb-3">
+                {!compact && (
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={id}
+                    onClick={() => toggleModule(section.label)}
+                    className={cn('flex w-full items-center gap-2 px-4 py-2 text-left text-2xs uppercase tracking-widest font-medium', focusRingInset, activeSectionLabel === section.label ? 'text-primary' : 'text-muted')}
+                  >
+                    <span className="flex-1">{section.label}</span>
+                    <LuChevronDown size={12} aria-hidden className={cn('shrink-0', !open && '-rotate-90')} />
+                  </button>
+                )}
+                <ul id={id} hidden={!compact && !open} className={cn((compact || open) && 'flex flex-col')}>
+                    {section.visibleItems.map((item) => {
+                      const entry = getBadge(item.badgeKey);
+                      return (
+                        <li key={item.to}>
+                          <NavLink item={item} active={isActive(item.to)} collapsed={compact} badgeOverride={entry?.count} badgeVariant={entry?.severity} badgeDescription={entry?.description} />
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            );
+          })}
+        </nav>
+        {!compact && (
+          <label className="flex items-center gap-2 px-4 py-3 text-xs text-muted">
+            <input type="checkbox" checked={peek} onChange={(e) => setPeek(e.target.checked)} className={focusRingInset} />
+            Peek sidebar
+          </label>
+        )}
+      </>
+    );
+  };
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside
+        aria-label="Sidebar"
+        onMouseEnter={() => {
+          if (collapsed && peek) hoverTimer.current = setTimeout(() => setHovered(true), 150);
+        }}
+        onMouseLeave={clearHover}
+        onFocusCapture={(e) => {
+          setFocused(true);
+          const label = e.target.closest<HTMLElement>('[data-module]')?.dataset.module;
+          if (rail && label && !modules.expanded.includes(label)) {
+            setModules((current) => ({ ...current, expanded: [...current.expanded, label] }));
+          }
+        }}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
+        }}
         className={cn(
-          'shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-y-auto transition-[width] duration-fast',
-          'relative',
+          'shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-y-auto transition-[width] duration-fast motion-reduce:transition-none',
           'hidden md:block',
-          collapsed ? 'w-14' : 'w-60',
+          rail ? 'w-14' : 'w-60',
         )}
       >
-        {/* Blueprint grid texture — decorative, aria-hidden, behind nav content */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 opacity-[0.35]"
-          style={{
-            backgroundImage:
-              'linear-gradient(var(--border-default) 1px, transparent 1px), linear-gradient(90deg, var(--border-default) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-            maskImage:
-              'linear-gradient(to bottom, transparent 0%, black 20%, black 70%, transparent 100%)',
-            WebkitMaskImage:
-              'linear-gradient(to bottom, transparent 0%, black 20%, black 70%, transparent 100%)',
-          }}
-        />
-        {sidebarContent}
+        {sidebarContent()}
       </aside>
 
       {/* Mobile drawer */}
@@ -941,7 +1004,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
                 className="text-muted hover:text-primary"
               />
             </div>
-            {sidebarContent}
+            {sidebarContent(true)}
           </aside>
         </div>
       )}
@@ -971,7 +1034,7 @@ const NavLink = memo(function NavLink({
 
   useEffect(() => {
     if (active && linkRef.current) {
-      linkRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      linkRef.current.scrollIntoView({ block: 'nearest', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     }
   }, [active]);
 
@@ -980,7 +1043,9 @@ const NavLink = memo(function NavLink({
       ref={linkRef}
       to={item.to}
       aria-label={collapsed ? item.label : undefined}
+      aria-current={active ? 'page' : undefined}
       className={cn(
+        focusRingInset,
         'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-md text-sm transition-colors duration-fast',
         active
           ? 'text-accent font-medium bg-accent/15'

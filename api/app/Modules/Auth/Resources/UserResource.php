@@ -21,6 +21,7 @@ class UserResource extends JsonResource
             'must_change_password'  => (bool) $this->must_change_password,
             'theme_mode'            => $this->theme_mode,
             'sidebar_collapsed'     => (bool) $this->sidebar_collapsed,
+            'sidebar_peek'          => (bool) ($this->sidebar_peek ?? true),
             'role' => $this->whenLoaded('role', fn () => [
                 'id'   => $this->role->hash_id,
                 'name' => $this->role->name,

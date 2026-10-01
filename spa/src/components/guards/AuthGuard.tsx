@@ -17,7 +17,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
  void bootstrap().then(() => {
  const authedUser = useAuthStore.getState().user;
  if (authedUser) {
- useSidebarStore.getState().init(authedUser.sidebar_collapsed);
+ useSidebarStore.getState().init(authedUser.sidebar_collapsed, authedUser.sidebar_peek);
  }
  });
  }

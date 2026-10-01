@@ -25,7 +25,7 @@ id, name (string 100), slug (string 100 unique), module (string 50), description
 role_id (FK roles), permission_id (FK permissions), PRIMARY KEY (role_id, permission_id)
 
 ### users
-id, name (string 100), email (string unique), password (string), role_id (FK roles), employee_id (FK employees nullable), is_active (bool default true), must_change_password (bool default false), last_activity (timestamp nullable), password_changed_at (timestamp nullable), failed_login_attempts (int default 0), locked_until (timestamp nullable), theme_mode (string 10 default 'system'), sidebar_collapsed (bool default false), remember_token, created_at, updated_at, deleted_at
+id, name (string 100), email (string unique), password (string), role_id (FK roles), employee_id (FK employees nullable), is_active (bool default true), must_change_password (bool default false), last_activity (timestamp nullable), password_changed_at (timestamp nullable), failed_login_attempts (int default 0), locked_until (timestamp nullable), theme_mode (string 10 default 'system'), sidebar_collapsed (bool default false), sidebar_peek (bool default true), remember_token, created_at, updated_at, deleted_at
 
 ### password_history
 id, user_id (FK users), password_hash (string), created_at

@@ -135,7 +135,7 @@ export default function LoginPage() {
 
   if (result.realm === 'internal') {
   applyUser(result.user);
-  useSidebarStore.getState().init(result.user.sidebar_collapsed);
+  useSidebarStore.getState().init(result.user.sidebar_collapsed, result.user.sidebar_peek);
   const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
   navigate(result.must_change_password ? '/change-password' : from, { replace: true });
   } else {

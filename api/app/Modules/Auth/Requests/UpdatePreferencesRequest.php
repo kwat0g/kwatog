@@ -19,6 +19,7 @@ class UpdatePreferencesRequest extends FormRequest
         return [
             'theme_mode'        => ['sometimes', Rule::in(['light', 'dark', 'system'])],
             'sidebar_collapsed' => ['sometimes', 'boolean'],
+            'sidebar_peek'      => ['sometimes', 'boolean'],
         ];
     }
 }

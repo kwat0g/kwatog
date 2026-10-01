@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { usePageActionsDispatcher } from '@/contexts/PageActionsContext';
 
 export interface KeyboardShortcutsApi {
@@ -102,6 +103,15 @@ export function useKeyboardShortcuts(): KeyboardShortcutsApi {
 
  // From here on, all shortcuts are blocked while typing in form fields.
  if (typing) return;
+
+ if (mod && e.key === '.' && !e.altKey && !e.shiftKey && !e.repeat) {
+ e.preventDefault();
+ const sidebar = useSidebarStore.getState();
+ if (window.innerWidth < 768) sidebar.setMobileOpen(!sidebar.mobileOpen);
+ else sidebar.toggle();
+ clearLeader();
+ return;
+ }
 
  // ─── Help toggle: `?` ────────────────────────────────────────────
  if (e.key === '?' && !mod) {

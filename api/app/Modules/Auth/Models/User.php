@@ -48,6 +48,7 @@ class User extends Authenticatable
         'locked_until',
         'theme_mode',
         'sidebar_collapsed',
+        'sidebar_peek',
     ];
 
     protected $hidden = [
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'is_active'             => 'boolean',
             'must_change_password'  => 'boolean',
             'sidebar_collapsed'     => 'boolean',
+            'sidebar_peek'          => 'boolean',
             'last_activity'         => 'datetime',
             'password_changed_at'   => 'datetime',
             'locked_until'          => 'datetime',

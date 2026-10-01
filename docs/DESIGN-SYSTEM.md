@@ -364,7 +364,14 @@ All animations respect `prefers-reduced-motion: reduce`.
 - Hover: `--bg-elevated`
 
 **Rail (56px)** below 1280px or collapsed: 16px Tabler Icons, 36px square targets,
-`rounded-md`, 2px clay indicator on the active item, tooltip on hover.
+`rounded-md`, 2px clay indicator on the active item. Hover widens the rail in flow
+after 150ms when `sidebar_peek` is enabled; keyboard focus reveals labels immediately.
+No rail tooltips, grid texture, or decorative section dividers.
+
+Modules follow the active route. Inactive modules start collapsed; opening an
+unvisited module peeks for five seconds. Visiting it keeps it open until navigation
+changes modules or the user collapses it. A sticky **Collapse all** control closes
+every module. **Ctrl+.** toggles the desktop rail or mobile drawer.
 
 ### Icons
 

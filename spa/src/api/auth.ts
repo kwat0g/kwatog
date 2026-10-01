@@ -22,6 +22,7 @@ export interface AuthUser {
  must_change_password: boolean;
  theme_mode: 'light' | 'dark' | 'system';
  sidebar_collapsed: boolean;
+ sidebar_peek?: boolean;
  role: AuthRole;
  /** Linked HR employee, when this user account is wired to one. */
  employee: AuthEmployee | null;
@@ -48,6 +49,7 @@ export interface PasswordPolicy { minimum_length: number; requires_uppercase: bo
 export interface PreferencesPayload {
  theme_mode?: 'light' | 'dark' | 'system';
  sidebar_collapsed?: boolean;
+ sidebar_peek?: boolean;
 }
 
 export const authApi = {

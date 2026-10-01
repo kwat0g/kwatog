@@ -47,6 +47,7 @@ export const SHORTCUTS: ShortcutEntry[] = [
  { id: 'nav.dashboard', keys: 'g d', label: 'Go to Dashboard', hint: 'g d', group: 'navigation', scope: 'global', navigate: '/dashboard' },
 
  // Actions — global commands.
+ { id: 'action.sidebar', keys: 'mod+.', label: 'Toggle sidebar', hint: 'Ctrl+.', group: 'actions', scope: 'global' },
  { id: 'action.search', keys: 'mod+k', label: 'Open command palette / search', hint: '⌘ K', group: 'actions', scope: 'global' },
  { id: 'action.focusSearch',keys: '/', label: 'Focus page search', hint: '/', group: 'actions', scope: 'global' },
  { id: 'action.new', keys: 'mod+shift+n', label: 'New record on current page', hint: '⌘ ⇧ N', group: 'actions', scope: 'global' },
