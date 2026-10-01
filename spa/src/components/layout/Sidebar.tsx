@@ -868,16 +868,13 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     peekTimers.current.clear();
   }, [pathname, activeSectionLabel]);
 
-  const collapseAll = () => {
+  const allExpanded = visibleSections.every((section) => modules.expanded.includes(section.label));
+  const toggleAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
-    setModules({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
-  };
-
-  const expandAll = () => {
-    peekTimers.current.forEach(clearTimeout);
-    peekTimers.current.clear();
-    setModules({ pathname, activeSectionLabel, expanded: visibleSections.map((section) => section.label) });
+    setModules({ pathname, activeSectionLabel, expanded: allExpanded
+      ? (activeSectionLabel ? [activeSectionLabel] : [])
+      : visibleSections.map((section) => section.label) });
   };
 
   const toggleModule = (label: string) => {
@@ -938,11 +935,9 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         </nav>
         {!compact && (
           <div role="group" aria-label="Module controls" className="flex shrink-0 gap-1 border-t border-default bg-canvas p-2">
-            <button type="button" onClick={collapseAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
-              <LuChevronDown size={14} className="rotate-180" aria-hidden /> Collapse all
-            </button>
-            <button type="button" onClick={expandAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
-              <LuChevronDown size={14} aria-hidden /> Expand all
+            <button type="button" onClick={toggleAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
+              <LuChevronDown size={14} className={cn(allExpanded && 'rotate-180')} aria-hidden />
+              {allExpanded ? 'Collapse all' : 'Expand all'}
             </button>
           </div>
         )}

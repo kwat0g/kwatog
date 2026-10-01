@@ -35,7 +35,7 @@ it('expands the active module, expires unvisited peeks, and keeps visited module
   act(() => vi.advanceTimersByTime(5000));
   expect(production).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'false');
-  fireEvent.click(screen.getByRole('button', { name: 'Production Planning (MRP)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
   fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
   expect(production).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'false');
@@ -102,12 +102,15 @@ it('toggles with Ctrl+. on desktop and mobile, while ignoring typing and repeats
 it('expands every visible module without peek expiry and keeps the active module on collapse', () => {
   render(<MemoryRouter initialEntries={['/mrp/plans']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
   const sidebar = screen.getByLabelText('Sidebar');
+  expect(within(within(sidebar).getByRole('group', { name: 'Module controls' })).getAllByRole('button')).toHaveLength(1);
+  expect(within(sidebar).queryByRole('button', { name: 'Collapse all' })).not.toBeInTheDocument();
   fireEvent.click(within(sidebar).getByRole('button', { name: /^Production$/ }));
   fireEvent.click(within(sidebar).getByRole('button', { name: 'Expand all' }));
   act(() => vi.advanceTimersByTime(5000));
   const headers = sidebar.querySelectorAll('button[aria-expanded]');
   expect(headers.length).toBeGreaterThan(1);
   headers.forEach((header) => expect(header).toHaveAttribute('aria-expanded', 'true'));
+  expect(within(sidebar).queryByRole('button', { name: 'Expand all' })).not.toBeInTheDocument();
   fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse all' }));
   expect(within(sidebar).getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'true');
   expect(within(sidebar).getByRole('button', { name: /^Production$/ })).toHaveAttribute('aria-expanded', 'false');

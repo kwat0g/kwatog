@@ -370,9 +370,9 @@ No rail tooltips, grid texture, or decorative section dividers.
 
 Modules follow the active route. Inactive modules start collapsed; opening an
 unvisited module peeks for five seconds. Visiting it keeps it open until navigation
-changes modules or the user collapses it. A fixed footer places **Collapse all** and **Expand all** below the scrolling
-module list. Collapse all keeps the active module expanded; Expand all opens
-every visible module and cancels pending peek timers. **Ctrl+.** toggles the desktop rail or mobile drawer.
+changes modules or the user collapses it. A fixed footer holds one toggle below the scrolling module list: **Expand all**
+opens every visible module and cancels pending peek timers; once all modules
+are open, **Collapse all** returns to only the active module. **Ctrl+.** toggles the desktop rail or mobile drawer.
 
 ### Icons
 
