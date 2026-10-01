@@ -98,3 +98,21 @@ it('toggles with Ctrl+. on desktop and mobile, while ignoring typing and repeats
   expect(useSidebarStore.getState().mobileOpen).toBe(true);
   vi.unstubAllGlobals();
 });
+
+it('expands every visible module without peek expiry and keeps the active module on collapse', () => {
+  render(<MemoryRouter initialEntries={['/mrp/plans']}><Sidebar roleSlug="system_admin" /></MemoryRouter>);
+  const sidebar = screen.getByLabelText('Sidebar');
+  fireEvent.click(within(sidebar).getByRole('button', { name: /^Production$/ }));
+  fireEvent.click(within(sidebar).getByRole('button', { name: 'Expand all' }));
+  act(() => vi.advanceTimersByTime(5000));
+  const headers = sidebar.querySelectorAll('button[aria-expanded]');
+  expect(headers.length).toBeGreaterThan(1);
+  headers.forEach((header) => expect(header).toHaveAttribute('aria-expanded', 'true'));
+  fireEvent.click(within(sidebar).getByRole('button', { name: 'Collapse all' }));
+  expect(within(sidebar).getByRole('button', { name: 'Production Planning (MRP)' })).toHaveAttribute('aria-expanded', 'true');
+  expect(within(sidebar).getByRole('button', { name: /^Production$/ })).toHaveAttribute('aria-expanded', 'false');
+  act(() => useSidebarStore.getState().setMobileOpen(true));
+  const drawer = screen.getByRole('dialog', { name: 'Menu' });
+  fireEvent.click(within(drawer).getByRole('button', { name: 'Expand all' }));
+  expect(within(drawer).getByRole('button', { name: /^Production$/ })).toHaveAttribute('aria-expanded', 'true');
+});

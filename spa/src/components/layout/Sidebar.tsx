@@ -874,6 +874,12 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     setModules({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
   };
 
+  const expandAll = () => {
+    peekTimers.current.forEach(clearTimeout);
+    peekTimers.current.clear();
+    setModules({ pathname, activeSectionLabel, expanded: visibleSections.map((section) => section.label) });
+  };
+
   const toggleModule = (label: string) => {
     clearTimeout(peekTimers.current.get(label));
     peekTimers.current.delete(label);
@@ -898,14 +904,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     const compact = !mobile && rail;
     return (
       <>
-        {!compact && (
-          <div className="sticky top-0 z-10 bg-canvas px-2 py-2">
-            <button type="button" onClick={collapseAll} className={cn('flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary', focusRingInset)}>
-              <LuChevronDown size={14} className="rotate-180" aria-hidden /> Collapse all
-            </button>
-          </div>
-        )}
-        <nav aria-label="Modules" className="py-3">
+        <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto py-3">
           {visibleSections.map((section) => {
             const open = modules.expanded.includes(section.label);
             const id = `${navId}-${mobile ? 'mobile' : 'desktop'}-${section.label}`;
@@ -937,6 +936,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
             );
           })}
         </nav>
+        {!compact && (
+          <div role="group" aria-label="Module controls" className="flex shrink-0 gap-1 border-t border-default bg-canvas p-2">
+            <button type="button" onClick={collapseAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
+              <LuChevronDown size={14} className="rotate-180" aria-hidden /> Collapse all
+            </button>
+            <button type="button" onClick={expandAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
+              <LuChevronDown size={14} aria-hidden /> Expand all
+            </button>
+          </div>
+        )}
       </>
     );
   };
@@ -961,8 +970,8 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
           if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
         }}
         className={cn(
-          'shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-y-auto transition-[width] duration-fast motion-reduce:transition-none',
-          'hidden md:block',
+          'shrink-0 sticky top-12 h-[calc(100vh-3rem)] border-r border-default bg-canvas overflow-hidden flex-col transition-[width] duration-fast motion-reduce:transition-none',
+          'hidden md:flex',
           rail ? 'w-14' : 'w-60',
         )}
       >
@@ -983,9 +992,9 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className="absolute inset-y-0 left-0 w-72 bg-canvas border-r border-default overflow-y-auto animate-slide-right focus:outline-none"
+            className="absolute inset-y-0 left-0 w-72 flex flex-col bg-canvas border-r border-default overflow-hidden animate-slide-right focus:outline-none"
           >
-            <div className="h-12 flex items-center justify-between px-3 border-b border-default">
+            <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-default">
               <span className="text-sm font-medium text-primary">Menu</span>
               <Button
                 variant="ghost"
