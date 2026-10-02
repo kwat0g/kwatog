@@ -119,9 +119,12 @@ class ItemService
 
     public function delete(Item $item): void
     {
-        if (! $item->canDelete()) {
-            throw new BusinessRuleException('Cannot delete an item with stock or movements. Deactivate instead.');
-        }
-        $item->delete();
+        DB::transaction(function () use ($item) {
+            $locked = Item::query()->lockForUpdate()->findOrFail($item->getKey());
+            if (! $locked->canDelete()) {
+                throw new BusinessRuleException('Cannot delete an item with stock, movements, open stock counts, or pending stock adjustments. Deactivate instead.');
+            }
+            $locked->delete();
+        });
     }
 }

@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockLevel;
@@ -69,6 +70,12 @@ class StockCountService
             $query = $this->locationsFor($session)->where('is_active', true);
 
             $locations = $query->get();
+            $itemIds = StockLevel::query()
+                ->whereIn('location_id', $locations->modelKeys())
+                ->distinct()
+                ->orderBy('item_id')
+                ->pluck('item_id');
+            $this->lockActiveItems($itemIds);
             $items = [];
             foreach ($locations as $loc) {
                 $stockLevels = StockLevel::query()->where('location_id', $loc->id)->get();
@@ -112,6 +119,17 @@ class StockCountService
                 ->lockForUpdate()
                 ->get();
             $locationIds = $locations->pluck('id');
+            $itemIds = StockLevel::query()
+                ->whereIn('location_id', $locationIds)
+                ->distinct()
+                ->orderBy('item_id')
+                ->pluck('item_id')
+                ->concat($session->items()->pluck('item_id'))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+            $this->lockActiveItems($itemIds);
             $overlap = StockCountSession::query()
                 ->where('status', StockCountSessionStatus::InProgress->value)
                 ->whereHas('items', fn ($items) => $items->whereIn('location_id', $locationIds))
@@ -351,5 +369,23 @@ class StockCountService
         }
 
         return $query;
+    }
+
+    /** @param \Illuminate\Support\Collection<int, int|null> $itemIds */
+    private function lockActiveItems(\Illuminate\Support\Collection $itemIds): void
+    {
+        if ($itemIds->isEmpty()) {
+            return;
+        }
+
+        $items = Item::withTrashed()
+            ->whereKey($itemIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($items->count() !== $itemIds->count() || $items->contains(static fn (Item $item): bool => $item->trashed())) {
+            throw new BusinessRuleException('A stock count cannot include a missing or deleted item. Restore the item or cancel the count.');
+        }
     }
 }

@@ -8,6 +8,8 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\ReorderMethod;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -60,6 +62,16 @@ class Item extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class);
+    }
+
+    public function stockAdjustments(): HasMany
+    {
+        return $this->hasMany(StockAdjustment::class);
+    }
+
+    public function stockCountItems(): HasMany
+    {
+        return $this->hasMany(StockCountItem::class);
     }
 
     public function approvedSuppliers(): HasMany
@@ -152,8 +164,16 @@ class Item extends Model
 
     public function canDelete(): bool
     {
-        if ($this->stockLevels()->where('quantity', '>', 0)->exists()) return false;
+        if ($this->stockLevels()->where(fn (Builder $query) => $query
+            ->where('quantity', '<>', 0)
+            ->orWhere('reserved_quantity', '<>', 0))->exists()) return false;
         if ($this->movements()->exists()) return false;
+        if ($this->stockAdjustments()->where('status', StockAdjustmentStatus::Pending->value)->exists()) return false;
+        if ($this->stockCountItems()->whereHas('session', fn (Builder $query) => $query->whereIn('status', [
+            StockCountSessionStatus::Draft->value,
+            StockCountSessionStatus::InProgress->value,
+        ]))->exists()) return false;
+
         return true;
     }
 }

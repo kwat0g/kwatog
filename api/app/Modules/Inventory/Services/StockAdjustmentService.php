@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockAdjustment;
@@ -120,6 +121,11 @@ class StockAdjustmentService
         $reasonCode = $this->normalizeReason($reasonCode);
 
         return DB::transaction(function () use ($itemId, $locationId, $direction, $qty, $unitCost, $reason, $by, $reasonCode) {
+            $item = Item::query()->lockForUpdate()->find($itemId);
+            if ($item === null) {
+                throw new BusinessRuleException('Cannot adjust a missing or deleted item.');
+            }
+
             $cost = $direction === 'out'
                 ? $this->currentWac($itemId, $locationId)
                 : $this->requiredInboundCost($unitCost);
@@ -199,6 +205,9 @@ class StockAdjustmentService
             }
             if ((int) $locked->requested_by === (int) $by->id) {
                 throw new BusinessRuleException('The requester cannot approve their own adjustment.');
+            }
+            if (Item::query()->lockForUpdate()->whereKey($locked->item_id)->first() === null) {
+                throw new BusinessRuleException('Cannot approve an adjustment for a deleted item. Restore the item first.');
             }
 
             $mvmt = $this->applyMovement(
