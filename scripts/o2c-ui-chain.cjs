@@ -27,24 +27,38 @@ const RUN = (process.env.O2CUI_RUN_ID || `O2CUI${Date.now().toString(36)}`).toUp
 const DB = `ogami_test_o2c_browser_o2cui${RUN.toLowerCase()}`;
 const API_PORT = Number(process.env.O2CUI_API_PORT || 8231);
 const SPA_PORT = Number(process.env.O2CUI_SPA_PORT || 5231);
+const DB_USER = process.env.O2CUI_DB_USER || 'ogami';
 const BASE = `http://127.0.0.1:${SPA_PORT}`;
 const OUT = process.env.O2CUI_OUTPUT || path.join('/tmp', `o2c-ui-chain-${RUN}`);
 const KEEP = process.env.O2CUI_KEEP === '1';
 const FIXTURE_IN_CONTAINER = `/tmp/o2c-fixture-${RUN}.json`;
+if (!/^[a-z_][a-z0-9_]*$/i.test(DB_USER)) throw new Error('O2CUI_DB_USER must be a PostgreSQL role name.');
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
   BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  SESSION_DOMAIN: '127.0.0.1', SESSION_SECURE_COOKIE: 'false', SESSION_SAME_SITE: 'lax',
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
+  COMPANY_LEGAL_NAME: 'Ogami Audit Test Corporation', COMPANY_ADDRESS: 'Audit Test Site',
+  COMPANY_PHONE: '+639000000000', COMPANY_EMAIL: 'audit@ogami.test', COMPANY_TIN: '000-000-000-000',
+  COMPANY_VAT_STATUS: 'VAT Registered', COMPANY_PUBLIC_URL: 'https://ogami.test',
+  COMPANY_SALES_INBOX_EMAIL: 'sales@ogami.test', COMPANY_CERTIFICATION: 'Audit Test Certified',
+  COMPANY_EMPLOYEE_EMAIL_DOMAIN: 'ogami.test', COMPANY_LATITUDE: '14.286', COMPANY_LONGITUDE: '120.9345',
+  COMPANY_EMAIL_BRAND_NAME: 'Ogami Audit Test',
   O2C_BROWSER_DB: DB, O2C_RUN_ID: RUN, O2C_FIXTURE_PATH: FIXTURE_IN_CONTAINER,
 };
 
-const report = { run_id: RUN, database: DB, base_url: BASE, mode: 'ui-driven', checks: [], failures: [], http_errors: [], page_errors: [] };
+const report = { run_id: RUN, database: DB, base_url: BASE, mode: 'ui-driven', checks: [], failures: [], api_errors: [], http_errors: [], console_errors: [], page_errors: [] };
 let fixture;
 
 function check(name, ok, evidence = '') {
   const text = typeof evidence === 'string' ? evidence : JSON.stringify(evidence);
   (ok ? report.checks : report.failures).push({ name, evidence: text });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${text ? ` — ${text.slice(0, 260)}` : ''}`);
+  if (!ok) {
+    const error = new Error(`Assertion failed: ${name}${text ? ` — ${text}` : ''}`);
+    error.auditCheck = true;
+    throw error;
+  }
   return ok;
 }
 
@@ -55,9 +69,13 @@ function compose(args) {
 }
 const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
 const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
-const psql = (sqlText, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-F', '|', '-c', sqlText]).trim();
+const psql = (sqlText, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', DB_USER, '-d', db, '-At', '-F', '|', '-c', sqlText]).trim();
 const sql = (query) => psql(query, DB);
-const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
+const apiIp = () => {
+  const container = compose(['ps', '-q', 'api']).trim().split(/\s+/)[0];
+  if (!container) throw new Error('The selected Compose project has no running api service.');
+  return execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container], { encoding: 'utf8' }).trim();
+};
 
 function stopApiServer() {
   for (const pattern of [`port=${API_PORT}`, `0.0.0.0:${API_PORT}`]) {
@@ -68,7 +86,7 @@ function stopApiServer() {
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
-  psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  psql(`CREATE DATABASE ${DB} OWNER ${DB_USER};`);
   artisan('migrate', '--force');
   artisan('tinker', '--execute', "require 'tests/Browser/o2c_fixture.php';");
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
@@ -102,7 +120,7 @@ async function setUp() {
 
 async function tearDown(server) {
   try { await server?.close(); } catch { /* already closed */ }
-  const dirty = report.failures.length > 0 || report.http_errors.length > 0 || report.page_errors.length > 0;
+  const dirty = report.failures.length > 0 || report.http_errors.length > 0 || unexplainedConsoleErrors().length > 0 || report.page_errors.length > 0;
   if (KEEP || dirty) {
     if (dirty && !KEEP) console.log(`Run was not clean — keeping ${DB} and API :${API_PORT} for inspection.`);
     console.log(`Kept ${DB} and API :${API_PORT} — start the SPA with: npm run dev`);
@@ -124,7 +142,52 @@ const sessions = new WeakMap();
 const emailOf = (page) => sessions.get(page.context())?.email ?? 'crm@ogami.test';
 const checkOf = (page) => sessions.get(page.context())?.sessionCheck ?? '/auth/user';
 
+function assertCleanStep(label, expectedApiErrors = []) {
+  const missingExpectedErrors = expectedApiErrors.filter((error) => !report.api_errors.includes(error));
+  check(`${label}: expected API rejection was recorded`, missingExpectedErrors.length === 0, missingExpectedErrors);
+  report.expected_api_errors ??= [];
+  report.expected_api_errors.push(...expectedApiErrors);
+  const allowedApiErrors = new Set(report.expected_api_errors);
+  const unexpectedApiErrors = report.api_errors.filter((error) =>
+    !/ 401 GET \/api\/v1\/auth\/user$/.test(error) && !allowedApiErrors.has(error));
+  check(`${label}: no unexplained API errors`, unexpectedApiErrors.length === 0, unexpectedApiErrors);
+  const consoleErrors = unexplainedConsoleErrors();
+  check(`${label}: no unexplained browser console errors`, consoleErrors.length === 0, consoleErrors);
+}
+
+function unexplainedConsoleErrors() {
+  // Chromium logs expected API rejection responses as console errors. AuthGuard
+  // probes `/auth/user` while signed out; forbidden-action probes are listed
+  // explicitly in expected_api_errors. All other failures remain visible.
+  let knownAuthProbes = report.api_errors.filter((error) => / 401 GET \/api\/v1\/auth\/user$/.test(error)).length;
+  const expectedStatuses = new Map();
+  for (const error of report.expected_api_errors ?? []) {
+    const status = error.match(/\s(\d{3})\s(?:GET|POST|PUT|PATCH|DELETE)\s/)?.[1];
+    if (status) expectedStatuses.set(status, (expectedStatuses.get(status) ?? 0) + 1);
+  }
+  const expected = [];
+  const unexpected = [];
+  for (const error of report.console_errors) {
+    if (/Failed to load resource: the server responded with a status of 401 \(Unauthorized\)$/.test(error) && knownAuthProbes > 0) {
+      expected.push(error);
+      knownAuthProbes -= 1;
+    } else {
+      const status = error.match(/Failed to load resource: the server responded with a status of (\d{3}) /)?.[1];
+      const remaining = status ? expectedStatuses.get(status) ?? 0 : 0;
+      if (remaining > 0) {
+        expected.push(error);
+        expectedStatuses.set(status, remaining - 1);
+      } else {
+        unexpected.push(error);
+      }
+    }
+  }
+  report.expected_console_errors = expected;
+  return unexpected;
+}
+
 async function signIn(page, email, sessionCheck) {
+  const loginRoute = sessionCheck === '/b2b/customer/me' ? '/portal/customer/login' : '/sign-in';
   // The login form disables its inputs while a 429 cooldown runs; back-to-back
   // runs log in many accounts from one IP, so wait OUT the cooldown instead of
   // timing out on a disabled field. The form itself can also take a moment on
@@ -133,14 +196,14 @@ async function signIn(page, email, sessionCheck) {
   let visible = false;
   for (let i = 0; i < 6 && !visible; i += 1) {
     try {
-      await page.goto('/sign-in', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+      await page.goto(loginRoute, { waitUntil: 'domcontentloaded', timeout: 20_000 });
       await page.waitForTimeout(500);
       // A stale session (cached SPA state from an earlier run) bounces /sign-in
       // back to the dashboard. Clear every client-side artifact and hard-reload.
       if (!page.url().includes('/sign-in')) {
         await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); }).catch(() => {});
         await contextClearCookies(page);
-        await page.goto('/sign-in', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+        await page.goto(loginRoute, { waitUntil: 'domcontentloaded', timeout: 20_000 });
       }
       await emailInput.waitFor({ state: 'visible', timeout: 8_000 });
       visible = true;
@@ -160,7 +223,7 @@ async function signIn(page, email, sessionCheck) {
   await emailInput.fill(email);
   await page.getByLabel('Password', { exact: true }).fill('password');
   await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForURL((u) => !u.pathname.startsWith('/sign-in'), { timeout: 30_000 });
+  await page.waitForFunction(() => !window.location.pathname.startsWith('/sign-in'), undefined, { timeout: 30_000 });
   await page.waitForTimeout(400);
   const me = await api(page, 'GET', sessionCheck, undefined, {}, { probe: false });
   if (me.status !== 200) throw new Error(`Login as ${email} left no session (GET ${sessionCheck} → ${me.status}).`);
@@ -180,8 +243,14 @@ async function login(email, sessionCheck = '/auth/user') {
   const page = await context.newPage();
   sessions.set(context, { email, sessionCheck });
   page.on('pageerror', (e) => report.page_errors.push(`${email}: ${e.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') report.console_errors.push(`${email}: ${message.text().slice(0, 500)}`);
+  });
   page.on('response', (r) => {
-    if (r.status() >= 500 && r.url().includes('/api/')) report.http_errors.push(`${email} ${r.status()} ${r.request().method()} ${r.url().replace(BASE, '')}`);
+    if (r.status() < 400 || !r.url().includes('/api/')) return;
+    const failure = `${email} ${r.status()} ${r.request().method()} ${r.url().replace(BASE, '')}`;
+    report.api_errors.push(failure);
+    if (r.status() >= 500) report.http_errors.push(failure);
   });
   // The lost-session race that hits mid-chain can hit the sign-in itself: the
   // form posts, the SPA lands on the dashboard, and the freshly rotated
@@ -282,7 +351,12 @@ async function selectByRegExp(page, sel, pattern) {
 /** Read the inspection's live status via a read-only detail API call. */
 async function inspectionStatus(page, inspectionHashId) {
   const detail = (await api(page, 'GET', `/quality/inspections/${inspectionHashId}`)).body?.data;
-  return { status: detail?.status, mode: detail?.inspection_mode };
+  return {
+    status: detail?.status,
+    mode: detail?.inspection_mode,
+    resultAuthors: detail?.result_authors ?? [],
+    reviewer: detail?.reviewer,
+  };
 }
 
 /** Wait for a toast; every UI mutation ends here so a failed action is read.
@@ -319,7 +393,8 @@ async function openDetail(page, listRoute, needle, detailPattern, fallbackRoute)
   const cell = page.getByText(needle).first();
   try {
     await cell.click({ timeout: 5000 });
-    await page.waitForURL(detailPattern, { timeout: 10_000 });
+    const routePattern = detailPattern.source;
+    await page.waitForFunction((pattern) => new RegExp(pattern).test(window.location.pathname), routePattern, { timeout: 10_000 });
   } catch {
     if (fallbackRoute) await open(page, fallbackRoute);
   }
@@ -347,7 +422,7 @@ async function step1SalesOrder() {
   // server failure keeps us here, so capture the toast and stop the run.
   const detailUrl = /\/crm\/sales-orders\/(?!create)[^/]+$/;
   try {
-    await page.waitForURL(detailUrl, { timeout: 30_000 });
+    await page.waitForFunction((pattern) => new RegExp(pattern).test(window.location.pathname), detailUrl.source, { timeout: 30_000 });
   } catch {
     const body = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 400);
     check(`${label}: order created AND confirmed from the form`, false, `still on ${page.url()} — ${body}`);
@@ -359,6 +434,9 @@ async function step1SalesOrder() {
   check(`${label}: order created AND confirmed from the form`, /^SO-/.test(SO_NUMBER ?? ''), `${SO_NUMBER} · ${page.url()}`);
   const soDetail = (await api(page, 'GET', `/crm/sales-orders/${SO_ID}`)).body?.data;
   check(`${label}: status is confirmed`, soDetail?.status === 'confirmed', soDetail?.status);
+  const totals = sql(`select subtotal||'|'||vat_amount||'|'||total_amount from sales_orders where so_number='${SO_NUMBER}'`);
+  check(`${label}: stored SO totals reconcile to 200 × ₱12.50 plus 12% VAT`, totals === '2500.00|300.00|2800.00', totals);
+  check(`${label}: order changes are audited by sales`, Number(sql(`select count(*) from audit_logs where model_type like '%SalesOrder' and model_id=(select id from sales_orders where so_number='${SO_NUMBER}') and user_id=(select id from users where email='crm@ogami.test') and action in ('created','updated')`)) >= 2);
 
   WO_NUMBER = sql(`select wo_number from work_orders where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}') order by id desc limit 1`);
   check(`${label}: confirming the order drafted a work order`, /^WO-/.test(WO_NUMBER), WO_NUMBER);
@@ -370,6 +448,26 @@ async function step1SalesOrder() {
   await wh.locator('select[name="work_order_id"]').waitFor({ state: 'visible', timeout: 15_000 });
   const optionCount = await wh.locator('select[name="work_order_id"] option', { hasText: WO_NUMBER }).count();
   check(`${label}: NO JUMPING — a planned WO is not yet issuable from the warehouse form`, optionCount === 0, `${WO_NUMBER} options=${optionCount}`);
+}
+
+// A warehouse user can forge a hidden planned work-order ID in the issue API.
+// The server must reject that jump before writing a slip or consuming stock.
+async function attemptPlannedWorkOrderIssue(woId) {
+  const label = '1.6 · Planned work-order API gate';
+  const page = who.warehouse;
+  const stockBefore = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='RM-${RUN}')`);
+  const slipsBefore = sql(`select count(*) from material_issue_slips where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')`);
+  const response = await api(page, 'POST', '/inventory/material-issues', {
+    work_order_id: woId,
+    issued_date: today(),
+    items: [{ item_id: fixture.resin_item, location_id: fixture.raw_location, quantity_issued: '0.001' }],
+  }, {}, { probe: false });
+  check(`${label}: API rejects issuing to a planned work order`, response.status === 422 && response.body?.message === 'Materials can only be issued to confirmed, in-progress, or paused work orders.', response);
+  const stockAfter = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='RM-${RUN}')`);
+  const slipsAfter = sql(`select count(*) from material_issue_slips where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')`);
+  check(`${label}: rejection leaves stock unchanged`, stockAfter === stockBefore, `${stockBefore} → ${stockAfter}`);
+  check(`${label}: rejection creates no issue slip`, slipsAfter === slipsBefore, `${slipsBefore} → ${slipsAfter}`);
+  assertCleanStep(label, [`${emailOf(page)} ${response.status} POST /api/v1/inventory/material-issues`]);
 }
 
 // 2 — PPC runs the scheduler. Segregation of duties: ppc_head PROPOSES
@@ -402,10 +500,14 @@ async function step2Schedule() {
   const confirmedOk = confirmResult.status() === 200;
   await prod.waitForLoadState('networkidle').catch(() => {});
   check(`${label}: production manager confirmed the schedule`, confirmedOk, `HTTP ${confirmResult.status()}`);
+  const confirmedSchedule = sql(`select count(*) from production_schedules where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}') and status='confirmed' and is_confirmed=true and confirmed_by=(select id from users where email='production@ogami.test')`);
+  check(`${label}: confirmed schedule is persisted under production manager`, confirmedSchedule === '1', confirmedSchedule);
+  const ppcConfirmed = sql(`select count(*) from production_schedules where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}') and confirmed_by=(select id from users where email='ppc@ogami.test')`);
+  check(`${label}: PPC proposal did not record an approval`, ppcConfirmed === '0', ppcConfirmed);
 }
 
 // 3 — Production manager confirms the WO (machine + mold) and starts it.
-async function step3ConfirmAndStart(woId) {
+async function step3ConfirmAndStart(woId, woDbId) {
   const label = '3 · Production';
   const page = who.prod;
   await openDetail(page, `/production/work-orders?search=${WO_NUMBER}`, WO_NUMBER, /\/production\/work-orders\/[^/]+$/, `/production/work-orders/${woId}`);
@@ -436,6 +538,11 @@ async function step3ConfirmAndStart(woId) {
   await page.waitForTimeout(500);
   const woAfter = (await api(page, 'GET', `/production/work-orders/${woId}`)).body?.data;
   check(`${label}: status is in progress`, woAfter?.status === 'in_progress', woAfter?.status);
+  const autoIssue = sql(`select coalesce(sum(quantity),0) from stock_movements where reference_type='work_order' and reference_id=${woDbId} and movement_type='material_issue'`);
+  check(`${label}: start issued only the 4.000 kg BOM requirement`, autoIssue === '4.000', autoIssue);
+  const stock = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='RM-${RUN}')`);
+  check(`${label}: on-hand stock reflects the automatic issue`, stock === '496.000', stock);
+  check(`${label}: start transition is audited by production`, Number(sql(`select count(*) from audit_logs where model_type like '%WorkOrder' and model_id=${woDbId} and user_id=(select id from users where email='production@ogami.test') and action='updated' and new_values->>'status'='in_progress'`)) === 1);
 }
 
 // 4 — Warehouse issues the reserved material to the running WO.
@@ -453,15 +560,36 @@ async function step4IssueMaterial(woId, woDbId) {
   await page.waitForTimeout(800); // location options load per item
   await page.locator('select[name="items.0.location_id"]').selectOption({ index: 1 });
   await page.waitForTimeout(300);
-  await page.locator('input[name="items.0.quantity_issued"]').fill('4.060');
-  await pageButton(page, 'Create issue');
+  // Start already issued the 4.000 kg BOM requirement; 0.060 kg covers the
+  // three rejects below, for 4.060 kg total.
+  await page.locator('input[name="items.0.quantity_issued"]').fill('0.060');
   const issueResponse = page.waitForResponse((r) => r.url().endsWith('/inventory/material-issues') && r.request().method() === 'POST', { timeout: 20_000 });
+  await pageButton(page, 'Create issue');
   // The success toast is the first thing shown; read it before it expires.
-  await expectToast(page, /created|issue/i, `${label}: material issue recorded through the form (4.060 kg resin)`);
+  await expectToast(page, /created|issue/i, `${label}: material issue recorded through the form (0.060 kg resin)`);
   const issueResult = await issueResponse;
   check(`${label}: the issue POST succeeded`, issueResult.status() === 201 || issueResult.status() === 200, `HTTP ${issueResult.status()}`);
-  const movements = sql(`select count(*) from material_issue_slips where work_order_id=${woDbId} and status='issued'`);
-  check(`${label}: the issue landed (slip rows)`, Number(movements) >= 1, `rows=${movements}`);
+  const issued = sql(`select coalesce(sum(i.quantity_issued),0) from material_issue_slips s join material_issue_slip_items i on i.material_issue_slip_id=s.id where s.work_order_id=${woDbId} and s.status='issued'`);
+  check(`${label}: manual issue is 0.060 kg`, issued === '0.060', issued);
+  const totalIssued = sql(`select coalesce(sum(quantity),0) from stock_movements where item_id=(select id from items where code='RM-${RUN}') and movement_type='material_issue'`);
+  check(`${label}: total issue equals 4.060 kg for 203 gross units`, totalIssued === '4.060', totalIssued);
+  const stock = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='RM-${RUN}')`);
+  check(`${label}: raw-material stock reconciles to 500 − 4.060`, stock === '495.940', stock);
+  check(`${label}: issue audit identifies the warehouse actor`, Number(sql(`select count(*) from audit_logs where model_type like '%MaterialIssueSlip' and model_id=(select id from material_issue_slips where work_order_id=${woDbId}) and user_id=(select id from users where email='warehouse@ogami.test') and action='created'`)) === 1);
+}
+
+async function attemptUnauthorizedOutput(woId, woDbId) {
+  const label = '4.5 · Warehouse output permission gate';
+  const page = who.warehouse;
+  const before = sql(`select count(*) from work_order_outputs where work_order_id=${woDbId}`);
+  const auditBefore = sql(`select count(*) from audit_logs where model_type like '%WorkOrderOutput' and user_id=(select id from users where email='warehouse@ogami.test') and action='created'`);
+  const response = await api(page, 'POST', `/production/work-orders/${woId}/outputs`, {
+    good_count: 1, reject_count: 0, shift: 'Day Shift',
+  }, {}, { probe: false });
+  check(`${label}: warehouse cannot record production output`, response.status === 403, response);
+  check(`${label}: forbidden write creates no output`, sql(`select count(*) from work_order_outputs where work_order_id=${woDbId}`) === before, before);
+  check(`${label}: forbidden write creates no audit event`, sql(`select count(*) from audit_logs where model_type like '%WorkOrderOutput' and user_id=(select id from users where email='warehouse@ogami.test') and action='created'`) === auditBefore, auditBefore);
+  assertCleanStep(label, [`${emailOf(page)} ${response.status} POST /api/v1/production/work-orders/${woId}/outputs`]);
 }
 
 // 5 — Production records two output batches through the form, then completes.
@@ -471,7 +599,7 @@ async function step5ProduceOutputs(woId) {
   for (const [good, rejectCount, defectCount] of [[150, 3, 3], [50, 0, 0]]) {
     await open(page, `/production/work-orders/${woId}`);
     await pageButton(page, 'Record output');
-    await page.waitForURL(/\/record-output$/, { timeout: 15_000 });
+    await page.waitForFunction(() => /\/record-output$/.test(window.location.pathname), undefined, { timeout: 15_000 });
     await page.getByLabel('Good count').fill(String(good));
     if (rejectCount > 0) {
       await page.getByRole('button', { name: 'Add defect' }).click();
@@ -494,6 +622,13 @@ async function step5ProduceOutputs(woId) {
   check(`${label}: WO terminal state is completed`, woDone?.status === 'completed', woDone?.status);
   const outputs = sql(`select count(*) from work_order_outputs where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')`);
   check(`${label}: two output batches on the WO`, outputs === '2', `outputs=${outputs}`);
+  const counts = sql(`select sum(good_count)||'|'||sum(reject_count) from work_order_outputs where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')`);
+  check(`${label}: raw batch counts reconcile to 200 good and 3 rejected`, counts === '200|3', counts);
+  const receipt = sql(`select coalesce(sum(quantity),0) from stock_movements where movement_type='production_receipt' and reference_type='work_order_output' and reference_id in (select id from work_order_outputs where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}'))`);
+  check(`${label}: only the 200 good units enter finished-goods stock`, receipt === '200.000', receipt);
+  const finishedStock = sql(`select coalesce(sum(quantity),0) from stock_levels where item_id=(select id from items where code='O2C-${RUN}')`);
+  check(`${label}: finished-goods on-hand matches production receipts`, finishedStock === '200.000', finishedStock);
+  check(`${label}: output audit identifies production actor`, Number(sql(`select count(*) from audit_logs where model_type like '%WorkOrderOutput' and model_id in (select id from work_order_outputs where work_order_id=(select id from work_orders where wo_number='${WO_NUMBER}')) and user_id=(select id from users where email='production@ogami.test') and action='created'`)) === 2);
 }
 
 // 6 — QC inspector measures, saves, and completes every inspection (UI).
@@ -524,8 +659,14 @@ async function measureInspectionUI(page, inspectionNumber, { good = true } = {})
       await tickAll.first().click();
       await modalButton(page, 'OK').catch(() => {});
     }
-    // Section 2: the counted AQL sample's defective pieces.
-    await page.getByLabel('Defective pieces found').fill(good ? '0' : '8');
+    // Section 2: tap targets replace the input when the reject limit is small.
+    const defectGroup = page.getByRole('group', { name: 'Defective pieces found' });
+    if (await defectGroup.count()) {
+      const choices = defectGroup.getByRole('button');
+      await choices.nth(good ? 0 : (await choices.count()) - 1).click();
+    } else {
+      await page.getByLabel('Defective pieces found').fill(good ? '0' : '8');
+    }
     // Section 3: per-piece measurements of the toleranced dimensions.
     const numeric = page.locator('input[type="number"][aria-label*=", piece "]');
     const rows = await numeric.count();
@@ -551,8 +692,13 @@ async function measureInspectionUI(page, inspectionNumber, { good = true } = {})
   }
 
   const hashId = found.id;
-  const { status } = await inspectionStatus(page, hashId);
-  return status;
+  const detail = await inspectionStatus(page, hashId);
+  const actor = (await api(page, 'GET', '/auth/user')).body?.data;
+  check(`6 · QC: ${inspectionNumber} records the actual measurement author`, detail.resultAuthors.some((author) => author.id === actor?.id), detail.resultAuthors);
+  const authorLabel = page.getByText('Results recorded by', { exact: true });
+  const authorText = await authorLabel.locator('xpath=..').innerText().catch(() => '');
+  check(`6 · QC: ${inspectionNumber} shows the result author in its detail page`, authorText.includes(actor?.name ?? '__missing__'), authorText);
+  return detail.status;
 }
 
 async function step6QC(woDbId) {
@@ -572,11 +718,28 @@ async function step6QC(woDbId) {
   return numbers;
 }
 
+async function attemptQcSelfReview(numbers) {
+  const page = who.qc;
+  const inspection = ((await api(page, 'GET', `/quality/inspections?search=${numbers[0]}`)).body?.data ?? [])
+    .find((row) => row.inspection_number === numbers[0]);
+  if (!inspection) throw new Error(`Cannot find ${numbers[0]} for the self-review gate.`);
+  await open(page, `/quality/inspections/${inspection.id}`);
+  const buttons = await page.getByRole('button', { name: 'Approve pass' }).count();
+  check('6.5 · QC maker-checker gate: the result author has no approve control', buttons === 0, `Approve pass buttons=${buttons}`);
+  const dbId = Number(sql(`select id from inspections where inspection_number='${numbers[0]}'`));
+  const auditBefore = sql(`select count(*) from audit_logs where model_type like '%Inspection' and model_id=${dbId} and user_id=(select id from users where email='qc@ogami.test') and action='updated'`);
+  const response = await api(page, 'PATCH', `/quality/inspections/${inspection.id}/review`, { decision: 'passed' }, {}, { probe: false });
+  check('6.5 · QC maker-checker gate: direct self-review is rejected', response.status === 403, response);
+  check('6.5 · QC maker-checker gate: inspection remains awaiting review', sql(`select status from inspections where id=${dbId}`) === 'awaiting_review');
+  check('6.5 · QC maker-checker gate: self-review writes no audit record', sql(`select count(*) from audit_logs where model_type like '%Inspection' and model_id=${dbId} and user_id=(select id from users where email='qc@ogami.test') and action='updated'`) === auditBefore, auditBefore);
+  assertCleanStep('6.5 · QC maker-checker gate', [`${emailOf(page)} ${response.status} PATCH /api/v1/quality/inspections/${inspection.id}/review`]);
+}
+
 // 7 — Production manager (checker) approves both results.
 async function step7CheckerReview(numbers) {
   const label = '7 · Checker';
   const page = who.prod;
-  for (const number of numbers) {
+  for (const [index, number] of numbers.entries()) {
     await openDetail(page, `/quality/inspections?search=${number}`, number, /\/quality\/inspections\/[^/]+$/, null);
     await pageButton(page, 'Approve pass');
     await modalButton(page, 'Approve pass');
@@ -584,7 +747,42 @@ async function step7CheckerReview(numbers) {
     const hashId = page.url().split('/').pop();
     const { status } = await inspectionStatus(page, hashId);
     check(`${label}: ${number} terminal state is passed`, status === 'passed', status);
+    const dbId = Number(sql(`select id from inspections where inspection_number='${number}'`));
+    const checker = sql(`select count(*) from inspections where id=${dbId} and reviewed_by=(select id from users where email='production@ogami.test') and reviewed_at is not null`);
+    check(`${label}: ${number} review records the production checker`, checker === '1', checker);
+    const deliveries = sql(`select count(*) from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`);
+    const expectedDeliveries = String(index + 1);
+    check(`${label}: one partial delivery exists for each passed outgoing lot`, deliveries === expectedDeliveries, `${deliveries} deliveries (expected ${expectedDeliveries})`);
+    const linkedDelivery = sql(`select count(*) from deliveries d join delivery_items di on di.delivery_id=d.id join inspections i on i.id=di.inspection_id where i.inspection_number='${number}' and d.status='scheduled'`);
+    check(`${label}: ${number} authorizes exactly one scheduled delivery line`, linkedDelivery === '1', linkedDelivery);
+    if (index === 0 && numbers.length > 1) await attemptDeliveryFromUnreviewedLot(numbers[1]);
   }
+}
+
+async function attemptDeliveryFromUnreviewedLot(inspectionNumber) {
+  const label = '7.5 · Pending-QC delivery gate';
+  const page = who.impex;
+  const inspection = ((await api(who.qc, 'GET', `/quality/inspections?search=${inspectionNumber}`)).body?.data ?? [])
+    .find((row) => row.inspection_number === inspectionNumber);
+  const order = (await api(who.sales, 'GET', `/crm/sales-orders/${SO_ID}`)).body?.data;
+  const item = order?.items?.[0];
+  if (!inspection || !item) throw new Error(`Cannot construct the pending-QC delivery attempt for ${inspectionNumber}.`);
+  const before = {
+    deliveries: sql(`select count(*) from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`),
+    reservations: sql(`select count(*) from delivery_stock_reservations r join deliveries d on d.id=r.delivery_id where d.sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`),
+    movements: sql("select count(*) from stock_movements where reference_type='delivery'"),
+  };
+  const response = await api(page, 'POST', '/supply-chain/deliveries', {
+    sales_order_id: SO_ID,
+    scheduled_date: today(),
+    notes: `Audit pending-QC gate ${RUN}`,
+    items: [{ sales_order_item_id: item.id, quantity: '0.01', inspection_id: inspection.id }],
+  }, { 'Idempotency-Key': `audit-${RUN}-pending-qc` }, { probe: false });
+  check(`${label}: server rejects an unreviewed outgoing lot`, response.status === 422 && response.body?.message === 'The selected inspection is not a passed outgoing inspection.', response);
+  check(`${label}: rejected attempt creates no delivery`, sql(`select count(*) from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`) === before.deliveries, before.deliveries);
+  check(`${label}: rejected attempt reserves no stock`, sql(`select count(*) from delivery_stock_reservations r join deliveries d on d.id=r.delivery_id where d.sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}')`) === before.reservations, before.reservations);
+  check(`${label}: rejected attempt creates no movement`, sql("select count(*) from stock_movements where reference_type='delivery'") === before.movements, before.movements);
+  assertCleanStep(label, [`${emailOf(page)} ${response.status} POST /api/v1/supply-chain/deliveries`]);
 }
 
 // 8 — ImpEx assigns van + driver, then walks the delivery to delivered.
@@ -599,6 +797,10 @@ async function step8Dispatch(deliveries) {
     await page.getByRole('dialog').locator('textarea').first().fill('UI chain run — first available van and driver.');
     await modalButton(page, 'Save assignment');
     await expectToast(page, /assign|saved/i, `${label}: ${delivery.number} van + driver assigned through the dialog`);
+    const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+    const assignment = sql(`select status||'|'||coalesce(vehicle_id::text,'')||'|'||coalesce(driver_id::text,'') from deliveries where id=${deliveryDbId}`);
+    check(`${label}: ${delivery.number} assignment persisted while still scheduled`, /^scheduled\|\d+\|\d+$/.test(assignment), assignment);
+    check(`${label}: ${delivery.number} assignment is audited by ImpEx`, Number(sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId} and user_id=(select id from users where email='impex@ogami.test') and action='updated'`)) >= 1);
     await page.waitForTimeout(400);
 
     // Departure re-checks a physical reservation of the inspected lot; the
@@ -620,6 +822,18 @@ async function step8Dispatch(deliveries) {
     check(`${label}: ${delivery.number} inspected lot reserved from the page`, !!reserveResult && (reserveResult.status() === 200 || reserveResult.status() === 201), reserveResult ? `HTTP ${reserveResult.status()}` : 'no reservation POST observed');
     await open(page, `/supply-chain/deliveries/${delivery.id}`);
 
+    const reservationKey = sql(`select request_key from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
+    const reservation = sql(`select status||'|'||reserved_by::text from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
+    const reservationTotals = sql(`select (select coalesce(sum(quantity),0)::numeric(15,3) from delivery_stock_reservations where delivery_id=${deliveryDbId})||'|'||(select coalesce(sum(quantity),0)::numeric(15,3) from delivery_items where delivery_id=${deliveryDbId})`);
+    const reservationRows = sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId} and status='reserved' and consumed_quantity=0 and released_quantity=0`);
+    check(`${label}: ${delivery.number} reservation is complete and owned by ImpEx`, reservation === `reserved|${sql("select id from users where email='impex@ogami.test'")}`, reservation);
+    check(`${label}: ${delivery.number} reservation quantity matches every delivery line`, reservationTotals.split('|')[0] === reservationTotals.split('|')[1] && reservationRows !== '0', `${reservationTotals}; rows=${reservationRows}`);
+    const batchCountBeforeReplay = sql(`select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
+    const reservationCountBeforeReplay = sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId}`);
+    const replay = await api(page, 'POST', `/supply-chain/deliveries/${delivery.id}/reserve-stock`, { request_key: reservationKey }, {}, { probe: false });
+    check(`${label}: retry with the same reservation key is idempotent`, replay.status === 200, `HTTP ${replay.status}`);
+    check(`${label}: reservation retry creates no duplicate batch or hold`, sql(`select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`) === batchCountBeforeReplay && sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId}`) === reservationCountBeforeReplay, `${batchCountBeforeReplay} batch / ${reservationCountBeforeReplay} holds`);
+
     for (const next of ['loading', 'in_transit', 'delivered']) {
       const labelRe = new RegExp(`^Mark ${next.replace('_', ' ')}`, 'i');
       let advanceResult = null;
@@ -638,6 +852,21 @@ async function step8Dispatch(deliveries) {
       await page.waitForLoadState('networkidle').catch(() => {});
       await open(page, `/supply-chain/deliveries/${delivery.id}`);
       check(`${label}: ${delivery.number} → ${next}`, advanceResult.status() === 200, `HTTP ${advanceResult.status()}`);
+
+      const apiStatus = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data?.status;
+      const stored = sql(`select status from deliveries where id=${deliveryDbId}`);
+      check(`${label}: ${delivery.number} ${next} persisted before the next transition`, apiStatus === next && stored === next, `${apiStatus}|${stored}`);
+      check(`${label}: ${delivery.number} ${next} transition has an ImpEx audit entry`, Number(sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId} and user_id=(select id from users where email='impex@ogami.test') and action='updated' and new_values->>'status'='${next}'`)) >= 1);
+
+      if (next === 'loading') {
+        check(`${label}: ${delivery.number} loading reserves its assigned vehicle`, sql(`select v.status from deliveries d join vehicles v on v.id=d.vehicle_id where d.id=${deliveryDbId}`) === 'in_use');
+      } else if (next === 'in_transit') {
+        const consumed = sql(`select b.status||'|'||(select count(*) from delivery_stock_reservations r where r.delivery_id=${deliveryDbId} and r.status='consumed' and r.consumed_quantity=r.quantity and r.stock_movement_id is not null) from delivery_stock_reservation_batches b where b.delivery_id=${deliveryDbId}`);
+        check(`${label}: ${delivery.number} departure consumes each held lot exactly once`, consumed === `consumed|${reservationRows}`, consumed);
+      } else {
+        check(`${label}: ${delivery.number} delivered records time and received quantities`, sql(`select (delivered_at is not null)::text||'|'||(select count(*) from delivery_items where delivery_id=${deliveryDbId} and customer_received_quantity=quantity) from deliveries where id=${deliveryDbId}`) === 'true|1');
+        check(`${label}: ${delivery.number} delivery releases its vehicle`, sql(`select v.status from deliveries d join vehicles v on v.id=d.vehicle_id where d.id=${deliveryDbId}`) === 'available');
+      }
     }
     const status = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data?.status;
     check(`${label}: ${delivery.number} terminal state is delivered`, status === 'delivered', status);
@@ -652,11 +881,14 @@ async function step9DriverProof(deliveries) {
   for (const delivery of deliveries) {
     await openDetail(page, '/driver', delivery.number, /\/driver\/[^/]+$/, `/driver/${delivery.id}`);
     await page.getByRole('button', { name: /Capture receipt photo/i }).click();
-    await page.waitForURL(/\/driver\/[^/]+\/photo$/, { timeout: 15_000 });
+    await page.waitForFunction(() => /\/driver\/[^/]+\/photo$/.test(window.location.pathname), undefined, { timeout: 15_000 });
     const inputs = page.locator('input[type="file"]');
     await inputs.nth(1).setInputFiles({ name: `receipt-${delivery.number}.png`, mimeType: 'image/png', buffer: png });
     await page.getByRole('button', { name: /Upload photo/i }).click();
     await expectToast(page, /upload|success/i, `${label}: receipt photo uploaded for ${delivery.number} through the driver flow`);
+    const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+    check(`${label}: ${delivery.number} proof is stored under the driver actor`, Number(sql(`select count(*) from delivery_proofs where delivery_id=${deliveryDbId} and uploaded_by=(select id from users where email='driver@ogami.test') and mime_type='image/png' and file_size>0`)) === 1);
+    check(`${label}: uploading proof leaves the delivered state unchanged`, sql(`select status from deliveries where id=${deliveryDbId}`) === 'delivered');
   }
 }
 
@@ -673,6 +905,11 @@ async function step10CustomerConfirm(deliveries) {
     await expectToast(page, /confirm|thank/i, `${label}: ${delivery.number} receipt confirmed in the portal with receiver details`);
     const status = (await api(who.impex, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data?.status;
     check(`${label}: ${delivery.number} terminal state is confirmed`, status === 'confirmed', status);
+    const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+    const state = sql(`select status||'|'||coalesce(receiver_name,'')||'|'||coalesce(receiver_position,'')||'|'||(received_at is not null)::text||'|'||(confirmed_at is not null)::text||'|'||coalesce(invoice_handoff_status,'') from deliveries where id=${deliveryDbId}`);
+    check(`${label}: ${delivery.number} receiver, confirmation, and invoice handoff are persisted`, /^confirmed\|Juan Dela Cruz\|Warehouse Staff\|true\|true\|generated$/.test(state), state);
+    check(`${label}: ${delivery.number} customer confirmation has a portal audit entry`, Number(sql(`select count(*) from audit_logs where actor_type='customer_portal' and action='customer.delivery.confirmed' and model_type like '%Delivery' and model_id=${deliveryDbId} and new_values->>'email'='${fixture.customer_email.replaceAll("'", "''")}'`)) === 1);
+    check(`${label}: ${delivery.number} has exactly one linked draft invoice`, sql(`select count(*) from invoices where delivery_id=${deliveryDbId} and status='draft'`) === '1');
   }
 }
 
@@ -690,8 +927,11 @@ async function step11Finance(invoices) {
     await page.waitForLoadState('networkidle').catch(() => {});
     const number = sql(`select invoice_number from invoices where id=${invoice.dbId}`);
     check(`${label}: ${number} finalized from the invoice page`, finalizeResult.status() === 200, `HTTP ${finalizeResult.status()}`);
+    const finalized = sql(`select i.status||'|'||j.status||'|'||(j.total_debit=j.total_credit)::text from invoices i join journal_entries j on j.id=i.journal_entry_id where i.id=${invoice.dbId}`);
+    check(`${label}: ${number} finalization posts one balanced journal entry`, finalized === 'finalized|posted|true', finalized);
 
     const balance = sql(`select balance from invoices where id=${invoice.dbId}`);
+    const collectionsBefore = sql(`select count(*) from collections where invoice_id=${invoice.dbId}`);
     await pageButton(page, 'Record collection');
     await dialogSelect(page, 0, { label: /1020/ }).catch(() => dialogSelect(page, 0, { index: 1 }));
     await page.getByRole('dialog').getByRole('spinbutton').last().fill(balance);
@@ -705,6 +945,8 @@ async function step11Finance(invoices) {
     check(`${label}: ${number} collection POST accepted`, collectResult.status() === 201 || collectResult.status() === 200, `HTTP ${collectResult.status()}`);
     const after = sql(`select status||':'||balance from invoices where id=${invoice.dbId}`);
     check(`${label}: ${number} fully paid`, /paid:0\.00/.test(after), after);
+    check(`${label}: ${number} collection was recorded once by Finance`, sql(`select count(*) from collections where invoice_id=${invoice.dbId} and amount=${balance} and created_by=(select id from users where email='finance@ogami.test')`) === '1' && collectionsBefore === '0');
+    check(`${label}: ${number} collection has one balanced posted journal entry`, sql(`select count(*) from collections c join journal_entries j on j.id=c.journal_entry_id where c.invoice_id=${invoice.dbId} and j.status='posted' and j.total_debit=j.total_credit`) === '1');
   }
   const soStatus = sql(`select status from sales_orders where so_number='${SO_NUMBER}'`);
   check(`${label}: the sales order closed once delivered AND paid`, soStatus === 'closed', soStatus);
@@ -749,21 +991,33 @@ async function verifyAlignment(woDbId) {
       await new Promise((r) => setTimeout(r, 1_000)); // ease the per-IP auth limiter
     }
     check('All 9 role contexts signed in through the real sign-in form', Object.keys(who).length === 9, Object.keys(who).join(','));
+    assertCleanStep('0 · Sign in');
 
     await step1SalesOrder();
+    assertCleanStep('1 · Sales order');
     const prod = who.prod;
 
     const woId = (((await api(prod, 'GET', `/production/work-orders?search=${WO_NUMBER}`)).body?.data ?? [])
       .find((w) => w.wo_number === WO_NUMBER) ?? {}).id;
     check('0 · Lookups: work order hash id resolved (read-only)', !!woId, woId);
+    assertCleanStep('1.5 · Work order lookup');
+    await attemptPlannedWorkOrderIssue(woId);
 
     await step2Schedule();
+    assertCleanStep('2 · Schedule approval');
     const woDbId = Number(sql(`select id from work_orders where wo_number='${WO_NUMBER}'`) || 0);
-    await step3ConfirmAndStart(woId);
+    await step3ConfirmAndStart(woId, woDbId);
+    assertCleanStep('3 · Confirm and start work order');
     await step4IssueMaterial(woId, woDbId);
+    assertCleanStep('4 · Issue material');
+    await attemptUnauthorizedOutput(woId, woDbId);
     await step5ProduceOutputs(woId);
+    assertCleanStep('5 · Production output');
     const qcNumbers = await step6QC(woDbId);
+    assertCleanStep('6 · Quality inspection');
+    await attemptQcSelfReview(qcNumbers);
     await step7CheckerReview(qcNumbers);
+    assertCleanStep('7 · Quality approval');
 
     const deliveries = sql(`select delivery_number from deliveries where sales_order_id=(select id from sales_orders where so_number='${SO_NUMBER}') and status='scheduled' order by id`).split('\n').filter(Boolean);
     const deliveryObjs = [];
@@ -775,10 +1029,14 @@ async function verifyAlignment(woDbId) {
       deliveryObjs.push({ number, id: found.id });
     }
     check('7.5 · Chain gate: deliveries only exist now that QC passed', deliveries.length === 2, deliveries.join(', '));
+    assertCleanStep('7.5 · Delivery lookup');
 
     await step8Dispatch(deliveryObjs);
+    assertCleanStep('8 · Dispatch');
     await step9DriverProof(deliveryObjs);
+    assertCleanStep('9 · Driver proof');
     await step10CustomerConfirm(deliveryObjs);
+    assertCleanStep('10 · Customer receipt');
 
     const invoices = [];
     const finance = who.finance;
@@ -795,25 +1053,38 @@ async function verifyAlignment(woDbId) {
         invoices.push({ hash: inv.id, dbId });
       }
     }
+    assertCleanStep('10.5 · Invoice handoff');
 
     await step11Finance(invoices);
+    assertCleanStep('11 · Finance');
     await verifyAlignment(woDbId);
 
     await shot(who.sales, `/crm/sales-orders/${SO_ID}`, 'ui-chain-so-closed');
     await shot(who.finance, `/accounting/invoices/${invoices[0]?.hash}`, 'ui-chain-invoice-paid');
+    assertCleanStep('12 · Final inspection');
   } catch (error) {
-    check('run aborted', false, error.stack?.slice(0, 900) ?? String(error));
+    if (!error.auditCheck) {
+      const evidence = error.stack?.slice(0, 900) ?? String(error);
+      report.failures.push({ name: 'run aborted', evidence });
+      console.log(`FAIL  run aborted — ${evidence.slice(0, 260)}`);
+    }
   } finally {
+    const unexpectedConsoleErrors = unexplainedConsoleErrors();
     report.summary = {
       passed: report.checks.length, failed: report.failures.length,
-      server_errors: report.http_errors.length, page_errors: report.page_errors.length,
+      api_errors: report.api_errors.length,
+      unexplained_api_errors: report.api_errors.filter((error) =>
+        !/ 401 GET \/api\/v1\/auth\/user$/.test(error) && !(report.expected_api_errors ?? []).includes(error)).length,
+      server_errors: report.http_errors.length, console_errors: report.console_errors.length,
+      expected_console_errors: report.expected_console_errors.length,
+      unexplained_console_errors: unexpectedConsoleErrors.length, page_errors: report.page_errors.length,
     };
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 2));
-    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.server_errors} 5xx, ${report.summary.page_errors} page errors → ${OUT}/report.json`);
+    console.log(`\n${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.unexplained_api_errors} unexplained API errors (${report.summary.server_errors} 5xx), ${report.summary.expected_console_errors} expected API response console errors, ${report.summary.unexplained_console_errors} unexplained console errors, ${report.summary.page_errors} page errors → ${OUT}/report.json`);
     for (const f of report.failures) console.log(`  FAIL ${f.name} — ${f.evidence.slice(0, 220)}`);
     await browser?.close();
     await tearDown(server);
-    process.exitCode = report.failures.length || report.http_errors.length || report.page_errors.length ? 1 : 0;
+    process.exitCode = report.failures.length || report.summary.unexplained_api_errors || report.http_errors.length || unexpectedConsoleErrors.length || report.page_errors.length ? 1 : 0;
   }
 })();
