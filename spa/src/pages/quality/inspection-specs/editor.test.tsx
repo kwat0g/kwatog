@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import InspectionSpecEditorPage from './editor';
 import { usePermission } from '@/hooks/usePermission';
+import { inspectionSpecsApi } from '@/api/quality/inspectionSpecs';
 
 vi.mock('@/api/crm/products', () => ({
  productsApi: {
-  list: vi.fn().mockResolvedValue({
+  options: vi.fn().mockResolvedValue({
    data: [{ id: 'product-1', part_number: 'P-100', name: 'Widget' }],
    meta: { total: 1 },
   }),
@@ -174,5 +175,37 @@ describe('inspection spec editor accessibility', () => {
 
   expect(await screen.findByRole('combobox', { name: 'Revision to inspect' })).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'Inspection spec revision 2' })).toBeInTheDocument();
+ });
+
+ it('preserves edits when parameter metadata loads after the spec', async () => {
+  let resolveOptions!: (value: {
+   parameter_types: Array<{ value: string; label: string }>;
+  }) => void;
+  const options = new Promise<{ parameter_types: Array<{ value: string; label: string }> }>(
+   (resolve) => { resolveOptions = resolve; },
+  );
+  vi.mocked(inspectionSpecsApi.options).mockReturnValueOnce(options as never);
+
+  renderEditor();
+
+  await waitFor(() =>
+   expect(screen.getByRole('textbox', { name: 'Parameter 1 notes' })).toHaveValue('Inspect every batch.'),
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'Parameter 1 notes' }), {
+   target: { value: 'Edited while parameter metadata loads.' },
+  });
+  resolveOptions({
+   parameter_types: [
+    { value: 'dimensional', label: 'Dimensional' },
+    { value: 'visual', label: 'Visual' },
+   ],
+  });
+  await options;
+  await screen.findByRole('option', { name: 'Visual' });
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  expect(screen.getByRole('textbox', { name: 'Parameter 1 notes' })).toHaveValue(
+   'Edited while parameter metadata loads.',
+  );
  });
 });

@@ -232,8 +232,10 @@ export default function InspectionSpecEditorPage() {
     register,
     control,
     handleSubmit,
+    getValues,
     reset,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -243,7 +245,7 @@ export default function InspectionSpecEditorPage() {
       items: [
         {
           parameter_name: '',
-          parameter_type: defaultParameterType,
+          parameter_type: '',
           unit_of_measure: '',
           nominal_value: '',
           tolerance_min: '',
@@ -283,7 +285,7 @@ export default function InspectionSpecEditorPage() {
         items: [
           {
             parameter_name: '',
-            parameter_type: defaultParameterType,
+            parameter_type: '',
             unit_of_measure: '',
             nominal_value: '',
             tolerance_min: '',
@@ -301,7 +303,22 @@ export default function InspectionSpecEditorPage() {
     specDetail.data,
     existing.data,
     reset,
+  ]);
+
+  useEffect(() => {
+    if (!productId || loadedSpec || !defaultParameterType) return;
+    if (isSpecDetailMode ? specDetail.data === undefined : existing.data === undefined) return;
+    if (getValues('items.0.parameter_type')) return;
+    setValue('items.0.parameter_type', defaultParameterType);
+  }, [
+    productId,
+    loadedSpec,
+    isSpecDetailMode,
+    specDetail.data,
+    existing.data,
     defaultParameterType,
+    getValues,
+    setValue,
   ]);
 
   const upsert = useMutation({

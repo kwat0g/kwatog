@@ -22,7 +22,7 @@ vi.mock('@/api/quality/inspectionSpecs', () => ({
 
 vi.mock('@/api/crm/products', () => ({
  productsApi: {
-  list: vi.fn(),
+  options: vi.fn(),
  },
 }));
 
@@ -61,7 +61,7 @@ function renderPage() {
 describe('CapabilityStudyPage', () => {
  beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(productsApi.list).mockResolvedValue({
+  vi.mocked(productsApi.options).mockResolvedValue({
    data: [{ id: 'product-1', part_number: 'P-100', name: 'Widget' }],
    meta: { total: 1 },
   } as never);
