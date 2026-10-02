@@ -54,6 +54,13 @@ class ProductionAssertions
             $errors[] = 'SEED_DEMO_DATA must be false in production.';
         }
 
+        $reverbAllowedOrigins = config('reverb.apps.apps.0.allowed_origins', []);
+        if (empty($reverbAllowedOrigins)) {
+            $errors[] = 'REVERB_ALLOWED_ORIGINS must include at least one trusted origin in production.';
+        } elseif (array_filter($reverbAllowedOrigins, static fn (string $origin): bool => str_contains($origin, '*'))) {
+            $errors[] = 'REVERB_ALLOWED_ORIGINS must not contain a wildcard in production.';
+        }
+
         if (! empty($errors)) {
             throw new RuntimeException('Production boot blocked: '.implode(' ', $errors));
         }

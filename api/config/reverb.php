@@ -15,6 +15,16 @@ declare(strict_types=1);
  * Both ends look connected (101 Switching Protocols visible in DevTools)
  * but no event ever reaches the browser. Real bug, fixed 2026-05-07.
  */
+$allowedOriginSetting = env('REVERB_ALLOWED_ORIGINS') ?: env('FRONTEND_URL') ?: env('APP_URL', 'http://localhost');
+$allowedOrigins = array_values(array_filter(
+    array_map(static function (string $origin): string {
+        $origin = trim($origin);
+
+        return parse_url($origin, PHP_URL_HOST) ?: $origin;
+    }, explode(',', (string) $allowedOriginSetting)),
+    static fn (string $origin): bool => $origin !== '',
+));
+
 return [
 
     /*
@@ -42,20 +52,20 @@ return [
     'servers' => [
 
         'reverb' => [
-            'host'        => env('REVERB_SERVER_HOST', '0.0.0.0'),
-            'port'        => (int) env('REVERB_SERVER_PORT', 8080),
-            'hostname'    => env('REVERB_HOST'),
+            'host' => env('REVERB_SERVER_HOST', '0.0.0.0'),
+            'port' => (int) env('REVERB_SERVER_PORT', 8080),
+            'hostname' => env('REVERB_HOST'),
             'options' => [
                 'tls' => [],
             ],
             'max_request_size' => (int) env('REVERB_MAX_REQUEST_SIZE', 10_000),
-            'scaling'          => [
+            'scaling' => [
                 'enabled' => (bool) env('REVERB_SCALING_ENABLED', false),
                 'channel' => env('REVERB_SCALING_CHANNEL', 'reverb'),
-                'server'  => [
-                    'url'      => env('REDIS_URL'),
-                    'host'     => env('REDIS_HOST', '127.0.0.1'),
-                    'port'     => env('REDIS_PORT', '6379'),
+                'server' => [
+                    'url' => env('REDIS_URL'),
+                    'host' => env('REDIS_HOST', '127.0.0.1'),
+                    'port' => env('REDIS_PORT', '6379'),
                     'username' => env('REDIS_USERNAME'),
                     'password' => env('REDIS_PASSWORD'),
                     'database' => env('REDIS_DB', '0'),
@@ -83,19 +93,19 @@ return [
 
         'apps' => [
             [
-                'key'                  => env('REVERB_APP_KEY'),
-                'secret'               => env('REVERB_APP_SECRET'),
-                'app_id'               => env('REVERB_APP_ID'),
-                'options'              => [
-                    'host'   => env('REVERB_HOST'),
-                    'port'   => env('REVERB_PORT', 443),
+                'key' => env('REVERB_APP_KEY'),
+                'secret' => env('REVERB_APP_SECRET'),
+                'app_id' => env('REVERB_APP_ID'),
+                'options' => [
+                    'host' => env('REVERB_HOST'),
+                    'port' => env('REVERB_PORT', 443),
                     'scheme' => env('REVERB_SCHEME', 'https'),
                     'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
                 ],
-                'allowed_origins'      => ['*'],
-                'ping_interval'        => (int) env('REVERB_APP_PING_INTERVAL', 60),
-                'activity_timeout'     => (int) env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
-                'max_message_size'     => (int) env('REVERB_APP_MAX_MESSAGE_SIZE', 10_000),
+                'allowed_origins' => $allowedOrigins,
+                'ping_interval' => (int) env('REVERB_APP_PING_INTERVAL', 60),
+                'activity_timeout' => (int) env('REVERB_APP_ACTIVITY_TIMEOUT', 30),
+                'max_message_size' => (int) env('REVERB_APP_MAX_MESSAGE_SIZE', 10_000),
             ],
         ],
 

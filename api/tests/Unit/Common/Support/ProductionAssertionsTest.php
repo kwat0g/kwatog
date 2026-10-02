@@ -15,6 +15,17 @@ use Tests\TestCase;
  */
 class ProductionAssertionsTest extends TestCase
 {
+    public function test_reverb_default_origins_are_restricted(): void
+    {
+        $origins = config('reverb.apps.apps.0.allowed_origins');
+
+        $this->assertNotEmpty($origins);
+        $this->assertNotContains('*', $origins);
+        foreach ($origins as $origin) {
+            $this->assertSame($origin, parse_url($origin, PHP_URL_HOST) ?: $origin);
+        }
+    }
+
     private function asProduction(): void
     {
         app()->detectEnvironment(fn () => 'production');
@@ -26,6 +37,7 @@ class ProductionAssertionsTest extends TestCase
         config()->set('hashids.connections.main.salt', 'real-random-salt-1234567890abcdef');
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         config()->set('app.server_name', 'erp.ogami.test');
+        config()->set('reverb.apps.apps.0.allowed_origins', ['erp.ogami.test']);
         // Set explicitly rather than relying on the ambient test env: the
         // assertion below must fail for the right reason, not because
         // SESSION_SECURE_COOKIE happened to be unset.
@@ -171,6 +183,42 @@ class ProductionAssertionsTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/SEED_DEMO_DATA/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
+    public function test_throws_when_reverb_accepts_every_origin_in_production(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('reverb.apps.apps.0.allowed_origins', ['*']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/REVERB_ALLOWED_ORIGINS/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
+    public function test_throws_when_reverb_uses_a_wildcard_subdomain_in_production(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('reverb.apps.apps.0.allowed_origins', ['*.ogami.test']);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/REVERB_ALLOWED_ORIGINS/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
+    public function test_throws_when_reverb_has_no_allowed_origin_in_production(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('reverb.apps.apps.0.allowed_origins', []);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/REVERB_ALLOWED_ORIGINS/');
 
         ProductionAssertions::assertSafeOrFail();
     }
