@@ -194,6 +194,21 @@ class DeliveryDispatchProvenanceTest extends TestCase
         ]], $preparation['locations']);
     }
 
+    public function test_archiving_a_scheduled_delivery_releases_its_stock_reservation(): void
+    {
+        [$delivery, , , $source] = $this->arrange();
+        $delivery->forceFill(['status' => DeliveryStatus::Scheduled])->save();
+        $batch = $delivery->stockReservationBatch()->firstOrFail();
+
+        $this->assertSame('3.000', (string) StockLevel::where('location_id', $source->id)->value('reserved_quantity'));
+
+        app(DeliveryService::class)->delete($delivery);
+
+        $this->assertSame('released', $batch->fresh()->status->value);
+        $this->assertSame('3.000', (string) $batch->reservations()->firstOrFail()->released_quantity);
+        $this->assertSame('0.000', (string) StockLevel::where('location_id', $source->id)->value('reserved_quantity'));
+    }
+
     public function test_another_operation_cannot_reserve_the_stock_this_delivery_holds(): void
     {
         [$delivery, , $item, $source] = $this->arrange();

@@ -1784,6 +1784,8 @@ class DeliveryService
                 throw new BusinessRuleException('Cannot delete an active delivery after loading; cancel it instead.');
             }
 
+            $this->stockReservations->releaseForDelivery($locked);
+
             $paths = DeliveryProof::query()
                 ->where('delivery_id', $locked->id)
                 ->pluck('file_path')
