@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\AuditLog;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\CurrencyDisplayService;
 use App\Common\Services\DocumentSequenceService;
@@ -360,7 +361,7 @@ class SalesOrderService
         // the SO detail page can render the right-panel LinkedRecords block
         // without N+1 round-trips. mrpPlan + workOrders relations are
         // defined on the SalesOrder model (Sprint 6 Task 52).
-        return $so->load([
+        $so->load([
             'customer',
             'creator:id,name,role_id',
             'latestResponse.items',
@@ -372,6 +373,71 @@ class SalesOrderService
             'deliveries:id,delivery_number,sales_order_id,status,scheduled_date',
             'invoices:id,invoice_number,sales_order_id,status,total_amount,balance',
         ]);
+
+        $so->setAttribute('status_history', AuditLog::query()
+            ->with('user:id,name')
+            ->where('model_type', $so->getMorphClass())
+            ->where('model_id', $so->id)
+            ->whereIn('action', ['created', 'updated'])
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->filter(static function (AuditLog $entry): bool {
+                $current = $entry->new_values['status'] ?? null;
+                if (! is_string($current)) {
+                    return false;
+                }
+
+                return $entry->action === 'created'
+                    || ($entry->action === 'updated'
+                        && ($entry->old_values['status'] ?? null) !== $current);
+            })
+            ->map(static function (AuditLog $entry): array {
+                $old = $entry->old_values ?? [];
+                $new = $entry->new_values ?? [];
+                $status = (string) $new['status'];
+                $previousStatus = $entry->action === 'updated'
+                    ? (isset($old['status']) ? (string) $old['status'] : null)
+                    : null;
+                $comment = null;
+
+                if ($status === SalesOrderStatus::Cancelled->value && isset($new['notes'])) {
+                    $oldNotes = (string) ($old['notes'] ?? '');
+                    $newNotes = (string) $new['notes'];
+                    $delta = str_starts_with($newNotes, $oldNotes)
+                        ? substr($newNotes, strlen($oldNotes))
+                        : '';
+                    $delta = trim($delta);
+                    $prefix = '[Cancelled: ';
+                    if (str_starts_with($delta, $prefix) && str_ends_with($delta, ']')) {
+                        $value = trim(substr($delta, strlen($prefix), -1));
+                        $comment = $value !== '' ? $value : null;
+                    }
+                }
+
+                return [
+                    'event_type' => $entry->action === 'created' ? 'created' : 'status_changed',
+                    'status' => $status,
+                    'status_label' => SalesOrderStatus::tryFrom($status)?->label() ?? $status,
+                    'previous_status' => $previousStatus,
+                    'previous_status_label' => $previousStatus !== null
+                        ? (SalesOrderStatus::tryFrom($previousStatus)?->label() ?? $previousStatus)
+                        : null,
+                    'actor_name' => $entry->user?->name ?? match ($entry->actor_type) {
+                        'system' => 'System',
+                        'customer_portal' => 'Customer portal',
+                        'supplier_portal' => 'Supplier portal',
+                        'user' => 'User unavailable',
+                        default => null,
+                    },
+                    'occurred_at' => $entry->created_at?->toIso8601String(),
+                    'comment' => $comment,
+                ];
+            })
+            ->values()
+            ->all());
+
+        return $so;
     }
 
     /**

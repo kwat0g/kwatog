@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\CRM;
 
+use App\Common\Events\ChainStepAdvanced;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -20,6 +21,7 @@ use App\Modules\SupplyChain\Models\Delivery;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -32,6 +34,51 @@ class SalesOrderRouteCoverageTest extends TestCase
     {
         parent::setUp();
         $this->seed([RolePermissionSeeder::class, SettingsSeeder::class]);
+    }
+
+    public function test_sales_order_detail_returns_recorded_status_history_and_actor(): void
+    {
+        [$customer, $product] = $this->references();
+        $this->agreement($customer, $product);
+        $actor = $this->actor([
+            'crm.sales_orders.create',
+            'crm.sales_orders.view',
+            'crm.sales_orders.cancel',
+        ]);
+        $created = $this->actingAs($actor)
+            ->postJson('/api/v1/crm/sales-orders', $this->orderPayload($customer, $product, 'FOB'))
+            ->assertCreated();
+        $so = SalesOrder::query()->where('so_number', $created->json('data.so_number'))->firstOrFail();
+
+        $this->actingAs($actor)
+            ->postJson("/api/v1/crm/sales-orders/{$so->hash_id}/cancel", ['reason' => 'Customer withdrew'])
+            ->assertOk();
+
+        $chainEvent = DB::table('event_outbox')
+            ->where('event_type', ChainStepAdvanced::class)
+            ->first();
+        $this->assertNotNull($chainEvent);
+        $chainPayload = json_decode($chainEvent->payload, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(SalesOrderStatus::Cancelled->value, $chainPayload['newStatus']);
+        $this->assertSame(SalesOrderStatus::Cancelled->value, $chainPayload['activeStep']);
+        $this->assertSame([], $chainPayload['completedSteps']);
+
+        $response = $this->actingAs($actor)
+            ->getJson("/api/v1/crm/sales-orders/{$so->hash_id}");
+
+        $response->assertOk()
+            ->assertJsonCount(2, 'data.status_history')
+            ->assertJsonPath('data.status_history.0.status', SalesOrderStatus::Draft->value)
+            ->assertJsonPath('data.status_history.0.status_label', 'Draft')
+            ->assertJsonPath('data.status_history.0.previous_status', null)
+            ->assertJsonPath('data.status_history.0.actor_name', $actor->name)
+            ->assertJsonPath('data.status_history.1.status', SalesOrderStatus::Cancelled->value)
+            ->assertJsonPath('data.status_history.1.previous_status', SalesOrderStatus::Draft->value)
+            ->assertJsonPath('data.status_history.1.actor_name', $actor->name)
+            ->assertJsonPath('data.status_history.1.comment', 'Customer withdrew');
+
+        $this->assertArrayNotHasKey('old_values', $response->json('data.status_history.0'));
+        $this->assertArrayNotHasKey('new_values', $response->json('data.status_history.0'));
     }
 
     public function test_sales_order_crud_round_trip_preserves_incoterm_and_supports_restore(): void

@@ -216,7 +216,7 @@ class SalesOrderChainBridgeTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonStructure([
-            'data' => ['id', 'so_number', 'status'],
+            'data' => ['id', 'so_number', 'status', 'status_history'],
             'chain_result' => [
                 'so_number',
                 'work_orders_created',
@@ -230,6 +230,8 @@ class SalesOrderChainBridgeTest extends TestCase
         ]);
 
         $this->assertSame('confirmed', $response->json('data.status'));
+        $this->assertSame('draft', $response->json('data.status_history.0.status'));
+        $this->assertSame('confirmed', $response->json('data.status_history.1.status'));
     }
 
     public function test_confirm_endpoint_rejects_non_draft_so(): void

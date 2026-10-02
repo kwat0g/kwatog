@@ -59,6 +59,7 @@ class SalesOrderResource extends JsonResource
                 'id'   => $this->creator->hash_id,
                 'name' => $this->creator->name,
             ] : null),
+            'status_history'     => $this->whenHas('status_history'),
             'items'              => $this->whenLoaded('items', fn () =>
                 SalesOrderItemResource::collection($this->items)
             ),

@@ -1070,6 +1070,22 @@ async function verifyAlignment(woDbId) {
   for (const [name, ok] of Object.entries(guards)) check(`${label}: ${name}`, ok);
 }
 
+async function verifySalesOrderActivity(page) {
+  const detail = (await api(page, 'GET', `/crm/sales-orders/${SO_ID}`)).body?.data;
+  const history = Array.isArray(detail?.status_history) ? detail.status_history : [];
+  const panel = page.getByRole('heading', { name: 'Activity', exact: true }).locator('xpath=../../..');
+  const events = await panel.getByRole('listitem').allTextContents();
+
+  check('12 · Activity: UI count matches the sales-order audit history', events.length === history.length, `${events.length}|${history.length}`);
+  check('12 · Activity: every recorded status, actor, and comment is visible', history.every((event, index) => {
+    const text = events[index] ?? '';
+    return text.includes(event.status_label)
+      && (!event.actor_name || text.includes(event.actor_name))
+      && (!event.comment || text.includes(event.comment));
+  }), events);
+  check('12 · Activity: timeline has no fabricated current-status row', !events.some((event) => /^Status:\s*/.test(event)), events);
+}
+
 /* ─── Main ────────────────────────────────────────────────────────── */
 
 (async () => {
@@ -1155,6 +1171,7 @@ async function verifyAlignment(woDbId) {
     await verifyAlignment(woDbId);
 
     await shot(who.sales, `/crm/sales-orders/${SO_ID}`, 'ui-chain-so-closed');
+    await verifySalesOrderActivity(who.sales);
     await shot(who.finance, `/accounting/invoices/${invoices[0]?.hash}`, 'ui-chain-invoice-paid');
     assertCleanStep('12 · Final inspection');
   } catch (error) {

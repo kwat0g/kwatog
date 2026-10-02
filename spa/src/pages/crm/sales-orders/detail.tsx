@@ -25,7 +25,7 @@ import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
-import { formatDateIso } from '@/lib/formatDate';
+import { formatDateTime } from '@/lib/formatDate';
 
 const statusVariant: Record<
   SalesOrderStatus,
@@ -150,6 +150,33 @@ export default function SalesOrderDetailPage() {
   const canEdit = data.is_editable && can('crm.sales_orders.update');
   const canConfirm = data.is_editable && can('crm.sales_orders.confirm');
   const canCancel = data.is_cancellable && can('crm.sales_orders.cancel');
+  const activityItems = (data.status_history ?? []).map((event) => ({
+    dot: event.status === 'cancelled' ? ('danger' as const) : event.event_type === 'created' ? ('success' as const) : ('info' as const),
+    text: (
+      <div className="space-y-0.5">
+        <div>
+          {event.event_type === 'created' ? (
+            <>
+              Sales order <span className="font-mono">{data.so_number}</span> created with status{' '}
+              <span className="font-medium">{event.status_label}</span>.
+            </>
+          ) : event.previous_status_label ? (
+            <>
+              Status changed from <span className="font-medium">{event.previous_status_label}</span> to{' '}
+              <span className="font-medium">{event.status_label}</span>.
+            </>
+          ) : (
+            <>
+              Status changed to <span className="font-medium">{event.status_label}</span>.
+            </>
+          )}
+        </div>
+        <div className="text-2xs text-muted">By {event.actor_name ?? 'Actor not recorded'}</div>
+        {event.comment && <div className="text-2xs text-muted">Reason: {event.comment}</div>}
+      </div>
+    ),
+    time: formatDateTime(event.occurred_at, 'Date not recorded'),
+  }));
 
   return (
     <div>
@@ -500,32 +527,11 @@ export default function SalesOrderDetailPage() {
               />
             </Panel>
             <Panel title="Activity">
-              <ActivityStream
-                items={[
-                  {
-                    dot: 'success' as const,
-                    text: (
-                      <>
-                        Sales order <span className="font-mono">{data.so_number}</span> created.
-                      </>
-                    ),
-                    time: formatDateIso(data.created_at, ''),
-                  },
-                  ...(data.status !== 'draft'
-                    ? [
-                        {
-                          dot: 'info' as const,
-                          text: (
-                            <>
-                              Status: <span className="font-medium">{data.status_label}</span>
-                            </>
-                          ),
-                          time: formatDateIso(data.updated_at, ''),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
+              {activityItems.length > 0 ? (
+                <ActivityStream items={activityItems} />
+              ) : (
+                <p className="text-xs text-muted">No status changes have been recorded.</p>
+              )}
             </Panel>
           </div>
         </div>

@@ -81,6 +81,17 @@ export interface SalesOrderItem {
  delivery_date: string;
 }
 
+export interface SalesOrderStatusHistoryEvent {
+ event_type: 'created' | 'status_changed';
+ status: SalesOrderStatus;
+ status_label: string;
+ previous_status: SalesOrderStatus | null;
+ previous_status_label: string | null;
+ actor_name: string | null;
+ occurred_at: string | null;
+ comment: string | null;
+}
+
 export interface SalesOrder {
  id: string;
  so_number: string;
@@ -132,6 +143,7 @@ export interface SalesOrder {
  customer?: { id: string; name: string };
  creator?: { id: string; name: string };
  items?: SalesOrderItem[];
+ status_history?: SalesOrderStatusHistoryEvent[];
  created_at: string;
  updated_at: string;
 }
