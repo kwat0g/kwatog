@@ -37,8 +37,6 @@
         </include>
     </source>
     <php>
-        <!-- Artisan starts PHPUnit as a child PHP process; CLI -d does not propagate. -->
-        <ini name="memory_limit" value="2048M"/>
         <!--
             Pin both PHP's process environment and $_SERVER. Compose injects
             APP_ENV=${APP_ENV:-local}; PHPUnit's forced <env> changes getenv()
