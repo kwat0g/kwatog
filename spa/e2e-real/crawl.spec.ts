@@ -1,20 +1,20 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'node:fs';
-import { captureNetwork, loginAs } from './helpers';
+import { captureNetwork, loginAs, navigateSpa } from './helpers';
 
 /**
  * Phase 3 gate (broad surface): visit every static SPA route as system_admin
  * against the REAL backend. Records per-route: console errors, failed API
  * requests, blank renders, bounces to sign-in.
  *
+ * Bootstrap each chunk once, then traverse its routes through the SPA router
+ * to avoid repeatedly loading and rate-limiting shared guest endpoints.
  * Record-and-continue: each chunk ALWAYS appends its rows to
- * results/crawl-admin.json, then asserts only the hard gates:
+ * results/crawl-admin.json, then asserts the hard gates:
  *   - zero HTTP >= 500 from the API (server crash/exception = defect)
  *   - zero blank renders (white screen = defect)
- * Bounces, 4xx, and 429s are recorded for triage, not asserted: this crawl
- * loads ~150 pages in minutes and trips the 60/min API throttle, which real
- * users never hit. A bounce under throttle is harness noise; a bounce in
- * isolation (repro single-route) is a defect.
+ *   - zero HTTP 429 from the API (rate limiting invalidates route evidence)
+ * Permission-dependent 4xxs and bounces are recorded for matrix triage.
  *
  * Sharded into ~25-route chunks so each test stays inside the API throttle
  * window and its own timeout. One login per chunk, same email spaced minutes
@@ -65,30 +65,45 @@ test.describe('admin route crawl (real backend)', () => {
       await loginAs(page, 'admin@ogami.test', 'password');
       const rows: Array<Record<string, unknown>> = [];
       const hardFailures: string[] = [];
+      let appBooted = false;
 
       for (const route of routes) {
         const net = captureNetwork(page);
-        await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        if (appBooted) {
+          await navigateSpa(page, route);
+        } else {
+          await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+          appBooted = true;
+        }
         await page.waitForTimeout(2500);
         const finalUrl = page.url().replace(/http:\/\/[^/]+/, '');
-        const bodyText = ((await page.locator('body').textContent().catch(() => '')) ?? '').trim();
-        const blank = bodyText.length < 20;
+        const bodyText = ((await page.locator('body').innerText().catch(() => '')) ?? '').trim();
+        const main = page.locator('main').first();
+        const hasMain = (await page.locator('main').count()) > 0;
+        const renderedText = hasMain ? (await main.innerText().catch(() => '')).trim() : bodyText;
+        const blank = renderedText.length < 20;
         const serverErrors = net.failedRequests.filter((r) => (r.status as number) >= 500);
+        const rateLimits = net.failedRequests.filter((r) => r.status === 429);
         rows.push({
           route,
           finalUrl,
           bouncedToLogin: /sign-in|\/login/.test(finalUrl),
           blank,
+          contentRoot: hasMain ? 'main' : 'body',
           consoleErrors: net.errors.slice(0, 5),
           failedApi: net.failedRequests.slice(0, 10),
         });
         if (serverErrors.length > 0) {
           hardFailures.push(`${route} server errors: ${JSON.stringify(serverErrors)}`);
         }
+        if (rateLimits.length > 0) {
+          hardFailures.push(`${route} rate-limited requests: ${JSON.stringify(rateLimits)}`);
+        }
         if (blank) hardFailures.push(`${route} rendered blank`);
         net.stop();
         if (/sign-in|\/login/.test(finalUrl)) {
           await loginAs(page, 'admin@ogami.test', 'password');
+          appBooted = false;
         }
       }
 

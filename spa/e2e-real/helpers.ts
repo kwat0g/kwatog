@@ -21,6 +21,14 @@ export function statefulHeaders(): Record<string, string> {
   const base = baseUrl();
   return { Referer: `${base}/`, Origin: base, Accept: 'application/json' };
 }
+
+export async function navigateSpa(page: Page, route: string): Promise<void> {
+  await page.evaluate((nextRoute) => {
+    window.history.pushState({}, '', nextRoute);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, route);
+}
+
 export const ROLES: Array<{ slug: string; email: string; password: string }> = [
   { slug: 'system_admin', email: 'admin@ogami.test', password: 'password' },
   { slug: 'vice_president', email: 'vp@ogami.test', password: 'password' },
