@@ -26,11 +26,17 @@ const VISIBLE_ERRORS = [
 ];
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+  await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
+  const signIn = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST',
+    { timeout: 20_000 },
+  );
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL((url) => url.pathname !== '/login', { timeout: 20_000 });
+  const response = await signIn;
+  if (!response.ok()) throw new Error(`sign-in returned ${response.status()}`);
+  await page.waitForURL((url) => !['/login', '/sign-in'].includes(url.pathname), { timeout: 20_000 });
 }
 
 async function auditRole(browser, browserName, email, expectedPath) {

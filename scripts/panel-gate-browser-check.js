@@ -24,15 +24,21 @@ const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 const FINANCE_MARKERS = ['Cash on hand', 'AR Outstanding', 'AP Outstanding', 'Revenue MTD'];
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   // The login page carries an animated hero, and a cold Vite dev server can take
   // seconds to transform it — wait for the field rather than assuming it is there.
   const emailField = page.locator('input[type="email"]');
   await emailField.waitFor({ state: 'visible', timeout: 60_000 });
   await emailField.fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
+  const signIn = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL((url) => url.pathname !== '/login', { timeout: 30_000 });
+  const response = await signIn;
+  if (!response.ok()) throw new Error(`sign-in returned ${response.status()}`);
+  await page.waitForURL((url) => !['/login', '/sign-in'].includes(url.pathname), { timeout: 30_000 });
 }
 
 /** Settles the dashboard: its panels arrive from a second request after mount. */

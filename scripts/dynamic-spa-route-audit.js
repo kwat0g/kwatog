@@ -57,7 +57,7 @@ function groupFor(route) {
   if (route.startsWith('/self-service')) return 'employee';
   if (route.startsWith('/driver')) return 'driver';
   if (route.startsWith('/maintenance/mobile')) return 'maintenance';
-  if (route === '/' || route.startsWith('/careers') || ['/login', '/forgot-password', '/reset-password'].includes(route)) return 'public';
+  if (route === '/' || route.startsWith('/careers') || ['/login', '/sign-in', '/forgot-password', '/reset-password'].includes(route)) return 'public';
   return 'internal';
 }
 
@@ -85,18 +85,30 @@ function monitor(page) {
 }
 
 async function loginInternal(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+  await page.goto(`${BASE}/sign-in`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
+  const signIn = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST',
+    { timeout: 20_000 },
+  );
   await page.locator('button[type="submit"]').click();
-  await page.waitForURL((url) => url.pathname !== '/login', { timeout: 20_000 });
+  const response = await signIn;
+  if (!response.ok()) throw new Error(`sign-in returned ${response.status()}`);
+  await page.waitForURL((url) => !['/login', '/sign-in'].includes(url.pathname), { timeout: 20_000 });
 }
 
 async function loginPortal(page, kind, email) {
   await page.goto(`${BASE}/portal/${kind}/login`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(PASSWORD);
+  const signIn = page.waitForResponse(
+    (response) => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST',
+    { timeout: 20_000 },
+  );
   await page.locator('button[type="submit"]').click();
+  const response = await signIn;
+  if (!response.ok()) throw new Error(`sign-in returned ${response.status()}`);
   await page.waitForURL(new RegExp(`/portal/${kind}/?$`), { timeout: 20_000 });
 }
 
@@ -229,7 +241,7 @@ async function auditGroup(browser, name, staticRoutes, templates, login, interna
     customer: [(page) => loginPortal(page, 'customer', 'portal@cust.test'), false],
   };
   const requested = new Set((process.env.AUDIT_GROUPS || '').split(',').filter(Boolean));
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const failures = [];
   const uncovered = [];
   let checked = 0;
