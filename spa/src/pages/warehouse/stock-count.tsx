@@ -211,10 +211,21 @@ export function StockCountManager() {
  <Panel
  title={`${activeSession.session_number} — ${activeSession.title}`}
  actions={
- canManage && activeSession.status === 'draft' ? (
- <Button size="sm" variant="primary" icon={<LuPlay size={12} />} onClick={() => setConfirmAction('start')}>
- Start count
- </Button>
+                canManage && activeSession.status === 'draft' ? (
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<LuPlay size={12} />}
+                      onClick={() => setConfirmAction('start')}
+                      disabled={items.length === 0}
+                    >
+                      Start count
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => setConfirmAction('cancel')}>
+                      Cancel
+                    </Button>
+                  </div>
  ) : canManage && activeSession.status === 'in_progress' ? (
  <div className="flex gap-1">
                 {!cannotComplete && (
@@ -229,8 +240,11 @@ export function StockCountManager() {
  ) : null
  }
  >
- <div className="text-xs space-y-1">
-        {activeSession.status === 'in_progress' && canManage && cannotComplete && (
+        <div className="text-xs space-y-1">
+          {activeSession.status === 'draft' && canManage && items.length === 0 && (
+            <p className="text-warning-fg">No stock items are in this scope. Cancel and choose a scope with stock.</p>
+          )}
+          {activeSession.status === 'in_progress' && canManage && cannotComplete && (
           <p className="text-warning-fg">
             {isSessionCreator
               ? 'A different user must complete this count.'

@@ -165,7 +165,11 @@ class StockCountService
             if ($newItems !== []) {
                 StockCountItem::insert($newItems);
             }
-            $session->update(['total_locations' => $session->items()->count()]);
+            $totalItems = $session->items()->count();
+            if ($totalItems === 0) {
+                throw new BusinessRuleException('This scope has no stock items to count. Choose a scope with stock or cancel this session.');
+            }
+            $session->update(['total_locations' => $totalItems]);
 
             $session->update([
                 'status'    => StockCountSessionStatus::InProgress->value,
@@ -286,9 +290,9 @@ class StockCountService
             // wrong adjustment could be posted from stale counted values.
             $session->setRelation('items', $session->items()->lockForUpdate()->get());
 
-            if ($session->items->contains(static fn (StockCountItem $item): bool =>
-                (int) $item->counted_by === (int) $user->id
-                || (int) $item->verified_by === (int) $user->id
+            if ($session->items->contains(
+                static fn (StockCountItem $item): bool => (int) $item->counted_by === (int) $user->id
+                    || (int) $item->verified_by === (int) $user->id,
             )) {
                 throw new BusinessRuleException('A different user must complete a stock count after recording or approving a line.');
             }

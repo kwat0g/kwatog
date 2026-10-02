@@ -11,6 +11,11 @@ import {
 
 type User = { id: string; name: string; email: string; permissions: string[] };
 type Warehouse = { id: string; zones: Array<{ id: string; locations: Array<{ id: string }> }> };
+type WarehouseTree = {
+  id: string;
+  is_active: boolean;
+  zones: Array<{ id: string; code: string; locations: Array<{ id: string; code: string }> }>;
+};
 type StockLevel = {
   item: { id: string; code: string };
   location: { id: string; full_code: string };
@@ -578,6 +583,139 @@ test('A variance checker cannot recount or post their own approval', async ({ br
     makerNetwork.stop();
     checkerNetwork.stop();
     finisherNetwork.stop();
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test('An empty stock-count draft cannot start and can be cancelled', async ({ browser }) => {
+  const warehouseRole = ROLES.find(({ slug }) => slug === 'warehouse_staff')!;
+  const admin = ROLES.find(({ slug }) => slug === 'system_admin')!;
+  const contexts = await Promise.all(Array.from({ length: 2 }, () => browser.newContext()));
+  const [maker, auditor] = await Promise.all(contexts.map((context) => context.newPage()));
+  const makerNetwork = captureNetwork(maker);
+  const suffix = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+  const zoneCode = `E${suffix}`;
+  const locationCode = `E${suffix}`;
+  const title = `E2E empty count ${randomUUID()}`;
+  let zoneId: string | null = null;
+  let locationId: string | null = null;
+  let sessionId: string | null = null;
+
+  try {
+    await Promise.all([
+      loginAs(maker, warehouseRole.email, warehouseRole.password),
+      loginAs(auditor, admin.email, admin.password),
+    ]);
+    const makerUser = await readData<User>(maker, '/api/v1/auth/user');
+    expect(makerUser.permissions).toContain('inventory.warehouse.manage');
+
+    const warehouses = await readData<WarehouseTree[]>(maker, '/api/v1/inventory/warehouse');
+    const warehouse = warehouses.find(({ is_active }) => is_active);
+    expect(warehouse, 'an active warehouse is seeded in the test database').toBeTruthy();
+    const createZone = await maker.request.post(`${baseUrl()}/api/v1/inventory/zones`, {
+      headers: await csrfHeaders(maker),
+      data: {
+        warehouse_id: warehouse!.id,
+        name: `Empty count ${suffix}`,
+        code: zoneCode,
+        zone_type: 'staging',
+      },
+    });
+    expect(createZone.status()).toBe(201);
+    zoneId = ((await createZone.json()) as { data: { id: string } }).data.id;
+    const createLocation = await maker.request.post(`${baseUrl()}/api/v1/inventory/locations`, {
+      headers: await csrfHeaders(maker),
+      data: { zone_id: zoneId, code: locationCode, is_active: true, is_blocked: false },
+    });
+    expect(createLocation.status()).toBe(201);
+    locationId = ((await createLocation.json()) as { data: { id: string } }).data.id;
+
+    const levels = await readData<StockLevel[]>(maker, '/api/v1/inventory/stock-levels?per_page=200');
+    expect(levels.some(({ location }) => location.id === locationId)).toBe(false);
+
+    await maker.goto('/inventory/stock-count');
+    await maker.getByRole('button', { name: 'New session', exact: true }).click();
+    const createDialog = maker.getByRole('dialog', { name: 'New count session' });
+    await createDialog.getByLabel('Title').fill(title);
+    await createDialog.getByLabel('Scope').selectOption('zone');
+    await createDialog.getByLabel('Warehouse').selectOption(warehouse!.id);
+    await createDialog.getByLabel('Zone').selectOption(zoneId);
+    const createResponsePromise = maker.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/v1/inventory/stock-counts'
+      && response.request().method() === 'POST',
+    );
+    await createDialog.getByRole('button', { name: 'Create session', exact: true }).click();
+    const createResponse = await createResponsePromise;
+    expect(createResponse.status()).toBe(201);
+    const created = (await createResponse.json() as { data: CountSession }).data;
+    sessionId = created.id;
+    expect(created.status).toBe('draft');
+
+    const beforeStart = await readSession(maker, created.id);
+    expect(beforeStart).toMatchObject({
+      status: 'draft',
+      frozen_at: null,
+      created_by: { id: makerUser.id },
+      items: [],
+    });
+    const auditBeforeStart = await readAudit(auditor, 'StockCountSession', created.id);
+    await expect(maker.getByRole('button', { name: 'Start count', exact: true })).toBeDisabled();
+    await expect(maker.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+    await expect(maker.getByText('No stock items are in this scope. Cancel and choose a scope with stock.')).toBeVisible();
+
+    const startResponse = await maker.request.post(
+      `${baseUrl()}/api/v1/inventory/stock-counts/${created.id}/start`,
+      { headers: await csrfHeaders(maker) },
+    );
+    expect(startResponse.status()).toBe(422);
+    expect((await startResponse.json() as { message: string }).message).toBe(
+      'This scope has no stock items to count. Choose a scope with stock or cancel this session.',
+    );
+    expect(await readSession(maker, created.id)).toEqual(beforeStart);
+    expect(await readAudit(auditor, 'StockCountSession', created.id)).toEqual(auditBeforeStart);
+
+    await maker.getByRole('button', { name: 'Cancel', exact: true }).click();
+    const cancelDialog = maker.getByRole('dialog', { name: 'Cancel session?' });
+    const cancelResponsePromise = maker.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/v1/inventory/stock-counts/${created.id}`
+      && response.request().method() === 'DELETE',
+    );
+    await cancelDialog.getByRole('button', { name: 'Cancel session', exact: true }).click();
+    expect((await cancelResponsePromise).status()).toBe(204);
+    expect((await readSession(maker, created.id)).status).toBe('cancelled');
+    expect(await readAudit(auditor, 'StockCountSession', created.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'updated',
+        user: expect.objectContaining({ email: warehouseRole.email }),
+        new_values: expect.objectContaining({ status: 'cancelled' }),
+      }),
+    ]));
+    expect(relevantErrors(makerNetwork)).toEqual([]);
+    expect(makerNetwork.failedRequests).toEqual([]);
+  } finally {
+    if (sessionId) {
+      const active = await readSession(maker, sessionId);
+      if (['draft', 'in_progress'].includes(active.status)) {
+        const cancelled = await maker.request.delete(
+          `${baseUrl()}/api/v1/inventory/stock-counts/${sessionId}`,
+          { headers: await csrfHeaders(maker) },
+        );
+        expect(cancelled.status()).toBe(204);
+      }
+    }
+    if (locationId) {
+      const deleted = await maker.request.delete(`${baseUrl()}/api/v1/inventory/locations/${locationId}`, {
+        headers: await csrfHeaders(maker),
+      });
+      expect(deleted.status()).toBe(204);
+    }
+    if (zoneId) {
+      const deleted = await maker.request.delete(`${baseUrl()}/api/v1/inventory/zones/${zoneId}`, {
+        headers: await csrfHeaders(maker),
+      });
+      expect(deleted.status()).toBe(204);
+    }
+    makerNetwork.stop();
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
