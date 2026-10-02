@@ -785,12 +785,108 @@ async function attemptDeliveryFromUnreviewedLot(inspectionNumber) {
   assertCleanStep(label, [`${emailOf(page)} ${response.status} POST /api/v1/supply-chain/deliveries`]);
 }
 
+function finishedGoodStockSnapshot() {
+  return sql(`select coalesce(string_agg(location_id::text||':'||quantity::numeric(15,3)::text||':'||reserved_quantity::numeric(15,3)::text, ',' order by location_id),'') from stock_levels where item_id=(select id from items where code='O2C-${RUN}')`);
+}
+
+async function reserveShipmentStock(page, delivery, label) {
+  await open(page, `/supply-chain/deliveries/${delivery.id}`);
+  const current = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+  if (current?.stock_reservation_status === 'reserved') {
+    check(`${label}: ${delivery.number} already has its inspected lot reserved`, current.can_reserve_stock === false);
+    return false;
+  }
+  let reserveResult = null;
+  for (let attempt = 0; attempt < 3 && !reserveResult; attempt += 1) {
+    try {
+      const reserveBtn = page.getByRole('button', { name: 'Reserve shipment stock' });
+      if ((await reserveBtn.count()) === 0) break;
+      const reservePost = page.waitForResponse((r) => r.url().includes(`/supply-chain/deliveries/${delivery.id}/reserve-stock`) && r.request().method() === 'POST', { timeout: 20_000 });
+      await reserveBtn.first().click();
+      reserveResult = await reservePost;
+    } catch {
+      await open(page, `/supply-chain/deliveries/${delivery.id}`);
+    }
+  }
+  check(`${label}: ${delivery.number} inspected lot reserved from the page`, !!reserveResult && [200, 201].includes(reserveResult.status()), reserveResult ? `HTTP ${reserveResult.status()}` : 'no reservation POST observed');
+  await open(page, `/supply-chain/deliveries/${delivery.id}`);
+  return true;
+}
+
 // 8 — ImpEx assigns van + driver, then walks the delivery to delivered.
 async function step8Dispatch(deliveries) {
   const label = '8 · ImpEx';
   const page = who.impex;
-  for (const delivery of deliveries) {
+  for (let deliveryIndex = 0; deliveryIndex < deliveries.length; deliveryIndex += 1) {
+    let delivery = deliveries[deliveryIndex];
     await openDetail(page, `/supply-chain/deliveries?search=${delivery.number}`, delivery.number, /\/supply-chain\/deliveries\/[^/]+$/, `/supply-chain/deliveries/${delivery.id}`);
+    await page.getByRole('button', { name: 'Assign driver & vehicle', exact: true }).waitFor({ state: 'visible', timeout: 15_000 });
+    const cancelActionCount = await page.getByRole('button', { name: 'Cancel delivery', exact: true }).count();
+    check(`${label}: ${delivery.number} scheduled delivery exposes its cancel action`, cancelActionCount === 1, `count=${cancelActionCount}`);
+
+    if (deliveryIndex === 0) {
+      const deliveryDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+      const source = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+      check(`${label}: ${delivery.number} cancellation test has source line and inspection`, !!source?.sales_order?.id && !!source?.items?.[0]?.sales_order_item_id && !!source?.items?.[0]?.inspection?.id, source?.items?.[0]);
+      const stockBeforeDeniedRequest = finishedGoodStockSnapshot();
+      const stateBeforeDeniedRequest = sql(`select status||'|'||(select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId})||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId})||'|'||(select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId}) from deliveries where id=${deliveryDbId}`);
+      const deniedCancel = await api(who.qc, 'PATCH', `/supply-chain/deliveries/${delivery.id}/status`, { status: 'cancelled' });
+      const deniedCancelError = `${emailOf(who.qc)} ${deniedCancel.status} PATCH /api/v1/supply-chain/deliveries/${delivery.id}/status`;
+      if (deniedCancel.status === 403) {
+        report.expected_api_errors ??= [];
+        report.expected_api_errors.push(deniedCancelError);
+      }
+      const stateAfterDeniedRequest = sql(`select status||'|'||(select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId})||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId})||'|'||(select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId}) from deliveries where id=${deliveryDbId}`);
+      check(`${label}: QC cannot cancel through the API and rejection leaves delivery, reservation, invoice, audit, and stock unchanged`, deniedCancel.status === 403 && stateAfterDeniedRequest === stateBeforeDeniedRequest && finishedGoodStockSnapshot() === stockBeforeDeniedRequest, `${deniedCancel.status}|${stateBeforeDeniedRequest} → ${stateAfterDeniedRequest}`);
+
+      const stockBeforeReserve = finishedGoodStockSnapshot();
+      await reserveShipmentStock(page, delivery, label);
+      const reserved = sql(`select (select status from delivery_stock_reservation_batches where delivery_id=${deliveryDbId})||'|'||(select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId} and status='reserved' and consumed_quantity=0 and released_quantity=0)`);
+      check(`${label}: ${delivery.number} cancellation setup holds inspected stock`, /^reserved\|[1-9]\d*$/.test(reserved), reserved);
+      const stockWhileReserved = finishedGoodStockSnapshot();
+      check(`${label}: ${delivery.number} reservation changes holds but not on-hand quantity`, stockBeforeReserve.split(',').map((row) => row.split(':').slice(0, 2).join(':')).join(',') === stockWhileReserved.split(',').map((row) => row.split(':').slice(0, 2).join(':')).join(',') && stockBeforeReserve !== stockWhileReserved, `${stockBeforeReserve} → ${stockWhileReserved}`);
+
+      const cancelResponse = page.waitForResponse((r) => r.url().includes(`/supply-chain/deliveries/${delivery.id}/status`) && r.request().method() === 'PATCH', { timeout: 20_000 });
+      await pageButton(page, 'Cancel delivery');
+      const cancelDialog = page.getByRole('dialog');
+      await cancelDialog.getByText(`Delivery ${delivery.number} cannot be dispatched after cancellation. Any reserved stock will be released; create a new delivery if these items still need to ship.`, { exact: true }).waitFor({ state: 'visible' });
+      await modalButton(page, 'Cancel delivery');
+      const cancelResult = await cancelResponse;
+      check(`${label}: ${delivery.number} cancellation succeeds only after confirmation`, cancelResult.status() === 200, `HTTP ${cancelResult.status()}`);
+      await expectToast(page, /Delivery cancelled/i, `${label}: ${delivery.number} cancellation success toast follows server response`);
+      await open(page, `/supply-chain/deliveries/${delivery.id}`);
+      const cancelled = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+      check(`${label}: ${delivery.number} is terminal cancelled and no longer cancellable`, cancelled?.status === 'cancelled' && cancelled?.can_cancel === false && await page.getByRole('button', { name: 'Cancel delivery', exact: true }).count() === 0, `${cancelled?.status}|can_cancel=${cancelled?.can_cancel}`);
+      const released = sql(`select (select status from delivery_stock_reservation_batches where delivery_id=${deliveryDbId})||'|'||(select coalesce(sum(quantity),0)::numeric(15,3)::text from delivery_stock_reservations where delivery_id=${deliveryDbId})||'|'||(select coalesce(sum(consumed_quantity),0)::numeric(15,3)::text from delivery_stock_reservations where delivery_id=${deliveryDbId})||'|'||(select coalesce(sum(released_quantity),0)::numeric(15,3)::text from delivery_stock_reservations where delivery_id=${deliveryDbId})||'|'||(select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId} and status='released')`);
+      const [, reservedQty, consumedQty, releasedQty, releasedRows] = released.split('|');
+      check(`${label}: ${delivery.number} cancellation releases each stock hold exactly once`, released.startsWith('released|') && reservedQty === releasedQty && consumedQty === '0.000' && Number(releasedRows) > 0, released);
+      const cancelledEffects = sql(`select status||'|'||(departed_at is not null)::text||'|'||(delivered_at is not null)::text||'|'||(select count(*) from invoices where delivery_id=${deliveryDbId})||'|'||(select count(*) from delivery_items where delivery_id=${deliveryDbId} and (stock_movement_id is not null or customer_received_quantity is not null)) from deliveries where id=${deliveryDbId}`);
+      check(`${label}: ${delivery.number} cancellation creates no invoice, dispatch, movement, or received quantity`, cancelledEffects === 'cancelled|false|false|0|0', cancelledEffects);
+      check(`${label}: ${delivery.number} cancellation restores reserved stock and leaves on-hand unchanged`, finishedGoodStockSnapshot() === stockBeforeReserve, `${stockBeforeReserve} → ${finishedGoodStockSnapshot()}`);
+      check(`${label}: ${delivery.number} cancellation audit records ImpEx and scheduled → cancelled`, sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId} and user_id=(select id from users where email='impex@ogami.test') and action='updated' and old_values->>'status'='scheduled' and new_values->>'status'='cancelled'`) === '1');
+
+      await open(page, '/supply-chain/deliveries/create');
+      await page.locator('select[name="sales_order_id"]').selectOption(source.sales_order.id);
+      await page.locator('select[name="items.0.sales_order_item_id"]').selectOption(source.items[0].sales_order_item_id);
+      await page.locator('select[name="items.0.inspection_id"]').selectOption(source.items[0].inspection.id);
+      await page.locator('input[name="items.0.quantity"]').fill(String(source.items[0].quantity));
+      await page.locator('input[name="scheduled_date"]').fill(today());
+      const createResponse = page.waitForResponse((r) => r.url().endsWith('/api/v1/supply-chain/deliveries') && r.request().method() === 'POST', { timeout: 20_000 });
+      await pageButton(page, 'Create delivery');
+      const createResult = await createResponse;
+      check(`${label}: replacement delivery is created through the real form`, createResult.status() === 201, `HTTP ${createResult.status()}`);
+      await page.waitForFunction(() => /^\/supply-chain\/deliveries\/[^/]+$/.test(window.location.pathname), undefined, { timeout: 20_000 });
+      await expectToast(page, /Delivery created/i, `${label}: replacement creation success toast follows server response`);
+      delivery = { id: page.url().split('/').pop(), number: '' };
+      const replacement = (await api(page, 'GET', `/supply-chain/deliveries/${delivery.id}`)).body?.data;
+      delivery.number = replacement?.delivery_number;
+      check(`${label}: replacement reuses released SO line, inspected lot, and quantity`, replacement?.status === 'scheduled' && replacement?.sales_order?.id === source.sales_order.id && replacement?.items?.length === 1 && replacement.items[0].sales_order_item_id === source.items[0].sales_order_item_id && replacement.items[0].inspection?.id === source.items[0].inspection.id && Number(replacement.items[0].quantity) === Number(source.items[0].quantity), replacement);
+      const replacementDbId = Number(sql(`select id from deliveries where delivery_number='${delivery.number}'`));
+      check(`${label}: replacement is audited as a real ImpEx-created delivery`, sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${replacementDbId} and user_id=(select id from users where email='impex@ogami.test') and action='created'`) === '1');
+      check(`${label}: replacement exposes its own cancellation action`, await page.getByRole('button', { name: 'Cancel delivery', exact: true }).count() === 1);
+      deliveries[deliveryIndex] = delivery;
+    }
+
     await pageButton(page, 'Assign driver & vehicle');
     await dialogSelect(page, 0, { label: /O2C van/ }).catch(() => dialogSelect(page, 0, { index: 1 }));
     await dialogSelect(page, 1, { index: 1 });
@@ -803,24 +899,8 @@ async function step8Dispatch(deliveries) {
     check(`${label}: ${delivery.number} assignment is audited by ImpEx`, Number(sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId} and user_id=(select id from users where email='impex@ogami.test') and action='updated'`)) >= 1);
     await page.waitForTimeout(400);
 
-    // Departure re-checks a physical reservation of the inspected lot; the
-    // dispatch desk reserves it from the delivery page before loading. The
-    // click can land before React attaches handlers, so retry with reloads.
-    await open(page, `/supply-chain/deliveries/${delivery.id}`);
-    let reserveResult = null;
-    for (let attempt = 0; attempt < 3 && !reserveResult; attempt += 1) {
-      try {
-        const reserveBtn = page.getByRole('button', { name: 'Reserve shipment stock' });
-        if ((await reserveBtn.count()) === 0) break; // already reserved
-        const reservePost = page.waitForResponse((r) => r.url().includes(`/supply-chain/deliveries/${delivery.id}/reserve-stock`) && r.request().method() === 'POST', { timeout: 20_000 });
-        await reserveBtn.first().click();
-        reserveResult = await reservePost;
-      } catch {
-        await open(page, `/supply-chain/deliveries/${delivery.id}`);
-      }
-    }
-    check(`${label}: ${delivery.number} inspected lot reserved from the page`, !!reserveResult && (reserveResult.status() === 200 || reserveResult.status() === 201), reserveResult ? `HTTP ${reserveResult.status()}` : 'no reservation POST observed');
-    await open(page, `/supply-chain/deliveries/${delivery.id}`);
+    // Departure re-checks a physical reservation of the inspected lot before loading.
+    const reservedThroughAction = await reserveShipmentStock(page, delivery, label);
 
     const reservationKey = sql(`select request_key from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
     const reservation = sql(`select status||'|'||reserved_by::text from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
@@ -830,9 +910,20 @@ async function step8Dispatch(deliveries) {
     check(`${label}: ${delivery.number} reservation quantity matches every delivery line`, reservationTotals.split('|')[0] === reservationTotals.split('|')[1] && reservationRows !== '0', `${reservationTotals}; rows=${reservationRows}`);
     const batchCountBeforeReplay = sql(`select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`);
     const reservationCountBeforeReplay = sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId}`);
+    const replayStateBefore = `${batchCountBeforeReplay}|${reservationCountBeforeReplay}|${finishedGoodStockSnapshot()}|${sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId}`)}`;
     const replay = await api(page, 'POST', `/supply-chain/deliveries/${delivery.id}/reserve-stock`, { request_key: reservationKey }, {}, { probe: false });
-    check(`${label}: retry with the same reservation key is idempotent`, replay.status === 200, `HTTP ${replay.status}`);
-    check(`${label}: reservation retry creates no duplicate batch or hold`, sql(`select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`) === batchCountBeforeReplay && sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId}`) === reservationCountBeforeReplay, `${batchCountBeforeReplay} batch / ${reservationCountBeforeReplay} holds`);
+    const replayStateAfter = `${sql(`select count(*) from delivery_stock_reservation_batches where delivery_id=${deliveryDbId}`)}|${sql(`select count(*) from delivery_stock_reservations where delivery_id=${deliveryDbId}`)}|${finishedGoodStockSnapshot()}|${sql(`select count(*) from audit_logs where model_type like '%Delivery' and model_id=${deliveryDbId}`)}`;
+    if (reservedThroughAction) {
+      check(`${label}: retry with the same reservation-endpoint key is idempotent`, replay.status === 200, `HTTP ${replay.status}`);
+      check(`${label}: reservation retry creates no duplicate batch, hold, stock change, or audit`, replayStateAfter === replayStateBefore, `${replayStateBefore} → ${replayStateAfter}`);
+    } else {
+      const expectedReplayError = `${emailOf(page)} 422 POST /api/v1/supply-chain/deliveries/${delivery.id}/reserve-stock`;
+      if (replay.status === 422) {
+        report.expected_api_errors ??= [];
+        report.expected_api_errors.push(expectedReplayError);
+      }
+      check(`${label}: create-time reservation key cannot be replayed through recovery endpoint and writes nothing`, replay.status === 422 && replay.body?.message === 'This reservation request key was already used for a different delivery or payload.' && replayStateAfter === replayStateBefore, `${replay.status}|${replay.body?.message}|${replayStateBefore} → ${replayStateAfter}`);
+    }
 
     for (const next of ['loading', 'in_transit', 'delivered']) {
       const labelRe = new RegExp(`^Mark ${next.replace('_', ' ')}`, 'i');
@@ -961,8 +1052,9 @@ async function verifyAlignment(woDbId) {
     'WO belongs to the SO': sql(`select count(*) from work_orders where id=${woDbId} and sales_order_id=${soId}`) === '1',
     'WO is completed': sql(`select status from work_orders where id=${woDbId}`) === 'completed',
     'every output batch has exactly one PASSED outgoing inspection': sql(`select count(*) from work_order_outputs o where o.work_order_id=${woDbId} and (select count(*) from inspections i where i.work_order_output_id=o.id and i.stage='outgoing' and i.status='passed') <> 1`) === '0',
-    'every delivery reached customer-confirmed': sql(`select count(*) from deliveries where sales_order_id=${soId} and status <> 'confirmed'`) === '0',
-    'every delivery has a proof of delivery': sql(`select count(*) from deliveries d where d.sales_order_id=${soId} and (select count(*) from delivery_proofs p where p.delivery_id=d.id) = 0`) === '0',
+    'every non-cancelled delivery reached customer-confirmed': sql(`select count(*) from deliveries where sales_order_id=${soId} and status not in ('confirmed','cancelled')`) === '0',
+    'cancelled delivery remains terminal with released stock and no invoice or dispatch': sql(`select count(*) from deliveries d where d.sales_order_id=${soId} and d.status='cancelled' and exists(select 1 from delivery_stock_reservation_batches b where b.delivery_id=d.id and b.status='released') and not exists(select 1 from invoices i where i.delivery_id=d.id) and not exists(select 1 from delivery_items di where di.delivery_id=d.id and (di.stock_movement_id is not null or di.customer_received_quantity is not null))`) === '1',
+    'every non-cancelled delivery has proof of delivery': sql(`select count(*) from deliveries d where d.sales_order_id=${soId} and d.status <> 'cancelled' and (select count(*) from delivery_proofs p where p.delivery_id=d.id) = 0`) === '0',
     'every delivered line references a PASSED inspection': sql(`select count(*) from delivery_items di join deliveries d on d.id=di.delivery_id where d.sales_order_id=${soId} and di.inspection_id is not null and (select status from inspections where id=di.inspection_id) <> 'passed'`) === '0',
     'every delivered line carries an inspection reference (no vacuous NULLs)': sql(`select count(*) from delivery_items di join deliveries d on d.id=di.delivery_id where d.sales_order_id=${soId} and di.inspection_id is null`) === '0',
     'every paid invoice carries a posted journal entry': sql(`select count(*) from invoices i where i.sales_order_id=${soId} and i.status='paid' and (select status from journal_entries where id=i.journal_entry_id) <> 'posted'`) === '0',

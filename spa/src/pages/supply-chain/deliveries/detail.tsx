@@ -55,6 +55,7 @@ export default function DeliveryDetailPage() {
   // Proof upload form state.
   const [proofType, setProofType] = useState<DeliveryProofType | null>(null);
   const [proofNotes, setProofNotes] = useState('');
+  const [cancelDeliveryOpen, setCancelDeliveryOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [receiverName, setReceiverName] = useState('');
   const [receiverPosition, setReceiverPosition] = useState('');
@@ -109,8 +110,9 @@ export default function DeliveryDetailPage() {
 
   const advance = useMutation({
     mutationFn: (next: DeliveryStatus) => deliveriesApi.updateStatus(id, next),
-    onSuccess: () => {
-      toast.success('Status updated');
+    onSuccess: (_delivery, next) => {
+      toast.success(next === 'cancelled' ? 'Delivery cancelled' : 'Status updated');
+      setCancelDeliveryOpen(false);
       qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries', id] });
     },
     onError: (e: AxiosError<{ message?: string }>) =>
@@ -286,7 +288,18 @@ export default function DeliveryDetailPage() {
         backTo="/supply-chain/deliveries"
         backLabel="Deliveries"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {data.can_cancel && canEdit && (
+              <Button
+                variant="danger"
+                size="sm"
+                className="min-h-[44px] sm:min-h-0"
+                loading={advance.isPending}
+                onClick={() => setCancelDeliveryOpen(true)}
+              >
+                Cancel delivery
+              </Button>
+            )}
             {next && canEdit && (
               <Button
                 variant="secondary"
@@ -1046,6 +1059,16 @@ export default function DeliveryDetailPage() {
         description="Finalizing locks the invoice number, posts the AR/revenue journal entry, and flips the invoice to Finalized (the SO is promoted to Invoiced). Review the auto-created amounts before posting."
         confirmLabel="Finalize invoice"
         pending={finalizeInvoice.isPending}
+      />
+      <ConfirmDialog
+        isOpen={cancelDeliveryOpen}
+        onClose={() => setCancelDeliveryOpen(false)}
+        onConfirm={() => advance.mutate('cancelled')}
+        title="Cancel this delivery?"
+        description={`Delivery ${data.delivery_number} cannot be dispatched after cancellation. Any reserved stock will be released; create a new delivery if these items still need to ship.`}
+        confirmLabel="Cancel delivery"
+        variant="danger"
+        pending={advance.isPending}
       />
       {/* Archive proof confirmation */}
       <ConfirmDialog
