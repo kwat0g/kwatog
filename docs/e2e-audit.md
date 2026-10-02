@@ -1,5 +1,49 @@
 # E2E Audit Ledger — "Make it work, prove it" mission (started 2026-09-29)
 
+> **Current-run rule (2026-10-02):** All findings and pass claims below this note are historical. They are not evidence for this run. Re-test every behavior before marking it covered.
+
+## Current run — 2026-10-02
+
+### Recon and isolated runtime
+
+- Worktree baseline: branch `main`; pre-existing local changes in `docker-compose.yml`, `docker/nginx/default.conf`, `spa/vite.config.ts`, plus untracked `.agents/skills/`, `docker-compose.vps.yml`, `docker/caddy/`, and `skills-lock.json`. These were present before this audit and are not included in audit changes.
+- Existing running containers belong to Compose project `kwatog` and load `docker-compose.vps.yml`. They are treated as non-test and have not been used or changed.
+- Host has Node 24.21.0/npm 11.19.0 and installed SPA dependencies; PHP is unavailable on the host. API commands run in Docker.
+- `api/.env` exists, so audit API container overlays `/var/www/.env` with an empty file and receives only explicit test settings. Compose also receives a dedicated `/tmp/kwatog-audit.env`; no repository `.env` or API credentials are used.
+- Dedicated stack: Compose project `ogami-audit-20261002`; DB `ogami_test_audit_20261002`; role user `ogami_audit`; fresh project volumes; HTTP `127.0.0.1:18080`; Reverb `127.0.0.1:18081`. `APP_DEBUG=false`, random test-only `APP_KEY`, `MAIL_MAILER=array`, `BROADCAST_CONNECTION=log`, `QUEUE_CONNECTION=sync`, Redis sessions/cache. No demo transaction seeder was run.
+- Test stack command: `docker compose --env-file /tmp/kwatog-audit.env -p ogami-audit-20261002 -f docker-compose.yml -f /tmp/kwatog-audit.compose.yml up -d --build --wait --wait-timeout 180 db redis api spa reverb nginx`.
+- Runtime evidence: all six requested services healthy; `GET /` = 200, `GET /up` = 200; 46 startup log lines contained zero warning/error candidates. All 688 migrations applied successfully through `2026_10_01_000000_add_sidebar_peek_to_users`.
+- Seed evidence: `DatabaseSeeder` with `SEED_REFERENCE_DATA=true`, `SEED_DEMO_DATA=false`, then `DemoAccountSeeder`; 18 fake role accounts, 16 roles, 262 permissions, 0 purchase requests, 0 sales orders. This is master/reference data and explicit starting users only; no later-stage chain record was seeded.
+- Observed running-app route inventory: `php artisan route:list --json` returned 1,094 routes (303 POST, 518 GET/HEAD, 48 PUT, 64 DELETE, 163 PATCH). Route middleware is present; authorization matrix derivation/testing remains open.
+- Fresh source inventory: 22 API module route files, 24 SPA route modules, 395 SPA page files, 28 Playwright spec files, 635 PHP test files. These counts are inventory only, not coverage.
+- Existing `spa/playwright.config.ts` uses API mocks; `spa/playwright.real.config.ts` targets the real Nginx/API/database stack with no mocks. The expanded real-backend auth suite passed 32/32: UI and API-cookie sign-in for all 16 internal roles, plus wrong-password rejection with no session. Route crawls and complete chains remain unverified.
+
+### First observed test results and fixes
+
+- `npm run test:run` on the baseline collected real Playwright specs as Vitest tests and reported three runner errors; it also found a real missing notification mapping for `chain.outgoing_qc_missing`.
+- Fix 1: `spa/vitest.config.ts` now excludes `**/e2e-real/**`. Commit `cb3e5256`. Fresh full Vitest run: 59 files, 366 tests passed. This removes runner cross-collection; Playwright specs are run with Playwright separately.
+- Fix 2: `spa/src/lib/notificationMeta.ts` now maps backend notification `chain.outgoing_qc_missing` to the alerts group. Added a regression test that first failed (`system`, expected `alerts`) and then passed. Commit `16edb18e`.
+- `npm run typecheck` passed after the changes. `git diff --check` passed. Full Vitest output included three jsdom navigation warnings; no tests failed.
+- Real-browser sign-in: `E2E_BASE_URL=http://localhost:18080 npx playwright test -c playwright.real.config.ts --project=real-chromium e2e-real/auth.roles.spec.ts` passed 32/32, including UI and API-cookie login for all 16 internal roles and bad-password rejection with no session. The first expanded run was 31/32 because the fresh fixture had omitted `company.vat_status`; the suite DB was reseeded with fake company settings and the full run passed. Initial browser launch failed before app requests because Chromium shared libraries were missing; after installing browser dependencies, the run passed. Page behavior by role remains unverified.
+- PHP full-suite baseline: the repository's default `php artisan test` subprocess ran at PHP's default 128 MB and fatally exhausted memory in Laravel's query builder. A 512 MB direct PHPUnit run is active against isolated DB `ogami_test_suite_20261002`; result pending. A focused `BatchLotSequenceTest` run passed 3/3 at 256 MB. PHPUnit 12 doc-comment metadata deprecations appeared during full-suite execution; severity and final count pending.
+- `npm run audit:api-routes` found 963 SPA requests matching 1,600 Laravel method/routes; 15 unmatched requests have explicit entries in `api-route-scope-manifest.json`. This is static mapping evidence, not behavior coverage.
+- `npm run audit:rbac` found an unseeded `accounting.journals.post` reference. A focused API regression reproduced it: a `finance_officer` with seeded `accounting.journal.post` received 403 instead of reaching request-key validation (422); the delivery resource also hid the retry action. Root cause was a pluralized permission typo in the route, request, and resource. After changing all three to the seeded slug, the test passed 3/3 (5 assertions); an `employee` remains rejected with 403. Five seeded CRM/QC permissions have no static UI or enforcement reference and remain under investigation.
+- Initial `npm run lint` failed on 13 stale test-file lint issues: redundant empty-array initializers and unused `no-await-in-loop` suppressions. Removed only those no-op initializers/comments; lint then passed. No runtime logic changed.
+- First real-browser O2C run (`AUDIT20261003`) stopped at sign-in before any business action. The harness inherited `SESSION_DOMAIN=localhost` while its browser origin was `127.0.0.1`, so the browser dropped the session cookie; POST `/auth/sign-in` returned 419. No sales order or work order was created. The harness now sets an origin-matching session domain and HTTP cookie settings; corrected O2C run `AUDIT20261004` is in progress.
+- One workflow permission defect is confirmed and fixed in this pass. The O2C chain, full PHP suite, route crawls, remaining transition/permission cells, and other chains are still unverified.
+
+### Pass tracking
+
+| Pass | Status | Modules exercised | New findings | Verification |
+|---|---|---|---|---|
+| 1 | IN PROGRESS | Runtime boot, route inventory, frontend unit/type/lint checks, role sign-in, delivery-cost retry permission | Missing Vitest exclusion; missing alert mapping; finance delivery-cost retry denied by permission-key typo; stale lint suppressions; O2C harness cookie-domain mismatch | SPA 366/366; typecheck/lint passed; role sign-in 32/32; delivery retry regression 3/3; PHP full suite and O2C chain pending; remaining routes, matrix cells, and chains pending |
+
+### Current unverified scope
+
+- Every lifecycle transition, permission cell, SoD conflict, chain gate, UI action, calculation, report/export, job, scheduler, security attack, and accessibility/responsive behavior.
+- All module workflows, route crawls, real-browser chains, and remaining real-browser tests.
+- No pass has reached a verdict; historical PASS labels below must not be reused.
+
 Mission: find every gap between appearance and reality (process defects + completeness
 defects), fix with root-cause server-side enforcement, guard with regression tests.
 Ground rules: observed behavior only; UNVERIFIED until exercised; never weaken tests;

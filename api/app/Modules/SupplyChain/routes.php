@@ -141,7 +141,7 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::post('/deliveries/{delivery}/reserve-stock', [DeliveryController::class, 'reserveStock'])
         ->middleware('permission_any:supply_chain.deliveries.create,inventory.adjust');
     Route::post('/deliveries/{delivery}/retry-cost-handoff', [DeliveryController::class, 'retryCost'])
-        ->middleware('permission:accounting.journals.post');
+        ->middleware('permission:accounting.journal.post');
     Route::get('/deliveries/{delivery}/receipt-photo',      [DeliveryController::class, 'receiptPhoto'])
         ->middleware('permission_any:supply_chain.view,supply_chain.deliveries.view');
     Route::post('/deliveries/{delivery}/confirm',           [DeliveryController::class, 'confirm'])

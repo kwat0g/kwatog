@@ -31,7 +31,7 @@ class DeliveryResource extends JsonResource
             return [
                 'status' => $state, 'amount' => (string) ($handoff?->target_amount ?? '0.00'),
                 'message' => $handoff?->message,
-                'can_retry' => $state === 'manual_required' && ($request->user()?->hasPermission('accounting.journals.post') ?? false),
+                'can_retry' => $state === 'manual_required' && ($request->user()?->hasPermission('accounting.journal.post') ?? false),
             ];
         };
 

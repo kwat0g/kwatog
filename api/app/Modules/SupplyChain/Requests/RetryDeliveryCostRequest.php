@@ -11,7 +11,7 @@ class RetryDeliveryCostRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('accounting.journals.post') ?? false;
+        return $this->user()?->hasPermission('accounting.journal.post') ?? false;
     }
 
     public function rules(): array
