@@ -33,7 +33,7 @@ const resultsUrl = new URL('./results/crawl-admin.json', import.meta.url);
 function appendRows(rows: Array<Record<string, unknown>>): void {
   const dir = new URL('./results/', import.meta.url);
   fs.mkdirSync(dir, { recursive: true });
-  let existing: Array<Record<string, unknown>> = [];
+  let existing: Array<Record<string, unknown>>;
   try {
     existing = JSON.parse(fs.readFileSync(resultsUrl, 'utf8'));
   } catch {
@@ -67,11 +67,8 @@ test.describe('admin route crawl (real backend)', () => {
       const hardFailures: string[] = [];
 
       for (const route of routes) {
-        // eslint-disable-next-line no-await-in-loop
         const net = captureNetwork(page);
-        // eslint-disable-next-line no-await-in-loop
         await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        // eslint-disable-next-line no-await-in-loop
         await page.waitForTimeout(2500);
         const finalUrl = page.url().replace(/http:\/\/[^/]+/, '');
         const bodyText = ((await page.locator('body').textContent().catch(() => '')) ?? '').trim();
@@ -91,7 +88,6 @@ test.describe('admin route crawl (real backend)', () => {
         if (blank) hardFailures.push(`${route} rendered blank`);
         net.stop();
         if (/sign-in|\/login/.test(finalUrl)) {
-          // eslint-disable-next-line no-await-in-loop
           await loginAs(page, 'admin@ogami.test', 'password');
         }
       }

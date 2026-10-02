@@ -99,14 +99,11 @@ export async function loginAs(
 ): Promise<void> {
   const base = baseUrl();
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    // eslint-disable-next-line no-await-in-loop
     await page.request.get(`${base}/sanctum/csrf-cookie`, { headers: statefulHeaders() });
-    // eslint-disable-next-line no-await-in-loop
     const cookies = await page.context().cookies();
     const xsrf = cookies.find((c) => c.name === 'XSRF-TOKEN');
     const postHeaders: Record<string, string> = { ...statefulHeaders() };
     if (xsrf) postHeaders['X-XSRF-TOKEN'] = decodeURIComponent(xsrf.value);
-    // eslint-disable-next-line no-await-in-loop
     const res = await page.request.post(`${base}/api/v1/auth/sign-in`, {
       headers: postHeaders,
       data: { email, password },
