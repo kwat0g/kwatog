@@ -146,6 +146,8 @@ export function StockCountManager() {
 
  const pendingItems = items.filter((i) => i.status === 'pending');
  const isSessionCreator = activeSession?.created_by?.id === actorId;
+ const isLineActor = !!actorId && items.some((item) => item.counted_by?.id === actorId || item.verified_by?.id === actorId);
+ const cannotComplete = isSessionCreator || isLineActor;
 
  return (
  <div>
@@ -215,10 +217,10 @@ export function StockCountManager() {
  </Button>
  ) : canManage && activeSession.status === 'in_progress' ? (
  <div className="flex gap-1">
- {!isSessionCreator && (
- <Button size="sm" variant="primary" onClick={() => setConfirmAction('complete')}>
- Complete session
- </Button>
+                {!cannotComplete && (
+                  <Button size="sm" variant="primary" onClick={() => setConfirmAction('complete')}>
+                    Complete session
+                  </Button>
  )}
  <Button size="sm" variant="danger" onClick={() => setConfirmAction('cancel')}>
  Cancel
@@ -228,8 +230,12 @@ export function StockCountManager() {
  }
  >
  <div className="text-xs space-y-1">
- {activeSession.status === 'in_progress' && canManage && isSessionCreator && (
- <p className="text-warning-fg">A different user must complete this count.</p>
+        {activeSession.status === 'in_progress' && canManage && cannotComplete && (
+          <p className="text-warning-fg">
+            {isSessionCreator
+              ? 'A different user must complete this count.'
+              : 'A user who counted or approved a line cannot complete this count.'}
+          </p>
  )}
  <div className="flex gap-4">
  <span className="text-muted">Scope: <span className="font-medium text-primary">{activeSession.scope_label ?? activeSession.scope}</span></span>
@@ -286,12 +292,28 @@ export function StockCountManager() {
  </Td>
  <Td><Chip variant={itemStatusVariant[item.status]}>{item.status_label ?? item.status}</Chip></Td>
  <Td align="right" mono>
- {activeSession.status === 'in_progress' && item.status === 'pending' && canManage && (
- <Button size="sm" variant="secondary" onClick={() => setCountModalItem(item)}>Count</Button>
- )}
- {activeSession.status === 'in_progress' && item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct && canManage && (
- <Button size="xs" variant="danger" onClick={() => setApproveTarget(item)}>Approve</Button>
- )}
+                {activeSession.status === 'in_progress' && ['pending', 'counted', 'verified'].includes(item.status) && canManage && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      countForm.reset({
+                        counted_quantity: item.counted_quantity ?? '',
+                        lot_number: item.lot_number ?? '',
+                        notes: item.notes ?? '',
+                      });
+                      setCountModalItem(item);
+                    }}
+                  >
+                    {item.status === 'pending' ? 'Count' : 'Recount'}
+                  </Button>
+                )}
+                {activeSession.status === 'in_progress' && item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct && canManage && !isSessionCreator && item.counted_by?.id !== actorId && (
+                  <Button size="xs" variant="danger" onClick={() => setApproveTarget(item)}>Approve</Button>
+                )}
+                {activeSession.status === 'in_progress' && item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct && canManage && (isSessionCreator || item.counted_by?.id === actorId) && (
+                  <span className="text-2xs text-muted">A different user must approve.</span>
+                )}
  {item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) <= stockCountOptions.variance_tolerance_pct && (
  <span className="text-2xs text-muted">Auto</span>
  )}

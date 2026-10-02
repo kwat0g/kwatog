@@ -66,6 +66,7 @@ export interface StockCountItem {
  status_label?: string;
  counted_by: { id: string; name: string } | null;
  counted_at: string | null;
+ verified_by: { id: string; name: string } | null;
  notes: string | null;
 }
 

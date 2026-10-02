@@ -200,6 +200,7 @@ class StockCountService
                 'counted_by'        => $user->id,
                 'counted_at'        => now(),
                 'notes'             => $data['notes'] ?? $item->notes,
+                'verified_by'       => null,
             ]);
 
             $counted = $session->items()
@@ -284,6 +285,13 @@ class StockCountService
             // completion must not be overwritten by the variance snapshot, or a
             // wrong adjustment could be posted from stale counted values.
             $session->setRelation('items', $session->items()->lockForUpdate()->get());
+
+            if ($session->items->contains(static fn (StockCountItem $item): bool =>
+                (int) $item->counted_by === (int) $user->id
+                || (int) $item->verified_by === (int) $user->id
+            )) {
+                throw new BusinessRuleException('A different user must complete a stock count after recording or approving a line.');
+            }
 
             if ($session->items->isEmpty() || $session->items->contains(
                 static fn (StockCountItem $item): bool => ! in_array(

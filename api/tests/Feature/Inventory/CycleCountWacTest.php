@@ -83,7 +83,8 @@ class CycleCountWacTest extends TestCase
 
     public function test_cycle_count_overage_is_valued_at_location_wac(): void
     {
-        app(StockCountService::class)->completeSession($this->session->id, $this->checker);
+        $finisher = User::factory()->create();
+        app(StockCountService::class)->completeSession($this->session->id, $finisher);
 
         $movement = StockMovement::query()
             ->where('item_id', $this->item->id)
@@ -115,7 +116,8 @@ class CycleCountWacTest extends TestCase
         app(StockCountService::class)->recordCount($item->id, ['counted_quantity' => '3.000'], $this->user);
         app(StockCountService::class)->approveVariance($item->id, $this->checker);
 
-        app(StockCountService::class)->completeSession($this->session->id, $this->checker);
+        $finisher = User::factory()->create();
+        app(StockCountService::class)->completeSession($this->session->id, $finisher);
 
         $level = StockLevel::where('item_id', $this->item->id)->where('location_id', $fresh->id)->firstOrFail();
         $this->assertSame('3.000', (string) $level->quantity);
