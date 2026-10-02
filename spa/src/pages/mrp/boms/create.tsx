@@ -56,7 +56,7 @@ export default function CreateBomPage() {
  });
  const items = useQuery({
  queryKey: ['inventory', 'items', 'lookup'],
- queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
+ queryFn: () => itemsApi.catalog({ per_page: 200, is_active: 'true' }),
  });
 
  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });

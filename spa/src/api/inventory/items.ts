@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Item, CreateItemData, UpdateItemData, ItemCategory, ItemQualityPlan, QualityPlanParameter } from '@/types/inventory';
+import type { Item, ItemOption, CreateItemData, UpdateItemData, ItemCategory, ItemQualityPlan, QualityPlanParameter } from '@/types/inventory';
 
 export interface ItemListParams extends ListParams {
   item_type?: string;
@@ -13,6 +13,8 @@ export interface ItemListParams extends ListParams {
 
 export const itemsApi = {
  options: () => client.get<{ data: { item_types: Array<{ value: string; label: string }>; reorder_methods: Array<{ value: string; label: string }>; adjustment_directions: Array<{ value: string; label: string }>; stock_statuses: Array<{ value: string; label: string }> } }>('/inventory/items/options').then((r) => r.data.data),
+ catalog: (params?: ItemListParams) =>
+  client.get<PaginatedResponse<ItemOption>>('/inventory/items/catalog', { params }).then((r) => r.data),
  list: (params?: ItemListParams) =>
  client.get<PaginatedResponse<Item>>('/inventory/items', { params }).then((r) => r.data),
  show: (id: string) =>

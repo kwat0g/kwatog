@@ -64,6 +64,8 @@ export interface Item {
   updated_at?: string;
 }
 
+export type ItemOption = Pick<Item, 'id' | 'code' | 'name' | 'unit_of_measure'>;
+
 export interface QualityPlanParameter {
   parameter_name: string;
   parameter_type: 'dimensional' | 'visual' | 'functional';

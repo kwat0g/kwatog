@@ -11,6 +11,7 @@ use App\Modules\Inventory\Enums\StockAdjustmentDirection;
 use App\Modules\Inventory\Enums\StockStatus;
 use App\Modules\Inventory\Requests\StoreItemRequest;
 use App\Modules\Inventory\Requests\UpdateItemRequest;
+use App\Modules\Inventory\Resources\ItemCatalogOptionResource;
 use App\Modules\Inventory\Resources\ItemResource;
 use App\Modules\Inventory\Services\AbcClassificationService;
 use App\Modules\Inventory\Services\ItemService;
@@ -51,6 +52,11 @@ class ItemController
     public function index(Request $request): AnonymousResourceCollection
     {
         return ItemResource::collection($this->service->list($request->query()));
+    }
+
+    public function catalog(Request $request): AnonymousResourceCollection
+    {
+        return ItemCatalogOptionResource::collection($this->service->list($request->query()));
     }
 
     public function show(Item $item): ItemResource

@@ -40,6 +40,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     // lines without gaining the Inventory module nav (sidebar still gates on
     // inventory.view).
     Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission_any:inventory.view,purchasing.pr.create');
+    Route::get('/items/catalog', [ItemController::class, 'catalog'])->middleware('permission_any:inventory.view,mrp.boms.manage');
     Route::get('/items', [ItemController::class, 'index'])->middleware('permission_any:inventory.view,purchasing.pr.create');
     Route::post('/items/recompute-abc', [ItemController::class, 'recomputeAbc'])->middleware('permission:inventory.items.manage');
     Route::get('/items/{item}', [ItemController::class, 'show'])->middleware('permission:inventory.view');
