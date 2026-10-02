@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
@@ -27,14 +26,7 @@ class BirAlphalistTest extends TestCase
 
     private function makeUser(): User
     {
-        $roleId = Role::query()->orderBy('id')->value('id');
-
-        return User::create([
-            'name'     => 'Tester '.uniqid(),
-            'email'    => 't_'.uniqid().'@x.test',
-            'password' => bcrypt('Password1!'),
-            'role_id'  => $roleId,
-        ]);
+        return User::factory()->withRole('hr_officer')->create();
     }
 
     private function makeFinalizedPeriod(int $year = 2026): PayrollPeriod
