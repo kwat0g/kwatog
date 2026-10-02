@@ -35,8 +35,6 @@ export const qualityRoutes = (
  element={<PermissionGuard permission="quality.view"><QualityDashboardPage /></PermissionGuard>} />
  <Route path="/quality/inspection-specs"
  element={<PermissionGuard permission="quality.specs.view"><InspectionSpecsListPage /></PermissionGuard>} />
- <Route path="/quality/inspection-specs/new"
- element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
  <Route path="/quality/inspection-specs/spec/:specId"
  element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
  <Route path="/quality/inspection-specs/:productId"
