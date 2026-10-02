@@ -40,24 +40,20 @@
         <!-- Artisan starts PHPUnit as a child PHP process; CLI -d does not propagate. -->
         <ini name="memory_limit" value="2048M"/>
         <!--
-            force="true" is load-bearing, not decoration. A plain <env> does not
-            overwrite a variable already present in the process environment, and
-            docker-compose.yml:11 injects APP_ENV=${APP_ENV:-local} into the api
-            container. So the local suite ran with app.env = 'local' for as long
-            as this file has existed, while CI ran 'testing' (its job-scoped env:
-            block sets APP_ENV as a process variable, which wins either way).
-            The two environments therefore disagreed about the one value that
-            selects which .env file Laravel loads. See finding F-042.
+            Pin both PHP's process environment and $_SERVER. Compose injects
+            APP_ENV=${APP_ENV:-local}; PHPUnit's forced <env> changes getenv()
+            and $_ENV but leaves $_SERVER untouched, and Laravel resolves
+            APP_ENV from $_SERVER first. Without the forced <server>, local runs
+            booted Laravel as 'local' while CI booted it as 'testing'. See F-042.
 
-            Consequence worth knowing before editing: Laravel loads .env.{APP_ENV}
-            when it exists, so forcing 'testing' switches the suite from api/.env
-            to api/.env.testing. Because this <env> block is applied before
-            Laravel's immutable Dotenv, every key declared below still wins over
-            that file — which is why the switch is safe, and why this block, not
-            .env.testing, is the durable place to pin test configuration.
-            .env.testing is untracked and cannot be enforced by the repository.
+            Laravel loads .env.{APP_ENV} when present, so this switches the suite
+            from api/.env to api/.env.testing. PHPUnit applies this block before
+            Laravel's immutable Dotenv, making these declarations the durable
+            place to pin test configuration. .env.testing is untracked and
+            cannot be enforced by the repository.
         -->
         <env name="APP_ENV" value="testing" force="true"/>
+        <server name="APP_ENV" value="testing" force="true"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <!--
