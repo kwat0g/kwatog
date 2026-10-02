@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class StockCountItem extends Model
 {
-    use HasFactory, HasHashId;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'session_id', 'location_id', 'item_id',
