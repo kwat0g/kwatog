@@ -37,6 +37,8 @@
         </include>
     </source>
     <php>
+        <!-- Artisan starts PHPUnit as a child PHP process; CLI -d does not propagate. -->
+        <ini name="memory_limit" value="2048M"/>
         <!--
             force="true" is load-bearing, not decoration. A plain <env> does not
             overwrite a variable already present in the process environment, and
