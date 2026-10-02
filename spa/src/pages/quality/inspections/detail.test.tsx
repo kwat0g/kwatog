@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import InspectionDetailPage from './detail';
+import { analyticsApi } from '@/api/quality/analytics';
 import { inspectionsApi } from '@/api/quality/inspections';
 import type { Inspection, InspectionMeasurement } from '@/types/quality';
+
+const permissionState = vi.hoisted(() => ({ can: vi.fn((_permission: string) => true) }));
 
 /**
  * O2C audit 2026-09-25 — an outgoing inspection rendered one panel per sample:
@@ -30,7 +33,7 @@ vi.mock('@/api/quality/inspections', () => ({
 }));
 vi.mock('@/api/quality/capability', () => ({ capabilityApi: { options: vi.fn().mockResolvedValue({}) } }));
 vi.mock('@/api/quality/analytics', () => ({ analyticsApi: { spcForSpec: vi.fn().mockResolvedValue([]) } }));
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }));
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: permissionState.can }) }));
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router-dom')>()),
   useParams: () => ({ id: 'insp-1' }),
@@ -72,9 +75,12 @@ const inspection = {
   completed_at: null,
   notes: null,
   measurements: [1, 2, 3].flatMap((i) => [measurement(i, 'dimensional'), measurement(i, 'visual')]),
+  spec: { id: 'spec-1' },
 } as unknown as Inspection;
 
 describe('InspectionDetailPage', () => {
+  afterEach(() => permissionState.can.mockReturnValue(true));
+
   it('lists every sample in one measurements table', async () => {
     vi.mocked(inspectionsApi.show).mockResolvedValue(inspection);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -112,4 +118,26 @@ describe('InspectionDetailPage', () => {
     expect(results.every((select) => select.value === 'pass')).toBe(true);
     expect(screen.queryByRole('button', { name: /open manual check/ })).not.toBeInTheDocument();
   });
+
+  it('does not request SPC data when the actor cannot view inspection specs', async () => {
+    permissionState.can.mockImplementation((permission) => permission !== 'quality.specs.view');
+    vi.mocked(inspectionsApi.show).mockResolvedValue(inspection);
+    vi.mocked(analyticsApi.spcForSpec).mockClear();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <InspectionDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Measurements')).toBeInTheDocument();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(analyticsApi.spcForSpec).not.toHaveBeenCalled();
+    permissionState.can.mockReturnValue(true);
+  });
+
+
 });

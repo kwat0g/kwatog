@@ -110,7 +110,7 @@ export default function InspectionDetailPage() {
   const spc = useQuery({
     queryKey: ['quality', 'spc', data?.spec?.id],
     queryFn: () => analyticsApi.spcForSpec(data!.spec!.id),
-    enabled: Boolean(data?.spec?.id),
+    enabled: Boolean(data?.spec?.id && can('quality.specs.view')),
     staleTime: 300_000,
   });
 
