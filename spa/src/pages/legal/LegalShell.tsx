@@ -32,7 +32,7 @@ export function LegalShell({ title, path, children }: LegalShellProps) {
           Last updated {LAST_UPDATED}
         </p>
         <div
-          className="mt-10 space-y-4 text-sm leading-relaxed text-secondary [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_h2]:mt-10 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-primary [&_h3]:mt-6 [&_h3]:font-medium [&_h3]:text-primary [&_li]:mt-1 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5"
+          className="mt-10 max-w-[70ch] space-y-4 text-md leading-relaxed text-secondary [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_h2]:mt-10 [&_h2]:font-display [&_h2]:text-xl [&_h2]:text-primary [&_h3]:mt-6 [&_h3]:font-medium [&_h3]:text-primary [&_li]:mt-1 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5"
         >
           {children}
         </div>

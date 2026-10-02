@@ -34,7 +34,7 @@ export function showUndoToast({ message, onUndo, duration = 5000 }: UndoToastOpt
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className={`flex items-center gap-3 px-4 py-2.5 bg-canvas border border-default rounded-md shadow-menu transition-opacity duration-fast ${
+        className={`relative flex items-center gap-3 px-4 py-2.5 bg-canvas border border-default rounded-md shadow-menu transition-opacity duration-fast ${
           t.visible ? 'animate-slide-up opacity-100' : 'opacity-0 scale-95'
         }`}
       >
@@ -50,6 +50,15 @@ export function showUndoToast({ message, onUndo, duration = 5000 }: UndoToastOpt
         >
           Undo
         </Button>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden rounded-b-md"
+        >
+          <span
+            className="undo-toast-countdown block h-full bg-accent"
+            style={{ animationDuration: `${duration}ms` }}
+          />
+        </span>
       </div>
     ),
     { duration },

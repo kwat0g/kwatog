@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LuExternalLink, LuClock, LuTriangleAlert } from '@/lib/icons';
+import { LuExternalLink, LuClock, LuTriangleAlert, LuRefreshCw } from '@/lib/icons';
 import { approvalsApi } from '@/api/approvals';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -95,6 +95,13 @@ export default function ApprovalsBoardPage() {
             ? `${data.summary.my_action} requiring my action${overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}`
             : undefined
         }
+        refreshingQueryKey={['approvals', 'board', kind, pendingLimit, historyLimit]}
+        actions={(
+          <Button variant="secondary" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <LuRefreshCw size={13} className={cn(isFetching && 'animate-spin')} />
+            Refresh approvals
+          </Button>
+        )}
       />
 
       {/* Filter pills */}

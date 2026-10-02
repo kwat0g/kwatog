@@ -214,6 +214,8 @@ test.describe('pagination', () => {
     await page.waitForTimeout(400);
 
     await expect(page.getByLabel(/rows/i).first()).toBeVisible();
+    await page.locator('form[role="search"] input').fill('Ana');
+    await expect(page.getByText('2 active filters')).toBeVisible();
   });
 });
 

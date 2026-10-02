@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LuCircleCheck, LuPlus, LuCircleX } from '@/lib/icons';
@@ -24,6 +25,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
+import { showActionToast } from '@/lib/actionToast';
 import { focusRingInset } from '@/lib/focus';
 import type { TransferOrder } from '@/types/warehouse';
 import type { WarehouseLocation } from '@/types/inventory';
@@ -61,6 +63,7 @@ async function listItemStock(itemId: string) {
 }
 
 export default function TransferOrdersPage() {
+ const navigate = useNavigate();
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('inventory.adjust');
@@ -134,7 +137,14 @@ export default function TransferOrdersPage() {
 
  const executeTransfer = useMutation({
  mutationFn: (id: string) => transferOrderApi.execute(id),
- onSuccess: () => { toast.success('Transfer executed!'); refetch(); refetchDetail(); inv(); setExecuteTarget(null); },
+ onSuccess: () => {
+ showActionToast({
+ message: 'Transfer executed.',
+ actionLabel: 'View movements',
+ onAction: () => navigate('/inventory/movements'),
+ });
+ refetch(); refetchDetail(); inv(); setExecuteTarget(null);
+ },
  onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to execute.'),
  });
 

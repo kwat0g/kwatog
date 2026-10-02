@@ -176,7 +176,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
             className="h-9 shrink-0 transition-transform duration-500 group-hover:scale-105"
           />
           <div className="hidden flex-col text-left sm:flex">
-            <span className="font-display text-sm font-semibold tracking-tight text-primary leading-tight whitespace-nowrap">
+            <span className="font-display text-sm tracking-tight text-primary leading-tight whitespace-nowrap">
               {legalName}
             </span>
             <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">

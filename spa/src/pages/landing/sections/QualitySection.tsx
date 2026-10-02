@@ -32,7 +32,7 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
       <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-md border border-default text-accent transition-colors duration-500 group-hover:border-accent/40">
         <Icon size={20} strokeWidth={1.6} />
       </div>
-      <h3 className="mt-6 font-display text-xl font-semibold tracking-[-0.02em] text-primary">
+      <h3 className="mt-6 font-display text-xl tracking-[-0.02em] text-primary">
         {pillar.title}
       </h3>
       <p className="mt-3 font-sans text-[15px] font-light leading-relaxed text-secondary">
@@ -88,7 +88,7 @@ export function QualitySection() {
               <LuAward size={22} strokeWidth={1.6} />
             </div>
             <div className="mt-5">
-              <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
+              <h3 className="font-display text-2xl tracking-[-0.02em] text-primary">
                 {qualityPolicy?.certification_title ?? '—'}
               </h3>
               <p className="mt-3 font-sans text-base font-light leading-relaxed text-secondary">

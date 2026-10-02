@@ -91,7 +91,7 @@ export function LandingFooter() {
             <div className="flex items-center gap-3">
               <BrandLogo alt={legalName} className="h-10" />
               <div className="flex flex-col text-left">
-                <span className="font-display text-base font-semibold tracking-tight text-primary">
+                <span className="font-display text-base tracking-tight text-primary">
                   {legalName}
                 </span>
                 <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted">

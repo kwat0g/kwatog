@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { LuChevronLeft, LuChevronRight, LuPlus, LuPencil, LuArchiveRestore, LuTrash2 } from '@/lib/icons';
+import { LuChevronLeft, LuChevronRight, LuPlus, LuPencil, LuArchiveRestore, LuTrash2, LuCircleCheck } from '@/lib/icons';
 import { format, getDaysInMonth, startOfMonth, parseISO, isSameMonth, getDay } from 'date-fns';
 import { holidaysApi } from '@/api/attendance/holidays';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -30,6 +30,7 @@ import type { Holiday } from '@/types/attendance';
 import { cn } from '@/lib/cn';
 
 import { showUndoToast } from '@/lib/undoToast';
+import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 import { reportMutationError } from '@/lib/formErrors';
 const schema = z.object({
  name: z.string().min(1).max(100),
@@ -322,6 +323,7 @@ function HolidayFormModal({
  editing, onClose, onSaved,
 }: { editing: Holiday | null; onClose: () => void; onSaved: () => void }) {
  const isEdit = !!editing;
+ const { saved, markSaved } = useSavedFeedback({ duration: 900, onExpire: onSaved });
  const { data: holidayOptions } = useQuery({
  queryKey: ['attendance', 'holiday-options'],
  queryFn: () => holidaysApi.options(),
@@ -341,7 +343,11 @@ function HolidayFormModal({
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) => isEdit ? holidaysApi.update(editing!.id, d as Parameters<typeof holidaysApi.update>[1]) : holidaysApi.create(d as Parameters<typeof holidaysApi.create>[0]),
- onSuccess: () => { toast.success(isEdit ? 'Holiday updated.' : 'Holiday created.'); onSaved(); },
+ onSuccess: () => {
+ toast.success(isEdit ? 'Holiday updated.' : 'Holiday created.');
+ if (isEdit) markSaved();
+ else onSaved();
+ },
  onError: (e: AxiosError<ApiValidationError>) => {
  if (e.response?.status === 422 && e.response.data.errors) {
  Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
@@ -366,8 +372,8 @@ function HolidayFormModal({
  </div>
  <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
- {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create holiday'}
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || saved} loading={mutation.isPending}>
+ {mutation.isPending ? 'Saving…' : saved ? <><LuCircleCheck size={14} /> Saved</> : isEdit ? 'Save changes' : 'Create holiday'}
  </Button>
  </ModalFooter>
  </form>

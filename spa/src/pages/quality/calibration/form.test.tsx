@@ -100,4 +100,31 @@ describe('CalibrationFormPage', () => {
 
     expect(screen.getByLabelText(/last calibrated/i)).toHaveAttribute('max', today);
   });
+
+  it('confirms an edit inline before returning to Save changes', async () => {
+    const record = {
+      id: 'abc123',
+      equipment_code: 'CAL-UI-3',
+      name: 'Caliper',
+      location: 'Quality lab',
+      last_calibration_date: '2026-01-01',
+      next_calibration_date: '2027-01-01',
+      frequency_days: 365,
+      status: 'active',
+      responsible: 'QC',
+      remarks: '',
+    } as never;
+    vi.mocked(calibrationApi.show).mockResolvedValue(record);
+    vi.mocked(calibrationApi.update).mockResolvedValue(record);
+
+    renderForm('/quality/calibration/abc123/edit');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('button', { name: 'Saved' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument(),
+      { timeout: 2500 },
+    );
+  });
 });

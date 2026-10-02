@@ -130,7 +130,7 @@ export function PageHeader({
               {backLabel ?? 'Back'}
             </a>
           )}
- <h1 className="font-display text-2xl text-primary truncate">
+ <h1 className="font-display text-2xl text-primary break-words">
             {title}
             {refreshingQueryKey && <RefreshingIndicator queryKey={refreshingQueryKey} />}
           </h1>

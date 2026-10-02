@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { LuPlus, LuPencil, LuArchiveRestore, LuTrash2, LuUsers } from '@/lib/icons';
+import { LuPlus, LuPencil, LuArchiveRestore, LuTrash2, LuUsers, LuCircleCheck } from '@/lib/icons';
 import { useNavigate } from 'react-router-dom';
 import { shiftsApi } from '@/api/attendance/shifts';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
@@ -29,6 +29,7 @@ import type { Shift } from '@/types/attendance';
 
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { showUndoToast } from '@/lib/undoToast';
+import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 const schema = z.object({
  name: z.string().trim().min(1, 'Name is required').max(50)
  .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
@@ -237,6 +238,7 @@ export default function ShiftsPage() {
 
 function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; onClose: () => void; onSaved: () => void }) {
  const isEdit = !!editing;
+ const { saved, markSaved } = useSavedFeedback({ duration: 900, onExpire: onSaved });
  const {
  register, handleSubmit, watch, setError,
  formState: { errors, isSubmitting },
@@ -267,7 +269,8 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
  },
  onSuccess: () => {
  toast.success(isEdit ? 'Shift updated.' : 'Shift created.');
- onSaved();
+ if (isEdit) markSaved();
+ else onSaved();
  },
  onError: (e: AxiosError<ApiValidationError>) => {
  if (e.response?.status === 422 && e.response.data.errors) {
@@ -311,8 +314,8 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
  </div>
  <ModalFooter>
  <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || mutation.isPending}>Cancel</Button>
- <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
- {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create shift'}
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending || saved} loading={mutation.isPending}>
+ {mutation.isPending ? 'Saving…' : saved ? <><LuCircleCheck size={14} /> Saved</> : isEdit ? 'Save changes' : 'Create shift'}
  </Button>
  </ModalFooter>
  </form>

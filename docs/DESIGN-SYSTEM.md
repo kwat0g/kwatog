@@ -225,7 +225,7 @@ values.
 `components/layout/PageHeader.tsx` renders the `h1` on essentially every page:
 
 ```tsx
-<h1 className="font-display text-2xl text-primary truncate">
+<h1 className="font-display text-2xl text-primary break-words">
 ```
 
 No weight class — the family is 400-only. Subtitles, breadcrumbs and actions stay

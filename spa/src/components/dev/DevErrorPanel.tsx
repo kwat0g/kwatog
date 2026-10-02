@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { LuTriangleAlert, LuX, LuTrash2, LuCopy, LuChevronDown, LuChevronRight } from '@/lib/icons';
+import { LuTriangleAlert, LuX, LuTrash2, LuChevronDown, LuChevronRight } from '@/lib/icons';
 import { useErrorLogStore, type ServerErrorEntry } from '@/stores/errorLogStore';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { focusRing, focusRingInset } from '@/lib/focus';
 
 /**
@@ -121,11 +122,6 @@ function ErrorRow({
  ? 'text-danger-fg' : entry.status === 403 || entry.status === 401
  ? 'text-warning-fg' : 'text-muted';
 
- const copyAll = () => {
- const blob = JSON.stringify(entry, null, 2);
- navigator.clipboard?.writeText(blob);
- };
-
  return (
  <li className="text-xs">
  <button
@@ -180,13 +176,15 @@ function ErrorRow({
  </details>
  )}
  <div className="flex items-center gap-2">
- <button
- type="button"
- onClick={copyAll}
- className={cn('inline-flex items-center gap-1 px-2 py-1 rounded border border-default text-muted hover:text-primary hover:bg-elevated cursor-pointer', focusRing)}
+ <CopyButton
+ value={JSON.stringify(entry, null, 2)}
+ label="Error details"
+ size="xs"
+ variant="secondary"
+ className={cn('text-muted hover:text-primary hover:bg-elevated', focusRing)}
  >
- <LuCopy size={10} /> Copy JSON
- </button>
+ Copy JSON
+ </CopyButton>
  </div>
  </div>
  )}

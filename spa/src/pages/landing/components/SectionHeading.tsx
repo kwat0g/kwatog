@@ -50,7 +50,7 @@ export function SectionHeading({
       <h2
         data-reveal
         data-reveal-delay="0.05"
-        className="mt-6 font-display text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
+        className="mt-6 font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.98] tracking-[-0.03em] text-primary"
       >
         {title}
       </h2>
@@ -60,7 +60,7 @@ export function SectionHeading({
           data-reveal
           data-reveal-delay="0.1"
           className={cn(
-            'mt-6 font-sans text-base leading-relaxed text-secondary sm:text-lg font-light tracking-wide',
+            'mt-6 font-sans text-md leading-relaxed text-secondary sm:text-lg tracking-normal',
             centered && 'mx-auto',
           )}
         >

@@ -299,7 +299,7 @@ export default function MachineHealthPage() {
                   ) : (
                     <EmptyState
                       icon="activity"
-                      title="No data"
+                      title="No readings yet"
                       description={`No ${metric} readings for this machine.`}
                       className="mt-4"
                     />

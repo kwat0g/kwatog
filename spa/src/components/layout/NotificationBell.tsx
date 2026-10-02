@@ -53,7 +53,7 @@ export function NotificationBell() {
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['notifications'] });
  },
- onError: () => toast.error('Could not mark that notification read.'),
+ onError: () => toast.error('Could not mark this notification as read. Try again.'),
  });
 
  const markAllMutation = useMutation({
@@ -61,7 +61,7 @@ export function NotificationBell() {
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['notifications'] });
  },
- onError: () => toast.error('Could not mark all read.'),
+ onError: () => toast.error('Could not mark all notifications as read. Try again.'),
  });
 
  const unread = data?.meta.unread_count ?? 0;
@@ -126,7 +126,7 @@ export function NotificationBell() {
  aria-controls={panelId}
  aria-expanded={open}
  onClick={() => setOpen((v) => !v)}
- className="relative text-muted hover:text-primary"
+ className="relative min-h-[44px] min-w-[44px] text-muted hover:text-primary sm:min-h-0 sm:min-w-0"
  >
  <LuBell size={14} />
  {unread > 0 && (
@@ -144,7 +144,7 @@ export function NotificationBell() {
  <div
  ref={panelRef}
  id={panelId}
- className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md z-50 animate-fade-in overflow-hidden"
+ className="fixed inset-x-2 top-14 bg-canvas border border-default rounded-md z-50 animate-fade-in overflow-hidden md:absolute md:left-auto md:right-0 md:top-9 md:w-80"
  role="dialog"
  aria-modal="false"
  aria-labelledby={titleId}

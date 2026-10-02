@@ -188,7 +188,7 @@ export function ProcessSection() {
                     </div>
                   </div>
 
-                  <h3 className="mt-10 font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
+                  <h3 className="mt-10 font-display text-2xl tracking-[-0.02em] text-primary">
                     {step.title}
                   </h3>
                   <p className="mt-4 font-sans text-base font-light leading-relaxed text-secondary">

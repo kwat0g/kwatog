@@ -4,6 +4,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes undo-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @layer base {
   html {
     font-family: var(--font-sans);
@@ -63,6 +72,17 @@
 }
 
 @layer components {
+  .undo-toast-countdown {
+    animation: undo-toast-countdown linear forwards;
+    transform-origin: left center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .undo-toast-countdown {
+      display: none;
+    }
+  }
+
   /* Hairline border helper — true 0.5px on retina, 1px elsewhere. */
   .border-hairline {
     border-width: 1px;

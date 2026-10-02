@@ -27,6 +27,7 @@ import { reduceMotion } from '../motion';
 import { cn } from '@/lib/cn';
 import { landingApi } from '@/api/landing';
 import { useQuery } from '@tanstack/react-query';
+import { cardGap, container, headingGap, sectionPadX, sectionPadY } from '../styles';
 
 export function PartShowcaseSection() {
   const [partIndex, setPartIndex] = useState(0);
@@ -54,15 +55,15 @@ export function PartShowcaseSection() {
   }, [liveParts.length]);
 
   return (
-    <section id="parts-3d" className="relative bg-canvas px-5 py-24 sm:px-5 sm:py-32">
-      <div className="mx-auto max-w-[1440px]">
+    <section id="parts-3d" className={cn('relative bg-canvas', sectionPadX, sectionPadY)}>
+      <div className={container}>
         <SectionHeading
           eyebrow={content?.section_copy?.part_showcase_eyebrow ?? '—'}
           title={content?.section_copy?.part_showcase_title ?? '—'}
           intro={content?.section_copy?.part_showcase_intro ?? '—'}
         />
 
-        <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
+        <div className={cn(headingGap, 'grid items-stretch', cardGap, 'lg:grid-cols-[0.82fr_1.18fr] lg:gap-10')}>
           {/* ── Control rail ─────────────────────────────────────── */}
           <div data-reveal="left" className="flex flex-col">
             {/* part selector */}

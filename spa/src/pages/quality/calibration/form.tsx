@@ -18,6 +18,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { useFormSafety } from '@/hooks/useFormSafety';
+import { useSavedFeedback } from '@/hooks/useSavedFeedback';
 import { localIsoDate } from '@/lib/formatDate';
 
 const today = () => localIsoDate();
@@ -70,13 +71,14 @@ export default function CalibrationFormPage() {
   const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
+  const { saved: showSaved, markSaved } = useSavedFeedback();
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: EMPTY_VALUES });
   const {
     register,
     handleSubmit,
     reset,
     setError,
-    formState: { errors, isSubmitting },
+    formState: { errors, isDirty, isSubmitting },
   } = form;
 
   const detail = useQuery({
@@ -112,17 +114,22 @@ export default function CalibrationFormPage() {
       };
       return isEdit ? calibrationApi.update(id as string, payload) : calibrationApi.create(payload);
     },
-    onSuccess: (record) => {
+    onSuccess: (record, values) => {
+      reset(values);
       void queryClient.invalidateQueries({ queryKey: ['quality', 'calibration'] });
       toast.success(
         isEdit ? 'Calibration instrument updated' : 'Calibration instrument registered',
       );
-      navigate(`/quality/calibration/${record.id}/edit`);
+      if (isEdit) {
+        markSaved();
+      } else {
+        navigate(`/quality/calibration/${record.id}/edit`);
+      }
     },
     onError: (error) =>
       applyServerValidationErrors(error, setError, 'Could not save the calibration instrument.'),
   });
-  const safety = useFormSafety({ form, saved: mutation.isSuccess });
+  const safety = useFormSafety({ form, saved: mutation.isSuccess && !isDirty });
 
   if (isEdit && detail.isLoading) {
     return (
@@ -250,7 +257,13 @@ export default function CalibrationFormPage() {
             loading={mutation.isPending}
             disabled={isSubmitting || mutation.isPending}
           >
-            {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Register instrument'}
+            {mutation.isPending
+              ? 'Saving…'
+              : showSaved
+                ? 'Saved'
+                : isEdit
+                  ? 'Save changes'
+                  : 'Register instrument'}
           </Button>
         </FormActions>
       </form>

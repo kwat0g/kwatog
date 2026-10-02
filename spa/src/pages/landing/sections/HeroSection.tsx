@@ -20,6 +20,7 @@ import { PartBlueprint } from '../components/PartBlueprint';
 import { landingApi } from '@/api/landing';
 import { reduceMotion } from '../motion';
 import { useMagnetic } from '../hooks/useMagnetic';
+import { container } from '../styles';
 
 export function HeroSection() {
   const rootRef = useRef<HTMLElement>(null);
@@ -133,7 +134,7 @@ export function HeroSection() {
         }}
       />
 
-      <div className="mx-auto grid w-full max-w-[1440px] items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
+      <div className={`${container} grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10`}>
         {/* ── Text column ───────────────────────────────────────── */}
         <div>
           {/* Solid ink, not a gradient fill. The old treatment was
@@ -157,7 +158,7 @@ export function HeroSection() {
                 .filter(Boolean)
                 .join(' ') || undefined
             }
-            className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-primary pb-2"
+            className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] leading-[0.94] tracking-[-0.04em] text-primary pb-2"
           >
             <span data-hero-line className="block overflow-hidden">
               <span className="block">{heroCopy?.line_one ?? '—'}</span>

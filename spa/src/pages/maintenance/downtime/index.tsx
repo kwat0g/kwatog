@@ -295,7 +295,7 @@ export default function DowntimeAnalyticsPage() {
  <DataTable columns={topColumns} data={topMachines} />
  </div>
  ) : (
- <EmptyState icon="wrench" title="No data" description="All machines are operating normally." className="mt-4" />
+ <EmptyState icon="wrench" title="No machines with downtime" description="All machines are operating normally." className="mt-4" />
  )}
  </Panel>
  </div>

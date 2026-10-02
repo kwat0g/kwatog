@@ -1,4 +1,4 @@
-import { forwardRef, useState, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useId, useState, type TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -29,7 +29,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     },
     ref,
   ) => {
-    const taId = id ?? `ta-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
+    const generatedId = useId().replaceAll(':', '');
+    const taId = id ?? `textarea-${generatedId}`;
 
     // Track current length for the counter. We mirror the value when the
     // textarea is uncontrolled so the counter still updates.
@@ -56,6 +57,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           id={taId}
+          required={required}
           aria-invalid={!!error}
           aria-describedby={error ? `${taId}-error` : helper ? `${taId}-helper` : undefined}
           maxLength={maxLength}

@@ -198,9 +198,19 @@ export default function AlertsListPage() {
  dismissed {formatDateTime(a.dismissed_at)}
  </span>
  )}
- </div>
- <p className="text-xs text-muted mt-0.5">{a.message}</p>
- {a.entity && (
+                 </div>
+                 <p className="text-xs text-muted mt-0.5">{a.message}</p>
+                 {a.severity === 'critical' && a.email_status === 'failed' && (
+                  <p role="status" className="text-2xs text-warning-fg mt-1">
+                   Critical alert email failed{a.email_failed_at ? ` on ${formatDateTime(a.email_failed_at)}` : ''}. Retry scheduled ({a.email_attempts} {a.email_attempts === 1 ? 'attempt' : 'attempts'}).
+                  </p>
+                 )}
+                 {a.severity === 'critical' && a.email_status === 'terminal_failed' && (
+                  <p role="status" className="text-2xs text-danger-fg mt-1">
+                   Critical alert email stopped after {a.email_attempts} attempts. Contact an administrator.
+                  </p>
+                 )}
+                 {a.entity && (
  <p className="text-2xs text-text-subtle font-mono mt-0.5">
  {a.entity.type} · {a.entity.label}
  </p>

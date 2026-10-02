@@ -1,4 +1,4 @@
-import { forwardRef, type SelectHTMLAttributes } from 'react';
+import { forwardRef, useId, type SelectHTMLAttributes } from 'react';
 import { LuChevronDown } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 
@@ -48,7 +48,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     },
     ref,
   ) => {
-    const selectId = id ?? `select-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
+    const generatedId = useId().replaceAll(':', '');
+    const selectId = id ?? `select-${generatedId}`;
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
@@ -69,6 +70,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <select
             ref={ref}
             id={selectId}
+            required={required}
             aria-invalid={!!error}
             aria-describedby={
               error ? `${selectId}-error` : helper ? `${selectId}-helper` : undefined

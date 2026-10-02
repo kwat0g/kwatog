@@ -121,7 +121,7 @@ export function StatsSection() {
             data-reveal-delay={(i * 0.08).toFixed(2)}
             className="group border-l border-default pl-6 transition-colors duration-300 hover:border-accent"
           >
-            <div className="font-display text-[clamp(3.5rem,8vw,5.5rem)] font-bold leading-none tracking-[-0.04em] text-primary transition-transform duration-500 group-hover:-translate-y-1">
+            <div className="font-display text-[clamp(3.5rem,8vw,5.5rem)] leading-none tracking-[-0.04em] text-primary transition-transform duration-500 group-hover:-translate-y-1">
               <Counter stat={stat} />
             </div>
             <p className="mt-5 font-mono text-sm uppercase tracking-[0.2em] text-muted">

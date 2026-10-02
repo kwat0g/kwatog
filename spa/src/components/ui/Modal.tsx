@@ -31,6 +31,12 @@ const sizes: Record<Size, string> = {
 const FOCUSABLE =
  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+ return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+ (element) => !element.closest('[hidden], [aria-hidden="true"], [inert]'),
+ );
+}
+
 /**
  * Trap keyboard focus inside the modal content region so Tab/Shift+Tab
  * cycle through focusable elements rather than escaping into the page
@@ -49,7 +55,7 @@ function useFocusTrap(
  const handleKeyDown = (e: KeyboardEvent) => {
  if (e.key !== 'Tab') return;
 
- const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE);
+ const focusableElements = getFocusableElements(container);
  if (focusableElements.length === 0) {
  // Nothing focusable inside — prevent focus from leaving the overlay.
  e.preventDefault();
@@ -59,15 +65,17 @@ function useFocusTrap(
  const first = focusableElements[0];
  const last = focusableElements[focusableElements.length - 1];
 
+ const activeInside = document.activeElement instanceof HTMLElement && container.contains(document.activeElement);
+
  if (e.shiftKey) {
  // Shift+Tab: wrap to last if we're on the first element
- if (document.activeElement === first) {
+ if (!activeInside || document.activeElement === first) {
  e.preventDefault();
  last.focus();
  }
  } else {
  // Tab: wrap to first if we're on the last element
- if (document.activeElement === last) {
+ if (!activeInside || document.activeElement === last) {
  e.preventDefault();
  first.focus();
  }
@@ -75,17 +83,20 @@ function useFocusTrap(
  };
 
  // Focus the first focusable element inside the modal on open.
- requestAnimationFrame(() => {
- const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE);
+ const frame = requestAnimationFrame(() => {
+ const focusableElements = getFocusableElements(container);
  if (focusableElements.length > 0) {
- focusableElements[0].focus();
+  focusableElements[0].focus();
+ } else {
+  container.focus();
  }
  });
 
  document.addEventListener('keydown', handleKeyDown);
  return () => {
+ cancelAnimationFrame(frame);
  document.removeEventListener('keydown', handleKeyDown);
- previousElement?.focus?.();
+ if (previousElement && document.contains(previousElement)) previousElement.focus();
  };
  }, [isOpen, containerRef]);
 }
@@ -153,14 +164,18 @@ export function Modal({
   aria-modal="true"
   aria-labelledby={title ? titleId : ariaLabelledBy}
   aria-describedby={ariaDescribedBy}
-  onMouseDown={(e) => {
-  if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
-  }}
   >
-  <div className="fixed inset-0 bg-black/60 transition-opacity" aria-hidden="true" />
+  <div
+    className="fixed inset-0 bg-black/60 transition-opacity"
+    aria-hidden="true"
+    onMouseDown={() => {
+      if (closeOnOverlayClick) onClose();
+    }}
+  />
   
   <div
   ref={dialogRef}
+  tabIndex={-1}
   className={cn(
   'relative w-full bg-canvas border border-default rounded-lg animate-slide-up flex flex-col max-h-[90vh]',
   sizes[size],

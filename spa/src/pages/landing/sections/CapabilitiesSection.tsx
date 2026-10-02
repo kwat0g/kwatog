@@ -31,7 +31,7 @@ function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
         </span>
       </div>
 
-      <h3 className="mt-8 font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
+      <h3 className="mt-8 font-display text-2xl tracking-[-0.02em] text-primary">
         {cap.title}
       </h3>
       <p className="mt-3 font-sans text-base font-light leading-relaxed text-secondary">

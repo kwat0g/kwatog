@@ -103,6 +103,7 @@ export function FilterBar({
  return v !== undefined && v !== null && v !== '';
  });
  const hasActive = activeFilters.length > 0 || hasActiveDate || searchValue !== '';
+ const activeFilterCount = activeFilters.length + (hasActiveDate ? 1 : 0) + (searchValue !== '' ? 1 : 0);
 
  const clearAll = () => {
  activeFilters.forEach((f) => onFilter?.(f.key, undefined));
@@ -185,6 +186,12 @@ export function FilterBar({
  className="h-8 rounded-md border border-default bg-canvas px-2 text-sm font-mono tabular-nums text-primary outline-none transition-colors duration-fast focus:border-accent focus:ring-2 focus:ring-accent"
  />
  </div>
+ )}
+
+ {hasActive && (
+ <span className="text-xs text-muted font-mono tabular-nums" aria-live="polite" aria-atomic="true">
+ {activeFilterCount} active {activeFilterCount === 1 ? 'filter' : 'filters'}
+ </span>
  )}
 
  {hasActive && (

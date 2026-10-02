@@ -313,6 +313,9 @@ test.describe('Admin > Create User (department-first)', () => {
     // One-time temp password modal.
     await expect(page.getByRole('heading', { name: 'Account Created' })).toBeVisible();
     await expect(page.getByText('TempPass1!')).toBeVisible();
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:5173' });
+    await page.getByRole('button', { name: 'Copy temporary password' }).click();
+    await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
 
     // Done closes the modal and returns to the list.
     await page.getByRole('button', { name: 'Done' }).click();

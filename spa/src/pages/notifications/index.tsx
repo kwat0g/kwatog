@@ -81,12 +81,12 @@ export default function NotificationsListPage() {
  const markRead = useMutation({
  mutationFn: (id: string) => notificationsApi.markRead(id),
  onSuccess: invalidate,
- onError: (error) => reportMutationError(error, 'Could not mark that notification read.'),
+ onError: (error) => reportMutationError(error, 'Could not mark this notification as read. Try again.'),
  });
  const markAll = useMutation({
  mutationFn: () => notificationsApi.markAllRead(),
  onSuccess: invalidate,
- onError: (error) => reportMutationError(error, 'Could not mark all read.'),
+ onError: (error) => reportMutationError(error, 'Could not mark all notifications as read. Try again.'),
  });
  const dismiss = useMutation({
  mutationFn: (id: string) => notificationsApi.remove(id),

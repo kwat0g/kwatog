@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { Button, Input, Modal, ModalFooter, Panel, Select, Switch } from '@/components/ui';
+import { Button, CopyButton, Input, Modal, ModalFooter, Panel, Select, Switch } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import type { EmployeeCandidate } from '@/types/admin';
@@ -135,6 +135,7 @@ export default function AdminCreateUserPage() {
       <FormDraftBanner safety={safety} />
 
  <form
+ noValidate
  onSubmit={handleSubmit(onSubmit)}
  className="max-w-2xl mx-auto px-5 py-4"
  >
@@ -278,9 +279,12 @@ export default function AdminCreateUserPage() {
  Account created successfully. Copy this temporary password — it is shown
  only once. The user must change it on first login.
  </p>
- <code className="block bg-elevated rounded-md p-3 font-mono tabular-nums text-md select-all">
+ <div className="flex items-center gap-2">
+ <code className="min-w-0 flex-1 bg-elevated rounded-md p-3 font-mono tabular-nums text-md select-all">
  {tempPasswordModal}
  </code>
+ <CopyButton value={tempPasswordModal ?? ''} label="Temporary password" />
+ </div>
  <ModalFooter>
  <Button
  variant="primary"

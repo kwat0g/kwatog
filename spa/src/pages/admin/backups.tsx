@@ -7,7 +7,6 @@ import {
  LuCheck,
  LuChevronDown,
  LuCloudUpload,
- LuCopy,
  LuDatabase,
  LuFolderOpen,
  LuInfo,
@@ -19,6 +18,7 @@ import {
 } from '@/lib/icons';
 import { backupsApi, type BackupOperation } from '@/api/admin/backups';
 import { Button } from '@/components/ui/Button';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -133,20 +133,6 @@ function artifactAvailabilityLabel(availability: NonNullable<BackupOperation['ar
  }
 }
 
-async function copyArtifactName(name: string): Promise<void> {
- if (!navigator.clipboard) {
- toast.error('Clipboard is unavailable in this browser.');
- return;
- }
-
- try {
- await navigator.clipboard.writeText(name);
- toast.success('Artifact filename copied.');
- } catch {
- toast.error('Could not copy the artifact filename.');
- }
-}
-
 function ArtifactLine({
  artifact,
  icon,
@@ -174,15 +160,15 @@ function ArtifactLine({
  <>
  <div className="flex items-start gap-1.5">
  <span className="font-mono text-xs text-primary break-all" title={artifact.name}>{artifact.name}</span>
- <button
- type="button"
- className="shrink-0 mt-0.5 text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
- aria-label={`Copy ${label} filename`}
+ <CopyButton
+ value={artifact.name}
+ label={`${label} filename`}
+ size="xs"
+ variant="ghost"
+ iconOnly
+ className="shrink-0 mt-0.5 text-muted hover:text-primary"
  title="Copy filename"
- onClick={() => void copyArtifactName(artifact.name)}
- >
- <LuCopy size={12} />
- </button>
+ />
  </div>
  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted mt-0.5">
  <span>{label}</span>

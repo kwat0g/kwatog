@@ -174,7 +174,7 @@ function SupplierPerformancePanel({ items }: { items: SupplierScoreItem[] }) {
  if (items.length === 0) {
  return (
  <Panel title="Supplier Performance">
- <EmptyState icon="inbox" title="No data" description="No supplier performance scores available." />
+ <EmptyState icon="inbox" title="No supplier scores yet" description="No supplier performance scores are available yet." />
  </Panel>
  );
  }

@@ -1,4 +1,4 @@
-import { forwardRef, useSyncExternalStore, type InputHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useId, useSyncExternalStore, type InputHTMLAttributes, type ReactNode } from 'react';
 import { LuCheck, LuX } from '@/lib/icons';
 import { cn } from '@/lib/cn';
 import type { FieldSize } from './Select';
@@ -56,7 +56,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref,
   ) => {
-    const inputId = id ?? `input-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
+    const generatedId = useId().replaceAll(':', '');
+    const inputId = id ?? `input-${generatedId}`;
     // Resolve legacy peso markers from the live accounting policy. The
     // subscription matters on first paint: AppLayout loads policy data
     // asynchronously, after many forms have already mounted.
@@ -111,6 +112,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             type={type}
+            required={required}
             readOnly={readOnly}
             aria-invalid={!!error}
             aria-disabled={readOnly || undefined}

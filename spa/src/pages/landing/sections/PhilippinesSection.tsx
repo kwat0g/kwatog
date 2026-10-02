@@ -13,6 +13,8 @@ import { Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LuExternalLink, LuMapPin } from '@/lib/icons';
 import { landingApi } from '@/api/landing';
+import { cn } from '@/lib/cn';
+import { container, sectionPadX, sectionPadY } from '../styles';
 
 const PlantMap = lazy(() =>
   import('../components/PlantMap').then((m) => ({ default: m.PlantMap })),
@@ -49,9 +51,9 @@ export function PhilippinesSection() {
   return (
     <section
       id="filipino-made"
-      className="relative overflow-hidden bg-surface px-5 sm:px-5 py-20 sm:py-28"
+      className={cn('relative overflow-hidden bg-surface', sectionPadX, sectionPadY)}
     >
-      <div className="mx-auto grid max-w-[1440px] items-center gap-14 lg:grid-cols-2 lg:gap-20">
+      <div className={cn(container, 'grid items-center gap-14 lg:grid-cols-2 lg:gap-20')}>
         {/* Copy */}
         <div data-reveal="left">
           <div data-reveal className="flex items-center gap-3">
@@ -64,7 +66,7 @@ export function PhilippinesSection() {
           <h2
             data-reveal
             data-reveal-delay="0.05"
-            className="mt-6 font-display text-[clamp(2.5rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
+            className="mt-6 font-display text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.98] tracking-[-0.03em] text-primary"
           >
             {copy?.title ?? '—'}
           </h2>
@@ -85,7 +87,7 @@ export function PhilippinesSection() {
                 data-reveal-delay={(0.12 + i * 0.06).toFixed(2)}
                 className="group flex items-baseline gap-6 border-t border-default pt-6 transition-colors duration-300 hover:border-accent"
               >
-                <dt className="w-24 shrink-0 font-display text-4xl font-semibold tracking-tight text-accent transition-transform duration-500 group-hover:-translate-y-1">
+                <dt className="w-24 shrink-0 font-display text-4xl tracking-tight text-accent transition-transform duration-500 group-hover:-translate-y-1">
                   {p.value}
                 </dt>
                 <dd className="font-sans text-base font-light leading-relaxed text-secondary">

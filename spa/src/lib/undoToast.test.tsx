@@ -31,7 +31,7 @@ function AppToaster() {
 }
 
 // The react-hot-toast store is module-global and outlives RTL's unmount.
-afterEach(() => toast.remove());
+afterEach(() => act(() => toast.remove()));
 
 describe('showUndoToast', () => {
   it('puts the confirmation inside a polite live region in the DOM', () => {
@@ -45,6 +45,18 @@ describe('showUndoToast', () => {
     expect(region).toHaveAttribute('aria-live', 'polite');
     expect(region).toHaveAttribute('aria-atomic', 'true');
     expect(region).toHaveTextContent('12 archived.');
+  });
+
+  it('uses the configured duration for the undo countdown', () => {
+    render(<AppToaster />);
+
+    act(() => {
+      showUndoToast({ message: '1 archived.', onUndo: () => {}, duration: 4200 });
+    });
+
+    const rail = document.querySelector('.undo-toast-countdown');
+    expect(rail).toBeInTheDocument();
+    expect(rail).toHaveStyle({ animationDuration: '4200ms' });
   });
 
   it('carries that region itself, because a custom toast bypasses the Toaster renderer', () => {

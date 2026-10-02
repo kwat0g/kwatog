@@ -12,7 +12,15 @@
  * Input) render blue-free here without any change to those components.
  */
 
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LuArrowLeft } from '@/lib/icons';
@@ -35,6 +43,7 @@ const AutoPartShowcase = lazy(() =>
     default: m.AutoPartShowcase,
   })),
 );
+const DESKTOP_MEDIA = '(min-width: 1024px)';
 
 const GRID_BG: CSSProperties = {
   backgroundImage:
@@ -45,6 +54,18 @@ const GRID_BG: CSSProperties = {
 
 export function AuthLayout() {
   const location = useLocation();
+  const [showcaseVisible, setShowcaseVisible] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_MEDIA).matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(DESKTOP_MEDIA);
+    const sync = () => setShowcaseVisible(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
   const { data: contact } = useQuery({
     queryKey: ['landing', 'contact'],
     queryFn: landingApi.contact,
@@ -214,9 +235,11 @@ export function AuthLayout() {
               />
             ))}
 
-            <Suspense fallback={null}>
-              <AutoPartShowcase className="absolute inset-0" />
-            </Suspense>
+            {showcaseVisible && (
+              <Suspense fallback={null}>
+                <AutoPartShowcase className="absolute inset-0" />
+              </Suspense>
+            )}
 
             {/* CMM scan-line — sweeps over the figure */}
             <div
