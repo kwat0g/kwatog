@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -148,6 +149,81 @@ class NotificationValidationTest extends TestCase
             'channel'           => 'in_app',
             'enabled'           => false,
         ]);
+    }
+
+    public function test_every_seeded_role_can_manage_only_its_own_preferences(): void
+    {
+        $roles = Role::query()->orderBy('slug')->get();
+        $cacheKeys = [];
+        foreach ($roles as $role) {
+            $cacheKey = "auth:role_perms:{$role->id}";
+            $permissions = $role->permissions()
+                ->where('permissions.slug', '!=', 'notifications.preferences.manage')
+                ->pluck('permissions.slug', 'permissions.id')
+                ->all();
+            Cache::put($cacheKey, $permissions, 300);
+            $cacheKeys[] = $cacheKey;
+        }
+
+        try {
+            $this->seed(RolePermissionSeeder::class);
+            foreach ($roles as $role) {
+                $user = User::factory()->create(['role_id' => $role->id]);
+                $this->assertTrue(
+                    $user->hasPermission('notifications.preferences.manage'),
+                    "Role {$role->slug} lacks the self-scoped preference grant.",
+                );
+                $this->actingAs($user)
+                    ->getJson('/api/v1/notification-preferences')
+                    ->assertOk();
+            }
+
+            $driver = User::factory()->create([
+                'role_id' => Role::where('slug', 'driver')->value('id'),
+            ]);
+            $other = User::factory()->create([
+                'role_id' => Role::where('slug', 'system_admin')->value('id'),
+            ]);
+            DB::table('notification_preferences')->insert([
+                'user_id' => $other->id,
+                'notification_type' => 'leave.approved',
+                'channel' => 'in_app',
+                'enabled' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->actingAs($driver)
+                ->getJson('/api/v1/notification-preferences')
+                ->assertOk()
+                ->assertJsonPath('data', []);
+
+            $this->actingAs($driver)
+                ->putJson('/api/v1/notification-preferences', [
+                    'user_id' => $other->id,
+                    'preferences' => [
+                        ['notification_type' => 'leave.approved', 'channel' => 'in_app', 'enabled' => false],
+                    ],
+                ])
+                ->assertOk();
+
+            $this->assertDatabaseHas('notification_preferences', [
+                'user_id' => $driver->id,
+                'notification_type' => 'leave.approved',
+                'channel' => 'in_app',
+                'enabled' => false,
+            ]);
+            $this->assertDatabaseHas('notification_preferences', [
+                'user_id' => $other->id,
+                'notification_type' => 'leave.approved',
+                'channel' => 'in_app',
+                'enabled' => true,
+            ]);
+        } finally {
+            foreach ($cacheKeys as $cacheKey) {
+                Cache::forget($cacheKey);
+            }
+        }
     }
 
     public function test_digest_channel_requires_the_global_type(): void

@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class RolePermissionSeeder extends Seeder
@@ -1040,6 +1041,10 @@ class RolePermissionSeeder extends Seeder
                         (array) $def['permissions'],
                         [
                             'notifications.view',
+                            // Every profile links to per-user notification
+                            // settings; the service scopes reads and writes to
+                            // the authenticated user.
+                            'notifications.preferences.manage',
                             // Series F — Tasks F1, F2, F5: cross-cutting reads
                             // available to every authenticated role.
                             'calendar.view',
@@ -1088,6 +1093,7 @@ class RolePermissionSeeder extends Seeder
 
         $crossCutting = [
             'notifications.view',
+            'notifications.preferences.manage',
             'calendar.view',
             'approvals.board.view',
             'hr.directory.view',
@@ -1118,5 +1124,6 @@ class RolePermissionSeeder extends Seeder
     protected function syncRolePermissions(Role $role, array $permissionIds): void
     {
         $role->permissions()->sync($permissionIds);
+        Cache::forget("auth:role_perms:{$role->id}");
     }
 }
