@@ -139,5 +139,26 @@ describe('InspectionDetailPage', () => {
     permissionState.can.mockReturnValue(true);
   });
 
+  it('shows who opened the inspection and who recorded its results', async () => {
+    vi.mocked(inspectionsApi.show).mockResolvedValue({
+      ...inspection,
+      inspection_mode: 'lot_checklist',
+      inspector: { id: 'creator-1', name: 'Sales requester' },
+      result_authors: [{ id: 'qc-1', name: 'QC inspector' }],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <InspectionDetailPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Inspection created by')).toBeInTheDocument();
+    expect(screen.getByText('Sales requester')).toBeInTheDocument();
+    expect(screen.getByText('Results recorded by')).toBeInTheDocument();
+    expect(screen.getByText('QC inspector')).toBeInTheDocument();
+  });
 });

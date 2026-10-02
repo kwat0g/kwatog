@@ -110,6 +110,14 @@ class InspectionResource extends JsonResource
                 'id' => $this->inspector->hash_id,
                 'name' => $this->inspector->name,
             ] : null),
+            'result_authors' => $this->whenLoaded('resultAuthors', fn () => $this->resultAuthors
+                ->map(fn ($author) => [
+                    'id' => $author->user?->hash_id,
+                    'name' => $author->user?->name,
+                ])
+                ->filter(fn (array $author) => $author['id'] !== null)
+                ->values()
+                ->all()),
             'reviewer' => $this->whenLoaded('reviewer', fn () => $this->reviewer ? [
                 'id' => $this->reviewer->hash_id,
                 'name' => $this->reviewer->name,

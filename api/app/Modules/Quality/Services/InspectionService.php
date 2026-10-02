@@ -74,6 +74,7 @@ class InspectionService
                 'inspector:id,name,role_id',
                 'reviewer:id,name,role_id',
                 'resultAuthors:id,inspection_id,user_id',
+                'resultAuthors.user:id,name',
                 'spec:id,product_id,version',
                 'specRevision:id,inspection_spec_id,version,created_by,notes',
                 'qualityPlan:id,item_id,vendor_id,version,sampling_method',
@@ -146,6 +147,7 @@ class InspectionService
             'inspector:id,name,role_id',
             'reviewer:id,name,role_id',
             'resultAuthors:id,inspection_id,user_id',
+            'resultAuthors.user:id,name',
             'spec:id,product_id,version,is_active',
             'specRevision:id,inspection_spec_id,version,created_by,notes',
             'specRevision.creator:id,name,role_id',
@@ -704,7 +706,7 @@ class InspectionService
                 $m->save();
             }
 
-            if ($hasMeaningfulResultEdit && $lockedInspection->requiresMakerChecker()) {
+            if ($hasMeaningfulResultEdit) {
                 $this->recordResultAuthor($lockedInspection, $by);
             }
 
@@ -837,8 +839,7 @@ class InspectionService
                         "sample_defect_count ({$defectCount}) cannot exceed sample_size ({$lockedInspection->sample_size})."
                     );
                 }
-                if ($lockedInspection->sample_defect_count !== $defectCount
-                    && $lockedInspection->requiresMakerChecker()) {
+                if ($lockedInspection->sample_defect_count !== $defectCount) {
                     $this->recordResultAuthor($lockedInspection, $by);
                 }
                 $lockedInspection->forceFill(['sample_defect_count' => $defectCount])->save();
@@ -939,9 +940,9 @@ class InspectionService
                 $lockedInspection->setAttribute('status', InspectionStatus::InProgress);
             }
 
+            $this->recordResultAuthor($lockedInspection, $by);
             if ($lockedInspection->requiresMakerChecker()) {
                 $this->states->assertAllowed($lockedInspection, InspectionStatus::AwaitingReview);
-                $this->recordResultAuthor($lockedInspection, $by);
 
                 $lockedInspection->forceFill([
                     'status' => InspectionStatus::AwaitingReview->value,

@@ -128,6 +128,7 @@ export interface Inspection {
   product?: { id: string; part_number: string; name: string } | null;
   item?: { id: string; code: string; name: string } | null;
   inspector?: { id: string; name: string } | null;
+  result_authors?: Array<{ id: string; name: string }>;
   reviewer?: { id: string; name: string } | null;
   work_order_output?: {
     id: string;

@@ -125,6 +125,67 @@ class InspectionResultAuthorsTest extends TestCase
         $this->assertSame($checker->id, $reviewed->reviewed_by);
     }
 
+    public function test_detail_exposes_actual_result_authors_separately_from_the_inspection_creator(): void
+    {
+        $creator = User::factory()->create(['name' => 'Sales requester']);
+        $qcInspector = User::factory()->create(['name' => 'QC inspector']);
+        $inspection = $this->makeIncomingInspection($creator);
+        $measurement = $this->makeChecklistRow($inspection);
+
+        $awaitingReview = $this->service->recordLotResult($inspection, [
+            'checklist' => [['id' => $measurement->hash_id, 'is_pass' => true]],
+            'measurements' => [],
+            'sample_defect_count' => 0,
+            'complete' => true,
+        ], $qcInspector);
+        $data = (new InspectionResource($this->service->show($awaitingReview)))
+            ->toArray(Request::create('/'));
+
+        $this->assertSame('Sales requester', $data['inspector']['name']);
+        $this->assertSame([
+            ['id' => $qcInspector->hash_id, 'name' => 'QC inspector'],
+        ], $data['result_authors']);
+    }
+
+    public function test_non_maker_checker_lot_result_still_records_the_user_who_entered_it(): void
+    {
+        $creator = User::factory()->create(['name' => 'Sales requester']);
+        $qcInspector = User::factory()->create(['name' => 'QC inspector']);
+        $inspection = Inspection::query()->create([
+            'inspection_number' => 'QC-INPROC-AUTHOR-'.uniqid(),
+            'stage' => \App\Modules\Quality\Enums\InspectionStage::InProcess,
+            'status' => InspectionStatus::Draft,
+            'inspection_mode' => InspectionMode::LotChecklist,
+            'entity_type' => 'work_order',
+            'entity_id' => 1,
+            'batch_quantity' => 1,
+            'sample_size' => 1,
+            'accept_count' => 0,
+            'reject_count' => 1,
+            'defect_count' => 0,
+            'inspector_id' => $creator->id,
+            'started_at' => now(),
+        ]);
+        $measurement = $this->makeChecklistRow($inspection);
+
+        $completed = $this->service->recordLotResult($inspection, [
+            'checklist' => [['id' => $measurement->hash_id, 'is_pass' => true]],
+            'measurements' => [],
+            'sample_defect_count' => 0,
+            'complete' => true,
+        ], $qcInspector);
+
+        $this->assertSame(InspectionStatus::Passed, $completed->status);
+        $this->assertDatabaseHas('inspection_result_authors', [
+            'inspection_id' => $inspection->id,
+            'user_id' => $qcInspector->id,
+        ]);
+        $this->assertDatabaseMissing('inspection_result_authors', [
+            'inspection_id' => $inspection->id,
+            'user_id' => $creator->id,
+        ]);
+    }
+
     private function makeIncomingInspection(User $assignedInspector): Inspection
     {
         return Inspection::query()->create([

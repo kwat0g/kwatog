@@ -402,61 +402,63 @@ export default function InspectionDetailPage() {
 
       <div className="px-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
+          <Panel title="Sample plan">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
+                <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
+                <dd className="font-mono tabular-nums">{data.batch_quantity}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Sample</dt>
+                <dd className="font-mono tabular-nums">
+                  {data.sample_size}
+                  {data.aql_code ? <span className="ml-2 text-muted">[{data.aql_code}]</span> : null}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Ac / Re</dt>
+                <dd className="font-mono tabular-nums">
+                  {data.accept_count} / {data.reject_count}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
+                <dd
+                  className={`font-mono tabular-nums ${
+                    data.defect_count > data.accept_count ? 'text-danger-fg' : ''
+                  }`}
+                >
+                  {data.defect_count}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Inspection created by</dt>
+                <dd>{data.inspector?.name ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Results recorded by</dt>
+                <dd>{data.result_authors?.map((author) => author.name).join(', ') || 'Not recorded'}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
+                <dd className="font-mono tabular-nums">{formatDateTime(data.started_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
+                <dd className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</dd>
+              </div>
+            </dl>
+          </Panel>
+
           {/* Lot checklist mode */}
           {data.inspection_mode === 'lot_checklist' ? (
             <LotResultPanel inspection={data} isTerminal={isTerminal} />
           ) : (
             <>
-              <Panel title="Sample plan">
-                <dl className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-3 text-sm">
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
-                    <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
-                    <dd className="font-mono tabular-nums">{data.batch_quantity}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Sample</dt>
-                    <dd className="font-mono tabular-nums">
-                      {data.sample_size}
-                      {data.aql_code ? (
-                        <span className="ml-2 text-muted">[{data.aql_code}]</span>
-                      ) : null}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Ac / Re</dt>
-                    <dd className="font-mono tabular-nums">
-                      {data.accept_count} / {data.reject_count}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Defects</dt>
-                    <dd
-                      className={`font-mono tabular-nums ${
-                        data.defect_count > data.accept_count ? 'text-danger-fg' : ''
-                      }`}
-                    >
-                      {data.defect_count}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Inspector</dt>
-                    <dd>{data.inspector?.name ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Started</dt>
-                    <dd className="font-mono tabular-nums">{formatDateTime(data.started_at)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs uppercase tracking-wider text-muted">Completed</dt>
-                    <dd className="font-mono tabular-nums">{formatDateTime(data.completed_at)}</dd>
-                  </div>
-                </dl>
-              </Panel>
-
               <Panel
                 title="Measurements"
                 meta={`${sampleIndices.length} sample${sampleIndices.length === 1 ? '' : 's'}`}
