@@ -76,9 +76,21 @@ class PurchaseRequestChainTraceFixesTest extends TestCase
         // resolveStrict throws for an unmapped status — this loop pins every
         // lifecycle status the service can broadcast as resolvable, so a new
         // PurchaseRequestStatus case cannot silently break the broadcaster.
-        foreach (['draft', 'pending', 'approved', 'partial', 'converted', 'rejected', 'cancelled'] as $status) {
+        $expectedSteps = [
+            'draft' => 'draft',
+            'pending' => 'pending',
+            'approved' => 'approved',
+            'partial' => 'approved',
+            'converted' => 'converted',
+            'rejected' => 'rejected',
+            'cancelled' => 'cancelled',
+        ];
+        foreach ($expectedSteps as $status => $expectedActive) {
             [$active, $completed] = \App\Common\Support\ChainDefinitions::resolveStrict('purchase_request', $status);
-            $this->assertContains($active, ['draft', 'pending', 'approved', 'converted'], $status);
+            $this->assertSame($expectedActive, $active, $status);
+            if (in_array($status, ['rejected', 'cancelled'], true)) {
+                $this->assertSame([], $completed, $status);
+            }
         }
 
         [$approvedActive, $approvedCompleted] = \App\Common\Support\ChainDefinitions::resolveStrict('purchase_request', 'approved');

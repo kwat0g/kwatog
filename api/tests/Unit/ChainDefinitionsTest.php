@@ -134,10 +134,11 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame(['draft', 'posted', 'partial'], $paidCompleted);
     }
 
-    public function test_bill_cancelled_collapses_to_closed(): void
+    public function test_bill_cancelled_stays_distinct_from_successful_closure(): void
     {
         [$active, $completed] = ChainDefinitions::resolve('bill', 'cancelled');
-        $this->assertSame('closed', $active);
+        $this->assertSame('cancelled', $active);
+        $this->assertSame([], $completed);
     }
 
     public function test_invoice_chain_resolves_statuses(): void
@@ -152,8 +153,33 @@ class ChainDefinitionsTest extends TestCase
         $this->assertSame('paid', $paid);
         $this->assertSame(['draft', 'finalized', 'partial'], $completed);
 
-        [$cancelled] = ChainDefinitions::resolve('invoice', 'cancelled');
-        $this->assertSame('closed', $cancelled);
+        [$cancelled, $cancelledCompleted] = ChainDefinitions::resolve('invoice', 'cancelled');
+        $this->assertSame('cancelled', $cancelled);
+        $this->assertSame([], $cancelledCompleted);
+    }
+
+    public function test_rejected_and_cancelled_statuses_are_terminal_outcomes_not_completed_chains(): void
+    {
+        foreach ([
+            ['sales_order', 'cancelled'],
+            ['work_order', 'cancelled'],
+            ['purchase_request', 'rejected'],
+            ['purchase_request', 'cancelled'],
+            ['purchase_order', 'cancelled'],
+            ['delivery', 'cancelled'],
+            ['grn', 'rejected'],
+            ['bill', 'cancelled'],
+            ['invoice', 'cancelled'],
+        ] as [$entityType, $status]) {
+            [$active, $completed] = ChainDefinitions::resolveStrict($entityType, $status);
+
+            $this->assertSame($status, $active, "{$entityType} {$status} must stay distinguishable from successful closure.");
+            $this->assertSame([], $completed, "{$entityType} {$status} must not mark every earlier step complete.");
+
+            [$readActive, $readCompleted] = ChainDefinitions::resolve($entityType, $status);
+            $this->assertSame($status, $readActive);
+            $this->assertSame([], $readCompleted);
+        }
     }
 
     public function test_allowed_types_includes_all_chains(): void

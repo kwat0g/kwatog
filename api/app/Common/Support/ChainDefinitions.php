@@ -275,6 +275,11 @@ final class ChainDefinitions
         return array_merge($defaults, $valid);
     }
 
+    private static function isTerminalOutcome(string $status): bool
+    {
+        return in_array($status, ['cancelled', 'rejected'], true);
+    }
+
     /**
      * @return array{0: string, 1: array<int,string>} [activeStep, completedSteps]
      */
@@ -283,6 +288,10 @@ final class ChainDefinitions
         $definition = self::configured()[$entityType] ?? null;
         $steps = $definition['steps'] ?? [];
         $statusMap = $definition['status_map'] ?? [];
+
+        if (array_key_exists($status, $statusMap) && self::isTerminalOutcome($status)) {
+            return [$status, []];
+        }
 
         $active = $statusMap[$status] ?? ($steps[0] ?? 'unknown');
         $idx    = array_search($active, $steps, true);
@@ -313,6 +322,10 @@ final class ChainDefinitions
             throw new \InvalidArgumentException(
                 "Status [{$status}] is not mapped for chain entity type [{$entityType}].",
             );
+        }
+
+        if (self::isTerminalOutcome($status)) {
+            return [$status, []];
         }
 
         $active = $statusMap[$status];
