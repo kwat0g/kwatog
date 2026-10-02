@@ -20,9 +20,25 @@ trait HasAuditLog
 {
     public static function bootHasAuditLog(): void
     {
-        static::created(fn (Model $m)  => static::writeAudit($m, 'created', null, $m->getAttributes()));
-        static::updated(fn (Model $m)  => static::writeAudit($m, 'updated', $m->getOriginal(), $m->getChanges()));
-        static::deleted(fn (Model $m)  => static::writeAudit($m, 'deleted', $m->getOriginal(), null));
+        $deleteSnapshots = new \WeakMap;
+
+        static::created(fn (Model $m) => static::writeAudit($m, 'created', null, $m->getAttributes()));
+        static::updated(fn (Model $m) => static::writeAudit($m, 'updated', $m->getOriginal(), $m->getChanges()));
+        static::deleting(static function (Model $m) use ($deleteSnapshots): void {
+            $deleteSnapshots[$m] = $m->getOriginal();
+        });
+        static::deleted(static function (Model $m) use ($deleteSnapshots): void {
+            $old = $deleteSnapshots[$m] ?? $m->getOriginal();
+            unset($deleteSnapshots[$m]);
+
+            $new = method_exists($m, 'getDeletedAtColumn')
+                && ! $m->isForceDeleting()
+                && $m->getAttribute($m->getDeletedAtColumn()) !== null
+                    ? $m->getAttributes()
+                    : null;
+
+            static::writeAudit($m, 'deleted', $old, $new);
+        });
     }
 
     /**
@@ -63,11 +79,11 @@ trait HasAuditLog
             ?? $request?->header('X-Request-ID');
 
         AuditLog::create([
-            'user_id'    => $userId,
+            'user_id' => $userId,
             'actor_type' => $actorType,
-            'action'     => $action,
+            'action' => $action,
             'model_type' => $model->getMorphClass(),
-            'model_id'   => $model->getKey(),
+            'model_id' => $model->getKey(),
             'old_values' => $old ? static::redactSensitive($model, static::auditSnapshot($model, $old)) : null,
             'new_values' => $new ? static::redactSensitive($model, static::auditSnapshot($model, $new)) : null,
             'ip_address' => $request?->ip(),
@@ -80,12 +96,13 @@ trait HasAuditLog
     }
 
     /**
-     * @param array<string, mixed> $values
+     * @param  array<string, mixed>  $values
      * @return array<string, mixed>
      */
     private static function redactSensitive(Model $model, array $values): array
     {
         $casts = $model->getCasts();
+
         return static::redactValue($values, $casts);
     }
 
@@ -105,9 +122,13 @@ trait HasAuditLog
         }
         if (is_array($value)) {
             $redacted = [];
-            foreach ($value as $key => $item) $redacted[$key] = static::redactValue($item, $casts, (string) $key);
+            foreach ($value as $key => $item) {
+                $redacted[$key] = static::redactValue($item, $casts, (string) $key);
+            }
+
             return $redacted;
         }
+
         return $value;
     }
 
@@ -144,8 +165,11 @@ trait HasAuditLog
     {
         foreach (['reason', 'reason_code', 'note', 'review_remarks', 'finance_remarks', 'remarks', 'notes'] as $field) {
             $value = $new[$field] ?? $old[$field] ?? null;
-            if (is_scalar($value) && trim((string) $value) !== '') return mb_substr(trim((string) $value), 0, 2000);
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return mb_substr(trim((string) $value), 0, 2000);
+            }
         }
+
         return null;
     }
 }
