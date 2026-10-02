@@ -172,7 +172,7 @@ export default function InspectionSpecEditorPage() {
 
   const products = useQuery({
     queryKey: ['crm', 'products', 'lookup'],
-    queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
+    queryFn: () => productsApi.options({ per_page: 100, is_active: 'true' }),
   });
   const parameterOptions = useQuery({
     queryKey: ['quality', 'inspection-specs', 'options'],

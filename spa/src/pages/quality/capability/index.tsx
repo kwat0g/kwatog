@@ -104,7 +104,7 @@ export default function CapabilityStudyPage() {
  // without affecting the study result or the capability options state.
  const productsQuery = useQuery({
  queryKey: ['crm', 'products', 'all'],
- queryFn: () => productsApi.list({ per_page: 200 }),
+ queryFn: () => productsApi.options({ per_page: 200 }),
  });
 
  // Fetch the spec for the selected product to populate spec items dropdown

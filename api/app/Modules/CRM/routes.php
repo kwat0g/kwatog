@@ -28,6 +28,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->withTrashed();
 
     /* ─── Products ─── */
+    Route::get('/products/options', [ProductController::class, 'options'])
+        ->middleware('permission_any:crm.products.view,production.molds.manage,quality.inspections.view,quality.inspections.manage,quality.ncr.manage,quality.specs.view');
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
     Route::get('/products/{product}', [ProductController::class, 'show']) ->middleware('permission:crm.products.view');
     Route::post('/products',          [ProductController::class, 'store']) ->middleware('permission:crm.products.manage');

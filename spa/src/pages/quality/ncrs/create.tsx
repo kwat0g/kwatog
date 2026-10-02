@@ -56,7 +56,7 @@ export default function CreateNcrPage() {
 
  const products = useQuery({
  queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
- queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
+ queryFn: () => productsApi.options({ is_active: true, per_page: 200 }),
  });
  const ncrOptions = useQuery({
  queryKey: ['quality', 'ncrs', 'options'],

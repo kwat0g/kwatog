@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Requests\StoreProductRequest;
 use App\Modules\CRM\Requests\UpdateProductRequest;
+use App\Modules\CRM\Resources\ProductOptionResource;
 use App\Modules\CRM\Resources\ProductResource;
 use App\Modules\CRM\Services\ProductService;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,11 @@ class ProductController
     public function index(Request $request): AnonymousResourceCollection
     {
         return ProductResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(Request $request): AnonymousResourceCollection
+    {
+        return ProductOptionResource::collection($this->service->list($request->query()));
     }
 
     public function show(Product $product): ProductResource

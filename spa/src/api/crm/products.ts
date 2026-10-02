@@ -7,7 +7,11 @@ export interface ProductListParams extends ListParams {
  has_bom?: boolean | string;
 }
 
+export type ProductOption = Pick<Product, 'id' | 'part_number' | 'name' | 'unit_of_measure'>;
+
 export const productsApi = {
+ options: (params?: ProductListParams, signal?: AbortSignal) =>
+ client.get<PaginatedResponse<ProductOption>>('/crm/products/options', { params, signal }).then((r) => r.data),
  list: (params?: ProductListParams, signal?: AbortSignal) =>
  client.get<PaginatedResponse<Product>>('/crm/products', { params, signal }).then((r) => r.data),
  show: (id: string) =>
