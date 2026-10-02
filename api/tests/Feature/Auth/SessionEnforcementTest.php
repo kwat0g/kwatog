@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Auth;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
@@ -51,6 +52,24 @@ class SessionEnforcementTest extends TestCase
             ->assertOk();
 
         $this->assertTrue($this->user->fresh()->last_activity->gt($old));
+    }
+
+    public function test_deactivated_user_is_rejected_on_the_next_authenticated_request(): void
+    {
+        $target = User::factory()->create([
+            'role_id' => Role::where('slug', 'employee')->value('id'),
+            'is_active' => true,
+            'must_change_password' => false,
+            'password_changed_at' => now(),
+        ]);
+
+        $this->actingAs($target)->getJson('/api/v1/auth/user')->assertOk();
+        app(UserAdminService::class)->deactivate($target, $this->user);
+
+        $this->actingAs($target->fresh())
+            ->getJson('/api/v1/auth/user')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'account_inactive');
     }
 
     public function test_password_change_requirement_does_not_trap_user_out_of_logout(): void

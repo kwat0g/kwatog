@@ -73,6 +73,21 @@ class SessionTimeout
             ], 401);
         }
 
+        if (! $user->is_active) {
+            if ($request->user('web') instanceof User) {
+                Auth::guard('web')->logout();
+                if ($request->hasSession()) {
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                }
+            }
+
+            return response()->json([
+                'message' => 'This account is inactive.',
+                'code' => 'account_inactive',
+            ], 401);
+        }
+
         $shortTimeoutRoles = $this->settings->get('security.session_timeout_short_roles');
         $shortTimeoutRoles = is_array($shortTimeoutRoles)
             ? array_values(array_filter($shortTimeoutRoles, 'is_string'))
