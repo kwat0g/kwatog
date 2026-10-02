@@ -197,6 +197,9 @@ class StockAdjustmentService
             if ($locked->status === StockAdjustmentStatus::Approved || $locked->stock_movement_id) {
                 throw new BusinessRuleException('Adjustment is already approved.');
             }
+            if ((int) $locked->requested_by === (int) $by->id) {
+                throw new BusinessRuleException('The requester cannot approve their own adjustment.');
+            }
 
             $mvmt = $this->applyMovement(
                 $locked->direction,

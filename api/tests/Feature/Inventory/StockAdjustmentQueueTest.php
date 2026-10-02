@@ -13,8 +13,10 @@ use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Common\Services\SettingsService;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -35,6 +37,7 @@ class StockAdjustmentQueueTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(ChartOfAccountsSeeder::class);
 
         $this->item     = Item::factory()->create(['is_active' => true]);
         $this->location = WarehouseLocation::factory()->create();
@@ -129,5 +132,27 @@ class StockAdjustmentQueueTest extends TestCase
         $this->actingAs($warehouse)
             ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
             ->assertStatus(403);
+    }
+
+    public function test_actor_with_maker_and_checker_permissions_cannot_approve_own_adjustment(): void
+    {
+        $makerChecker = $this->userWith('system_admin', ['inventory.adjust', 'inventory.adjust.approve']);
+        $pending = $this->pendingAdjustment($makerChecker);
+        $stockBefore = StockLevel::query()->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)->value('quantity');
+        $movementsBefore = DB::table('stock_movements')->count();
+
+        $this->actingAs($makerChecker)
+            ->patchJson("/api/v1/inventory/stock-adjustments/{$pending->hash_id}/approve")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The requester cannot approve their own adjustment.');
+
+        $this->assertSame('pending', $pending->fresh()->status->value);
+        $this->assertNull($pending->fresh()->stock_movement_id);
+        $this->assertSame((string) $stockBefore, (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)
+            ->value('quantity'));
+        $this->assertSame($movementsBefore, DB::table('stock_movements')->count());
     }
 }
