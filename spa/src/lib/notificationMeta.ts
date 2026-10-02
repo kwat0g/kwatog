@@ -69,6 +69,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
   'chain.outgoing_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
+  'chain.outgoing_qc_missing': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_awaiting_review': { icon: LuShieldCheck, group: 'approvals', label: 'Quality' },
   'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },

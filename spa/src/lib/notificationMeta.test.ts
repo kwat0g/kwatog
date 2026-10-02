@@ -41,6 +41,10 @@ describe('notificationMeta', () => {
  expect(notificationMeta('maintenance.breakdown').label).toBe('Maintenance');
  });
 
+ it('classifies missing outgoing QC escalations as alerts', () => {
+ expect(notificationMeta('chain.outgoing_qc_missing').group).toBe('alerts');
+ });
+
  it('has an entry for every type in the backend catalog', () => {
  const known = new Set(KNOWN_NOTIFICATION_TYPES);
  const missing = catalogKeys().filter((key) => !known.has(key));
