@@ -1039,8 +1039,11 @@ async function step11Finance(invoices) {
     check(`${label}: ${number} collection was recorded once by Finance`, sql(`select count(*) from collections where invoice_id=${invoice.dbId} and amount=${balance} and created_by=(select id from users where email='finance@ogami.test')`) === '1' && collectionsBefore === '0');
     check(`${label}: ${number} collection has one balanced posted journal entry`, sql(`select count(*) from collections c join journal_entries j on j.id=c.journal_entry_id where c.invoice_id=${invoice.dbId} and j.status='posted' and j.total_debit=j.total_credit`) === '1');
   }
-  const soStatus = sql(`select status from sales_orders where so_number='${SO_NUMBER}'`);
+  const soId = sql(`select id from sales_orders where so_number='${SO_NUMBER}'`);
+  const soStatus = sql(`select status from sales_orders where id=${soId}`);
   check(`${label}: the sales order closed once delivered AND paid`, soStatus === 'closed', soStatus);
+  const closeAudit = sql(`select count(*) filter (where new_values::jsonb->>'status'='closed')||'|'||count(*) filter (where new_values::jsonb->>'status'='closed' and user_id=(select id from users where email='finance@ogami.test')) from audit_logs where model_type like '%SalesOrder' and model_id=${soId} and action='updated'`);
+  check(`${label}: paid completion records one closed-state audit by Finance`, closeAudit === '1|1', closeAudit);
 }
 
 /* ─── DB-level alignment guards ───────────────────────────────────── */
