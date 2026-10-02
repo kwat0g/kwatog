@@ -40,6 +40,7 @@ import {
   LuListChecks,
   LuStore,
   LuChevronDown,
+  LuChevronRight,
 } from '@/lib/icons';
 import {
   WorkflowIcon,
@@ -75,6 +76,10 @@ export interface NavItem {
   to: string;
   label: string;
   icon: IconType;
+  /** Keep the most urgent cross-module destinations visible above module taxonomy. */
+  work?: boolean;
+  /** Plain-language explanation shown on hover/focus for dense internal terms. */
+  description?: string;
   /** Optional unread/pending count badge (static). */
   badge?: number;
   /**
@@ -93,6 +98,7 @@ export interface NavItem {
 
 export interface NavSection {
   label: string;
+  description?: string;
   items: NavItem[];
 }
 
@@ -127,19 +133,38 @@ const SECTION_PRIORITY: Record<string, number> = {
   Administration: 120,
 };
 
+/** Role context changes reading order only; permission gates remain authoritative. */
+const ROLE_SECTION_ORDER: Record<string, string[]> = {
+  vice_president: ['Finance', 'Sales & CRM', 'Production', 'Procurement'],
+  finance_officer: ['Finance', 'Procurement', 'Sales & CRM'],
+  purchasing_officer: ['Procurement', 'Warehouse', 'Finance'],
+  ppc_head: ['Production Planning (MRP)', 'Production', 'Procurement', 'Warehouse'],
+  production_manager: ['Production', 'Production Planning (MRP)', 'Quality', 'Warehouse'],
+  warehouse_staff: ['Warehouse', 'Supply Chain', 'Quality'],
+  qc_inspector: ['Quality', 'Warehouse', 'Production'],
+  maintenance_tech: ['Maintenance', 'Assets', 'Production'],
+  hr_officer: ['Human Resources', 'Finance'],
+  department_head: ['Human Resources', 'Finance', 'Production'],
+  sales_officer: ['Sales & CRM', 'Supply Chain'],
+  customer_service_officer: ['Sales & CRM', 'Supply Chain'],
+  driver: ['Supply Chain'],
+  employee: ['Human Resources'],
+};
+
 export const SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { to: '/dashboard', label: 'Dashboard', icon: LuLayoutDashboard },
+      { to: '/dashboard', label: 'Dashboard', icon: LuLayoutDashboard, work: true },
       {
         to: '/action-center',
         label: 'Action Center',
         icon: LuListChecks,
+        work: true,
         permission: 'dashboard.action_center.view',
         badgeKey: 'action_center',
       },
-      { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: LuChartColumnIncreasing },
+      { to: '/dashboard/scorecard', label: 'KPI Scorecard', description: 'Key performance indicator scorecard', icon: LuChartColumnIncreasing },
       {
         to: '/chains',
         label: 'Business Chain Tracker',
@@ -156,14 +181,16 @@ export const SECTIONS: NavSection[] = [
         to: '/approvals',
         label: 'Approval Queue',
         icon: LuInbox,
+        work: true,
         permission: 'approvals.board.view',
         badgeKey: 'approvals',
       },
-      { to: '/notifications', label: 'Notifications', icon: LuBell, badgeKey: 'unread' },
+      { to: '/notifications', label: 'Notifications', icon: LuBell, work: true, badgeKey: 'unread' },
     ],
   },
   {
     label: 'Sales & CRM',
+    description: 'Sales and customer relationship management',
     items: [
       {
         to: '/crm/sales-orders',
@@ -210,6 +237,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/return-management',
         label: 'Returns (RMA)',
+        description: 'Product return cases',
         icon: ReturnIcon,
         feature: 'return_management',
         permission: 'return_management.view',
@@ -253,10 +281,12 @@ export const SECTIONS: NavSection[] = [
   },
   {
     label: 'Production Planning (MRP)',
+    description: 'Material requirements planning',
     items: [
       {
         to: '/mrp/plans',
         label: 'MRP Plans',
+        description: 'Material requirements planning runs',
         icon: LuLayers,
         feature: 'mrp',
         permission: 'mrp.plans.view',
@@ -316,6 +346,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/purchasing/rfqs',
         label: 'Supplier RFQs',
+        description: 'Supplier quote requests',
         icon: LuFileText,
         feature: 'purchasing',
         permission: 'purchasing.rfq.view',
@@ -350,6 +381,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/inventory/grn',
         label: 'Goods Receipts (GRN)',
+        description: 'Inbound goods receipts',
         icon: ReceivingIcon,
         feature: 'inventory',
         permission: 'inventory.view',
@@ -365,6 +397,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/inventory/mrb',
         label: 'Quarantine Holds (MRB)',
+        description: 'Quality quarantine holds',
         icon: LuTriangleAlert,
         feature: 'inventory',
         permission: 'inventory.mrb.view',
@@ -473,6 +506,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/quality/ncrs',
         label: 'Nonconformance Reports (NCRs)',
+        description: 'Quality nonconformance reports',
         icon: LuTriangleAlert,
         feature: 'quality',
         permission: 'quality.ncr.view',
@@ -565,6 +599,7 @@ export const SECTIONS: NavSection[] = [
       {
         to: '/hr/attendance',
         label: 'Attendance & DTR',
+        description: 'Attendance and daily time records',
         icon: LuClock4,
         feature: 'attendance',
         anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'],
@@ -744,6 +779,8 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   const peekTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const visited = useRef(new Set<string>());
   const navId = useId();
+  const moduleContentId = (label: string, mobile: boolean) =>
+    `${navId}-${mobile ? 'mobile' : 'desktop'}-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   const rail = collapsed && !(peek && hovered) && !focused;
 
   useEffect(() => {
@@ -761,6 +798,7 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     peekTimers.current.forEach(clearTimeout);
   }, []);
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
+  const toggleSidebar = useSidebarStore((s) => s.toggle);
   const { pathname } = useLocation();
 
   // Close mobile drawer on route change.
@@ -792,15 +830,28 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         setMobileOpen(false);
       }
       if (e.key === 'Tab' && drawer) {
-        const controls = drawer.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled])');
+        const controls = Array.from(drawer.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        )).filter((control) =>
+          control.tabIndex >= 0
+          && !control.matches(':disabled')
+          && !control.closest('[hidden], [aria-hidden="true"]'),
+        );
         const first = controls[0];
         const last = controls[controls.length - 1];
-        if (e.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+        const current = document.activeElement;
+        if (!first || !last) {
           e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === drawer)) {
+          drawer.focus();
+        } else if (!drawer.contains(current)) {
           e.preventDefault();
-          first?.focus();
+          (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && (current === first || current === drawer)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (current === last || current === drawer)) {
+          e.preventDefault();
+          first.focus();
         }
       }
     }
@@ -826,13 +877,34 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   );
 
   // Only accessible modules participate in route matching and disclosure.
-  const visibleSections = useMemo(
+  const visibleSections = useMemo(() => {
+    const roleOrder = ROLE_SECTION_ORDER[roleSlug ?? ''] ?? [];
+    const roleRank = new Map(roleOrder.map((label, index) => [label, index]));
+    const sections = SECTIONS.map((section) => ({
+      ...section,
+      visibleItems: section.items.filter(isVisible),
+    })).filter((section) => section.visibleItems.length > 0);
+
+    return sections.sort((left, right) => {
+      const leftRank = left.label === 'Overview' ? -1 : roleRank.get(left.label) ?? roleOrder.length + (SECTION_PRIORITY[left.label] ?? Number.MAX_SAFE_INTEGER);
+      const rightRank = right.label === 'Overview' ? -1 : roleRank.get(right.label) ?? roleOrder.length + (SECTION_PRIORITY[right.label] ?? Number.MAX_SAFE_INTEGER);
+      return leftRank - rightRank;
+    });
+  }, [isVisible, roleSlug]);
+
+  const workItems = useMemo(
+    () => visibleSections.flatMap((section) => section.visibleItems.filter((item) => item.work)),
+    [visibleSections],
+  );
+  const moduleSections = useMemo(
     () =>
-      SECTIONS.map((section) => ({
-        ...section,
-        visibleItems: section.items.filter(isVisible),
-      })).filter((s) => s.visibleItems.length > 0),
-    [isVisible],
+      visibleSections
+        .map((section) => ({
+          ...section,
+          visibleItems: section.visibleItems.filter((item) => !item.work),
+        }))
+        .filter((section) => section.visibleItems.length > 0),
+    [visibleSections],
   );
 
   // Pick the most-specific item that matches the current path so a parent
@@ -856,10 +928,19 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
         : undefined,
     [matched, visibleSections],
   );
+  const activeModuleSectionLabel = matched?.work ? undefined : activeSectionLabel;
 
-  const [modules, setModules] = useState({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
+  const [modules, setModules] = useState({ pathname, activeSectionLabel, expanded: activeModuleSectionLabel ? [activeModuleSectionLabel] : [] });
   if (modules.pathname !== pathname || modules.activeSectionLabel !== activeSectionLabel) {
-    setModules({ pathname, activeSectionLabel, expanded: activeSectionLabel ? [activeSectionLabel] : [] });
+    const expandedAll =
+      moduleSections.length > 0 &&
+      moduleSections.every((section) => modules.expanded.includes(section.label));
+    const expanded = expandedAll
+      ? modules.expanded
+      : activeModuleSectionLabel
+        ? [activeModuleSectionLabel]
+        : [];
+    setModules({ pathname, activeSectionLabel, expanded });
   }
 
   useEffect(() => {
@@ -868,13 +949,15 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     peekTimers.current.clear();
   }, [pathname, activeSectionLabel]);
 
-  const allExpanded = visibleSections.every((section) => modules.expanded.includes(section.label));
+  const allExpanded =
+    moduleSections.length > 0 &&
+    moduleSections.every((section) => modules.expanded.includes(section.label));
   const toggleAll = () => {
     peekTimers.current.forEach(clearTimeout);
     peekTimers.current.clear();
     setModules({ pathname, activeSectionLabel, expanded: allExpanded
-      ? (activeSectionLabel ? [activeSectionLabel] : [])
-      : visibleSections.map((section) => section.label) });
+      ? (activeModuleSectionLabel ? [activeModuleSectionLabel] : [])
+      : moduleSections.map((section) => section.label) });
   };
 
   const toggleModule = (label: string) => {
@@ -884,9 +967,12 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
     setModules({ pathname, activeSectionLabel, expanded: open ? [...modules.expanded, label] : modules.expanded.filter((entry) => entry !== label) });
     if (open && !visited.current.has(label)) {
       const expire = () => {
-        // Give keyboard users time to finish navigating the module.
-        const group = document.getElementById(`${navId}-${mobileOpen ? 'mobile' : 'desktop'}-${label}`);
-        if (group?.contains(document.activeElement)) {
+        // Keep the temporary expansion while pointer hovers or keyboard enters its links.
+        const inUse = [false, true].some((mobile) => {
+          const group = document.getElementById(moduleContentId(label, mobile));
+          return group?.contains(document.activeElement) || group?.matches(':hover');
+        });
+        if (inUse) {
           peekTimers.current.set(label, setTimeout(expire, 500));
           return;
         }
@@ -899,46 +985,112 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
 
   const sidebarContent = (mobile = false) => {
     const compact = !mobile && rail;
+    const hoverExpanded = !mobile && collapsed && peek && hovered;
+    const renderNavItem = (item: NavItem) => {
+      const entry = getBadge(item.badgeKey);
+      return (
+        <li key={item.to}>
+          <NavLink item={item} active={isActive(item.to)} collapsed={compact} badgeOverride={entry?.count} badgeVariant={entry?.severity} badgeDescription={entry?.description} />
+        </li>
+      );
+    };
+    const renderModuleSection = (section: (typeof moduleSections)[number]) => {
+      const active = activeModuleSectionLabel === section.label;
+      const expanded = modules.expanded.includes(section.label);
+      const open = hoverExpanded || active || expanded;
+      const sectionBadges = section.visibleItems.flatMap((item) => {
+        const entry = getBadge(item.badgeKey);
+        const count = entry?.count ?? item.badge ?? 0;
+        return count > 0
+          ? [{ count, severity: entry?.severity ?? 'accent', description: entry?.description ?? item.label }]
+          : [];
+      });
+      const sectionBadgeCount = sectionBadges.reduce((total, badge) => total + badge.count, 0);
+      const sectionBadgeVariant: BadgeSeverity | 'accent' = sectionBadges.some((badge) => badge.severity === 'danger')
+        ? 'danger'
+        : sectionBadges.some((badge) => badge.severity === 'warning')
+          ? 'warning'
+          : sectionBadges.some((badge) => badge.severity === 'accent')
+            ? 'accent'
+            : 'neutral';
+      const sectionBadgeSummary = sectionBadges
+        .map((badge) => `${badge.description}: ${badge.count}`)
+        .join(' · ');
+      const id = moduleContentId(section.label, mobile);
+      return (
+        <div key={section.label} data-module={section.label} className="mb-2">
+          {!compact && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={id}
+              aria-label={!open && sectionBadgeCount > 0
+                ? `${section.label}: ${sectionBadgeSummary}`
+                : undefined}
+              disabled={hoverExpanded || active}
+              onClick={() => toggleModule(section.label)}
+              className={cn(
+                'flex min-h-11 w-full items-center gap-2 rounded-md px-4 py-1.5 text-left text-sm font-normal transition-colors duration-fast md:min-h-9',
+                focusRingInset,
+                active ? 'font-medium text-primary' : 'text-secondary hover:bg-elevated hover:text-primary',
+              )}
+            >
+              <span title={section.description ?? section.label} className="min-w-0 flex-1 truncate">{section.label}</span>
+              {!open && sectionBadgeCount > 0 && (
+                <span aria-hidden title={sectionBadgeSummary} className="shrink-0">
+                  <Badge variant={sectionBadgeVariant}>
+                    {sectionBadgeCount > 99 ? '99+' : sectionBadgeCount}
+                  </Badge>
+                </span>
+              )}
+              <LuChevronDown
+                size={14}
+                aria-hidden
+                className={cn('shrink-0 text-muted transition-transform duration-fast', !open && '-rotate-90')}
+              />
+            </button>
+          )}
+          <ul id={id} hidden={!compact && !open} className={cn((compact || open) && 'flex flex-col')}>
+            {section.visibleItems.map(renderNavItem)}
+          </ul>
+        </div>
+      );
+    };
     return (
       <>
-        <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto py-3">
-          {visibleSections.map((section) => {
-            const open = modules.expanded.includes(section.label);
-            const id = `${navId}-${mobile ? 'mobile' : 'desktop'}-${section.label}`;
-            return (
-              <div key={section.label} data-module={section.label} className="mb-3">
-                {!compact && (
-                  <button
-                    type="button"
-                    aria-expanded={open}
-                    aria-controls={id}
-                    onClick={() => toggleModule(section.label)}
-                    className={cn('flex w-full items-center gap-2 px-4 py-2 text-left text-2xs uppercase tracking-widest font-medium', focusRingInset, activeSectionLabel === section.label ? 'text-primary' : 'text-muted')}
-                  >
-                    <span className="flex-1">{section.label}</span>
-                    <LuChevronDown size={12} aria-hidden className={cn('shrink-0', !open && '-rotate-90')} />
-                  </button>
-                )}
-                <ul id={id} hidden={!compact && !open} className={cn((compact || open) && 'flex flex-col')}>
-                    {section.visibleItems.map((item) => {
-                      const entry = getBadge(item.badgeKey);
-                      return (
-                        <li key={item.to}>
-                          <NavLink item={item} active={isActive(item.to)} collapsed={compact} badgeOverride={entry?.count} badgeVariant={entry?.severity} badgeDescription={entry?.description} />
-                        </li>
-                      );
-                    })}
-                </ul>
-              </div>
-            );
-          })}
+        <nav aria-label="Modules" className="min-h-0 flex-1 overflow-y-auto py-2">
+          {workItems.length > 0 && (
+            <div role="group" aria-label="Work" className="mb-3">
+              {!compact && <div className="px-4 pb-1 text-2xs font-medium uppercase tracking-wide text-muted">Work</div>}
+              <ul className="flex flex-col">
+                {workItems.map(renderNavItem)}
+              </ul>
+            </div>
+          )}
+
+          {moduleSections.map(renderModuleSection)}
         </nav>
-        {!compact && (
+        {!compact && !hoverExpanded && moduleSections.length > 1 && (
           <div role="group" aria-label="Module controls" className="flex shrink-0 gap-1 border-t border-default bg-canvas p-2">
-            <button type="button" onClick={toggleAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
+            <button type="button" onClick={toggleAll} className={cn('flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-sm text-muted hover:bg-surface hover:text-primary md:min-h-hit', focusRingInset)}>
               <LuChevronDown size={14} className={cn(allExpanded && 'rotate-180')} aria-hidden />
               {allExpanded ? 'Collapse all' : 'Expand all'}
             </button>
+          </div>
+        )}
+        {compact && (
+          <div className="shrink-0 border-t border-default bg-canvas p-2">
+            <Tooltip content="Expand navigation" side="right">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                icon={<LuChevronRight size={18} />}
+                aria-label="Expand navigation"
+                onClick={toggleSidebar}
+                className="min-h-11 min-w-11 text-muted hover:text-primary md:min-h-hit md:min-w-hit"
+              />
+            </Tooltip>
           </div>
         )}
       </>
@@ -1027,6 +1179,10 @@ const NavLink = memo(function NavLink({
 }) {
   const Icon = item.icon;
   const badgeValue = badgeOverride ?? item.badge;
+  const hasBadge = badgeValue != null && badgeValue > 0;
+  const collapsedLabel = hasBadge
+    ? `${item.label}, ${badgeDescription ?? 'badge count'}: ${badgeValue}`
+    : item.label;
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
@@ -1035,59 +1191,62 @@ const NavLink = memo(function NavLink({
     }
   }, [active]);
 
-  return (
+  const link = (
     <Link
       ref={linkRef}
       to={item.to}
-      aria-label={collapsed ? item.label : undefined}
+      aria-label={collapsed ? collapsedLabel : undefined}
+      title={collapsed ? collapsedLabel : item.description}
       aria-current={active ? 'page' : undefined}
       className={cn(
         focusRingInset,
-        'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-md text-sm transition-colors duration-fast',
+        'relative flex min-h-11 items-center gap-3 py-1.5 mx-2 mb-0.5 rounded-md text-base transition-colors duration-fast md:min-h-9',
         active
-          ? 'text-accent font-medium bg-accent/15'
-          : 'text-secondary hover:bg-surface hover:text-primary',
-        collapsed && 'justify-center mx-1 py-2',
+          ? 'text-primary font-medium bg-accent/10'
+          : 'text-secondary hover:bg-elevated hover:text-primary',
+        collapsed ? 'justify-center mx-1 px-0 py-2' : 'px-3',
       )}
     >
       {active && (
         <span
-          className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent"
+          className="absolute left-1 top-1 bottom-1 w-0.5 rounded-r-md bg-accent"
           aria-hidden
         />
       )}
       <Icon
-        size={16}
-        className={cn(collapsed ? '' : 'shrink-0', active ? 'text-accent' : 'text-muted')}
+        size={collapsed ? 20 : 16}
+        className={cn('shrink-0', active ? 'text-accent' : 'text-muted')}
       />
-      {collapsed && badgeValue != null && badgeValue > 0 && (
-        <span
-          className={cn(
-            'absolute top-1 right-2 h-2 w-2 rounded-full',
-            badgeVariant === 'danger'
-              ? 'bg-danger-bg'
-              : badgeVariant === 'warning'
-                ? 'bg-warning-bg'
-                : 'bg-accent',
-          )}
-          aria-hidden
-        />
-      )}{' '}
+      {collapsed && hasBadge && (
+        <span aria-hidden className="absolute -top-1 right-0 z-10">
+          <Badge variant={badgeVariant ?? 'accent'} className="ring-2 ring-canvas">
+            {badgeValue > 99 ? '99+' : badgeValue}
+          </Badge>
+        </span>
+      )}
       {!collapsed && (
         <>
-          <span className="truncate flex-1">{item.label}</span>
+          <span title={item.label} className="min-w-0 flex-1 truncate">{item.label}</span>
           {badgeValue != null && badgeValue > 0 ? (
-            <Tooltip content={`${badgeDescription ?? item.label} · ${badgeValue}`} side="top">
-              <Badge
-                variant={badgeVariant ?? 'accent'}
-                aria-label={`${badgeDescription ?? item.label} — ${badgeValue}`}
-              >
-                {badgeValue > 99 ? '99+' : badgeValue}
-              </Badge>
-            </Tooltip>
+            <span className="ml-auto shrink-0">
+              <Tooltip content={`${badgeDescription ?? item.label} · ${badgeValue}`} side="top">
+                <Badge
+                  variant={badgeVariant ?? 'accent'}
+                  aria-label={`${badgeDescription ?? item.label} — ${badgeValue}`}
+                >
+                  {badgeValue > 99 ? '99+' : badgeValue}
+                </Badge>
+              </Tooltip>
+            </span>
           ) : null}
         </>
       )}
     </Link>
   );
+
+  return collapsed ? (
+    <Tooltip content={item.description ?? collapsedLabel} side="right">
+      {link}
+    </Tooltip>
+  ) : link;
 });

@@ -11,9 +11,9 @@ Make the shell work-first without changing routes, permissions, badge sources, o
 ## User experience
 
 - A persistent **Work** block exposes Dashboard, Action Center, Approval Queue, and Notifications.
-- Domain navigation sits behind one **All modules** disclosure. The active domain opens automatically so deep links retain context.
+- Domain navigation follows Work as directly visible section headers. Each active or expanded domain keeps its own section body open, and Expand all/Collapse all stays pinned at the bottom of the sidebar.
 - Existing module sections keep their labels, ordering, permission gates, badges, keyboard behavior, and command-palette destinations.
-- The mobile drawer uses the same Work/All modules hierarchy. Its focus trap, Escape handling, and route-close behavior remain unchanged.
+- The mobile drawer uses the same Work and module-section hierarchy. Its focus trap, Escape handling, and route-close behavior remain unchanged.
 - Theme and keyboard-help actions move into the profile menu at medium widths. Wide screens retain the existing direct controls.
 
 ## Components and data flow
@@ -21,11 +21,11 @@ Make the shell work-first without changing routes, permissions, badge sources, o
 ### Sidebar
 
 - Preserve `SECTIONS` as the single navigation metadata source.
-- Mark the existing Overview work destinations with a small metadata flag; keep non-work Overview links available under All modules.
-- Render work links first, then one disclosure around all non-work sections.
-- Auto-open All modules when the active route belongs to a domain section.
-- Keep section badges meaningful by rendering item descriptions and retaining existing section-level totals only inside All modules.
-- Keep the collapsed rail behavior, but retain active-state and tooltip semantics.
+- Mark the existing Overview work destinations with a small metadata flag; keep non-work Overview links in the module-section list.
+- Render work links first, then the non-work sections directly in the scroll container.
+- Auto-open the section that owns the active route.
+- Keep section badges meaningful by rendering item descriptions and retaining existing section-level totals on their section headers.
+- Keep the collapsed rail behavior, use 20px nav icons, and retain active-state, tooltip, and explicit Expand navigation semantics.
 
 ### Topbar, AppLayout, ProfileDropdown
 
@@ -37,9 +37,9 @@ Make the shell work-first without changing routes, permissions, badge sources, o
 ## States and edge cases
 
 - No visible work items: render the Work block with the available permission-filtered items; do not invent placeholders.
-- Active domain route: All modules opens and the matching section remains expanded.
+- Active domain route: the matching section remains expanded.
 - Collapsed desktop rail: work and domain links remain keyboard reachable with existing labels and titles.
-- Mobile drawer: Work and All modules fit the existing scroll container and focus trap.
+- Mobile drawer: Work and module sections fit the existing scroll container and focus trap.
 - Missing user: profile actions do not render because the profile menu already returns null.
 - Reduced motion: reuse existing transition and focus classes.
 
@@ -53,7 +53,7 @@ Make the shell work-first without changing routes, permissions, badge sources, o
 ## Acceptance criteria
 
 1. First viewport presents work destinations before domain taxonomy.
-2. Domain destinations require one explicit All modules action unless the current route belongs to that domain.
+2. Domain destinations are scannable directly below Work, with section bodies expanded on demand and global controls pinned below the scroll region.
 3. Existing permission filtering, badge counts, route matching, active states, mobile focus behavior, and command-palette destinations remain correct.
 4. Theme and keyboard-help actions remain reachable at every supported width.
 5. No new detector findings or token-audit failures.
