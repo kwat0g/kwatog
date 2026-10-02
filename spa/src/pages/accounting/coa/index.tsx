@@ -244,6 +244,7 @@ export function TreeRow({
 }) {
   const hasChildren = (node.children?.length ?? 0) > 0;
   const isOpen = expanded.has(node.id);
+  const cannotDeactivate = node.is_active && hasChildren;
 
   return (
     <>
@@ -298,12 +299,15 @@ export function TreeRow({
               iconOnly
               icon={node.is_active ? <LuEyeOff size={13} /> : <LuEye size={13} />}
               aria-label={`${node.is_active ? 'Deactivate' : 'Activate'} ${node.code}`}
-              title={`${node.is_active ? 'Deactivate' : 'Activate'} account`}
+              aria-description={cannotDeactivate ? 'Deactivate child accounts first' : undefined}
+              title={cannotDeactivate
+                ? 'Deactivate child accounts first'
+                : `${node.is_active ? 'Deactivate' : 'Activate'} account`}
               onClick={(e) => {
                 e.stopPropagation();
                 onStatusChange(node);
               }}
-              disabled={statusPending}
+              disabled={statusPending || cannotDeactivate}
             />
           )}
           {!node.is_active && <Chip variant="neutral">inactive</Chip>}
