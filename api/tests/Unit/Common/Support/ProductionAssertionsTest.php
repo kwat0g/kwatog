@@ -163,6 +163,18 @@ class ProductionAssertionsTest extends TestCase
         ProductionAssertions::assertSafeOrFail();
     }
 
+    public function test_throws_when_demo_data_is_enabled_in_production(): void
+    {
+        $this->asProduction();
+        $this->setSafeDefaults();
+        config()->set('app.seed_demo_data', true);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/SEED_DEMO_DATA/');
+
+        ProductionAssertions::assertSafeOrFail();
+    }
+
     public function test_aggregates_multiple_failures_into_one_message(): void
     {
         $this->asProduction();

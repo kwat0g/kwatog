@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Demo;
 
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use Database\Seeders\DemoAccountSeeder;
 use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\GoldenPathDemoSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Tests\TestCase;
 
 class DemoAccountSeederTest extends TestCase
@@ -66,5 +70,52 @@ class DemoAccountSeederTest extends TestCase
 
         $this->assertSame($links, $currentLinks);
         $this->assertSame(18, Employee::query()->count());
+    }
+
+    public function test_demo_accounts_cannot_be_seeded_in_production(): void
+    {
+        $this->seed([
+            RolePermissionSeeder::class,
+            DepartmentSeeder::class,
+            PositionSeeder::class,
+        ]);
+
+        $this->app->detectEnvironment(static fn (): string => 'production');
+        $exception = null;
+        try {
+            try {
+                $this->app->make(DemoAccountSeeder::class)->run();
+            } catch (RuntimeException $seedingException) {
+                $exception = $seedingException;
+            }
+        } finally {
+            $this->app->detectEnvironment(static fn (): string => 'testing');
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('employees', 0);
+        $this->assertSame('Demo data must never be seeded in production.', $exception?->getMessage());
+    }
+
+    public function test_golden_path_portal_credentials_cannot_be_seeded_in_production(): void
+    {
+        Vendor::factory()->create();
+        Customer::factory()->create();
+
+        $this->app->detectEnvironment(static fn (): string => 'production');
+        $exception = null;
+        try {
+            try {
+                $this->app->make(GoldenPathDemoSeeder::class)->run();
+            } catch (RuntimeException $seedingException) {
+                $exception = $seedingException;
+            }
+        } finally {
+            $this->app->detectEnvironment(static fn (): string => 'testing');
+        }
+
+        $this->assertDatabaseCount('supplier_portal_users', 0);
+        $this->assertDatabaseCount('customer_portal_users', 0);
+        $this->assertSame('Demo data must never be seeded in production.', $exception?->getMessage());
     }
 }

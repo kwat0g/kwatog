@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Common\Support\ProductionAssertions;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -46,6 +47,8 @@ class DemoAccountSeeder extends Seeder
 
     public function run(): void
     {
+        ProductionAssertions::assertDemoSeedingAllowed();
+
         $created = 0;
 
         foreach ($this->accounts as $index => $account) {

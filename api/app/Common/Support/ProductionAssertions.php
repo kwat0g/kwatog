@@ -50,8 +50,19 @@ class ProductionAssertions
             $errors[] = 'SESSION_SECURE_COOKIE must be true in production so the session cookie is never sent over plaintext HTTP.';
         }
 
+        if (config('app.seed_demo_data')) {
+            $errors[] = 'SEED_DEMO_DATA must be false in production.';
+        }
+
         if (! empty($errors)) {
             throw new RuntimeException('Production boot blocked: '.implode(' ', $errors));
+        }
+    }
+
+    public static function assertDemoSeedingAllowed(): void
+    {
+        if (app()->environment('production')) {
+            throw new RuntimeException('Demo data must never be seeded in production.');
         }
     }
 }

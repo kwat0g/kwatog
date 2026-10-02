@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Common\Services\ApprovalService;
+use App\Common\Support\ProductionAssertions;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
@@ -61,6 +62,8 @@ class GoldenPathDemoSeeder extends Seeder
 
     public function run(): void
     {
+        ProductionAssertions::assertDemoSeedingAllowed();
+
         $this->section('batch numbers (ADV3)', fn () => $this->seedBatchNumbers());
         $this->section('hero trace linkage (ADV3)', fn () => $this->hardenHeroTrace());
         $this->section('shipment lots (ADV3)', fn () => $this->seedShipmentLots());
