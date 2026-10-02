@@ -18,6 +18,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
@@ -56,6 +57,7 @@ export function StockCountManager() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const canManage = can('inventory.stock_count.manage');
+ const actorId = useAuthStore((state) => state.user?.id);
 
  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
  const [showCreateModal, setShowCreateModal] = useState(false);
@@ -143,6 +145,7 @@ export function StockCountManager() {
  const items = activeSession?.items ?? [];
 
  const pendingItems = items.filter((i) => i.status === 'pending');
+ const isSessionCreator = activeSession?.created_by?.id === actorId;
 
  return (
  <div>
@@ -212,9 +215,11 @@ export function StockCountManager() {
  </Button>
  ) : canManage && activeSession.status === 'in_progress' ? (
  <div className="flex gap-1">
+ {!isSessionCreator && (
  <Button size="sm" variant="primary" onClick={() => setConfirmAction('complete')}>
  Complete session
  </Button>
+ )}
  <Button size="sm" variant="danger" onClick={() => setConfirmAction('cancel')}>
  Cancel
  </Button>
@@ -223,6 +228,9 @@ export function StockCountManager() {
  }
  >
  <div className="text-xs space-y-1">
+ {activeSession.status === 'in_progress' && canManage && isSessionCreator && (
+ <p className="text-warning-fg">A different user must complete this count.</p>
+ )}
  <div className="flex gap-4">
  <span className="text-muted">Scope: <span className="font-medium text-primary">{activeSession.scope_label ?? activeSession.scope}</span></span>
  <span className="text-muted">Status: <Chip variant={statusVariant[activeSession.status] || 'neutral'}>{activeSession.status_label ?? activeSession.status.replace(/_/g, ' ')}</Chip></span>
@@ -346,6 +354,7 @@ export function StockCountManager() {
  label="Counted quantity" required autoFocus
  {...countForm.register('counted_quantity')}
  {...numberInputProps()}
+ step="0.001"
  error={countForm.formState.errors.counted_quantity?.message}
  className="font-mono tabular-nums"
  />
