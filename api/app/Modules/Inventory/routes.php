@@ -63,7 +63,9 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
         ->middleware('permission:inventory.view');
 
     /* ─── OGAMI-004 — UOM catalog + per-item conversions ─── */
-    Route::get('/uoms', [UomController::class, 'index'])->middleware('permission:inventory.view');
+    Route::get('/uoms', [UomController::class, 'index'])->middleware(
+        'permission_any:inventory.view,inventory.items.manage,crm.products.manage,mrp.boms.manage,quality.specs.view,quality.specs.manage,accounting.bills.create,accounting.invoices.create',
+    );
     Route::post('/uoms', [UomController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/uoms/{uom}', [UomController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/uoms/{uom}', [UomController::class, 'destroy'])->middleware('permission:inventory.items.manage');
