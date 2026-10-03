@@ -391,9 +391,10 @@ export default function ReturnRequestDetailPage() {
   const canDispose = canManage || can('return_management.dispose');
   const canComplete = canManage || can('return_management.complete');
   const canApprove = can('return_management.approve');
+  const canDecide = canApprove && rma.actions?.can_approve === true;
   const actions = availableActions(rma.status).filter((action) =>
     action.key === 'approve' || action.key === 'reject'
-      ? canApprove
+      ? canDecide
       : action.key === 'receive'
         ? canReceive
         : action.key === 'inspect'

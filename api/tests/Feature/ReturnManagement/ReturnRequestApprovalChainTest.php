@@ -125,4 +125,58 @@ class ReturnRequestApprovalChainTest extends TestCase
 
         $this->assertSame($finance->id, (int) $rma->fresh()->finance_only_approved_by);
     }
+
+    public function test_only_the_current_finance_actor_sees_and_can_reject_finance_only_rma(): void
+    {
+        $submitter = $this->userWithRole('customer_service_officer');
+        $departmentHead = $this->userWithRole('department_head');
+        $finance = $this->userWithRole('finance_officer');
+        $rma = ReturnRequest::query()->create([
+            'rma_number' => 'RMA-FIN-'.substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => 'draft',
+            'finance_only' => true,
+            'finance_only_reason' => 'Non-stock service credit.',
+            'created_by' => $submitter->id,
+        ]);
+
+        $this->actingAs($submitter)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending_approval');
+
+        $this->actingAs($departmentHead)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.pending_approval_step', 1)
+            ->assertJsonPath('data.approval_records.0.role_slug', 'finance_officer')
+            ->assertJsonPath('data.actions.can_approve', false)
+            ->assertJsonPath('data.actions.can_reject', false);
+
+        $this->actingAs($departmentHead)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
+                'reason' => 'This is not the assigned approval role.',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('pending_approval', $rma->fresh()->status->value);
+        $this->assertSame('pending', $rma->approvalRecords()->firstOrFail()->action);
+
+        $this->actingAs($finance)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.actions.can_approve', true)
+            ->assertJsonPath('data.actions.can_reject', true);
+
+        $this->actingAs($finance)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/reject", [
+                'reason' => 'Credit request lacks supporting documents.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+
+        $record = $rma->approvalRecords()->firstOrFail();
+        $this->assertSame('rejected', $record->action);
+        $this->assertSame($finance->id, (int) $record->approver_id);
+    }
 }

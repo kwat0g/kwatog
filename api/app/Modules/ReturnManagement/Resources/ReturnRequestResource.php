@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Resources;
 
+use App\Common\Services\ApprovalService;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -180,6 +182,12 @@ class ReturnRequestResource extends JsonResource
                 'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
 
+            'actions' => $this->whenLoaded('approvalRecords', function () use ($request): array {
+                $canDecide = $this->canDecide($request->user());
+
+                return ['can_approve' => $canDecide, 'can_reject' => $canDecide];
+            }),
+
             'creator'              => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,
                 'name' => $this->creator->name,
@@ -224,5 +232,24 @@ class ReturnRequestResource extends JsonResource
             'created_at'           => optional($this->created_at)->toIso8601String(),
             'updated_at'           => optional($this->updated_at)->toIso8601String(),
         ];
+    }
+
+    private function canDecide(?User $user): bool
+    {
+        if ($user === null
+            || $this->status?->value !== 'pending_approval'
+            || (int) $this->created_by === (int) $user->id
+            || ! $user->hasPermission('return_management.approve')) {
+            return false;
+        }
+
+        $records = $this->approvalRecords;
+        $next = $records->first(fn ($record) => $record->action === 'pending');
+        if ($next === null || ! app(ApprovalService::class)->canUserActFor($user, $next->role_slug)) {
+            return false;
+        }
+
+        return ! $records->contains(fn ($record) => (int) $record->approver_id === (int) $user->id
+            && in_array($record->action, ['approved', 'rejected'], true));
     }
 }
