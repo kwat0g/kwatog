@@ -911,7 +911,7 @@ class ReturnRequestScenarioTest extends TestCase
         $response = $this->actingAs($outsider)
             ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/approve");
 
-        $this->assertContains($response->status(), [403, 422], 'A non-approver must be refused.');
+        $response->assertForbidden();
         $this->assertSame(ReturnRequestStatus::PendingApproval, $rma->fresh()->status);
     }
 

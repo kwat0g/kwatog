@@ -10,6 +10,7 @@ use App\Modules\ReturnManagement\Models\ReturnRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -93,6 +94,33 @@ class ReturnRequestApprovalChainTest extends TestCase
             ->assertJsonPath('data.approval_records.0.action', 'approved')
             ->assertJsonPath('data.approval_records.0.approver.name', $head->name)
             ->assertJsonPath('data.approval_records.1.action', 'pending');
+    }
+
+    public function test_later_approval_role_cannot_skip_the_current_step(): void
+    {
+        $submitter = $this->userWithRole('system_admin');
+        $rma = $this->draftRma($submitter);
+
+        $this->actingAs($submitter)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending_approval');
+
+        $laterApprover = $this->userWithRole('production_manager');
+        $this->actingAs($laterApprover)
+            ->getJson("/api/v1/return-management/return-requests/{$rma->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.pending_approval_step', 1);
+        Log::spy();
+        $this->actingAs($laterApprover)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/approve")
+            ->assertForbidden()
+            ->assertJsonPath('message', "Only users with role 'department_head' can approve this step.");
+
+        $this->assertSame('pending_approval', $rma->fresh()->status->value);
+        $this->assertSame(['pending', 'pending'], $rma->approvalRecords()->orderBy('step_order')->pluck('action')->all());
+        $this->assertSame(0, $rma->receipts()->count());
+        Log::shouldNotHaveReceived('warning');
     }
 
     public function test_finance_only_rma_uses_a_finance_checker_and_is_visible_to_finance(): void

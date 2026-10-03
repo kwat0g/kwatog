@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Exceptions\ForbiddenActionException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -1730,6 +1731,10 @@ class ReturnRequestService
             try {
                 $this->approvals->approve($locked, $by, $remarks);
             } catch (\Throwable $e) {
+                if ($e instanceof ForbiddenActionException) {
+                    throw $e;
+                }
+
                 // Swallowing this returned 200 with an unchanged RMA, so the SPA
                 // showed "RMA approved." for an approval that never happened.
                 Log::warning('return_request approval approve failed', [

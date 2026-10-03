@@ -442,7 +442,8 @@ class SupplierReturnLifecycleTest extends TestCase
         // chain routes to department_head then production_manager.
         $this->actingAs($admin)
             ->postJson("/api/v1/return-management/return-requests/{$rmaId}/approve")
-            ->assertStatus(422);
+            ->assertForbidden()
+            ->assertJsonPath('message', 'You cannot act on a record you submitted.');
 
         $this->actingAs($this->userWithRole('department_head'))
             ->postJson("/api/v1/return-management/return-requests/{$rmaId}/approve", ['remarks' => 'Confirmed off-spec.'])
