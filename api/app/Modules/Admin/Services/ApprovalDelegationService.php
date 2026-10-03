@@ -68,21 +68,53 @@ class ApprovalDelegationService
             throw new BusinessRuleException('A user cannot delegate approval authority to themselves.');
         }
 
-        if (! User::whereKey($delegateId)->exists()) {
-            throw new BusinessRuleException('The selected delegate does not exist.');
-        }
-
-        $delegator = User::query()->with('role')->find($delegatorId);
-        if (! $delegator) {
-            throw new BusinessRuleException('The selected delegator does not exist.');
-        }
-
         $roleSlug = $data['role_slug'] ?? null;
-        if ($roleSlug !== null && $delegator->role?->slug !== $roleSlug) {
-            throw new BusinessRuleException('A delegation may only cover the delegator\'s current role.');
-        }
 
         return DB::transaction(function () use ($data, $delegatorId, $delegateId, $roleSlug) {
+            $users = User::query()
+                ->whereKey([$delegatorId, $delegateId])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->with('role')
+                ->get()
+                ->keyBy('id');
+
+            $delegate = $users->get($delegateId);
+            if (! $delegate) {
+                throw new BusinessRuleException('The selected delegate does not exist.');
+            }
+            if (! $delegate->is_active) {
+                throw new BusinessRuleException('The selected delegate must be an active user.');
+            }
+
+            $delegator = $users->get($delegatorId);
+            if (! $delegator) {
+                throw new BusinessRuleException('The selected delegator does not exist.');
+            }
+            if ($roleSlug !== null && $delegator->role?->slug !== $roleSlug) {
+                throw new BusinessRuleException('A delegation may only cover the delegator\'s current role.');
+            }
+
+            $existing = ApprovalDelegation::query()
+                ->where('delegator_user_id', $delegatorId)
+                ->where('delegate_user_id', $delegateId)
+                ->where('role_slug', $roleSlug)
+                ->whereDate('starts_at', $data['starts_at'])
+                ->whereDate('ends_at', $data['ends_at'])
+                ->first();
+
+            if ($existing) {
+                if ($existing->is_active && $existing->reason === ($data['reason'] ?? null)) {
+                    return $existing->load(['delegator', 'delegate']);
+                }
+
+                $message = $existing->is_active
+                    ? 'An active approval cover already exists for this delegate, role, and date range.'
+                    : 'This approval cover was already revoked. Choose a new date range.';
+
+                throw new BusinessRuleException($message);
+            }
+
             $delegation = ApprovalDelegation::create([
                 'delegator_user_id' => $delegatorId,
                 'delegate_user_id' => $delegateId,

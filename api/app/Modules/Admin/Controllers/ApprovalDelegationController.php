@@ -41,7 +41,7 @@ class ApprovalDelegationController
 
         return (new ApprovalDelegationResource($delegation))
             ->response()
-            ->setStatusCode(201);
+            ->setStatusCode($delegation->wasRecentlyCreated ? 201 : 200);
     }
 
     public function destroy(Request $request, ApprovalDelegation $delegation): JsonResponse

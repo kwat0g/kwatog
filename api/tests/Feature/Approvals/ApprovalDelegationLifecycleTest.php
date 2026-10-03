@@ -72,4 +72,75 @@ class ApprovalDelegationLifecycleTest extends TestCase
             'action' => 'updated',
         ]);
     }
+
+    public function test_retried_grant_returns_one_active_delegation(): void
+    {
+        $delegator = $this->makeUser('finance_officer');
+        $delegate = $this->makeUser('employee');
+        $payload = [
+            'delegate_user_id' => $delegate->hash_id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'reason' => 'Retry safety regression',
+        ];
+
+        $created = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', $payload)
+            ->assertCreated();
+        $delegationId = $created->json('data.id');
+
+        $retry = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', $payload);
+        $retry->assertOk()
+            ->assertJsonPath('data.id', $delegationId);
+
+        $changedReason = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', [...$payload, 'reason' => 'Changed reason']);
+        $changedReason->assertUnprocessable()
+            ->assertJsonPath('message', 'An active approval cover already exists for this delegate, role, and date range.');
+        $this->assertSame(1, ApprovalDelegation::query()
+            ->where('delegator_user_id', $delegator->id)
+            ->where('delegate_user_id', $delegate->id)
+            ->where('is_active', true)
+            ->count());
+
+        $this->actingAs($delegator, 'sanctum')
+            ->deleteJson("/api/v1/approval-delegations/{$delegationId}")
+            ->assertOk();
+
+        $this->assertSame([], ApprovalDelegation::activeDelegatesFor('finance_officer', now()));
+    }
+
+    public function test_delayed_retry_cannot_restore_a_revoked_delegation(): void
+    {
+        $delegator = $this->makeUser('finance_officer');
+        $delegate = $this->makeUser('employee');
+        $payload = [
+            'delegate_user_id' => $delegate->hash_id,
+            'role_slug' => 'finance_officer',
+            'starts_at' => now()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+        ];
+
+        $created = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', $payload)
+            ->assertCreated();
+        $delegationId = $created->json('data.id');
+
+        $this->actingAs($delegator, 'sanctum')
+            ->deleteJson("/api/v1/approval-delegations/{$delegationId}")
+            ->assertOk();
+
+        $retry = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', $payload);
+        $retry->assertUnprocessable()
+            ->assertJsonPath('message', 'This approval cover was already revoked. Choose a new date range.');
+        $this->assertFalse(ApprovalDelegation::query()
+            ->where('delegator_user_id', $delegator->id)
+            ->where('delegate_user_id', $delegate->id)
+            ->firstOrFail()
+            ->is_active);
+        $this->assertSame([], ApprovalDelegation::activeDelegatesFor('finance_officer', now()));
+    }
 }
