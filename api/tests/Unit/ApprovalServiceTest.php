@@ -433,6 +433,43 @@ class ApprovalServiceTest extends TestCase
         $this->assertSame('approved', $svc->records($po)->first()->action);
     }
 
+    public function test_active_role_with_database_default_can_approve_before_model_refresh(): void
+    {
+        $role = Role::firstOrCreate(['slug' => 'finance_officer'], ['name' => 'Finance Officer']);
+        $user = User::create([
+            'name' => 'Finance approver',
+            'email' => 'finance-'.uniqid().'@example.test',
+            'password' => 'Password1!',
+            'role_id' => $role->id,
+        ]);
+
+        $this->assertTrue($user->fresh()->is_active);
+        $this->assertTrue(app(ApprovalService::class)->canUserActFor($user, 'finance_officer'));
+    }
+
+    public function test_approval_authority_uses_current_persisted_role(): void
+    {
+        $finance = Role::firstOrCreate(['slug' => 'finance_officer'], ['name' => 'Finance Officer']);
+        $employee = Role::firstOrCreate(['slug' => 'employee'], ['name' => 'Employee']);
+        $user = User::factory()->create(['role_id' => $finance->id]);
+        $user->load('role');
+
+        User::query()->whereKey($user->id)->update(['role_id' => $employee->id]);
+
+        $this->assertFalse(app(ApprovalService::class)->canUserActFor($user, 'finance_officer'));
+    }
+
+    public function test_approval_authority_uses_current_persisted_active_status(): void
+    {
+        $finance = Role::firstOrCreate(['slug' => 'finance_officer'], ['name' => 'Finance Officer']);
+        $user = User::factory()->create(['role_id' => $finance->id]);
+        $user->load('role');
+
+        User::query()->whereKey($user->id)->update(['is_active' => false]);
+
+        $this->assertFalse(app(ApprovalService::class)->canUserActFor($user, 'finance_officer'));
+    }
+
     public function test_submitter_cannot_approve_own_record(): void
     {
         WorkflowDefinition::create([

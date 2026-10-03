@@ -223,8 +223,13 @@ class ApprovalService
 
     private function userMayActFor(User $user, string $roleSlug): bool
     {
+        $currentUser = $user->fresh(['role']);
+        if (! $currentUser || ! $currentUser->is_active) {
+            return false;
+        }
+
         // Direct role match — the original authority path.
-        if ($user->role?->slug === $roleSlug) {
+        if ($currentUser->role?->slug === $roleSlug) {
             return true;
         }
 
@@ -234,7 +239,7 @@ class ApprovalService
         // so a delegate still cannot act on a record the delegator submitted.
         $delegates = \App\Common\Models\ApprovalDelegation::activeDelegatesFor($roleSlug, now());
 
-        return in_array($user->id, $delegates, true);
+        return in_array($currentUser->id, $delegates, true);
     }
 
     private function assertNewDecisionMaker(Model $approvable, User $user): void
