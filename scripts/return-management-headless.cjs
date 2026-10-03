@@ -138,6 +138,24 @@ const errors = [];
 const httpErrors = [];
 // Preserve browser diagnostics and status/path pairs for audit review.
 const diagnostics = [];
+const unexplainedDiagnostics = () => {
+  const explained = new Map();
+  for (const entry of httpErrors) {
+    const match = entry.match(/^(.+) HTTP (\d{3}):/);
+    if (!match || Number(match[2]) >= 500) continue;
+    const key = `${match[1]} HTTP ${match[2]}`;
+    explained.set(key, (explained.get(key) ?? 0) + 1);
+  }
+  return diagnostics.filter((entry) => {
+    const match = entry.match(/^(.+) console: Failed to load resource: the server responded with a status of (\d{3}) \(/);
+    if (!match || Number(match[2]) >= 500) return true;
+    const key = `${match[1]} HTTP ${match[2]}`;
+    const count = explained.get(key) ?? 0;
+    if (count === 0) return true;
+    explained.set(key, count - 1);
+    return false;
+  });
+};
 const save = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 const pass = (name) => { if (!checks.includes(name)) checks.push(name); console.log('PASS:', name); };
 const internal = '/return-management/cases';
@@ -530,6 +548,29 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
   const url = `/return-management/return-requests/${rmaId}`;
   let rma = await ok(manager, 'GET', url);
   if (rma.status === 'received') {
+    const auditCount = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${rma.rma_number}'`, DB);
+    const beforeRejectedAfterReceipt = auditCount();
+    const rejectedAfterReceipt = await api(checker, 'POST', url + '/reject', { reason: 'Physical receipt already exists.' });
+    expect(rejectedAfterReceipt.status).toBe(422);
+    const cancelledAfterReceipt = await api(manager, 'POST', url + '/cancel', { reason: 'Physical receipt already exists.' });
+    expect(cancelledAfterReceipt.status).toBe(422);
+    const needsLocation = (rma.type === 'supplier_return' && disposition === 'return_to_supplier') || ['restock', 'rework'].includes(disposition);
+    const disposedBeforeInspection = await api(manager, 'POST', url + '/dispose', {
+      dispositions: rma.items.map((item) => ({ item_id: item.id, disposition })),
+      ...(needsLocation ? { location_id: fixture.location } : {}),
+      create_replacement_po: false,
+    });
+    expect(disposedBeforeInspection.status).toBe(422);
+    const unchangedAfterReceiptProbes = await ok(manager, 'GET', url);
+    expect(unchangedAfterReceiptProbes.status).toBe('received');
+    expect(unchangedAfterReceiptProbes.disposition_status).toBeNull();
+    expect(unchangedAfterReceiptProbes.receipts.map((receipt) => receipt.id)).toEqual(rma.receipts.map((receipt) => receipt.id));
+    expect(unchangedAfterReceiptProbes.items.every((item) => item.moved_quantity === null && item.stock_movement_id === null)).toBe(true);
+    expect(unchangedAfterReceiptProbes.stock_movement).toBeNull();
+    expect(unchangedAfterReceiptProbes.credit_note).toBeNull();
+    expect(auditCount()).toBe(beforeRejectedAfterReceipt);
+    pass('Received return cannot be rejected, cancelled, or disposed before Quality; failed actions leave receipts and audit unchanged');
+
     const requiresProductInspection = rma.items.some((item) => Boolean(item.product_id));
     const inspected = await rmaActionViaUi(
       qc,
@@ -583,34 +624,34 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     let inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
     if (['draft', 'in_progress'].includes(inspection.status)) {
       expect(inspection.inspection_mode).toBe('per_unit');
+      const qcAccount = await ok(qc, 'GET', '/auth/user');
+      const measurementState = () => inspection.measurements.map(({ id, measured_value, is_pass, notes }) => [id, measured_value, is_pass, notes]);
+      const inspectionAudit = () => psql(`select count(*) from audit_logs a join inspections i on i.id=a.model_id where a.model_type like '%Inspection' and i.inspection_number='${inspection.inspection_number}'`, DB);
+      const auditBeforeResult = inspectionAudit();
+      const measurementsBeforeResult = measurementState();
       await qc.goto(`/quality/inspections/${row.id}`, { waitUntil: 'domcontentloaded' });
-      const manual = inspection.measurements.filter((measurement) => measurement.tolerance_min === null && measurement.tolerance_max === null);
-      const numeric = inspection.measurements.filter((measurement) => measurement.tolerance_min !== null || measurement.tolerance_max !== null);
-      const resultFields = qc.locator('select[aria-label$=" result"]');
-      await expect.poll(() => resultFields.count(), { timeout: 20000 }).toBe(manual.length);
-      for (let i = 0; i < manual.length; i++) await resultFields.nth(i).selectOption('pass');
-      for (const measurement of numeric) {
-        const label = `Measured value — ${measurement.parameter_name}, sample ${measurement.sample_index}${measurement.unit_of_measure ? ` (${measurement.unit_of_measure})` : ''}`;
-        const value = measurement.nominal_value ?? measurement.target_value ?? measurement.tolerance_min ?? measurement.tolerance_max;
-        expect(value, `${measurement.parameter_name} has a usable measurement`).not.toBeNull();
-        await qc.getByLabel(label, { exact: true }).fill(String(value));
-      }
-      const save = qc.getByRole('button', { name: /^Save \(\d+\)$/ });
-      await expect(save).toBeEnabled();
-      const saveResponsePromise = qc.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/measurements`));
-      await save.click();
-      const saveResponse = await saveResponsePromise;
-      expect(saveResponse.status(), await saveResponse.text()).toBe(200);
+      const passButton = qc.getByRole('button', { name: 'PASS', exact: true });
+      await expect(passButton).toBeVisible();
+      const resultResponsePromise = qc.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/result`));
+      await passButton.click();
+      const resultResponse = await resultResponsePromise;
+      expect(resultResponse.status(), await resultResponse.text()).toBe(200);
       inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
-      expect(inspection.measurements.length).toBeGreaterThan(0);
-      expect(inspection.measurements.every((measurement) => measurement.is_pass === true)).toBe(true);
-      await qc.getByRole('button', { name: 'Complete', exact: true }).click();
-      const completeDialog = qc.getByRole('dialog');
-      const completeResponsePromise = qc.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/complete`));
-      await completeDialog.getByRole('button', { name: 'Complete', exact: true }).click();
-      const completeResponse = await completeResponsePromise;
-      expect(completeResponse.status()).toBe(200);
-      inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
+      expect(['passed', 'awaiting_review']).toContain(inspection.status);
+      expect(inspection.recorded_result).toBe('passed');
+      expect(inspection.result_authors.some((author) => author.id === qcAccount.id)).toBe(true);
+      expect(measurementState()).toEqual(measurementsBeforeResult);
+      expect(inspectionAudit()).toBe(String(Number(auditBeforeResult) + 1));
+      await expect(qc.getByRole('button', { name: 'PASS', exact: true })).toHaveCount(0);
+      const auditAfterResult = inspectionAudit();
+      const duplicateResult = await api(qc, 'POST', `/quality/inspections/${row.id}/result`, { result: 'passed' });
+      expect(duplicateResult.status).toBe(422);
+      const afterDuplicateResult = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
+      expect(afterDuplicateResult.status).toBe(inspection.status);
+      expect(afterDuplicateResult.recorded_result).toBe('passed');
+      expect(inspectionAudit()).toBe(auditAfterResult);
+      inspection = afterDuplicateResult;
+      pass('QC records one PASS through the visible result action; duplicate result is blocked and measurements stay unchanged');
     }
     if (inspection.status === 'awaiting_review') {
       expect((await api(qc, 'PATCH', `/quality/inspections/${row.id}/review`, { decision: 'passed' })).status).toBe(403);
@@ -630,6 +671,17 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     rma = await ok(manager, 'GET', url);
     expect(rma).toMatchObject({ status: 'inspected', disposition_status: null, stock_movement: null });
   }
+  if (rma.status === 'inspected' && rma.disposition_status !== 'disposed') {
+    const auditCount = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${rma.rma_number}'`, DB);
+    const beforeEarlyCompletion = auditCount();
+    const earlyCompletion = await api(manager, 'POST', url + '/complete', { location_id: fixture.location });
+    expect(earlyCompletion.status).toBe(422);
+    const unchangedBeforeDisposition = await ok(manager, 'GET', url);
+    expect(unchangedBeforeDisposition).toMatchObject({ status: 'inspected', disposition_status: null, moved_quantity: null, stock_movement: null, credit_note: null });
+    expect(unchangedBeforeDisposition.inspections.map((inspection) => inspection.status).every((status) => ['passed', 'failed'].includes(status))).toBe(true);
+    expect(auditCount()).toBe(beforeEarlyCompletion);
+    pass('Inspected return cannot complete before disposition; failed completion leaves the Quality result and audit unchanged');
+  }
   if (rma.status !== 'completed') {
     if (rma.disposition_status !== 'disposed') {
       await manager.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
@@ -648,6 +700,23 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
       expect(disposeResponse.status(), JSON.stringify(disposeBody)).toBe(200);
       rma = await ok(manager, 'GET', url);
       expect(rma).toMatchObject({ status: 'inspected', disposition_status: 'disposed' });
+      const auditCount = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${rma.rma_number}'`, DB);
+      const movementCount = () => psql(`select count(*) from stock_movements m join return_requests r on r.id=m.reference_id where m.reference_type='return_request' and r.rma_number='${rma.rma_number}'`, DB);
+      const beforeDuplicateDisposition = { audit: auditCount(), movements: movementCount() };
+      const duplicateDisposition = await api(manager, 'POST', url + '/dispose', {
+        dispositions: rma.items.map((item) => ({ item_id: item.id, disposition })),
+        ...(((rma.type === 'supplier_return' && disposition === 'return_to_supplier') || ['restock', 'rework'].includes(disposition)) ? { location_id: fixture.location } : {}),
+        create_replacement_po: false,
+      });
+      expect(duplicateDisposition.status).toBe(422);
+      const afterDuplicateDisposition = await ok(manager, 'GET', url);
+      expect(afterDuplicateDisposition).toMatchObject({ status: 'inspected', disposition_status: 'disposed', moved_quantity: rma.moved_quantity });
+      expect(afterDuplicateDisposition.stock_movement?.id).toBe(rma.stock_movement?.id);
+      expect(afterDuplicateDisposition.credit_note?.id).toBe(rma.credit_note?.id);
+      expect(afterDuplicateDisposition.items.map((item) => item.moved_quantity)).toEqual(rma.items.map((item) => item.moved_quantity));
+      expect(auditCount()).toBe(beforeDuplicateDisposition.audit);
+      expect(movementCount()).toBe(beforeDuplicateDisposition.movements);
+      pass('Repeated disposition is rejected without another stock movement, credit, or audit event');
     }
     const moved = rma.items[0].moved_quantity;
     rma = await rmaActionViaUi(manager, rmaId, 'Complete RMA', 'Confirm Complete', '/complete');
@@ -657,6 +726,23 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     expect(completed).toMatchObject({ status: 'completed', disposition_status: 'disposed' });
     expect(completed.items[0].moved_quantity).toBe(moved);
     expect(completed.completed_by).toBeTruthy();
+    const auditCount = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${completed.rma_number}'`, DB);
+    const movements = () => psql(`select count(*) from stock_movements m join return_requests r on r.id=m.reference_id where m.reference_type='return_request' and r.rma_number='${completed.rma_number}'`, DB);
+    const beforeTerminalProbes = { audit: auditCount(), movements: movements() };
+    const duplicateCompletion = await api(manager, 'POST', url + '/complete', { location_id: fixture.location });
+    expect(duplicateCompletion.status).toBe(422);
+    const cancelledAfterCompletion = await api(manager, 'POST', url + '/cancel', { reason: 'Completed return cannot be cancelled.' });
+    expect(cancelledAfterCompletion.status).toBe(422);
+    const rejectedAfterCompletion = await api(checker, 'POST', url + '/reject', { reason: 'Completed return cannot be rejected.' });
+    expect(rejectedAfterCompletion.status).toBe(422);
+    const afterTerminalProbes = await ok(manager, 'GET', url);
+    expect(afterTerminalProbes).toMatchObject({ status: 'completed', disposition_status: 'disposed', completed_at: completed.completed_at, moved_quantity: completed.moved_quantity });
+    expect(afterTerminalProbes.stock_movement?.id).toBe(completed.stock_movement?.id);
+    expect(afterTerminalProbes.credit_note?.id).toBe(completed.credit_note?.id);
+    expect(afterTerminalProbes.items.map((item) => item.moved_quantity)).toEqual(completed.items.map((item) => item.moved_quantity));
+    expect(auditCount()).toBe(beforeTerminalProbes.audit);
+    expect(movements()).toBe(beforeTerminalProbes.movements);
+    pass('Completed return rejects repeat completion, cancellation, and rejection without new audit, stock, or credit effects');
   }
   pass(`${rma.type}: measurement, checker, disposition, and completion run through role UI; settled quantity preserved`);
   return ok(manager, 'GET', url);
@@ -700,7 +786,8 @@ async function finalizeCreditViaUi(finance, creditId) {
       await expect(customer.getByText('Report actions', { exact: true })).toHaveCount(0);
       pass('Customer follows case to physical return and back; closed case has no empty action panel');
       expect(errors).toEqual([]);
-      fs.writeFileSync(path.join(OUT, 'links-report.json'), JSON.stringify({ headless: true, realApi: true, checks, errors }, null, 2));
+      expect(unexplainedDiagnostics()).toEqual([]);
+      fs.writeFileSync(path.join(OUT, 'links-report.json'), JSON.stringify({ headless: true, realApi: true, checks, errors, diagnostics, http_errors: httpErrors }, null, 2));
       return;
     }
     if (process.env.RETURN_TEST_PHASE === 'quality-recovery') {
@@ -853,9 +940,118 @@ async function finalizeCreditViaUi(finance, creditId) {
       expect(approvedCancellation.inspections).toHaveLength(0);
       await cancelReturnViaUi(service, approvedCancellationId, 'approved');
 
+      const rejectedId = await createCustomerReturnViaUi(service);
+      const submittedForRejection = await rmaActionViaUi(service, rejectedId, 'Submit for Approval', 'Submit', '/submit');
+      expect(submittedForRejection.status).toBe('pending_approval');
+      const waitingForHead = await ok(service, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(waitingForHead).toMatchObject({ status: 'pending_approval', pending_approval_step: 1, disposition_status: null });
+      expect(waitingForHead.approval_records.map((record) => record.action)).toEqual(['pending', 'pending']);
+      expect(waitingForHead.items[0].source_allocation).not.toBeNull();
+      expect(waitingForHead.receipts).toHaveLength(0);
+      expect(waitingForHead.inspections).toHaveLength(0);
+      const rejectionAuditTrail = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${waitingForHead.rma_number}'`, DB);
+      const auditBeforeEarlyReceipt = rejectionAuditTrail();
+      const earlyReceipt = await api(warehouse, 'POST', `/return-management/return-requests/${rejectedId}/receive`, {
+        received_quantities: { [waitingForHead.items[0].id]: '1.000' },
+        final_receipt: true,
+        request_key: randomUUID(),
+        quarantine_location_id: fixture.quarantine,
+      });
+      expect(earlyReceipt.status).toBe(422);
+      const afterEarlyReceipt = await ok(warehouse, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(afterEarlyReceipt).toMatchObject({ status: 'pending_approval', pending_approval_step: 1, receipt_open: false });
+      expect(afterEarlyReceipt.receipts).toHaveLength(0);
+      expect(afterEarlyReceipt.items[0].source_allocation).not.toBeNull();
+      expect(rejectionAuditTrail()).toBe(auditBeforeEarlyReceipt);
+
+      const departmentHead = await login(browser, 'depthead@ogami.test');
+      const stepOneApproval = await rmaActionViaUi(departmentHead, rejectedId, 'Approve', 'Approve', '/approve');
+      expect(stepOneApproval.status).toBe('pending_approval');
+      const waitingForProduction = await ok(departmentHead, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(waitingForProduction).toMatchObject({ status: 'pending_approval', pending_approval_step: 2, disposition_status: null });
+      expect(waitingForProduction.approval_records.map((record) => record.action)).toEqual(['approved', 'pending']);
+      expect(waitingForProduction.receipts).toHaveLength(0);
+      expect(waitingForProduction.inspections).toHaveLength(0);
+      const auditBeforeFailedRejection = rejectionAuditTrail();
+      const wrongRejector = await api(departmentHead, 'POST', `/return-management/return-requests/${rejectedId}/reject`, {
+        reason: 'Cannot reject a later step after approving the first step.',
+      });
+      expect(wrongRejector.status).toBe(403);
+      const noReason = await api(checker, 'POST', `/return-management/return-requests/${rejectedId}/reject`);
+      expect(noReason.status).toBe(422);
+      expect(noReason.body.errors.reason).toBeTruthy();
+      const unchangedBeforeRejection = await ok(checker, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(unchangedBeforeRejection).toMatchObject({ status: 'pending_approval', pending_approval_step: 2, disposition_status: null });
+      expect(unchangedBeforeRejection.approval_records.map((record) => record.action)).toEqual(['approved', 'pending']);
+      expect(unchangedBeforeRejection.items[0].source_allocation).not.toBeNull();
+      expect(unchangedBeforeRejection.receipts).toHaveLength(0);
+      expect(unchangedBeforeRejection.inspections).toHaveLength(0);
+      expect(rejectionAuditTrail()).toBe(auditBeforeFailedRejection);
+
+      const rejectionReason = 'Production review rejected the return claim.';
+      await checker.goto(`/return-management/${rejectedId}`, { waitUntil: 'domcontentloaded' });
+      await expect(checker.locator('#main-content').getByText(waitingForProduction.rma_number, { exact: true })).toBeVisible();
+      await expect(checker.getByRole('button', { name: 'Reject', exact: true })).toBeVisible();
+      await checker.getByRole('button', { name: 'Reject', exact: true }).click();
+      const rejectionDialog = checker.getByRole('dialog');
+      await expect(rejectionDialog).toBeVisible();
+      const rejectButton = rejectionDialog.getByRole('button', { name: 'Reject', exact: true });
+      await expect(rejectButton).toBeDisabled();
+      await rejectionDialog.getByRole('textbox', { name: 'Rejection reason', exact: true }).fill(rejectionReason);
+      await expect(rejectButton).toBeEnabled();
+      const rejectionResponsePromise = checker.waitForResponse((response) =>
+        response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rejectedId}/reject`));
+      await rejectButton.click();
+      const rejectionResponse = await rejectionResponsePromise;
+      const rejectionBody = await rejectionResponse.json();
+      expect(rejectionResponse.status(), JSON.stringify(rejectionBody)).toBe(200);
+      const rejected = await ok(service, 'GET', `/return-management/return-requests/${rejectedId}`);
+      const checkerAccount = await ok(checker, 'GET', '/auth/user');
+      expect(rejected).toMatchObject({ status: 'rejected', pending_approval_step: null, disposition_status: null });
+      expect(rejected.rejected_by.id).toBe(checkerAccount.id);
+      expect(rejected.approval_records.map((record) => [record.step_order, record.action]))
+        .toEqual([[1, 'approved'], [2, 'rejected']]);
+      expect(rejected.approval_records[1].remarks).toBe(rejectionReason);
+      expect(rejected.approval_records[1].approver.id).toBe(rejected.rejected_by.id);
+      expect(rejected.items.every((line) => line.source_allocation === null && line.stock_movement_id === null)).toBe(true);
+      expect(rejected.receipts).toHaveLength(0);
+      expect(rejected.inspections).toHaveLength(0);
+      expect(rejected.stock_movement).toBeNull();
+      expect(rejected.credit_note).toBeNull();
+      const rejectionAllocations = psql(`select count(*)||'|'||count(*) filter (where a.released_at is not null and a.quantity=0)||'|'||count(*) filter (where a.released_at is null) from return_request_source_allocations a join return_request_items i on i.id=a.return_request_item_id join return_requests r on r.id=i.return_request_id where r.rma_number='${rejected.rma_number}'`, DB);
+      expect(rejectionAllocations).toBe('1|1|0');
+      const rejectionAudit = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${rejected.rma_number}' and a.action='updated' and a.user_id=(select id from users where email='production@ogami.test') and a.old_values->>'status'='pending_approval' and a.new_values->>'status'='rejected'`, DB);
+      expect(rejectionAudit()).toBe('1');
+      const totalAuditAfterRejection = rejectionAuditTrail();
+      await checker.goto(`/return-management/${rejectedId}`, { waitUntil: 'domcontentloaded' });
+      await expect(checker.locator('#main-content').getByText(rejectionReason, { exact: false }).first()).toBeVisible();
+      await expect(checker.getByRole('button', { name: 'Reject', exact: true })).toHaveCount(0);
+      const duplicateRejection = await api(checker, 'POST', `/return-management/return-requests/${rejectedId}/reject`, { reason: rejectionReason });
+      expect(duplicateRejection.status).toBe(422);
+      const afterDuplicateRejection = await ok(checker, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(afterDuplicateRejection.status).toBe('rejected');
+      expect(afterDuplicateRejection.approval_records.map((record) => record.action)).toEqual(['approved', 'rejected']);
+      expect(afterDuplicateRejection.items.every((line) => line.source_allocation === null)).toBe(true);
+      expect(rejectionAudit()).toBe('1');
+      expect(rejectionAuditTrail()).toBe(totalAuditAfterRejection);
+      const resubmitRejected = await api(service, 'POST', `/return-management/return-requests/${rejectedId}/submit`);
+      expect(resubmitRejected.status).toBe(422);
+      const afterRejectedResubmit = await ok(service, 'GET', `/return-management/return-requests/${rejectedId}`);
+      expect(afterRejectedResubmit.status).toBe('rejected');
+      expect(afterRejectedResubmit.items.every((line) => line.source_allocation === null)).toBe(true);
+      expect(rejectionAuditTrail()).toBe(totalAuditAfterRejection);
+      const retryAsNewRequest = await createCustomerReturnViaUi(service);
+      const resubmitted = await rmaActionViaUi(service, retryAsNewRequest, 'Submit for Approval', 'Submit', '/submit');
+      expect(resubmitted.status).toBe('pending_approval');
+      const newAttempt = await ok(service, 'GET', `/return-management/return-requests/${retryAsNewRequest}`);
+      expect(newAttempt).toMatchObject({ status: 'pending_approval', pending_approval_step: 1 });
+      expect(newAttempt.items[0].source_allocation).not.toBeNull();
+      pass('Final-step rejection requires a reason, preserves approval and audit history, releases allocation, blocks retries, and permits a new request');
+
       expect(httpErrors.filter((entry) => /GET \/api\/v1\/(vendors|inventory\/items)$/.test(entry))).toEqual([]);
       pass('Customer Service customer-return form makes no forbidden vendor or inventory-list requests');
       expect(errors).toEqual([]);
+      expect(unexplainedDiagnostics()).toEqual([]);
       fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, errors, diagnostics, http_errors: httpErrors, server_log: path.join(OUT, 'server.log') }, null, 2));
       console.log(`${checks.length} checks passed; ${findings.length} findings. Evidence: ${OUT}`);
       return;
@@ -1069,6 +1265,7 @@ async function finalizeCreditViaUi(finance, creditId) {
     await customer.screenshot({ path: path.join(OUT, 'customer-completed-credit.png'), fullPage: true });
     pass('Finance issues 250 shortage + 50 defect credit; customer sees the resolved case');
     expect(errors).toEqual([]);
+    expect(unexplainedDiagnostics()).toEqual([]);
     pass('No uncaught browser errors');
     fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, diagnostics, http_errors: httpErrors, server_log: path.join(OUT, 'server.log') }, null, 2));
     console.log(`${checks.length} checks passed; ${findings.length} findings. Evidence: ${OUT}`);
