@@ -29,11 +29,11 @@ class NotifyOnGrnReceived implements ShouldQueue
             $ref = $grn->purchaseOrder?->po_number ?? $grn->grn_number;
 
             $this->notifications->send($audience, 'inventory.grn_received', [
-                'title'       => "GRN Received — {$grn->grn_number}",
-                'message'     => "Goods received against {$ref}. Incoming QC in progress.",
-                'link_to'     => "/inventory/grn/{$grn->hash_id}",
+                'title' => "GRN Received — {$grn->grn_number}",
+                'message' => "Goods received against {$ref}.",
+                'link_to' => "/inventory/grn/{$grn->hash_id}",
                 'entity_type' => 'grn',
-                'entity_id'   => $grn->hash_id,
+                'entity_id' => $grn->hash_id,
             ]);
         } catch (\Throwable $e) {
             Log::warning('NotifyOnGrnReceived failed', ['error' => $e->getMessage()]);

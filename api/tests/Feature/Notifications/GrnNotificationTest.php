@@ -11,6 +11,7 @@ use App\Modules\Inventory\Listeners\NotifyOnGrnReceived;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class GrnNotificationTest extends TestCase
@@ -34,7 +35,7 @@ class GrnNotificationTest extends TestCase
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $po->id,
-            'type'          => 'inventory.grn_received',
+            'type' => 'inventory.grn_received',
         ]);
     }
 
@@ -49,8 +50,24 @@ class GrnNotificationTest extends TestCase
 
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $inactive->id,
-            'type'          => 'inventory.grn_received',
+            'type' => 'inventory.grn_received',
         ]);
+    }
+
+    public function test_delayed_grn_notification_does_not_claim_qc_is_still_in_progress(): void
+    {
+        $purchasing = $this->userWithRole('purchasing_officer');
+        $grn = GoodsReceiptNote::factory()->create(['status' => 'accepted']);
+
+        app(NotifyOnGrnReceived::class)->handle(new GoodsReceiptNoteCreated($grn));
+
+        $notification = DB::table('notifications')
+            ->where('notifiable_id', $purchasing->id)
+            ->where('type', 'inventory.grn_received')
+            ->firstOrFail();
+        $data = json_decode($notification->data, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('Goods received against', $data['message']);
+        $this->assertStringNotContainsString('in progress', strtolower($data['message']));
     }
 
     public function test_listener_class_exists(): void
@@ -64,6 +81,7 @@ class GrnNotificationTest extends TestCase
     private function userWithRole(string $slug, bool $is_active = true): User
     {
         $role = Role::where('slug', $slug)->firstOrFail();
+
         return User::factory()->create(['role_id' => $role->id, 'is_active' => $is_active]);
     }
 }

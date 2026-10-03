@@ -11,7 +11,10 @@ use App\Common\Services\OutboxService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
+use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\MRP\Jobs\RunAutomaticMrpJob;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Models\Inspection;
@@ -94,6 +97,17 @@ class OutboxFactEventToleranceTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    public function test_created_grn_event_publishes_after_the_grn_advances(): void
+    {
+        $grn = GoodsReceiptNote::factory()->create(['status' => 'pending_qc']);
+        $message = app(OutboxService::class)->record(new GoodsReceiptNoteCreated($grn));
+
+        $this->travel(5)->seconds();
+        $grn->forceFill(['status' => 'accepted'])->save();
+
+        $this->assertSame(OutboxMessage::STATUS_PUBLISHED, $this->dispatch($message));
+    }
+
     public function test_an_older_row_is_still_refused_even_for_a_fact_event(): void
     {
         $so = $this->confirmedOrder();
@@ -112,7 +126,7 @@ class OutboxFactEventToleranceTest extends TestCase
             'inspection_number' => 'QC-T-'.substr(uniqid(), -6),
             'stage' => 'in_process',
             'status' => 'failed',
-            'product_id' => \App\Modules\CRM\Models\Product::factory()->create()->id,
+            'product_id' => Product::factory()->create()->id,
             'batch_quantity' => 1,
             'sample_size' => 1,
         ]);

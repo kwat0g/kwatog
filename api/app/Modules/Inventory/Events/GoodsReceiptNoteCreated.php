@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
  * the TriggerIncomingQC listener which creates a pending inspection on
  * the incoming materials.
  */
-class GoodsReceiptNoteCreated
+class GoodsReceiptNoteCreated implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 
