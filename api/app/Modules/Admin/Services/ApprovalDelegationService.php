@@ -75,7 +75,7 @@ class ApprovalDelegationService
                 ->whereKey([$delegatorId, $delegateId])
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->with('role')
+                ->with(['role', 'employee:id,department_id'])
                 ->get()
                 ->keyBy('id');
 
@@ -93,6 +93,13 @@ class ApprovalDelegationService
             }
             if ($roleSlug !== null && $delegator->role?->slug !== $roleSlug) {
                 throw new BusinessRuleException('A delegation may only cover the delegator\'s current role.');
+            }
+            $coveredRole = $roleSlug ?? $delegator->role?->slug;
+            $delegatorDepartmentId = $delegator->employee?->department_id;
+            $delegateDepartmentId = $delegate->employee?->department_id;
+            if ($coveredRole === 'department_head'
+                && $delegatorDepartmentId !== $delegateDepartmentId) {
+                throw new BusinessRuleException('Department head approval cover must be assigned within the same department.');
             }
 
             $existing = ApprovalDelegation::query()

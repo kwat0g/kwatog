@@ -8,6 +8,10 @@ use App\Common\Models\ApprovalDelegation;
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
+use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\PositionSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -142,5 +146,37 @@ class ApprovalDelegationLifecycleTest extends TestCase
             ->firstOrFail()
             ->is_active);
         $this->assertSame([], ApprovalDelegation::activeDelegatesFor('finance_officer', now()));
+    }
+
+    public function test_department_head_cover_rejects_a_delegate_from_another_department(): void
+    {
+        $this->seed(DepartmentSeeder::class);
+        $this->seed(PositionSeeder::class);
+        $departments = Department::query()->orderBy('id')->take(2)->get();
+        $this->assertCount(2, $departments);
+
+        $delegator = $this->makeUser('department_head');
+        $delegate = $this->makeUser('employee');
+        $delegator->update([
+            'employee_id' => Employee::factory()->create(['department_id' => $departments[0]->id])->id,
+        ]);
+        $delegate->update([
+            'employee_id' => Employee::factory()->create(['department_id' => $departments[1]->id])->id,
+        ]);
+
+        $response = $this->actingAs($delegator, 'sanctum')->postJson('/api/v1/approval-delegations', [
+            'delegate_user_id' => $delegate->hash_id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', 'Department head approval cover must be assigned within the same department.');
+        $this->assertDatabaseMissing('approval_delegations', [
+            'delegator_user_id' => $delegator->id,
+            'delegate_user_id' => $delegate->id,
+            'is_active' => true,
+        ]);
     }
 }
