@@ -23,6 +23,7 @@ use App\Modules\Quality\Models\Inspection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -305,7 +306,7 @@ class GrnHttpContractTest extends TestCase
         ];
     }
 
-    /** @dataProvider malformedNumbers */
+    #[DataProvider('malformedNumbers')]
     public function test_store_grn_refuses_a_malformed_quantity(string $value): void
     {
         [$po, $poItem, $item, $location] = $this->fixture();
@@ -335,7 +336,7 @@ class GrnHttpContractTest extends TestCase
         return $cases;
     }
 
-    /** @dataProvider malformedCosts */
+    #[DataProvider('malformedCosts')]
     public function test_receive_with_qc_refuses_a_malformed_unit_cost(string $value): void
     {
         [$po, $poItem, $item, $location] = $this->fixture();
@@ -358,7 +359,7 @@ class GrnHttpContractTest extends TestCase
         $this->assertSame(0, GrnItem::query()->count());
     }
 
-    /** @dataProvider malformedNumbers */
+    #[DataProvider('malformedNumbers')]
     public function test_finalize_draft_refuses_a_malformed_quantity(string $value): void
     {
         [$po, $poItem, , $location] = $this->fixture();
@@ -380,7 +381,7 @@ class GrnHttpContractTest extends TestCase
         $this->assertSame('0.000', (string) $draft->items()->firstOrFail()->quantity_received);
     }
 
-    /** @dataProvider malformedNumbers */
+    #[DataProvider('malformedNumbers')]
     public function test_accept_refuses_a_malformed_accepted_quantity(string $value): void
     {
         [$po, $poItem, $item, $location] = $this->fixture();
