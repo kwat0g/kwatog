@@ -179,11 +179,7 @@ class DeliveryService
     public function inspectionOptions(int $salesOrderId): array
     {
         $inspections = Inspection::query()
-            ->where('stage', InspectionStage::Outgoing->value)
-            ->where('status', InspectionStatus::Passed->value)
-            ->whereNotNull('reviewed_by')
-            ->whereNotNull('reviewed_at')
-            ->whereNotNull('work_order_output_id')
+            ->outgoingReleaseCandidates()
             ->whereHas('workOrderOutput.workOrder', fn (Builder $q) => $q
                 ->where('sales_order_id', $salesOrderId)
                 ->whereNotNull('sales_order_item_id'))
@@ -205,6 +201,9 @@ class DeliveryService
 
         return $inspections
             ->map(function (Inspection $inspection) use ($reservedByInspection): ?array {
+                if (! $inspection->canReleaseOutgoing()) {
+                    return null;
+                }
                 $reserved = $reservedByInspection->get($inspection->id, '0.000');
                 $remaining = bcsub((string) $inspection->accepted_quantity, $reserved, 2);
 
@@ -618,15 +617,8 @@ class DeliveryService
         string $quantity,
     ): Inspection {
         $inspection = Inspection::query()->lockForUpdate()->find($inspectionId);
-        $stage = $inspection?->stage instanceof InspectionStage
-            ? $inspection->stage
-            : ($inspection ? InspectionStage::tryFrom((string) $inspection->stage) : null);
-        $status = $inspection?->status instanceof InspectionStatus
-            ? $inspection->status
-            : ($inspection ? InspectionStatus::tryFrom((string) $inspection->status) : null);
-
-        if (! $inspection || $stage !== InspectionStage::Outgoing || $status !== InspectionStatus::Passed) {
-            throw new BusinessRuleException('The selected inspection is not a passed outgoing inspection.');
+        if (! $inspection) {
+            throw new BusinessRuleException('The selected inspection has no approved outgoing release quantity.');
         }
         if (! $inspection->isMakerChecked()) {
             throw new BusinessRuleException('The selected outgoing inspection has not been checked.');
@@ -634,9 +626,13 @@ class DeliveryService
         if (! $inspection->work_order_output_id) {
             throw new BusinessRuleException('Legacy product/WO-only inspections cannot authorize a new delivery.');
         }
+        if (! $inspection->canReleaseOutgoing()) {
+            throw new BusinessRuleException('The selected inspection has no approved outgoing release quantity.');
+        }
 
         $output = WorkOrderOutput::query()->lockForUpdate()->find($inspection->work_order_output_id);
         $workOrder = $output?->workOrder;
+        $workOrder?->assertProcessQualityReleased();
         if (! $output || ! $workOrder
             || (int) $output->work_order_id !== (int) $inspection->entity_id
             || (int) $workOrder->product_id !== $productId
