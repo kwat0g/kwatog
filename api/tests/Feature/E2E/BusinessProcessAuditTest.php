@@ -197,19 +197,27 @@ class BusinessProcessAuditTest extends TestCase
         // ── Finalize (finance) — triggers bank file + GL posting ──
         // Anomaly flags raised at compute must be resolved first; hr_officer
         // holds payroll.anomalies.review (the checker on the anomaly board).
-        $flags = $this->actingAs($this->hr)
+        $hrReviewer = User::factory()->create([
+            'role_id' => $this->hr->role_id,
+            'is_active' => true,
+        ]);
+        $flags = $this->actingAs($hrReviewer)
             ->getJson("/api/v1/payroll-periods/{$periodId}/anomalies")
             ->assertOk()
             ->json('data');
         foreach ($flags as $flag) {
-            $this->actingAs($this->hr)
+            $this->actingAs($hrReviewer)
                 ->patchJson("/api/v1/payroll-anomalies/{$flag['id']}/resolve", [
                     'remarks' => 'Reviewed: contribution basis matches the prorated salary.',
                 ])
                 ->assertOk();
         }
 
-        $finalize = $this->actingAs($this->finance)
+        $financeFinalizer = User::factory()->create([
+            'role_id' => $this->finance->role_id,
+            'is_active' => true,
+        ]);
+        $finalize = $this->actingAs($financeFinalizer)
             ->patchJson("/api/v1/payroll-periods/{$periodId}/finalize");
         $finalize->assertOk();
         $period->refresh();
@@ -498,6 +506,7 @@ class BusinessProcessAuditTest extends TestCase
                 'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
                 'measurements' => [],
                 'sample_defect_count' => 0,
+                'coverage_confirmed' => true,
                 'complete' => true,
             ])
             ->assertOk();
@@ -553,7 +562,11 @@ class BusinessProcessAuditTest extends TestCase
             ]);
         $transfer->assertCreated();
         $transferId = $transfer->json('data.id');
-        $this->actingAs($this->warehouse)
+        $transferChecker = User::factory()->create([
+            'role_id' => $this->warehouse->role_id,
+            'is_active' => true,
+        ]);
+        $this->actingAs($transferChecker)
             ->postJson("/api/v1/inventory/transfer-orders/{$transferId}/execute")
             ->assertOk();
 
@@ -626,9 +639,16 @@ class BusinessProcessAuditTest extends TestCase
             ->postJson("/api/v1/inventory/stock-counts/items/{$varianceItemId}/approve", [])
             ->assertOk();
 
-        // Session completion is checker-gated too: the session creator (the
-        // counting warehouse user) cannot complete it — the approver does.
+        // A separate warehouse user finalizes: neither the count maker nor the
+        // variance checker may also complete the session.
+        $countFinalizer = User::factory()->create([
+            'role_id' => $this->warehouse->role_id,
+            'is_active' => true,
+        ]);
         $this->actingAs($this->admin)
+            ->postJson("/api/v1/inventory/stock-counts/{$countId}/complete")
+            ->assertUnprocessable();
+        $this->actingAs($countFinalizer)
             ->postJson("/api/v1/inventory/stock-counts/{$countId}/complete")
             ->assertOk();
 
@@ -722,11 +742,21 @@ class BusinessProcessAuditTest extends TestCase
         $this->actingAs($this->deptHead)
             ->postJson("/api/v1/return-management/return-requests/{$rma['id']}/approve")
             ->assertOk();
-        // Wrong order: VP cannot jump the chain (not step 2's role holder for
-        // the row-scope; finance also cannot double-tap step 1).
+        // Finance has the route permission for the finance-only return flow,
+        // but cannot act for production_manager on this customer-return chain.
+        $approvalService = app(\App\Common\Services\ApprovalService::class);
+        $beforeFinanceAttempt = $approvalService->chain($rmaModel)
+            ->map(fn ($record) => [$record->step_order, $record->role_slug, $record->action, $record->approver_id])
+            ->all();
         $this->actingAs($this->finance)
             ->postJson("/api/v1/return-management/return-requests/{$rma['id']}/approve")
-            ->assertStatus(422);
+            ->assertForbidden();
+        $this->assertSame(
+            $beforeFinanceAttempt,
+            $approvalService->chain($rmaModel)
+                ->map(fn ($record) => [$record->step_order, $record->role_slug, $record->action, $record->approver_id])
+                ->all(),
+        );
         $this->actingAs($this->prodManager)
             ->postJson("/api/v1/return-management/return-requests/{$rma['id']}/approve")
             ->assertOk();
@@ -1064,6 +1094,7 @@ class BusinessProcessAuditTest extends TestCase
                 'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
                 'measurements' => [],
                 'sample_defect_count' => 0,
+                'coverage_confirmed' => true,
                 'complete' => true,
             ])
             ->assertOk();

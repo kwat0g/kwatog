@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\E2E;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -16,6 +18,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\NonConformanceReport;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Database\Seeders\UomSeeder;
@@ -63,6 +66,7 @@ class QualityGateChainTest extends TestCase
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
         $this->seed(SettingsSeeder::class);
+        $this->seed(ChartOfAccountsSeeder::class);
         $this->seed(UomSeeder::class);
         $this->seed(WorkflowSeeder::class);
 
@@ -80,6 +84,11 @@ class QualityGateChainTest extends TestCase
         // quality.inspections.review (checker) AND quality.ncr.manage (MRB
         // disposition) and is never the maker.
         $this->qcChecker = $make('qc_inspector');
+
+        // GRN acceptance stages a draft supplier bill through an outbox
+        // listener, attributed to an explicitly configured system actor.
+        $make('system_admin');
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
 
         Storage::fake('local');
     }
@@ -206,6 +215,7 @@ class QualityGateChainTest extends TestCase
                 'checklist' => $checklist,
                 'measurements' => [],
                 'sample_defect_count' => $defects,
+                'coverage_confirmed' => true,
                 'complete' => true,
             ])
             ->assertOk();
@@ -257,6 +267,7 @@ class QualityGateChainTest extends TestCase
                 'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => true])->all(),
                 'measurements' => [],
                 'sample_defect_count' => 0,
+                'coverage_confirmed' => true,
                 'complete' => true,
             ])
             ->assertStatus(403);
@@ -276,6 +287,9 @@ class QualityGateChainTest extends TestCase
         // The chain listener auto-accepted the pending GRN.
         $grn->refresh();
         $this->assertSame(GrnStatus::Accepted->value, $grn->status->value);
+        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
+        $this->assertSame(BillStatus::Draft->value, $bill->status->value);
+        $this->assertNull($bill->journal_entry_id, 'QC acceptance must not post the supplier bill.');
 
         // Wrong time: accepting an already-terminal GRN is refused.
         $this->actingAs($this->warehouse)
@@ -303,11 +317,17 @@ class QualityGateChainTest extends TestCase
         // Wrong actor: the maker cannot review their own result.
         $inspection = $this->incomingInspection($grn);
         $rows = InspectionMeasurement::query()->where('inspection_id', $inspection->id)->get();
+        $failedRequirement = $rows->first(static fn (InspectionMeasurement $row): bool => ! $row->is_critical);
+        $this->assertNotNull($failedRequirement, 'Use-as-is test must fail only a non-critical requirement.');
         $this->actingAs($this->qc)
             ->postJson("/api/v1/quality/inspections/{$inspection->hash_id}/lot-result", [
-                'checklist' => $rows->map(fn ($r) => ['id' => $r->hash_id, 'is_pass' => false])->all(),
+                'checklist' => $rows->map(fn (InspectionMeasurement $row) => [
+                    'id' => $row->hash_id,
+                    'is_pass' => $row->id !== $failedRequirement->id,
+                ])->all(),
                 'measurements' => [],
                 'sample_defect_count' => 1,
+                'coverage_confirmed' => true,
                 'complete' => true,
             ])
             ->assertOk();
@@ -325,7 +345,7 @@ class QualityGateChainTest extends TestCase
         $this->actingAs($this->qcChecker)
             ->patchJson("/api/v1/quality/inspections/{$inspection->hash_id}/review", [
                 'decision' => 'failed',
-                'remarks' => 'Contamination visible across the lot.',
+                'remarks' => 'Non-critical packaging label is smudged; material identity passed.',
             ])
             ->assertOk();
         $inspection->refresh();
@@ -373,8 +393,14 @@ class QualityGateChainTest extends TestCase
         $this->actingAs($this->qcChecker)
             ->patchJson("/api/v1/quality/ncrs/{$ncr->hash_id}/disposition", [
                 'disposition' => 'use_as_is',
-                'root_cause' => 'Supplier process drift — verified cosmetic only.',
+                'root_cause' => 'Supplier packaging label was smudged; material identity is verified.',
                 'corrective_action' => 'Supplier corrective action request issued.',
+                'sorting_evidence' => [
+                    'inspected_quantity' => '100',
+                    'evidence_reference' => 'SORT-INCOMING-100',
+                    'performed_by' => $this->warehouse->hash_id,
+                    'recovery_passed' => true,
+                ],
             ])
             ->assertOk();
         $grn->refresh();
@@ -382,6 +408,13 @@ class QualityGateChainTest extends TestCase
         $ncr->refresh();
         $this->assertSame($this->qcChecker->id, (int) $ncr->mrb_decided_by);
         $this->assertNotNull($ncr->mrb_decided_at);
+        $this->assertSame('100.000', (string) $ncr->sorting_inspected_quantity);
+        $this->assertSame($this->warehouse->id, (int) $ncr->sorting_performed_by);
+        $this->assertSame($this->qcChecker->id, (int) $ncr->sorting_approved_by);
+        $this->assertNotNull($ncr->sorting_approved_at);
+        $bill = Bill::query()->where('goods_receipt_note_id', $grn->id)->firstOrFail();
+        $this->assertSame(BillStatus::Draft->value, $bill->status->value);
+        $this->assertNull($bill->journal_entry_id, 'MRB acceptance must stage, not post, the supplier bill.');
 
         // Wrong time: the MRB decision is final — a different disposition is
         // refused once the receipt has been settled against it.
