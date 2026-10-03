@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ChainListenerRun;
+use App\Common\Models\ChainStepRun;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\WithholdingTaxType;
+use App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted;
 use App\Modules\Accounting\Models\Bill;
-use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -22,11 +25,14 @@ use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Models\Inspection;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -75,10 +81,10 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     private function checkedPass(): array
     {
         return [
-            'status'       => 'passed',
+            'status' => 'passed',
             'inspector_id' => $this->user->id,
-            'reviewed_by'  => User::factory()->create(['is_active' => true])->id,
-            'reviewed_at'  => now(),
+            'reviewed_by' => User::factory()->create(['is_active' => true])->id,
+            'reviewed_at' => now(),
         ];
     }
 
@@ -91,22 +97,22 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin batch',
-            'quantity'          => '100.000',
-            'unit'              => 'kg',
-            'unit_price'        => '12.50',
-            'total'             => '1250.00',
+            'item_id' => $item->id,
+            'description' => 'Resin batch',
+            'quantity' => '100.000',
+            'unit' => 'kg',
+            'unit_price' => '12.50',
+            'total' => '1250.00',
             'quantity_received' => '0.000',
         ]);
         $location = WarehouseLocation::factory()->create();
 
         return $this->grnSvc->create($po, [[
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '80.000',
-            'unit_cost'              => '12.50',
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '80.000',
+            'unit_cost' => '12.50',
         ]], ['received_date' => now()->toDateString()], $this->user);
     }
 
@@ -115,7 +121,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $grn = $this->makePendingGrn();
 
         // Pass the synchronous incoming inspection so accept() clears the QC gate.
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -147,7 +153,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_repeated_accepted_events_do_not_stack_bills(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -167,7 +173,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_partial_accept_stages_a_draft_bill_for_the_accepted_quantity(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -216,7 +222,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         // A partial accept that ends up covering every line transitions to
         // Accepted — the event must fire there too, so the bill is staged.
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -247,7 +253,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         // worker for retry/failed-job handling and leave no half-written bill.
         app(SettingsService::class)->set('accounting.default_expense_account_code', '');
 
-        $listener = app(\App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted::class);
+        $listener = app(AutoCreateBillOnGrnAccepted::class);
         try {
             $listener->handle(new GoodsReceiptNoteAccepted($accepted));
             $this->fail('A missing default expense account must fail the stateful chain step.');
@@ -271,17 +277,109 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         ]);
         app(SettingsService::class)->set('system.automation.actor_roles', ['missing-role']);
 
-        $listener = app(\App\Modules\Accounting\Listeners\AutoCreateBillOnGrnAccepted::class);
+        $listener = app(AutoCreateBillOnGrnAccepted::class);
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('no active automation actor');
         $listener->handle(new GoodsReceiptNoteAccepted($grn->fresh()));
     }
 
+    public function test_missing_actor_leaves_accepted_grn_for_audited_listener_replay(): void
+    {
+        $grn = $this->makePendingGrn();
+        $line = $grn->items()->firstOrFail();
+        Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update($this->checkedPass());
+        app(SettingsService::class)->set('system.automation.actor_roles', ['missing-role']);
+        Log::spy();
+
+        $accepted = $this->grnSvc->accept($grn->fresh(), $this->user);
+
+        $this->assertSame(GrnStatus::Accepted, $accepted->status);
+        $this->assertSame('80.000', (string) DB::table('stock_levels')
+            ->where('item_id', $line->item_id)
+            ->where('location_id', $line->location_id)
+            ->value('quantity'));
+        $this->assertSame(1, DB::table('stock_movements')
+            ->where('reference_type', 'goods_receipt_note')
+            ->where('reference_id', $accepted->id)
+            ->count());
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $accepted->journal_entry_id,
+            'reference_type' => 'goods_receipt_note',
+            'status' => 'posted',
+        ]);
+        $this->assertSame(0, Bill::where('goods_receipt_note_id', $accepted->id)->count());
+
+        $outbox = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteAccepted::class)
+            ->first();
+        $this->assertNotNull($outbox);
+        $this->assertSame('failed', $outbox->status);
+        $this->assertSame(1, (int) $outbox->attempts);
+        $this->assertStringContainsString('no active automation actor', $outbox->last_error);
+        Log::shouldHaveReceived('error')
+            ->withArgs(fn (string $message, array $context): bool => $message === 'Outbox dispatch callback failed; inspect durable state before recovery.'
+                && ($context['outbox_id'] ?? null) === $outbox->id)
+            ->once();
+        $step = ChainStepRun::query()->where('outbox_id', $outbox->id)->firstOrFail();
+        $this->assertSame(ChainStepRun::STATUS_FAILED, $step->status);
+        $this->assertStringContainsString('no active automation actor', $step->last_error);
+
+        $failedRun = ChainListenerRun::query()->where('outbox_id', $outbox->id)->firstOrFail();
+        $this->assertSame(ChainListenerRun::STATUS_FAILED, $failedRun->status);
+        $this->assertSame(ChainListenerRun::OUTCOME_FAILED, $failedRun->outcome_status);
+
+        app(SettingsService::class)->set('system.automation.actor_roles', ['system_admin']);
+        $admin = User::query()
+            ->where('role_id', Role::where('slug', 'system_admin')->value('id'))
+            ->where('is_active', true)
+            ->firstOrFail();
+        $replayUrl = "/api/v1/chain/listener-runs/{$failedRun->id}/replay";
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson($replayUrl)
+            ->assertAccepted()
+            ->assertJsonPath('data.source_run_id', $failedRun->id)
+            ->assertJsonPath('data.replay_count', 1);
+
+        $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
+        $this->assertSame(BillStatus::Draft, $bill->status);
+        $this->assertNull($bill->journal_entry_id);
+        $this->assertSame(1, Bill::where('goods_receipt_note_id', $accepted->id)->count());
+        $this->assertSame('1120.00', (string) $bill->total_amount);
+        $replay = ChainListenerRun::query()->where('replayed_from_id', $failedRun->id)->firstOrFail();
+        $this->assertSame(ChainListenerRun::STATUS_COMPLETED, $replay->status);
+        $this->assertSame(ChainListenerRun::OUTCOME_COMPLETED, $replay->outcome_status);
+        $this->assertSame('supplier_bill_staged', $replay->outcome_code);
+        $this->assertSame('failed', DB::table('event_outbox')->where('id', $outbox->id)->value('status'));
+        $this->assertSame(ChainStepRun::STATUS_FAILED, $step->fresh()->status);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson($replayUrl)
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'A replay was requested for this run less than one minute ago. Wait for the new run to appear before replaying again.');
+        $this->assertSame(1, Bill::where('goods_receipt_note_id', $accepted->id)->count());
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/chain/listener-runs/{$failedRun->id}/resolve", [
+                'note' => 'Restored the automation actor and confirmed replay staged the draft bill.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.resolution_status', ChainListenerRun::RESOLUTION_RESOLVED)
+            ->assertJsonPath('data.resolved_by', $admin->name);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'chain_listener.resolved',
+            'user_id' => $admin->id,
+        ]);
+    }
+
     public function test_post_draft_posts_the_je_and_flips_bill_to_unpaid(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -315,7 +413,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_grn_show_includes_the_auto_created_bill_relation(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -334,7 +432,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_post_draft_rechecks_match_and_requires_an_audited_override(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -379,7 +477,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_auto_bill_uses_vendor_terms_for_due_date(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -388,7 +486,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $bill = Bill::where('goods_receipt_note_id', $accepted->id)->firstOrFail();
         $terms = $accepted->vendor->payment_terms_days;
 
-        $expectedDue = \Illuminate\Support\Carbon::parse($accepted->accepted_at)
+        $expectedDue = Carbon::parse($accepted->accepted_at)
             ->addDays($terms)->toDateString();
         $this->assertSame($expectedDue, $bill->due_date->toDateString());
     }
@@ -396,7 +494,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
     public function test_posted_partial_bill_allows_staging_second_bill_for_remainder(): void
     {
         $grn = $this->makePendingGrn();
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -442,11 +540,11 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
 
         // Set vendor EWT type to Goods (1%) before accepting
         $grn->vendor->forceFill([
-            'withholding_tax_type' => \App\Modules\Accounting\Enums\WithholdingTaxType::Goods->value,
+            'withholding_tax_type' => WithholdingTaxType::Goods->value,
         ])->save();
 
         // Pass incoming QC inspection
-        \App\Modules\Quality\Models\Inspection::query()
+        Inspection::query()
             ->where('entity_type', 'grn')
             ->where('entity_id', $grn->id)
             ->update($this->checkedPass());
@@ -460,7 +558,7 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         // Verify EWT is calculated: subtotal is 80 × 12.50 = 1000.00
         // EWT = 1000.00 × 0.01 = 10.00
         $this->assertSame('1000.00', (string) $bill->subtotal);
-        $this->assertSame(\App\Modules\Accounting\Enums\WithholdingTaxType::Goods, $bill->withholding_tax_type);
+        $this->assertSame(WithholdingTaxType::Goods, $bill->withholding_tax_type);
         $this->assertSame('0.0100', (string) $bill->ewt_rate);
         $this->assertSame('10.00', (string) $bill->ewt_amount);
     }

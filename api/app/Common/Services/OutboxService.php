@@ -60,13 +60,13 @@ class OutboxService
             ? DB::transaction($persist)
             : $persist();
 
-        // If Redis is down, this callback only logs the enqueue failure; the
-        // row remains pending for the scheduled dispatcher to recover.
+        // Queue publication failure leaves a pending row for the scheduler;
+        // sync-driver listener failures can instead dead-letter it here.
         DB::afterCommit(function () use ($message): void {
             try {
                 DispatchOutboxMessage::dispatch((string) $message->getKey());
             } catch (Throwable $e) {
-                Log::error('Unable to enqueue outbox message; scheduler will retry it.', [
+                Log::error('Outbox dispatch callback failed; inspect durable state before recovery.', [
                     'outbox_id' => $message->getKey(),
                     'error' => $e->getMessage(),
                 ]);
