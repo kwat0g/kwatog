@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LeaveTypesManager } from './types';
 import { leaveTypesApi } from '@/api/leave';
@@ -99,5 +99,27 @@ describe('leave type archive actions', () => {
   expect(await screen.findByRole('button', { name: 'Restore Bereavement Leave' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Edit Bereavement Leave' })).not.toBeInTheDocument();
   expect(leaveTypesApi.update).not.toHaveBeenCalled();
+ });
+
+ it('does not show active rows as archived while archived results are loading', async () => {
+  let releaseArchived!: (data: ReturnType<typeof page>) => void;
+  vi.mocked(leaveTypesApi.list).mockImplementation((params) => {
+   if (params?.trashed === 'only') {
+    return new Promise((resolve) => { releaseArchived = resolve; });
+   }
+   return Promise.resolve(page([activeType]));
+  });
+  renderManager();
+
+  expect(await screen.findByRole('button', { name: 'Archive Vacation Leave' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('radio', { name: 'Show archived records only' }));
+  await waitFor(() => expect(leaveTypesApi.list).toHaveBeenLastCalledWith(
+   expect.objectContaining({ trashed: 'only' }),
+  ));
+
+  expect(screen.queryByRole('button', { name: 'Restore Vacation Leave' })).not.toBeInTheDocument();
+
+  releaseArchived(page([archivedType]));
+  expect(await screen.findByRole('button', { name: 'Restore Bereavement Leave' })).toBeInTheDocument();
  });
 });

@@ -61,13 +61,12 @@ export function LeaveTypesManager() {
  const qc = useQueryClient();
  const [editTarget, setEditTarget] = useState<LeaveType | null>(null);
  const [showCreate, setShowCreate] = useState(false);
- const [filters] = useState<ListParams>({ page: 1, per_page: 50 });
+ const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 50 });
  const [scope, setScope] = useState<ArchiveScope>('active');
 
  const { data, isLoading, isError, refetch } = useQuery({
  queryKey: ['leave-types', filters, { trashed: archiveToTrashed(scope) }],
- queryFn: () => leaveTypesApi.list({ trashed: archiveToTrashed(scope) }),
- placeholderData: (prev) => prev,
+ queryFn: () => leaveTypesApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
  });
  const items = data?.data ?? [];
 
@@ -151,7 +150,10 @@ export function LeaveTypesManager() {
  <div className="flex items-center justify-between gap-3 px-5 pt-3">
  <div className="text-sm text-muted">{items.length} types</div>
  <div className="flex items-center gap-2">
- <ArchiveFilter value={scope} onChange={setScope} />
+ <ArchiveFilter value={scope} onChange={(nextScope) => {
+ setScope(nextScope);
+ setFilters((current) => ({ ...current, page: 1 }));
+ }} />
  {can('leave.types.manage') && (
  <Button variant="primary" size="xs" icon={<LuPlus size={14} />}
  onClick={() => { reset({ is_paid: true, is_active: true }); setShowCreate(true); }}>
@@ -165,7 +167,7 @@ export function LeaveTypesManager() {
  {!isLoading && !isError && items.length === 0 && <EmptyState icon="calendar" title="No leave types" />}
  {items.length > 0 && (
  <DataTable columns={columns} data={items} meta={data!.meta}
- onPageChange={() => {}}
+ onPageChange={(page) => setFilters((current) => ({ ...current, page }))}
  />
  )}
  {(showCreate || editTarget) && (
