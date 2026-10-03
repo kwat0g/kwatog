@@ -106,8 +106,10 @@ class ApprovalDelegationService
             throw new BusinessRuleException('Only the delegator or an administrator may revoke this delegation.');
         }
 
-        $delegation->update(['is_active' => false]);
+        return DB::transaction(function () use ($delegation): ApprovalDelegation {
+            $delegation->update(['is_active' => false]);
 
-        return $delegation->fresh(['delegator', 'delegate']);
+            return $delegation->fresh(['delegator', 'delegate']);
+        });
     }
 }
