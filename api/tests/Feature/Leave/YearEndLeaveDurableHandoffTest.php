@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature\Leave;
 
 use App\Common\Jobs\DispatchOutboxMessage;
+use App\Common\Models\ChainListenerRun;
+use App\Common\Models\OutboxMessage;
+use App\Common\Services\OutboxDispatcher;
 use App\Common\Services\OutboxEventCodec;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Events\YearEndLeaveProcessingRequested;
 use App\Modules\Leave\Listeners\RunYearEndLeaveOnRequested;
+use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Leave\Models\YearEndLeaveDisposition;
 use App\Modules\Leave\Requests\ProcessYearEndLeaveRequest;
 use App\Modules\Leave\Services\YearEndLeaveProcessingService;
 use Database\Seeders\RolePermissionSeeder;
@@ -83,6 +89,115 @@ class YearEndLeaveDurableHandoffTest extends TestCase
         $this->assertSame($first->getKey(), $second->getKey());
         $this->assertDatabaseCount('event_outbox', 1);
         $this->assertDatabaseCount('chain_step_runs', 1);
+    }
+
+    public function test_active_replacement_actor_can_retry_after_staged_actor_is_deactivated(): void
+    {
+        Queue::fake([DispatchOutboxMessage::class]);
+
+        $firstUser = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $replacement = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'system_admin')->value('id'),
+        ]);
+        $employee = Employee::factory()->create(['status' => 'active']);
+        $leaveType = LeaveType::create([
+            'name' => 'Replacement actor leave',
+            'code' => 'RT-'.substr(uniqid(), -5),
+            'default_balance' => 10.0,
+            'is_paid' => true,
+            'is_active' => true,
+            'is_convertible_year_end' => false,
+        ]);
+        EmployeeLeaveBalance::create([
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2025,
+            'total_credits' => 10.0,
+            'used' => 2.0,
+            'remaining' => 8.0,
+        ]);
+
+        $first = $this->actingAs($firstUser)
+            ->postJson('/api/v1/leaves/process-year-end', ['year' => 2025])
+            ->assertAccepted();
+        $firstOutboxId = $first->json('outbox_id');
+
+        $firstUser->update(['is_active' => false]);
+        app(OutboxDispatcher::class)->dispatch($firstOutboxId);
+
+        $this->assertDatabaseHas('chain_listener_runs', [
+            'outbox_id' => $firstOutboxId,
+            'outcome_status' => 'manual_required',
+            'outcome_code' => 'year_end_automation_actor_unavailable',
+        ]);
+        $this->assertSame('8.0', (string) EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $leaveType->id)
+            ->where('year', 2025)
+            ->value('remaining'));
+        $this->assertDatabaseMissing('year_end_leave_dispositions', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2025,
+        ]);
+
+        $retry = $this->actingAs($replacement)
+            ->postJson('/api/v1/leaves/process-year-end', ['year' => 2025])
+            ->assertAccepted();
+
+        $this->assertNotSame(
+            $firstOutboxId,
+            $retry->json('outbox_id'),
+            'A retry after actor handoff must stage a fresh request for the active replacement actor.',
+        );
+        $retryOutboxId = $retry->json('outbox_id');
+        $retryEvent = app(OutboxEventCodec::class)->decode(
+            YearEndLeaveProcessingRequested::class,
+            (array) OutboxMessage::query()->findOrFail($retryOutboxId)->payload,
+        );
+        $this->assertSame($replacement->id, $retryEvent->runById);
+
+        app(OutboxDispatcher::class)->dispatch($retryOutboxId);
+
+        $balance = EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $leaveType->id)
+            ->where('year', 2025)
+            ->firstOrFail();
+        $this->assertSame('0.0', (string) $balance->remaining);
+        $this->assertSame('10.0', (string) $balance->used);
+        $this->assertSame(
+            '8.0',
+            (string) YearEndLeaveDisposition::query()
+                ->where('employee_id', $employee->id)
+                ->where('leave_type_id', $leaveType->id)
+                ->where('year', 2025)
+                ->value('days_carried'),
+        );
+        $this->assertDatabaseHas('processed_year_end_leave_types', [
+            'leave_type_id' => $leaveType->id,
+            'year' => 2025,
+            'processed_by' => $replacement->id,
+            'employees_count' => 1,
+        ]);
+
+        $repeat = $this->actingAs($replacement)
+            ->postJson('/api/v1/leaves/process-year-end', ['year' => 2025])
+            ->assertAccepted();
+        $this->assertSame($retryOutboxId, $repeat->json('outbox_id'));
+        $this->assertDatabaseCount('year_end_leave_dispositions', 1);
+
+        $firstRun = ChainListenerRun::query()
+            ->where('outbox_id', $firstOutboxId)
+            ->firstOrFail();
+        $this->actingAs($replacement)
+            ->postJson("/api/v1/chain/listener-runs/{$firstRun->id}/resolve", [
+                'note' => 'The replacement actor completed the new year-end run.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.resolution_status', 'resolved');
     }
 
     public function test_command_refuses_inactive_configured_and_fallback_automation_actors(): void
