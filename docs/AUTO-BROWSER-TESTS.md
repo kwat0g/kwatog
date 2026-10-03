@@ -28,11 +28,11 @@
 |---|---|
 | SPA | `http://localhost/` (200) |
 | API | `http://localhost/api/v1` |
-| Auth | Sanctum SPA mode, HTTP-only cookie (`ogami_erp_session` + `XSRF-TOKEN`) |
+| Auth | Sanctum SPA mode, HTTP-only session cookie plus the `XSRF-TOKEN` CSRF cookie |
 | Stateful trigger | request must carry `Origin: http://localhost` / `Referer` so session middleware loads |
-| Login endpoint | `POST /api/v1/auth/login` → `200` + `{data:{...,role:{slug}}}` |
+| Internal UI login | `POST /api/v1/auth/sign-in` establishes the internal session; `POST /api/v1/auth/login` remains an API endpoint |
 | Identity endpoint | `GET /api/v1/auth/user` |
-| Portal auth | Sanctum **bearer tokens** (separate guards) — `POST /api/v1/b2b/supplier/login`, `.../b2b/customer/login` |
+| Portal auth | Supplier and customer use separate guards with HTTP-only cookie sessions. `/portal/{supplier,customer}/login` routes to the shared `/sign-in` UI; realm-specific API endpoints are `POST /api/v1/b2b/supplier/login` and `POST /api/v1/b2b/customer/login` |
 | Demo password | `password` (all seeded accounts) |
 
 To create the documented role accounts in a disposable local environment, set
