@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -90,6 +91,61 @@ class ReceiveGoodsAuthorizationTest extends TestCase
         $this->assertSame(1, Inspection::query()->where('entity_type', 'grn')->where('entity_id', $grn->id)->count());
         $this->assertSame(0, StockMovement::query()->count());
         $this->assertSame(0, Bill::query()->where('purchase_order_id', $po->id)->count());
+    }
+
+    public function test_single_screen_receiving_rejects_unsupported_dispositions_without_writes(): void
+    {
+        foreach (['use_under_concession', 'partial_accept'] as $disposition) {
+            [$po, $poItem, $item, $location] = $this->makeOpenPurchaseOrder();
+            $payload = $this->receivePayload($po, $poItem, $item, $location, 'pending');
+            $payload['qc']['disposition'] = $disposition;
+
+            $this->actingAs($this->receiver, 'sanctum')
+                ->postJson('/api/v1/inventory/receive-goods', $payload)
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('qc.disposition');
+
+            $this->assertSame(0, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+            $this->assertSame(0, GrnItem::query()->count());
+            $this->assertSame(0, Inspection::query()->where('entity_type', 'grn')->count());
+            $this->assertSame(0, StockMovement::query()->count());
+            $this->assertSame(0, Bill::query()->where('purchase_order_id', $po->id)->count());
+            $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
+        }
+    }
+
+    public function test_service_backstop_rejects_unsupported_single_screen_dispositions_without_writes(): void
+    {
+        [$po, $poItem, $item, $location] = $this->makeOpenPurchaseOrder();
+
+        try {
+            app(GrnService::class)->receiveWithQc(
+                $po,
+                [[
+                    'purchase_order_item_id' => $poItem->id,
+                    'item_id' => $item->id,
+                    'location_id' => $location->id,
+                    'quantity_received' => '10.000',
+                    'unit_cost' => '10.00',
+                ]],
+                ['received_date' => now()->toDateString()],
+                ['result' => 'pending', 'disposition' => 'partial_accept'],
+                $this->receiver,
+            );
+            $this->fail('The service must refuse unsupported dispositions before creating a receipt.');
+        } catch (BusinessRuleException $e) {
+            $this->assertSame(
+                'QC disposition is not implemented for single-screen receiving. Use the GRN partial-accept or supplier-return workflow instead.',
+                $e->getMessage(),
+            );
+        }
+
+        $this->assertSame(0, GoodsReceiptNote::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame(0, GrnItem::query()->count());
+        $this->assertSame(0, Inspection::query()->where('entity_type', 'grn')->count());
+        $this->assertSame(0, StockMovement::query()->count());
+        $this->assertSame(0, Bill::query()->where('purchase_order_id', $po->id)->count());
+        $this->assertSame('0.00', (string) $poItem->fresh()->quantity_received);
     }
 
     public function test_service_backstop_rejects_terminal_qc_without_quality_permission(): void
