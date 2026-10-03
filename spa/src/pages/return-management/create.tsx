@@ -238,7 +238,7 @@ export default function CreateReturnRequestPage() {
   const { data: productsData } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.list({ per_page: 500 }),
-    enabled: financeOnly,
+    enabled: financeOnly || returnType === 'customer_return',
   });
   const { data: customersData } = useQuery({
     queryKey: ['customers'],
@@ -248,10 +248,12 @@ export default function CreateReturnRequestPage() {
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors'],
     queryFn: () => vendorsApi.list({ per_page: 500 }),
+    enabled: returnType === 'supplier_return',
   });
   const { data: itemsData } = useQuery({
     queryKey: ['items'],
     queryFn: () => itemsApi.list({ per_page: 500 }),
+    enabled: returnType === 'supplier_return',
   });
   const { data: options } = useQuery({
     queryKey: ['return-management', 'options'],
@@ -362,6 +364,7 @@ export default function CreateReturnRequestPage() {
       setValue('sales_order_id', choice.rootId ?? '');
       setValue('invoice_id', '');
       setValue(`items.${index}.product_id`, choice.product_id ?? '');
+      setValue(`items.${index}.item_id`, choice.item_id ?? '', { shouldValidate: true });
     }
   };
   const selectBillLine = (index: number, value: string) => {
@@ -627,6 +630,13 @@ export default function CreateReturnRequestPage() {
               {fields.map((field, index) => {
                 const sourceChoices = isSupplierReturn ? supplierSourceLines : customerSourceLines;
                 const itemError = errors.items?.[index];
+                const selectedSource = sourceChoices.find(
+                  (choice) => choice.value === watch(`items.${index}.source_line` as const),
+                );
+                const selectedProduct = products.find(
+                  (product: { id: string; part_number: string; name: string }) =>
+                    product.id === selectedSource?.product_id,
+                );
                 return (
                   <div key={field.id} className="border border-default rounded-md p-3 space-y-2">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-start">
@@ -646,7 +656,7 @@ export default function CreateReturnRequestPage() {
                               ),
                             )}
                           </Select>
-                        ) : (
+                        ) : isSupplierReturn ? (
                           <Select
                             label="Inventory item"
                             {...register(`items.${index}.item_id` as const)}
@@ -659,6 +669,31 @@ export default function CreateReturnRequestPage() {
                               </option>
                             ))}
                           </Select>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <div id={`return-item-label-${field.id}`} className="text-xs text-muted font-medium">
+                              Inventory item
+                            </div>
+                            <div
+                              role="status"
+                              aria-labelledby={`return-item-label-${field.id}`}
+                              className="min-h-8 rounded-md border border-default bg-elevated px-3 py-2 text-sm"
+                            >
+                              {selectedSource?.item_id
+                                ? selectedProduct
+                                  ? `${selectedProduct.part_number} — ${selectedProduct.name}`
+                                  : 'Mapped from delivered source line'
+                                : selectedSource
+                                  ? 'No finished-good inventory item is mapped to this product.'
+                                  : 'Select a delivered source line to map its finished-good item.'}
+                            </div>
+                            <input type="hidden" {...register(`items.${index}.item_id` as const)} />
+                            {itemError?.item_id?.message && (
+                              <p role="alert" className="text-xs text-danger-fg">
+                                {itemError.item_id.message}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                       {!financeOnly && (
