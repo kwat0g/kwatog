@@ -15,6 +15,7 @@ test.afterEach(() => {
 
 async function login(page: Page, email: string): Promise<void> {
   await page.goto('/sign-in');
+  expect(new URL(page.url()).origin).toBe(BASE_URL);
   await page.getByLabel('Email').fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   const responsePromise = page.waitForResponse((response) =>
@@ -58,6 +59,31 @@ async function apiHeaders(context: BrowserContext): Promise<Record<string, strin
     Referer: `${BASE_URL}/`,
     ...(xsrf ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrf) } : {}),
   };
+}
+
+async function readAutomationActorRoles(page: Page): Promise<unknown[]> {
+  const response = await page.request.get(`${BASE_URL}/api/v1/admin/settings`, {
+    headers: await apiHeaders(page.context()),
+  });
+  expect(response.status()).toBe(200);
+  const body = await response.json() as {
+    data: Record<string, Array<{ key: string; value: unknown }>>;
+  };
+  const setting = Object.values(body.data).flat()
+    .find((row) => row.key === 'system.automation.actor_roles');
+  expect(Array.isArray(setting?.value)).toBe(true);
+  return setting!.value as unknown[];
+}
+
+async function writeAutomationActorRoles(page: Page, roles: unknown[], reason: string): Promise<void> {
+  const response = await page.request.put(
+    `${BASE_URL}/api/v1/admin/settings/system.automation.actor_roles`,
+    {
+      headers: await apiHeaders(page.context()),
+      data: { value: roles, reason },
+    },
+  );
+  expect(response.status(), await response.text()).toBe(200);
 }
 
 async function selectDepartment(page: Page, preferredCode = 'PROD'): Promise<void> {
@@ -642,7 +668,7 @@ test.describe('Live procurement runbook', () => {
     await rejectRma(browser, 'finance@ogami.test', rmaUrl);
   });
 
-  test('PR to accepted GRN creates one draft supplier bill', async ({ browser }) => {
+  test('PR to accepted GRN recovers one draft bill after automation actor loss', async ({ browser }) => {
     test.setTimeout(360_000);
     ({ poId, poNumber, vendorName } = await createCatalogPrToSentPo(browser));
     const warehouse = await newContext(browser);
@@ -777,19 +803,28 @@ test.describe('Live procurement runbook', () => {
       expect(pendingGrn.data?.items?.[0]?.inspection?.status).toBe('awaiting_review');
       expect(Number(pendingGrn.data?.items?.[0]?.quantity_accepted)).toBe(0);
 
+      const recoveryAdmin = await newContext(browser);
+      await login(recoveryAdmin.page, 'admin@ogami.test');
+      const originalAutomationRoles = await readAutomationActorRoles(recoveryAdmin.page);
+
       const reviewer = await newContext(browser);
+      await login(reviewer.page, 'production@ogami.test');
+      await reviewer.page.goto('/notifications');
+      await expect(reviewer.page.getByText(`Inspection ${qcNumber} awaits your review`, { exact: true }))
+        .toBeVisible({ timeout: 20_000 });
+      await reviewer.page.goto(`/quality/inspections/${inspectionId}`);
+      const approvePass = reviewer.page.getByRole('button', { name: 'Approve pass', exact: true });
+      await expect(approvePass).toBeVisible({ timeout: 20_000 });
+      const reviewResponsePromise = reviewer.page.waitForResponse((response) =>
+        response.request().method() === 'PATCH'
+        && response.url().includes(`/api/v1/quality/inspections/${inspectionId}/review`),
+      );
+      await writeAutomationActorRoles(
+        recoveryAdmin.page,
+        ['audit_missing_automation_actor'],
+        'Exercise the accepted GRN listener recovery path in the isolated E2E database.',
+      );
       try {
-        await login(reviewer.page, 'production@ogami.test');
-        await reviewer.page.goto('/notifications');
-        await expect(reviewer.page.getByText(`Inspection ${qcNumber} awaits your review`, { exact: true }))
-          .toBeVisible({ timeout: 20_000 });
-        await reviewer.page.goto(`/quality/inspections/${inspectionId}`);
-        const approvePass = reviewer.page.getByRole('button', { name: 'Approve pass', exact: true });
-        await expect(approvePass).toBeVisible({ timeout: 20_000 });
-        const reviewResponsePromise = reviewer.page.waitForResponse((response) =>
-          response.request().method() === 'PATCH'
-          && response.url().includes(`/api/v1/quality/inspections/${inspectionId}/review`),
-        );
         await approvePass.click();
         const reviewDialog = reviewer.page.getByRole('dialog');
         await reviewDialog.getByRole('button', { name: 'Approve pass', exact: true }).click();
@@ -809,8 +844,117 @@ test.describe('Live procurement runbook', () => {
           .not.toBe(reviewedInspection.data?.result_authors?.[0]?.id);
         await expect(reviewer.page.getByText('Passed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
       } finally {
+        await writeAutomationActorRoles(
+          recoveryAdmin.page,
+          originalAutomationRoles,
+          'Restore the original automation actor roles after the isolated E2E recovery scenario.',
+        );
         await reviewer.context.close();
       }
+
+      const runListResponse = await recoveryAdmin.page.request.get(
+        `${BASE_URL}/api/v1/chain/listener-runs?attention=false&per_page=100&search=AutoCreateBillOnGrnAccepted`,
+        { headers: await apiHeaders(recoveryAdmin.context) },
+      );
+      expect(runListResponse.status()).toBe(200);
+      const runList = await runListResponse.json() as {
+        data: { items: Array<{
+          id: string;
+          queue: { status: string };
+          outcome: { status: string; code: string };
+          resolution: { status: string };
+          correlation: { outbox_id: string; replayed_from_id: string | null };
+          chain_step?: { entity_type: string; entity_hash_id: string | null } | null;
+        }> };
+      };
+      const failedRun = runList.data.items.find((run) => run.chain_step?.entity_hash_id === grnId);
+      expect(failedRun, `Failed bill listener for GRN ${grnId} must be visible to recovery.`).toBeTruthy();
+      expect(failedRun).toMatchObject({
+        queue: { status: 'failed' },
+        outcome: { status: 'failed' },
+        resolution: { status: 'open' },
+      });
+
+      const grnBeforeRecovery = await recoveryAdmin.page.request.get(
+        `${BASE_URL}/api/v1/inventory/grn/${grnId}`,
+        { headers: await apiHeaders(recoveryAdmin.context) },
+      );
+      expect(grnBeforeRecovery.status()).toBe(200);
+      const unbilledGrn = await grnBeforeRecovery.json() as {
+        data?: { status?: string; bill?: { id: string } | null };
+      };
+      expect(unbilledGrn.data).toMatchObject({ status: 'accepted', bill: null });
+
+      await recoveryAdmin.page.goto('/chains/recovery');
+      await expect(recoveryAdmin.page.getByRole('heading', { name: 'Automation recovery' })).toBeVisible();
+      const recoverySearch = recoveryAdmin.page.getByRole('textbox', { name: 'Search listener runs' });
+      await recoverySearch.fill(failedRun!.correlation.outbox_id);
+      const failedRow = recoveryAdmin.page.locator('article')
+        .filter({ hasText: failedRun!.correlation.outbox_id })
+        .filter({ hasText: 'failed' });
+      await expect(failedRow).toBeVisible();
+      const replayResponsePromise = recoveryAdmin.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().endsWith(`/api/v1/chain/listener-runs/${failedRun!.id}/replay`),
+      );
+      await failedRow.getByRole('button', { name: 'Replay', exact: true }).click();
+      const replayDialog = recoveryAdmin.page.getByRole('dialog');
+      await replayDialog.getByRole('button', { name: 'Queue replay', exact: true }).click();
+      const replayResponse = await replayResponsePromise;
+      expect(replayResponse.status()).toBe(202);
+      await expect(recoveryAdmin.page.getByText('The selected listener replay was queued.')).toBeVisible();
+      const replayResult = await replayResponse.json() as {
+        data?: { source_run_id: string; replay_count: number };
+      };
+      expect(replayResult.data).toMatchObject({ source_run_id: failedRun!.id, replay_count: 1 });
+      await expect(failedRow).toContainText('1 replay');
+
+      await failedRow.getByRole('button', { name: 'Resolve', exact: true }).click();
+      const resolveDialog = recoveryAdmin.page.getByRole('dialog');
+      await resolveDialog.getByRole('textbox', { name: 'Resolution note' })
+        .fill('Restored the automation actor and confirmed the supplier bill replay.');
+      const resolveResponsePromise = recoveryAdmin.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().endsWith(`/api/v1/chain/listener-runs/${failedRun!.id}/resolve`),
+      );
+      await resolveDialog.getByRole('button', { name: 'Save resolution', exact: true }).click();
+      const resolveResponse = await resolveResponsePromise;
+      expect(resolveResponse.status()).toBe(200);
+      await expect(recoveryAdmin.page.getByText('Resolution note saved.')).toBeVisible();
+
+      const settledRunsResponse = await recoveryAdmin.page.request.get(
+        `${BASE_URL}/api/v1/chain/listener-runs?attention=false&per_page=100&search=${failedRun!.correlation.outbox_id}`,
+        { headers: await apiHeaders(recoveryAdmin.context) },
+      );
+      expect(settledRunsResponse.status()).toBe(200);
+      const settledRuns = await settledRunsResponse.json() as { data: { items: typeof runList.data.items } };
+      const resolvedSource = settledRuns.data.items.find((run) => run.id === failedRun!.id);
+      const completedReplay = settledRuns.data.items.find((run) => run.correlation.replayed_from_id === failedRun!.id);
+      expect(resolvedSource).toMatchObject({
+        queue: { status: 'failed' },
+        resolution: { status: 'resolved' },
+      });
+      expect(completedReplay).toMatchObject({
+        queue: { status: 'completed' },
+        outcome: { status: 'completed', code: 'supplier_bill_staged' },
+      });
+      expect(completedReplay?.correlation.outbox_id).toBe(failedRun!.correlation.outbox_id);
+
+      const grnAfterRecovery = await recoveryAdmin.page.request.get(
+        `${BASE_URL}/api/v1/inventory/grn/${grnId}`,
+        { headers: await apiHeaders(recoveryAdmin.context) },
+      );
+      expect(grnAfterRecovery.status()).toBe(200);
+      const billedGrn = await grnAfterRecovery.json() as {
+        data?: {
+          status?: string;
+          bill?: { id: string; status: string; total_amount: string } | null;
+        };
+      };
+      expect(billedGrn.data?.status).toBe('accepted');
+      expect(billedGrn.data?.bill?.status).toBe('draft');
+
+      await recoveryAdmin.context.close();
       const billLink = warehouse.page.getByRole('link', { name: /^BILL-/ }).first();
       const acceptedGrnResponsePromise = warehouse.page.waitForResponse((response) =>
         response.request().method() === 'GET'

@@ -11,7 +11,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { outputFolder: 'playwright-live-report' }]],
   use: {
-    baseURL: 'http://localhost',
+    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost',
     headless: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
