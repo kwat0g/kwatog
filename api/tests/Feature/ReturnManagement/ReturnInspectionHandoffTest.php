@@ -25,6 +25,7 @@ use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ReturnInspectionHandoffTest extends TestCase
@@ -340,7 +341,7 @@ class ReturnInspectionHandoffTest extends TestCase
         ];
     }
 
-    /** @dataProvider fractionalBatchProvider */
+    #[DataProvider('fractionalBatchProvider')]
     public function test_fractional_return_quantities_produce_a_decimal_safe_batch_size(
         array $quantities,
         int $expectedBatch,
