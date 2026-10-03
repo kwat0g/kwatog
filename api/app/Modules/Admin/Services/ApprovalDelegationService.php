@@ -32,7 +32,7 @@ class ApprovalDelegationService
     public function list(User $actor): Collection
     {
         $q = ApprovalDelegation::query()
-            ->with(['delegator:id,name,email,role_id', 'delegate:id,name,email,role_id'])
+            ->with(['delegator:id,name,is_active', 'delegate:id,name,is_active'])
             ->orderByDesc('id');
 
         // hasPermission short-circuits for system_admin, so the administrator

@@ -17,6 +17,7 @@ import {
  LuLogOut,
  LuChevronDown,
  LuLayoutDashboard,
+ LuShieldCheck,
 } from '@/lib/icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
@@ -36,6 +37,7 @@ const MENU_ITEMS = [
  { label: 'Loans', to: '/self-service/loans', icon: LuWallet },
  { label: 'Documents', to: '/self-service/documents', icon: LuFolderOpen },
  { label: 'Profile', to: '/self-service/profile', icon: LuUser },
+ { label: 'Approval cover', to: '/approvals/delegations', icon: LuShieldCheck },
 ] as const;
 
 export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {

@@ -69,7 +69,9 @@ class ApprovalDelegation extends Model
         return static::query()
             ->where('is_active', true)
             ->whereDate('starts_at', '<=', $day)
-            ->whereDate('ends_at', '>=', $day);
+            ->whereDate('ends_at', '>=', $day)
+            ->whereHas('delegator', fn (Builder $query) => $query->where('is_active', true))
+            ->whereHas('delegate', fn (Builder $query) => $query->where('is_active', true));
     }
 
     /**

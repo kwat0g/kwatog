@@ -27,6 +27,7 @@ const ScorecardPage = lazy(() => import('@/pages/dashboard/scorecard'));
 // Cross-module pages (no specific module guard)
 const CalendarPage = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
+const ApprovalDelegationsPage = lazy(() => import('@/pages/approvals/delegations'));
 const ChainTrackerPage = lazy(() => import('@/pages/chains'));
 const ChainRecoveryPage = lazy(() => import('@/pages/chains/recovery'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
@@ -86,6 +87,10 @@ export const dashboardRoutes = (
  <Route
  path="/approvals"
  element={<PermissionGuard permission="approvals.board.view"><Suspense fallback={<SkeletonKanban />}><ApprovalsBoardPage /></Suspense></PermissionGuard>}
+ />
+ <Route
+ path="/approvals/delegations"
+ element={<Suspense fallback={<SkeletonTable columns={4} rows={5} />}><ApprovalDelegationsPage /></Suspense>}
  />
 
  {/* Chain Tracker — cross-module order-to-cash journey view */}

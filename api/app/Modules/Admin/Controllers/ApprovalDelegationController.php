@@ -9,6 +9,7 @@ use App\Common\Models\ApprovalDelegation;
 use App\Modules\Admin\Requests\StoreApprovalDelegationRequest;
 use App\Modules\Admin\Resources\ApprovalDelegationResource;
 use App\Modules\Admin\Services\ApprovalDelegationService;
+use App\Modules\Auth\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -29,6 +30,46 @@ class ApprovalDelegationController
         return ApprovalDelegationResource::collection(
             $this->service->list($request->user())
         );
+    }
+
+    public function candidates(Request $request): JsonResponse
+    {
+        $request->merge(['q' => trim((string) $request->query('q', ''))]);
+        $search = mb_strtolower((string) $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:100'],
+        ])['q']);
+
+        $actor = $request->user();
+        $users = User::query()
+            ->with('role:id,name')
+            ->where('is_active', true)
+            ->where('id', '<>', $actor->id)
+            ->where(function ($query) use ($search): void {
+                $term = '%'.$search.'%';
+                $query->whereRaw('LOWER(name) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(email) LIKE ?', [$term]);
+            })
+            ->when($actor->role?->slug === 'department_head', function ($query) use ($actor): void {
+                $departmentId = $actor->employee?->department_id;
+                $query->where(function ($departmentQuery) use ($departmentId): void {
+                    $departmentQuery->whereHas('employee', fn ($employeeQuery) => $employeeQuery
+                        ->where('department_id', $departmentId));
+                    if ($departmentId === null) {
+                        $departmentQuery->orWhereDoesntHave('employee');
+                    }
+                });
+            })
+            ->orderBy('name')
+            ->limit(25)
+            ->get(['id', 'name', 'role_id']);
+
+        return response()->json([
+            'data' => $users->map(fn (User $user) => [
+                'id' => $user->hash_id,
+                'name' => $user->name,
+                'role' => $user->role?->name,
+            ])->values(),
+        ]);
     }
 
     public function store(StoreApprovalDelegationRequest $request): JsonResponse

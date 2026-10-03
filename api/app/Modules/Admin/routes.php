@@ -240,5 +240,6 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
         Route::get('/', [ApprovalDelegationController::class, 'index']);
         Route::post('/', [ApprovalDelegationController::class, 'store']);
+        Route::get('candidates', [ApprovalDelegationController::class, 'candidates']);
         Route::delete('{delegation}', [ApprovalDelegationController::class, 'destroy']);
     });

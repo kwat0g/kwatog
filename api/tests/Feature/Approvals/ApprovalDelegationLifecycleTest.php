@@ -179,4 +179,33 @@ class ApprovalDelegationLifecycleTest extends TestCase
             'is_active' => true,
         ]);
     }
+
+    public function test_department_head_candidate_search_only_returns_colleagues_from_their_department(): void
+    {
+        $this->seed(DepartmentSeeder::class);
+        $this->seed(PositionSeeder::class);
+        $departments = Department::query()->orderBy('id')->take(2)->get();
+        $this->assertCount(2, $departments);
+
+        $actor = $this->makeUser('department_head');
+        $sameDepartment = $this->makeUser('employee');
+        $otherDepartment = $this->makeUser('employee');
+        $actor->update([
+            'employee_id' => Employee::factory()->create(['department_id' => $departments[0]->id])->id,
+        ]);
+        $sameDepartment->update([
+            'name' => 'Delegate Same Department',
+            'employee_id' => Employee::factory()->create(['department_id' => $departments[0]->id])->id,
+        ]);
+        $otherDepartment->update([
+            'name' => 'Delegate Other Department',
+            'employee_id' => Employee::factory()->create(['department_id' => $departments[1]->id])->id,
+        ]);
+
+        $response = $this->actingAs($actor, 'sanctum')
+            ->getJson('/api/v1/approval-delegations/candidates?q=delegate')
+            ->assertOk();
+
+        $this->assertSame([$sameDepartment->hash_id], array_column($response->json('data'), 'id'));
+    }
 }
