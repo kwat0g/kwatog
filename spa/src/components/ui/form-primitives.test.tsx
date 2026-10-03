@@ -7,6 +7,26 @@ import { Select } from './Select';
 import { Textarea } from './Textarea';
 
 describe('form primitives', () => {
+  it('keeps decorative required markers out of accessible field names', () => {
+    const { container } = render(
+      <>
+        <Input label="Full name" required />
+        <Select label="Department" required>
+          <option value="">Choose one</option>
+        </Select>
+        <Textarea label="Reason" required />
+        <FileInput label="Evidence" required />
+      </>,
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Full name' })).toBeRequired();
+    expect(screen.getByRole('combobox', { name: 'Department' })).toBeRequired();
+    expect(screen.getByRole('textbox', { name: 'Reason' })).toBeRequired();
+    const evidence = container.querySelector('input[type="file"]');
+    expect(evidence).toHaveAccessibleName('Evidence');
+    expect(evidence).toBeRequired();
+  });
+
   it('keeps required validation and stable generated labels', () => {
     const { rerender } = render(<Input label="Full name" required />);
     const input = screen.getByLabelText(/^Full name/);
