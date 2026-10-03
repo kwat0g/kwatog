@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { LiveDashboardWidget } from './registry';
 import type { DashboardLayoutItem } from '@/api/dashboard-layout';
@@ -154,28 +154,35 @@ describe('LiveDashboardWidget', () => {
   });
 
   /** A KPI trend reads only against its target, and status is words, not colour. */
-  it('renders a KPI trend with its target and status label', () => {
-    wrap(
-      <LiveDashboardWidget
-        widget={item({
-          render_kind: 'trend',
-          data: {
-            points: [
-              { label: '2026-07', value: 82.5 },
-              { label: '2026-08', value: 88 },
-            ],
-            delta: 6.7,
-            kind: 'percent',
-            target: 85,
-            status: 'on_target',
-          },
-        })}
-        loading={false}
-      />,
-    );
+  it('renders a KPI trend without a fixed-size chart warning', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    expect(screen.getByText('88.0%')).toBeInTheDocument();
-    expect(screen.getByText(/Target 85\.0%/)).toBeInTheDocument();
-    expect(screen.getByText(/On target/)).toBeInTheDocument();
+    try {
+      wrap(
+        <LiveDashboardWidget
+          widget={item({
+            render_kind: 'trend',
+            data: {
+              points: [
+                { label: '2026-07', value: 82.5 },
+                { label: '2026-08', value: 88 },
+              ],
+              delta: 6.7,
+              kind: 'percent',
+              target: 85,
+              status: 'on_target',
+            },
+          })}
+          loading={false}
+        />,
+      );
+
+      expect(screen.getByText('88.0%')).toBeInTheDocument();
+      expect(screen.getByText(/Target 85\.0%/)).toBeInTheDocument();
+      expect(screen.getByText(/On target/)).toBeInTheDocument();
+      expect(warning).not.toHaveBeenCalledWith(expect.stringContaining('both fixed numbers'));
+    } finally {
+      warning.mockRestore();
+    }
   });
 });

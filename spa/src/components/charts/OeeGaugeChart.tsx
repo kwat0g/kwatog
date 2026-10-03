@@ -1,4 +1,4 @@
-import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 
 interface Props {
  oee: number | null; // 0–1
@@ -17,8 +17,9 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  <div className="flex flex-col items-center gap-3">
  {/* Half-circle gauge */}
  <div className="relative" style={{ width: 200, height: 108 }}>
- <ResponsiveContainer width={200} height={200}>
  <RadialBarChart
+ width={200}
+ height={200}
  cx="50%"
  cy="100%"
  innerRadius="60%"
@@ -35,7 +36,6 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  cornerRadius={4}
  />
  </RadialBarChart>
- </ResponsiveContainer>
  {/* Center label */}
  <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pb-1 pointer-events-none">
  <span className="text-2xl font-mono tabular-nums font-medium">{oeePct == null ? '—' : `${oeePct.toFixed(1)}%`}</span>

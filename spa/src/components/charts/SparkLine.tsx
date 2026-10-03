@@ -1,4 +1,4 @@
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { LineChart, Line } from 'recharts';
 
 interface SparkLineProps {
  data: number[];
@@ -15,10 +15,8 @@ export function SparkLine({
 }: SparkLineProps) {
  const chartData = data.map((v, i) => ({ i, v }));
  return (
- <ResponsiveContainer width={width} height={height}>
- <LineChart data={chartData}>
+ <LineChart data={chartData} width={width} height={height}>
  <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
  </LineChart>
- </ResponsiveContainer>
  );
 }

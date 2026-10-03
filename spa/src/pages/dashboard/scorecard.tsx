@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { LuTrendingUp, LuTrendingDown, LuMinus, LuRefreshCw } from '@/lib/icons';
 import toast from 'react-hot-toast';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { Panel } from '@/components/ui/Panel';
+import { SparkLine } from '@/components/charts/SparkLine';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -224,17 +224,12 @@ function KpiCard({ item, trendPoints }: { item: KpiScorecardItem; trendPoints: K
  {/* Sparkline */}
  {sparkData.length >= 2 && (
  <div className="shrink-0 pt-2">
- <ResponsiveContainer width={72} height={36}>
- <LineChart data={sparkData}>
- <Line
- type="monotone"
- dataKey="v"
- stroke={TREND_COLOR[status] ?? 'var(--accent)'}
- strokeWidth={1.5}
- dot={false}
+ <SparkLine
+ data={sparkData.map((point) => point.v)}
+ color={TREND_COLOR[status] ?? 'var(--accent)'}
+ height={36}
+ width={72}
  />
- </LineChart>
- </ResponsiveContainer>
  </div>
  )}
  </div>
