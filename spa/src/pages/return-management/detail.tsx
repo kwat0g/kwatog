@@ -264,9 +264,13 @@ export default function ReturnRequestDetailPage() {
         return [
           { key: 'approve', label: 'Approve', variant: 'primary' },
           { key: 'reject', label: 'Reject', variant: 'danger' },
+          { key: 'cancel', label: 'Cancel', variant: 'danger' },
         ];
       case 'approved':
-        return [{ key: 'receive', label: 'Record Receipt', variant: 'primary' }];
+        return [
+          { key: 'receive', label: 'Record Receipt', variant: 'primary' },
+          { key: 'cancel', label: 'Cancel', variant: 'danger' },
+        ];
       case 'received':
         return [{
           key: 'inspect',

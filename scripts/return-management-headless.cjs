@@ -469,6 +469,63 @@ async function receiveFinalShortViaUi(warehouse, rmaId, quantity) {
   pass('Warehouse closes a shorter physical return at its actual quantity through the UI');
   return received;
 }
+async function cancelReturnViaUi(page, rmaId, expectedStatus) {
+  const url = `/return-management/return-requests/${rmaId}`;
+  const before = await ok(page, 'GET', url);
+  expect(before.status).toBe(expectedStatus);
+  expect(before.receipts).toHaveLength(0);
+  await page.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#main-content').getByText(before.rma_number, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const responsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/cancel`));
+  await dialog.getByRole('button', { name: 'Yes, cancel RMA', exact: true }).click();
+  const response = await responsePromise;
+  const body = await response.json();
+  expect(response.status(), JSON.stringify(body)).toBe(200);
+  const cancelled = await ok(page, 'GET', url);
+  expect(cancelled).toMatchObject({
+    status: 'cancelled',
+    disposition_status: null,
+    moved_quantity: null,
+    stock_movement: null,
+    credit_note: null,
+  });
+  expect(cancelled.receipts).toHaveLength(0);
+  expect(cancelled.inspections).toHaveLength(0);
+  expect(cancelled.items.every((line) => line.source_allocation === null && line.stock_movement_id === null)).toBe(true);
+  const allocationState = psql(`select count(*)||'|'||count(*) filter (where a.released_at is not null and a.quantity=0)||'|'||count(*) filter (where a.released_at is null) from return_request_source_allocations a join return_request_items i on i.id=a.return_request_item_id join return_requests r on r.id=i.return_request_id where r.rma_number='${cancelled.rma_number}'`, DB);
+  expect(allocationState).toBe('1|1|0');
+  const approvalBlockers = psql(`select count(*) from approval_records a join return_requests r on r.id=a.approvable_id where a.approvable_type like '%ReturnRequest' and r.rma_number='${cancelled.rma_number}' and (a.action='pending' or a.is_current)`, DB);
+  expect(approvalBlockers).toBe('0');
+  const audit = () => psql(`select count(*) from audit_logs a join return_requests r on r.id=a.model_id where a.model_type like '%ReturnRequest' and r.rma_number='${cancelled.rma_number}' and a.action='updated' and a.user_id=(select id from users where email='customerservice@ogami.test') and a.old_values->>'status'='${expectedStatus}' and a.new_values->>'status'='cancelled'`, DB);
+  expect(audit()).toBe('1');
+  await page.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#main-content').getByText(cancelled.rma_number, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
+  const duplicate = await api(page, 'POST', `${url}/cancel`, { reason: 'Duplicate cancellation attempt.' });
+  expect(duplicate.status).toBe(422);
+  expect(duplicate.body.message).toMatch(/only draft, pending-approval, or approved returns can be cancelled/i);
+  const afterDuplicate = await ok(page, 'GET', url);
+  expect(afterDuplicate).toMatchObject({
+    status: 'cancelled',
+    cancelled_at: cancelled.cancelled_at,
+    disposition_status: null,
+    moved_quantity: null,
+    stock_movement: null,
+    credit_note: null,
+  });
+  expect(afterDuplicate.approval_records.map((record) => record.action)).not.toContain('pending');
+  expect(afterDuplicate.receipts).toHaveLength(0);
+  expect(afterDuplicate.inspections).toHaveLength(0);
+  expect(afterDuplicate.items.every((line) => line.source_allocation === null && line.stock_movement_id === null)).toBe(true);
+  expect(audit()).toBe('1');
+  expect(psql(`select count(*) from return_request_source_allocations a join return_request_items i on i.id=a.return_request_item_id join return_requests r on r.id=i.return_request_id where r.rma_number='${cancelled.rma_number}' and a.released_at is not null and a.quantity=0`, DB)).toBe('1');
+  pass(`Customer Service cancels an untouched ${expectedStatus} RMA through the UI and releases its source allocation`);
+  return cancelled;
+}
 async function finishReturn(manager, qc, checker, rmaId, disposition) {
   const url = `/return-management/return-requests/${rmaId}`;
   let rma = await ok(manager, 'GET', url);
@@ -776,6 +833,26 @@ async function finalizeCreditViaUi(finance, creditId) {
       expect(completed.status).toBe('completed');
       expect(completed.inspections).toHaveLength(1);
       pass('Recovered RMA passes Quality review, disposition, and completion through role UIs');
+
+      const pendingCancellationId = await createCustomerReturnViaUi(service);
+      const submittedCancellation = await rmaActionViaUi(service, pendingCancellationId, 'Submit for Approval', 'Submit', '/submit');
+      expect(submittedCancellation.status).toBe('pending_approval');
+      const pendingCancellation = await ok(service, 'GET', `/return-management/return-requests/${pendingCancellationId}`);
+      expect(pendingCancellation).toMatchObject({ status: 'pending_approval', pending_approval_step: 1, disposition_status: null });
+      expect(pendingCancellation.approval_records.map((record) => record.action)).toEqual(['pending', 'pending']);
+      expect(pendingCancellation.receipts).toHaveLength(0);
+      expect(pendingCancellation.inspections).toHaveLength(0);
+      await cancelReturnViaUi(service, pendingCancellationId, 'pending_approval');
+
+      const approvedCancellationId = await createCustomerReturnViaUi(service);
+      await approveReturn(browser, service, approvedCancellationId, checker);
+      const approvedCancellation = await ok(service, 'GET', `/return-management/return-requests/${approvedCancellationId}`);
+      expect(approvedCancellation).toMatchObject({ status: 'approved', pending_approval_step: null, disposition_status: null });
+      expect(approvedCancellation.approval_records.map((record) => record.action)).toEqual(['approved', 'approved']);
+      expect(approvedCancellation.receipts).toHaveLength(0);
+      expect(approvedCancellation.inspections).toHaveLength(0);
+      await cancelReturnViaUi(service, approvedCancellationId, 'approved');
+
       expect(httpErrors.filter((entry) => /GET \/api\/v1\/(vendors|inventory\/items)$/.test(entry))).toEqual([]);
       pass('Customer Service customer-return form makes no forbidden vendor or inventory-list requests');
       expect(errors).toEqual([]);
