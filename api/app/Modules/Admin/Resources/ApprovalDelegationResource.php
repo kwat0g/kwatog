@@ -21,6 +21,11 @@ class ApprovalDelegationResource extends JsonResource
             'ends_at' => $this->ends_at?->toDateString(),
             'reason' => $this->reason,
             'is_active' => (bool) $this->is_active,
+            'role_is_current' => $this->whenLoaded('delegator', function (): bool {
+                $roleSlug = $this->delegator?->role?->slug;
+
+                return $roleSlug !== null && ($this->role_slug === null || $roleSlug === $this->role_slug);
+            }),
             'can_revoke' => $request->user() !== null && (
                 $request->user()->id === $this->delegator_user_id
                 || $request->user()->hasPermission('admin.delegations.manage_any')

@@ -29,6 +29,7 @@ const delegation: ApprovalDelegation = {
   ends_at: '2026-10-10',
   reason: 'Annual leave',
   is_active: true,
+  role_is_current: true,
   can_revoke: true,
   created_at: null,
   updated_at: null,
@@ -105,5 +106,16 @@ describe('approval cover', () => {
     const row = await screen.findByRole('article', { name: 'Approval cover from Riley Chen' });
     expect(within(row).getByText('Delegator inactive')).toBeInTheDocument();
     expect(within(row).getByText(/administrator must reactivate the delegator or revoke the cover/i)).toBeInTheDocument();
+  });
+
+  it('explains that a role change has stopped the cover', async () => {
+    vi.mocked(approvalDelegationsApi.list).mockResolvedValue([
+      Object.assign({}, delegation, { role_is_current: false }),
+    ]);
+    renderPage();
+
+    const row = await screen.findByRole('article', { name: /Morgan Lee/i });
+    expect(within(row).getByText('Role changed')).toBeInTheDocument();
+    expect(within(row).getByText(/revoke this cover and set up a new one for the current role/i)).toBeInTheDocument();
   });
 });

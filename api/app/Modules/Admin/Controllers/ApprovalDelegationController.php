@@ -93,7 +93,7 @@ class ApprovalDelegationController
         // answer 422, quietly downgrading an access decision to a validation
         // complaint.
         try {
-            $this->service->revoke($delegation, $request->user());
+            $delegation = $this->service->revoke($delegation, $request->user());
         } catch (BusinessRuleException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
         }

@@ -208,4 +208,61 @@ class ApprovalDelegationLifecycleTest extends TestCase
 
         $this->assertSame([$sameDepartment->hash_id], array_column($response->json('data'), 'id'));
     }
+
+    public function test_listing_marks_exact_cover_ineffective_after_delegator_role_changes(): void
+    {
+        $delegator = $this->makeUser('finance_officer');
+        $delegate = $this->makeUser('employee');
+        $created = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', [
+                'delegate_user_id' => $delegate->hash_id,
+                'role_slug' => 'finance_officer',
+                'starts_at' => now()->subDay()->toDateString(),
+                'ends_at' => now()->addDay()->toDateString(),
+            ])
+            ->assertCreated();
+
+        $admin = $this->makeUser('system_admin');
+        $financeRole = Role::where('slug', 'finance_officer')->firstOrFail();
+        $employeeRole = Role::where('slug', 'employee')->firstOrFail();
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/admin/users/{$delegator->hash_id}/role", [
+                'role_id' => $employeeRole->hash_id,
+                'expected_role_id' => $financeRole->hash_id,
+                'reason' => 'Delegator role changed',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.role.slug', 'employee');
+        $this->assertSame($employeeRole->id, $delegator->fresh()->role_id);
+
+        $response = $this->actingAs($delegator, 'sanctum')
+            ->getJson('/api/v1/approval-delegations')
+            ->assertOk();
+
+        $response->assertJsonPath('data.0.id', $created->json('data.id'));
+        $response->assertJsonPath('data.0.role_is_current', false);
+    }
+
+    public function test_revoke_returns_the_complete_delegation_resource(): void
+    {
+        $delegator = $this->makeUser('finance_officer');
+        $delegate = $this->makeUser('employee');
+        $created = $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', [
+                'delegate_user_id' => $delegate->hash_id,
+                'role_slug' => 'finance_officer',
+                'starts_at' => now()->subDay()->toDateString(),
+                'ends_at' => now()->addDay()->toDateString(),
+            ])
+            ->assertCreated();
+
+        $revoked = $this->actingAs($delegator, 'sanctum')
+            ->deleteJson('/api/v1/approval-delegations/'.$created->json('data.id'))
+            ->assertOk();
+
+        $revoked->assertJsonPath('data.is_active', false);
+        $revoked->assertJsonPath('data.role_is_current', true);
+        $revoked->assertJsonPath('data.delegator.id', $delegator->hash_id);
+        $revoked->assertJsonPath('data.delegate.id', $delegate->hash_id);
+    }
 }

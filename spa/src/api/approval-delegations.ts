@@ -13,6 +13,7 @@ export interface ApprovalDelegation {
   ends_at: string;
   reason: string | null;
   is_active: boolean;
+  role_is_current: boolean;
   can_revoke: boolean;
   delegator: ApprovalDelegationPerson | null;
   delegate: ApprovalDelegationPerson | null;

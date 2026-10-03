@@ -32,7 +32,11 @@ class ApprovalDelegationService
     public function list(User $actor): Collection
     {
         $q = ApprovalDelegation::query()
-            ->with(['delegator:id,name,is_active', 'delegate:id,name,is_active'])
+            ->with([
+                'delegator:id,name,is_active,role_id',
+                'delegator.role:id,slug',
+                'delegate:id,name,is_active',
+            ])
             ->orderByDesc('id');
 
         // hasPermission short-circuits for system_admin, so the administrator
@@ -112,7 +116,11 @@ class ApprovalDelegationService
 
             if ($existing) {
                 if ($existing->is_active && $existing->reason === ($data['reason'] ?? null)) {
-                    return $existing->load(['delegator', 'delegate']);
+                    return $existing->load([
+                        'delegator:id,name,is_active,role_id',
+                        'delegator.role:id,slug',
+                        'delegate:id,name,is_active',
+                    ]);
                 }
 
                 $message = $existing->is_active
@@ -132,7 +140,11 @@ class ApprovalDelegationService
                 'is_active' => true,
             ]);
 
-            return $delegation->load(['delegator', 'delegate']);
+            return $delegation->load([
+                'delegator:id,name,is_active,role_id',
+                'delegator.role:id,slug',
+                'delegate:id,name,is_active',
+            ]);
         });
     }
 
@@ -148,7 +160,11 @@ class ApprovalDelegationService
         return DB::transaction(function () use ($delegation): ApprovalDelegation {
             $delegation->update(['is_active' => false]);
 
-            return $delegation->fresh(['delegator', 'delegate']);
+            return $delegation->fresh([
+                'delegator:id,name,is_active,role_id',
+                'delegator.role:id,slug',
+                'delegate:id,name,is_active',
+            ]);
         });
     }
 }

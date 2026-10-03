@@ -17,6 +17,7 @@ function statusOf(delegation: ApprovalDelegation, today: string): { label: strin
   if (!delegation.is_active) return { label: 'Revoked', variant: 'neutral' };
   if (delegation.delegator && !delegation.delegator.is_active) return { label: 'Delegator inactive', variant: 'danger' };
   if (!delegation.delegate?.is_active) return { label: 'Delegate inactive', variant: 'danger' };
+  if (!delegation.role_is_current) return { label: 'Role changed', variant: 'danger' };
   if (delegation.ends_at < today) return { label: 'Expired', variant: 'neutral' };
   if (delegation.starts_at > today) return { label: 'Scheduled', variant: 'warning' };
   return { label: 'Active', variant: 'success' };
@@ -256,6 +257,13 @@ export default function ApprovalDelegationsPage() {
                       )}
                       {delegation.is_active && delegation.delegator && !delegation.delegator.is_active && (
                         <p className="text-sm text-danger-fg">The delegator is inactive, so this cover cannot be used. An administrator must reactivate the delegator or revoke the cover.</p>
+                      )}
+                      {delegation.is_active && delegation.delegator?.is_active && delegation.role_is_current === false && (
+                        <p className="text-sm text-danger-fg">
+                          This cover no longer works because the delegator changed roles. {delegation.can_revoke
+                            ? 'Revoke this cover and set up a new one for the current role.'
+                            : 'Ask the delegator or an administrator to revoke and reassign this cover.'}
+                        </p>
                       )}
                     </div>
                     {delegation.can_revoke && delegation.is_active && (

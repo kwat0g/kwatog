@@ -519,16 +519,26 @@ class ApprovalDelegationTest extends TestCase
         $delegate = $this->makeUser('employee');
         $pr = $this->pendingPurchaseRequest($requester);
 
-        ApprovalDelegation::create([
-            'delegator_user_id' => $delegator->id,
-            'delegate_user_id' => $delegate->id,
-            'role_slug' => 'finance_officer',
-            'starts_at' => now()->subDay()->toDateString(),
-            'ends_at' => now()->addDay()->toDateString(),
-            'is_active' => true,
-        ]);
+        $this->actingAs($delegator, 'sanctum')
+            ->postJson('/api/v1/approval-delegations', [
+                'delegate_user_id' => $delegate->hash_id,
+                'role_slug' => 'finance_officer',
+                'starts_at' => now()->subDay()->toDateString(),
+                'ends_at' => now()->addDay()->toDateString(),
+            ])
+            ->assertCreated();
 
-        $delegator->update(['role_id' => Role::where('slug', 'employee')->value('id')]);
+        $admin = $this->makeUser('system_admin');
+        $financeRole = Role::where('slug', 'finance_officer')->firstOrFail();
+        $employeeRole = Role::where('slug', 'employee')->firstOrFail();
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/admin/users/{$delegator->hash_id}/role", [
+                'role_id' => $employeeRole->hash_id,
+                'expected_role_id' => $financeRole->hash_id,
+                'reason' => 'Delegator role changed',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.role.slug', 'employee');
 
         $this->expectExceptionMessage("Only users with role 'finance_officer' can approve this step.");
         app(ApprovalService::class)->approve($pr, $delegate, 'Stale delegation must fail');
