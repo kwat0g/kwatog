@@ -305,4 +305,49 @@ class CustomerReturnRestockOnDisposeTest extends TestCase
             ->where('movement_type', StockMovementType::Scrap->value)
             ->count());
     }
+
+    public function test_dispose_blocks_imported_received_customer_return_without_inventory_mapping(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $location = WarehouseLocation::factory()->create();
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-IMPORT-' . substr(uniqid(), -5),
+            'type' => 'customer_return',
+            'status' => ReturnRequestStatus::Inspected,
+            'customer_id' => $customer->id,
+            'reason_code' => 'defective',
+            'return_date' => now()->toDateString(),
+            'created_by' => $admin->id,
+        ]);
+        $line = ReturnRequestItem::create([
+            'return_request_id' => $rma->id,
+            'quantity' => '10.000',
+            'returned_quantity' => '8.000',
+            'receipt_recorded' => true,
+            'unit_price' => '100.00',
+            'total' => '800.00',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->postJson("/api/v1/return-management/return-requests/{$rma->hash_id}/dispose", [
+                'dispositions' => [[
+                    'item_id' => $line->hash_id,
+                    'disposition' => 'restock',
+                ]],
+                'location_id' => $location->hash_id,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('message', 'A received customer-return line needs a finished-goods inventory item before disposition.');
+
+        $this->assertSame(ReturnRequestStatus::Inspected, $rma->fresh()->status);
+        $this->assertNull($rma->fresh()->disposition_status);
+        $this->assertNull($rma->fresh()->credit_note_id);
+        $this->assertNull($line->fresh()->disposition);
+        $this->assertSame(0, StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->count());
+    }
 }

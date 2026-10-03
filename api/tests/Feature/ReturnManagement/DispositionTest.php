@@ -25,6 +25,7 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Services\StockMovementService;
@@ -219,7 +220,9 @@ class DispositionTest extends TestCase
     {
         $by = $this->makeUser();
         $customer = $this->makeCustomer();
-        $rma = $this->makeInspectedRma($by, $customer);
+        $product = $this->makeProduct();
+        $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        $this->makeLineStockable($rma, $by);
         // 2026-08-08 — restock lines are received back into stock at dispose
         // time, so the destination location is mandatory.
         $location = WarehouseLocation::factory()->create();
@@ -239,6 +242,12 @@ class DispositionTest extends TestCase
         $item = $result->items->first();
         $this->assertSame('restock', $item->disposition);
         $this->assertSame('Good condition after inspection', $item->disposition_notes);
+        $this->assertSame('8.000', (string) $item->stock_movement_quantity);
+        $this->assertNotNull($result->stock_movement_id);
+        $this->assertSame(2, StockMovement::query()
+            ->where('reference_type', 'return_request')
+            ->where('reference_id', $rma->id)
+            ->count());
     }
 
     public function test_dispose_creates_ncr_for_scrap_items(): void
@@ -307,7 +316,10 @@ class DispositionTest extends TestCase
         $by = $this->makeUser();
         $customer = $this->makeCustomer();
         $invoice = $this->makeInvoice($customer, $by);
-        $rma = $this->makeInspectedRma($by, $customer, $invoice);
+        $product = $this->makeProduct();
+        $rma = $this->makeInspectedRma($by, $customer, $invoice, $product);
+        $this->makeLineStockable($rma, $by);
+        $invoice->update(['sales_order_id' => $rma->sales_order_id]);
         $location = WarehouseLocation::factory()->create();
 
         $svc = app(ReturnRequestService::class);
@@ -372,6 +384,7 @@ class DispositionTest extends TestCase
             $customer = $this->makeCustomer();
             $product = $this->makeProduct();
             $rma = $this->makeInspectedRma($by, $customer, product: $product);
+            $this->makeLineStockable($rma, $by);
             $inspection = Inspection::query()
                 ->where('entity_type', InspectionEntityType::ReturnRequest->value)
                 ->where('entity_id', $rma->id)
@@ -437,6 +450,7 @@ class DispositionTest extends TestCase
         $customer = $this->makeCustomer();
         $product = $this->makeProduct();
         $rma = $this->makeInspectedRma($by, $customer, product: $product);
+        $this->makeLineStockable($rma, $by);
 
         Inspection::query()
             ->where('entity_type', InspectionEntityType::ReturnRequest->value)

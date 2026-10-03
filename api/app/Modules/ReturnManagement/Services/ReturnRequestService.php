@@ -1086,6 +1086,13 @@ class ReturnRequestService
                 }
                 continue;
             }
+            if ($rma->type === ReturnRequestType::CustomerReturn
+                && ! $line->item_id
+                && bccomp($this->settledQuantity($line), '0', 3) > 0) {
+                throw new BusinessRuleException(
+                    'A received customer-return line needs a finished-goods inventory item before disposition.'
+                );
+            }
             $hasSource = collect([
                 $item['source_invoice_item_id'] ?? null,
                 $item['source_sales_order_item_id'] ?? null,

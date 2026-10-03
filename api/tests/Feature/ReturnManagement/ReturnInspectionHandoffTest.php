@@ -6,8 +6,13 @@ namespace Tests\Feature\ReturnManagement;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\OutboxEventCodec;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionParameterType;
@@ -214,6 +219,30 @@ class ReturnInspectionHandoffTest extends TestCase
     {
         $product = Product::factory()->create(['part_number' => 'RMA-QC-GENERATED']);
         $rma = $this->receivedRma($product);
+        $customer = Customer::create(['name' => 'Quality Gate Customer', 'payment_terms_days' => 30]);
+        $salesOrder = SalesOrder::factory()->create([
+            'customer_id' => $customer->id,
+            'status' => SalesOrderStatus::Delivered,
+            'created_by' => $this->user->id,
+        ]);
+        $inventoryItem = Item::factory()->create([
+            'code' => $product->part_number,
+            'item_type' => ItemType::FinishedGood,
+        ]);
+        $source = SalesOrderItem::factory()->create([
+            'sales_order_id' => $salesOrder->id,
+            'product_id' => $product->id,
+            'quantity_delivered' => 5,
+            'unit_price' => '10.00',
+        ]);
+        $rma->forceFill([
+            'customer_id' => $customer->id,
+            'sales_order_id' => $salesOrder->id,
+        ])->save();
+        $rma->items->first()->update([
+            'item_id' => $inventoryItem->id,
+            'source_sales_order_item_id' => $source->id,
+        ]);
         $inspection = Inspection::create([
             'inspection_number' => 'QC-RMA-'.substr(uniqid(), -8),
             'stage'             => InspectionStage::CustomerReturn->value,
