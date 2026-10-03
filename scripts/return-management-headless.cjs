@@ -23,6 +23,7 @@ const spaRequire = createRequire(path.join(SPA, 'package.json'));
 const { chromium, expect } = spaRequire('@playwright/test');
 
 const BOOTSTRAP = process.env.RETURN_TEST_BOOTSTRAP === '1';
+const RESUME = process.env.RETURN_TEST_RESUME === '1';
 const RUN = (process.env.RETURN_RUN_ID || `RET${Date.now().toString(36)}`).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
 const DB = `ogami_test_return_browser_${RUN.toLowerCase()}`;
 const API_PORT = Number(process.env.RETURN_API_PORT || 8210);
@@ -64,12 +65,18 @@ function stopApiServer() {
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
-  psql(`CREATE DATABASE ${DB} OWNER "${databaseUser().replace(/"/g, '""')}";`);
-  artisan('migrate', '--force');
-  compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
-  artisan('tinker', '--execute', "require 'tests/Browser/return_case_fixture.php';");
-  compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
-  fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
+  if (RESUME) {
+    if (!DB.startsWith('ogami_test_return_browser_')) throw new Error('Resume requires a dedicated return-browser test database.');
+    if (psql(`SELECT 1 FROM pg_database WHERE datname='${DB}';`) !== '1') throw new Error(`Resume database ${DB} does not exist.`);
+    fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
+  } else {
+    psql(`CREATE DATABASE ${DB} OWNER "${databaseUser().replace(/"/g, '""')}";`);
+    artisan('migrate', '--force');
+    compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
+    artisan('tinker', '--execute', "require 'tests/Browser/return_case_fixture.php';");
+    compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
+    fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
+  }
   compose(['exec', '-d', ...envFlags(), 'api', 'sh', '-c', 'log="$1"; shift; exec "$@" > "$log" 2>&1', 'sh', API_LOG_IN_CONTAINER, 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
   let ready = false;
@@ -122,7 +129,7 @@ async function tearDown(server) {
 fs.mkdirSync(OUT, { recursive: true });
 const stateFile = path.join(OUT, 'state.json');
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
-const previousReport = process.env.RETURN_TEST_PHASE === 'customer' && fs.existsSync(path.join(OUT, 'report.json')) ? JSON.parse(fs.readFileSync(path.join(OUT, 'report.json'), 'utf8')) : null;
+const previousReport = (process.env.RETURN_TEST_PHASE === 'customer' || RESUME) && fs.existsSync(path.join(OUT, 'report.json')) ? JSON.parse(fs.readFileSync(path.join(OUT, 'report.json'), 'utf8')) : null;
 const checks = previousReport?.checks ?? [];
 const findings = state.findings || [];
 state.findings = findings;
@@ -239,17 +246,147 @@ async function linkViaUi(page, id, grn) {
   expect(saved.status(), await saved.text()).toBe(200);
   return (await saved.json()).data;
 }
+async function rmaActionViaUi(page, id, action, confirm, path) {
+  const endpoint = `/api/v1/return-management/return-requests/${id}${path}`;
+  await page.goto(`/return-management/${id}`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: action, exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(endpoint));
+  await dialog.getByRole('button', { name: confirm, exact: true }).click();
+  const response = await responsePromise;
+  const body = await response.json();
+  expect(response.status(), JSON.stringify(body)).toBe(200);
+  return body.data;
+}
+async function selectDispositions(dialog, lineCount, disposition) {
+  await expect(dialog).toBeVisible();
+  const fields = dialog.getByLabel('Disposition');
+  expect(await fields.count()).toBe(lineCount);
+  for (let i = 0; i < lineCount; i++) {
+    const field = fields.nth(i);
+    await expect.poll(() => field.locator('option').count(), { timeout: 20000 }).toBeGreaterThan(1);
+    await field.selectOption(disposition);
+    await expect(field).toHaveValue(disposition);
+  }
+}
+async function createCustomerReturnViaUi(page) {
+  await page.goto('/return-management/new', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'New Return Request', exact: true })).toBeVisible();
+  await page.getByLabel(/^Type\s*\*?$/).selectOption('customer_return');
+  await page.getByLabel(/^Customer\s*\*?$/).selectOption(fixture.customer);
+  await page.getByRole('button', { name: 'Add Item', exact: true }).click();
+  const source = page.getByLabel('Source line', { exact: true });
+  await expect.poll(() => source.locator('option').count(), { timeout: 20000 }).toBeGreaterThan(1);
+  await source.selectOption(`delivery_item:${fixture.return_delivery_line}`);
+  await expect(page.getByText('FG-BROWSER-RETURN — Browser test part', { exact: true })).toBeVisible();
+  await page.getByLabel('Qty', { exact: true }).fill('2');
+  const reason = page.getByLabel(/^Reason Code\s*\*?$/);
+  const reasonValue = await reason.locator('option').evaluateAll((options) => options.find((option) => option.value)?.value);
+  expect(reasonValue).toBeTruthy();
+  await reason.selectOption(reasonValue);
+  await page.getByLabel('Description', { exact: true }).fill('Returned for Quality inspection recovery test.');
+
+  const responsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && response.url().endsWith('/api/v1/return-management/return-requests'));
+  await page.getByRole('button', { name: 'Create Return Request', exact: true }).click();
+  const response = await responsePromise;
+  const body = await response.json();
+  expect(response.status(), JSON.stringify(body)).toBe(201);
+  expect(body.data).toMatchObject({ status: 'draft', type: 'customer_return' });
+  expect(body.data.items[0].item_id).toBe(fixture.return_item);
+  expect(body.data.items[0].source_delivery_item_id).toBe(fixture.return_delivery_line);
+  pass('Customer Service creates a source-linked customer RMA in the real UI');
+  return body.data.id;
+}
 async function approveReturn(browser, manager, rmaId, checker) {
   let rma = await ok(manager, 'GET', `/return-management/return-requests/${rmaId}`);
   if (rma.status === 'draft') {
-    await ok(manager, 'POST', `/return-management/return-requests/${rmaId}/submit`);
-    expect((await api(manager, 'POST', `/return-management/return-requests/${rmaId}/approve`)).status).toBeGreaterThanOrEqual(400);
-    const head = await login(browser, 'depthead@ogami.test');
-    await ok(head, 'POST', `/return-management/return-requests/${rmaId}/approve`, { remarks: 'Verified source and agreed return quantity.' });
-    await head.context().close();
-    await ok(checker, 'POST', `/return-management/return-requests/${rmaId}/approve`);
-    pass('Physical return follows two independent approval steps');
+    const submitted = await rmaActionViaUi(manager, rmaId, 'Submit for Approval', 'Submit', '/submit');
+    expect(submitted.status).toBe('pending_approval');
+    rma = await ok(manager, 'GET', `/return-management/return-requests/${rmaId}`);
   }
+  if (rma.status === 'pending_approval' && rma.pending_approval_step === 1) {
+    expect(rma).toMatchObject({ status: 'pending_approval', pending_approval_step: 1, disposition_status: null });
+    expect(rma.approval_records.map((record) => [record.step_order, record.action, record.role_slug]))
+      .toEqual([[1, 'pending', 'department_head'], [2, 'pending', 'production_manager']]);
+    expect(rma.receipts).toHaveLength(0);
+    expect(rma.inspections).toHaveLength(0);
+    for (const actor of [manager, checker]) {
+      await actor.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+      await expect(actor.locator('#main-content').getByText(rma.rma_number, { exact: true })).toBeVisible();
+      await expect(actor.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+    }
+    const wrongActor = await api(manager, 'POST', `/return-management/return-requests/${rmaId}/approve`);
+    expect(wrongActor.status).toBe(403);
+    expect(wrongActor.body.message).toMatch(/permission|approv/i);
+    const afterWrongActor = await ok(manager, 'GET', `/return-management/return-requests/${rmaId}`);
+    expect(afterWrongActor).toMatchObject({ status: 'pending_approval', pending_approval_step: 1 });
+    expect(afterWrongActor.approval_records.map((record) => record.action)).toEqual(['pending', 'pending']);
+    expect(afterWrongActor.receipts).toHaveLength(0);
+    expect(afterWrongActor.inspections).toHaveLength(0);
+    const outOfOrder = await api(checker, 'POST', `/return-management/return-requests/${rmaId}/approve`);
+    expect(outOfOrder.status).toBe(403);
+    expect(outOfOrder.body.message).toMatch(/role|step|approv/i);
+    const afterOutOfOrder = await ok(manager, 'GET', `/return-management/return-requests/${rmaId}`);
+    expect(afterOutOfOrder).toMatchObject({ status: 'pending_approval', pending_approval_step: 1 });
+    expect(afterOutOfOrder.approval_records.map((record) => record.action)).toEqual(['pending', 'pending']);
+    expect(afterOutOfOrder.receipts).toHaveLength(0);
+    expect(afterOutOfOrder.inspections).toHaveLength(0);
+    const head = await login(browser, 'depthead@ogami.test');
+    const duplicateHead = await login(browser, fixture.concurrent_department_head);
+    await head.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+    await head.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approvalDialog = head.getByRole('dialog');
+    await expect(approvalDialog).toBeVisible();
+    const uiApprovalResponsePromise = head.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/approve`));
+    const duplicateApprovalPromise = api(duplicateHead, 'POST', `/return-management/return-requests/${rmaId}/approve`);
+    const uiApprovalClickPromise = approvalDialog.getByRole('button', { name: 'Approve', exact: true }).click();
+    const [uiApprovalResponse, duplicateApproval] = await Promise.all([
+      uiApprovalResponsePromise,
+      duplicateApprovalPromise,
+      uiApprovalClickPromise,
+    ]).then(([response, duplicate]) => [response, duplicate]);
+    const uiApprovalBody = await uiApprovalResponse.json();
+    const approvalStatuses = [uiApprovalResponse.status(), duplicateApproval.status];
+    expect(approvalStatuses.filter((status) => status === 200)).toHaveLength(1);
+    const deniedStatus = approvalStatuses.find((status) => status !== 200);
+    expect(deniedStatus).toBe(403);
+    const deniedMessage = uiApprovalResponse.status() === 200 ? duplicateApproval.body.message : uiApprovalBody.message;
+    expect(deniedMessage).toMatch(/different user|only users with role/i);
+    const stepOne = await ok(head, 'GET', `/return-management/return-requests/${rmaId}`);
+    expect(stepOne).toMatchObject({ status: 'pending_approval', pending_approval_step: 2 });
+    expect(stepOne.approval_records.map((record) => [record.step_order, record.action]))
+      .toEqual([[1, 'approved'], [2, 'pending']]);
+    expect(stepOne.approval_records.filter((record) => record.action === 'approved')).toHaveLength(1);
+    expect(stepOne.receipts).toHaveLength(0);
+    expect(stepOne.inspections).toHaveLength(0);
+    await Promise.all([head.context().close(), duplicateHead.context().close()]);
+    pass('Step 2 cannot skip step 1; concurrent eligible approvers produce one approval effect');
+    rma = stepOne;
+  }
+  if (rma.status === 'pending_approval' && rma.pending_approval_step === 2) {
+    expect(rma.approval_records.map((record) => [record.step_order, record.action]))
+      .toEqual([[1, 'approved'], [2, 'pending']]);
+    expect(rma.receipts).toHaveLength(0);
+    expect(rma.inspections).toHaveLength(0);
+    const firstActor = rma.approval_records[0].approver.id;
+    await rmaActionViaUi(checker, rmaId, 'Approve', 'Approve', '/approve');
+    const approved = await ok(checker, 'GET', `/return-management/return-requests/${rmaId}`);
+    expect(approved).toMatchObject({ status: 'approved', pending_approval_step: null, disposition_status: null });
+    expect(approved.approval_records.map((record) => [record.step_order, record.action]))
+      .toEqual([[1, 'approved'], [2, 'approved']]);
+    expect(approved.approval_records[1].approver.id).not.toBe(firstActor);
+    expect(approved.approval_records.map((record) => record.approver.id)).not.toContain(approved.creator.id);
+    expect(approved.receipts).toHaveLength(0);
+    expect(approved.inspections).toHaveLength(0);
+    pass('RMA submission and both independent approvals run through role UI; state checked after each gate');
+    return approved;
+  }
+  expect(rma.status).toBe('approved');
+  expect(rma.approval_records.map((record) => [record.step_order, record.action]))
+    .toEqual([[1, 'approved'], [2, 'approved']]);
+  expect(rma.approval_records[0].approver.id).not.toBe(rma.approval_records[1].approver.id);
+  return rma;
 }
 async function receiveSplit(warehouse, rmaId, first, second) {
   const url = `/return-management/return-requests/${rmaId}`;
@@ -260,55 +397,227 @@ async function receiveSplit(warehouse, rmaId, first, second) {
     const shortFinal = await api(warehouse, 'POST', url + '/receive', { received_quantities: { [line.id]: first }, final_receipt: true, request_key: randomUUID(), quarantine_location_id: fixture.quarantine });
     expect(shortFinal.status, JSON.stringify(shortFinal.body)).toBe(422);
     expect(Number((await ok(warehouse, 'GET', url)).items[0].returned_quantity)).toBe(0);
-    const payload = { received_quantities: { [line.id]: first }, final_receipt: false, request_key: randomUUID(), quarantine_location_id: fixture.quarantine };
-    const partial = await ok(warehouse, 'POST', url + '/receive', payload);
-    const retry = await ok(warehouse, 'POST', url + '/receive', payload);
-    expect(Number(partial.items[0].returned_quantity)).toBe(Number(first));
-    expect(Number(retry.items[0].returned_quantity)).toBe(Number(first));
-    expect(retry.receipts).toHaveLength(1);
+    await warehouse.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+    await warehouse.getByRole('button', { name: 'Record Receipt', exact: true }).click();
+    const partialDialog = warehouse.getByRole('dialog');
+    await partialDialog.getByRole('spinbutton').first().fill(first);
+    await partialDialog.getByRole('checkbox').uncheck();
+    const partialResponsePromise = warehouse.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/receive`));
+    await partialDialog.getByRole('button', { name: 'Record Partial Receipt', exact: true }).click();
+    const partialResponse = await partialResponsePromise;
+    const partialBody = await partialResponse.json();
+    expect(partialResponse.status(), JSON.stringify(partialBody)).toBe(200);
+    const partialPayload = partialResponse.request().postDataJSON();
+    expect(partialBody.data).toMatchObject({ status: 'approved', receipt_open: true, disposition_status: null });
+    expect(partialBody.data.receipts).toHaveLength(1);
+    expect(partialBody.data.receipts[0].final_receipt).toBe(false);
+    expect(Number(partialBody.data.items[0].returned_quantity)).toBe(Number(first));
+    expect(partialBody.data.inspections).toHaveLength(0);
+    const retry = await api(warehouse, 'POST', url + '/receive', partialPayload);
+    expect(retry.status, JSON.stringify(retry.body)).toBe(200);
+    expect(retry.body.data.receipts).toHaveLength(1);
+    expect(retry.body.data.receipts[0].id).toBe(partialBody.data.receipts[0].id);
+    expect(Number(retry.body.data.items[0].returned_quantity)).toBe(Number(first));
+    rma = await ok(warehouse, 'GET', url);
+    expect(rma.status).toBe('approved');
+    expect(rma.receipts).toHaveLength(1);
+    pass('Warehouse records partial return in UI; same request retry adds no second receipt');
   }
-  rma = await ok(warehouse, 'POST', url + '/receive', { received_quantities: { [line.id]: second }, final_receipt: true, request_key: randomUUID(), quarantine_location_id: fixture.quarantine });
-  expect(rma.status).toBe('received');
-  expect(rma.receipts).toHaveLength(2);
-  pass('Short final receipt is blocked; split receipts and response-loss retry count goods once');
+  if (rma.status === 'approved') {
+    await warehouse.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+    await warehouse.getByRole('button', { name: 'Record Receipt', exact: true }).click();
+    const finalDialog = warehouse.getByRole('dialog');
+    await finalDialog.getByRole('spinbutton').first().fill(second);
+    await expect(finalDialog.getByRole('checkbox')).toBeChecked();
+    const finalResponsePromise = warehouse.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/receive`));
+    await finalDialog.getByRole('button', { name: 'Record Final Receipt', exact: true }).click();
+    const finalResponse = await finalResponsePromise;
+    const finalBody = await finalResponse.json();
+    expect(finalResponse.status(), JSON.stringify(finalBody)).toBe(200);
+    rma = await ok(warehouse, 'GET', url);
+    expect(rma.status).toBe('received');
+    expect(rma.receipts).toHaveLength(2);
+    expect(rma.receipts.map((receipt) => receipt.final_receipt)).toEqual([false, true]);
+    expect(Number(rma.items[0].returned_quantity)).toBe(Number(first) + Number(second));
+    expect(rma.inspections).toHaveLength(0);
+    pass('Warehouse final receipt advances RMA only after full quantity; state checked before Quality');
+  }
   return rma;
+}
+async function receiveFinalShortViaUi(warehouse, rmaId, quantity) {
+  const url = `/return-management/return-requests/${rmaId}`;
+  const before = await ok(warehouse, 'GET', url);
+  expect(before.status).toBe('approved');
+  await warehouse.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+  await warehouse.getByRole('button', { name: 'Record Receipt', exact: true }).click();
+  const dialog = warehouse.getByRole('dialog');
+  await dialog.getByRole('spinbutton').first().fill(quantity);
+  await expect(dialog.getByRole('checkbox')).toBeChecked();
+  const responsePromise = warehouse.waitForResponse((response) =>
+    response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/receive`));
+  await dialog.getByRole('button', { name: 'Record Final Receipt', exact: true }).click();
+  const response = await responsePromise;
+  const body = await response.json();
+  expect(response.status(), JSON.stringify(body)).toBe(200);
+  const received = await ok(warehouse, 'GET', url);
+  expect(received).toMatchObject({ status: 'received', receipt_open: false, disposition_status: null });
+  expect(received.receipts).toHaveLength(1);
+  expect(received.receipts[0].final_receipt).toBe(true);
+  expect(Number(received.items[0].returned_quantity)).toBe(Number(quantity));
+  expect(Number(received.items[0].quantity)).toBeGreaterThan(Number(quantity));
+  expect(received.inspections).toHaveLength(0);
+  pass('Warehouse closes a shorter physical return at its actual quantity through the UI');
+  return received;
 }
 async function finishReturn(manager, qc, checker, rmaId, disposition) {
   const url = `/return-management/return-requests/${rmaId}`;
   let rma = await ok(manager, 'GET', url);
-  if (rma.status === 'received') rma = await ok(qc, 'POST', url + '/inspect', { internal_notes: 'Returned goods verified against the case.' });
+  if (rma.status === 'received') {
+    const requiresProductInspection = rma.items.some((item) => Boolean(item.product_id));
+    const inspected = await rmaActionViaUi(
+      qc,
+      rmaId,
+      requiresProductInspection ? 'Stage Quality Handoff' : 'Continue to Disposition',
+      requiresProductInspection ? 'Stage Handoff' : 'Continue',
+      '/inspect',
+    );
+    expect(inspected.status).toBe('inspected');
+    rma = await ok(manager, 'GET', url);
+    expect(rma).toMatchObject({
+      status: 'inspected',
+      inspection_handoff: { status: requiresProductInspection ? 'generated' : 'not_required' },
+      disposition_status: null,
+      stock_movement: null,
+    });
+    if (requiresProductInspection) expect(rma.inspections.length).toBeGreaterThan(0);
+    else expect(rma.inspections).toHaveLength(0);
+    pass(`${requiresProductInspection ? 'QC stages product inspection' : 'Item-only return skips product inspection'} through role UI; RMA remains undisposed`);
+  }
+  if (rma.inspections?.some((inspection) => inspection.status === 'draft' || inspection.status === 'in_progress')) {
+    const earlyDispositions = rma.items.map((item) => ({ item_id: item.id, disposition, notes: 'Attempt before return inspection is complete.' }));
+    await manager.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+    await manager.getByRole('button', { name: 'Dispose Items', exact: true }).click();
+    const earlyDialog = manager.getByRole('dialog');
+    await selectDispositions(earlyDialog, rma.items.length, disposition);
+    if (rma.type === 'supplier_return' && disposition === 'return_to_supplier') {
+      const location = earlyDialog.getByLabel('Restock location', { exact: true });
+      await expect.poll(() => location.locator('option').count(), { timeout: 20000 }).toBeGreaterThan(1);
+      await location.selectOption(fixture.location);
+    }
+    const earlyResponsePromise = manager.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/dispose`));
+    await earlyDialog.getByRole('button', { name: 'Record Disposition', exact: true }).click();
+    const earlyResponse = await earlyResponsePromise;
+    const earlyBody = await earlyResponse.json();
+    expect(earlyResponse.status(), JSON.stringify(earlyBody)).toBe(422);
+    expect(earlyBody.message).toMatch(/inspection must be completed/i);
+    const earlyUiState = await ok(manager, 'GET', url);
+    expect(earlyUiState).toMatchObject({ status: 'inspected', disposition_status: null, stock_movement: null });
+    const earlyApi = await api(manager, 'POST', url + '/dispose', {
+      dispositions: earlyDispositions,
+      ...(rma.type === 'supplier_return' && disposition === 'return_to_supplier' ? { location_id: fixture.location } : {}),
+      create_replacement_po: false,
+    });
+    expect(earlyApi.status).toBe(422);
+    const unchanged = await ok(manager, 'GET', url);
+    expect(unchanged).toMatchObject({ status: 'inspected', disposition_status: null, stock_movement: null });
+    pass('UI and direct API both block disposition until every return inspection completes');
+  }
   for (const row of rma.inspections || []) {
     let inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
     if (['draft', 'in_progress'].includes(inspection.status)) {
-      await ok(qc, 'PATCH', `/quality/inspections/${row.id}/measurements`, { measurements: inspection.measurements.map((measurement) => ({ id: measurement.id, is_pass: true, notes: 'Condition assessed for return disposition.' })) });
-      inspection = await ok(qc, 'POST', `/quality/inspections/${row.id}/complete`);
+      expect(inspection.inspection_mode).toBe('per_unit');
+      await qc.goto(`/quality/inspections/${row.id}`, { waitUntil: 'domcontentloaded' });
+      const manual = inspection.measurements.filter((measurement) => measurement.tolerance_min === null && measurement.tolerance_max === null);
+      const numeric = inspection.measurements.filter((measurement) => measurement.tolerance_min !== null || measurement.tolerance_max !== null);
+      const resultFields = qc.locator('select[aria-label$=" result"]');
+      await expect.poll(() => resultFields.count(), { timeout: 20000 }).toBe(manual.length);
+      for (let i = 0; i < manual.length; i++) await resultFields.nth(i).selectOption('pass');
+      for (const measurement of numeric) {
+        const label = `Measured value — ${measurement.parameter_name}, sample ${measurement.sample_index}${measurement.unit_of_measure ? ` (${measurement.unit_of_measure})` : ''}`;
+        const value = measurement.nominal_value ?? measurement.target_value ?? measurement.tolerance_min ?? measurement.tolerance_max;
+        expect(value, `${measurement.parameter_name} has a usable measurement`).not.toBeNull();
+        await qc.getByLabel(label, { exact: true }).fill(String(value));
+      }
+      const save = qc.getByRole('button', { name: /^Save \(\d+\)$/ });
+      await expect(save).toBeEnabled();
+      const saveResponsePromise = qc.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/measurements`));
+      await save.click();
+      const saveResponse = await saveResponsePromise;
+      expect(saveResponse.status(), await saveResponse.text()).toBe(200);
+      inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
+      expect(inspection.measurements.length).toBeGreaterThan(0);
+      expect(inspection.measurements.every((measurement) => measurement.is_pass === true)).toBe(true);
+      await qc.getByRole('button', { name: 'Complete', exact: true }).click();
+      const completeDialog = qc.getByRole('dialog');
+      const completeResponsePromise = qc.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/complete`));
+      await completeDialog.getByRole('button', { name: 'Complete', exact: true }).click();
+      const completeResponse = await completeResponsePromise;
+      expect(completeResponse.status()).toBe(200);
+      inspection = await ok(qc, 'GET', `/quality/inspections/${row.id}`);
     }
     if (inspection.status === 'awaiting_review') {
       expect((await api(qc, 'PATCH', `/quality/inspections/${row.id}/review`, { decision: 'passed' })).status).toBe(403);
-      await ok(checker, 'PATCH', `/quality/inspections/${row.id}/review`, { decision: 'passed', remarks: 'Independent check of returned goods.' });
+      await checker.goto(`/quality/inspections/${row.id}`, { waitUntil: 'domcontentloaded' });
+      await checker.getByRole('button', { name: 'Approve pass', exact: true }).click();
+      const reviewDialog = checker.getByRole('dialog');
+      const reviewResponsePromise = checker.waitForResponse((response) => response.request().method() === 'PATCH' && response.url().endsWith(`/api/v1/quality/inspections/${row.id}/review`));
+      await reviewDialog.getByRole('button', { name: 'Approve pass', exact: true }).click();
+      const reviewResponse = await reviewResponsePromise;
+      expect(reviewResponse.status()).toBe(200);
+      inspection = await ok(checker, 'GET', `/quality/inspections/${row.id}`);
+      expect(inspection.status).toBe('passed');
+      expect(inspection.reviewer.id).not.toBe(inspection.inspector.id);
+      expect(inspection.result_authors.map((author) => author.id)).not.toContain(inspection.reviewer.id);
     }
+    expect(['passed', 'failed']).toContain(inspection.status);
+    rma = await ok(manager, 'GET', url);
+    expect(rma).toMatchObject({ status: 'inspected', disposition_status: null, stock_movement: null });
   }
   if (rma.status !== 'completed') {
     if (rma.disposition_status !== 'disposed') {
-      if (rma.type === 'customer_return') {
-        await manager.goto(`/return-management/${rmaId}`);
-        await manager.getByRole('button', { name: 'Dispose Items', exact: true }).click();
-        await manager.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption(disposition);
-        if (['restock', 'rework'].includes(disposition)) await manager.getByRole('combobox', { name: 'Restock location', exact: true }).selectOption(fixture.location);
-        const response = manager.waitForResponse((res) => res.url().endsWith(`${rmaId}/dispose`) && res.request().method() === 'POST');
-        await manager.getByRole('button', { name: 'Record Disposition', exact: true }).click();
-        const disposed = await response;
-        expect(disposed.status(), await disposed.text()).toBe(200);
-        rma = await ok(manager, 'GET', url);
-      } else rma = await ok(manager, 'POST', url + '/dispose', { dispositions: rma.items.map((line) => ({ item_id: line.id, disposition, notes: 'Agreed case disposition.' })), location_id: fixture.location, create_replacement_po: false });
+      await manager.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+      await manager.getByRole('button', { name: 'Dispose Items', exact: true }).click();
+      const disposeDialog = manager.getByRole('dialog');
+      await selectDispositions(disposeDialog, rma.items.length, disposition);
+      if ((rma.type === 'supplier_return' && disposition === 'return_to_supplier') || ['restock', 'rework'].includes(disposition)) {
+        const location = disposeDialog.getByLabel('Restock location', { exact: true });
+        await expect.poll(() => location.locator('option').count(), { timeout: 20000 }).toBeGreaterThan(1);
+        await location.selectOption(fixture.location);
+      }
+      const disposeResponsePromise = manager.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/dispose`));
+      await disposeDialog.getByRole('button', { name: 'Record Disposition', exact: true }).click();
+      const disposeResponse = await disposeResponsePromise;
+      const disposeBody = await disposeResponse.json();
+      expect(disposeResponse.status(), JSON.stringify(disposeBody)).toBe(200);
+      rma = await ok(manager, 'GET', url);
+      expect(rma).toMatchObject({ status: 'inspected', disposition_status: 'disposed' });
     }
     const moved = rma.items[0].moved_quantity;
-    rma = await ok(manager, 'POST', url + '/complete', {});
+    rma = await rmaActionViaUi(manager, rmaId, 'Complete RMA', 'Confirm Complete', '/complete');
     expect(rma.items[0].moved_quantity).toBe(moved);
     expect(rma.status).toBe('completed');
+    const completed = await ok(manager, 'GET', url);
+    expect(completed).toMatchObject({ status: 'completed', disposition_status: 'disposed' });
+    expect(completed.items[0].moved_quantity).toBe(moved);
+    expect(completed.completed_by).toBeTruthy();
   }
-  pass(`${rma.type}: inspection, ${disposition}, and completion preserve the settled quantity`);
+  pass(`${rma.type}: measurement, checker, disposition, and completion run through role UI; settled quantity preserved`);
   return ok(manager, 'GET', url);
+}
+async function finalizeCreditViaUi(finance, creditId) {
+  let credit = await ok(finance, 'GET', `/accounting/credit-notes/${creditId}`);
+  if (credit.status === 'draft') {
+    await finance.goto(`/accounting/credit-notes/${creditId}`, { waitUntil: 'domcontentloaded' });
+    const responsePromise = finance.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/accounting/credit-notes/${creditId}/finalize`));
+    await finance.getByRole('button', { name: 'Finalize + post', exact: true }).click();
+    const response = await responsePromise;
+    const body = await response.json();
+    expect(response.status(), JSON.stringify(body)).toBe(200);
+  }
+  credit = await ok(finance, 'GET', `/accounting/credit-notes/${creditId}`);
+  expect(credit.status).toBe('finalized');
+  pass(`Finance posts credit note ${credit.credit_note_number} through Accounting UI`);
+  return credit;
 }
 (async () => {
   let server;
@@ -335,6 +644,143 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
       pass('Customer follows case to physical return and back; closed case has no empty action panel');
       expect(errors).toEqual([]);
       fs.writeFileSync(path.join(OUT, 'links-report.json'), JSON.stringify({ headless: true, realApi: true, checks, errors }, null, 2));
+      return;
+    }
+    if (process.env.RETURN_TEST_PHASE === 'quality-recovery') {
+      const service = await login(browser, 'customerservice@ogami.test');
+      const rmaId = await createCustomerReturnViaUi(service);
+      const checker = await login(browser, 'production@ogami.test');
+      await approveReturn(browser, service, rmaId, checker);
+      const approvedForWarehouse = await ok(service, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(approvedForWarehouse.status).toBe('approved');
+      await service.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+      await expect(service.locator('#main-content').getByText(approvedForWarehouse.rma_number, { exact: true })).toBeVisible();
+      await expect(service.getByRole('button', { name: 'Record Receipt', exact: true })).toHaveCount(0);
+      const deniedReceipt = await api(service, 'POST', `/return-management/return-requests/${rmaId}/receive`, {
+        received_quantities: { [approvedForWarehouse.items[0].id]: '1.000' },
+        final_receipt: true,
+        request_key: randomUUID(),
+        quarantine_location_id: fixture.quarantine,
+      });
+      expect(deniedReceipt.status).toBe(403);
+      const unchangedBeforeReceipt = await ok(service, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(unchangedBeforeReceipt).toMatchObject({
+        status: 'approved',
+        receipt_open: false,
+        disposition_status: null,
+        moved_quantity: null,
+        stock_movement: null,
+        credit_note: null,
+      });
+      expect(unchangedBeforeReceipt.receipts).toHaveLength(0);
+      expect(unchangedBeforeReceipt.inspections).toHaveLength(0);
+      expect(unchangedBeforeReceipt.items.every((line) => line.moved_quantity === null && line.stock_movement_id === null)).toBe(true);
+      pass('Customer Service cannot see or call Warehouse receipt actions');
+      const warehouse = await login(browser, 'warehouse@ogami.test');
+      await receiveFinalShortViaUi(warehouse, rmaId, '1.000');
+      const qc = await login(browser, 'qc@ogami.test');
+      const admin = await login(browser, 'admin@ogami.test');
+
+      await admin.goto('/quality/inspection-specs', { waitUntil: 'domcontentloaded' });
+      const specRow = admin.locator('tr').filter({ hasText: 'FG-BROWSER-RETURN' });
+      await expect(specRow).toBeVisible();
+      const archiveResponsePromise = admin.waitForResponse((response) =>
+        response.request().method() === 'DELETE' && response.url().endsWith(`/api/v1/quality/inspection-specs/${fixture.return_spec}`));
+      await specRow.getByRole('button', { name: 'Archive inspection spec', exact: true }).click();
+      const archiveDialog = admin.getByRole('dialog');
+      await expect(archiveDialog).toBeVisible();
+      await archiveDialog.getByRole('button', { name: 'Archive', exact: true }).click();
+      const archiveResponse = await archiveResponsePromise;
+      const archiveBody = await archiveResponse.json();
+      expect(archiveResponse.status(), JSON.stringify(archiveBody)).toBe(200);
+      expect(archiveBody.data).toMatchObject({ is_active: false });
+      const archivedSpec = await api(admin, 'GET', `/quality/products/${fixture.return_product}/inspection-spec`);
+      expect(archivedSpec.status).toBe(200);
+      expect(archivedSpec.body.data).toBeNull();
+      pass('System Admin archives a Quality spec while the RMA is physically received');
+
+      const handoff = await rmaActionViaUi(qc, rmaId, 'Stage Quality Handoff', 'Stage Handoff', '/inspect');
+      expect(handoff).toMatchObject({
+        status: 'received',
+        inspection_handoff: { status: 'manual_required' },
+        disposition_status: null,
+        moved_quantity: null,
+      });
+      expect(handoff.inspections).toHaveLength(0);
+      const atQualityGate = await ok(qc, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(atQualityGate).toMatchObject({
+        status: 'received',
+        inspection_handoff: { status: 'manual_required' },
+        disposition_status: null,
+        moved_quantity: null,
+        stock_movement: null,
+        credit_note: null,
+      });
+      expect(atQualityGate.inspections).toHaveLength(0);
+      expect(atQualityGate.items.every((line) => line.moved_quantity === null && line.stock_movement_id === null)).toBe(true);
+      await service.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+      await expect(service.getByText('Quality inspection handoff needs attention', { exact: true })).toBeVisible();
+      await expect(service.getByRole('button', { name: 'Stage Quality Handoff', exact: true })).toHaveCount(0);
+      await expect(service.getByRole('button', { name: 'Retry Quality handoff', exact: true })).toHaveCount(0);
+      await expect(service.getByRole('button', { name: 'Dispose Items', exact: true })).toHaveCount(0);
+      const deniedStage = await api(service, 'POST', `/return-management/return-requests/${rmaId}/inspect`);
+      expect(deniedStage.status).toBe(403);
+      const afterDeniedStage = await ok(service, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(afterDeniedStage).toMatchObject({ status: 'received', inspection_handoff: { status: 'manual_required' }, disposition_status: null, moved_quantity: null, stock_movement: null, credit_note: null });
+      expect(afterDeniedStage.inspections).toHaveLength(0);
+      const deniedRetry = await api(service, 'POST', `/return-management/return-requests/${rmaId}/retry-inspection`);
+      expect(deniedRetry.status).toBe(403);
+      const afterDeniedRetry = await ok(service, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(afterDeniedRetry).toMatchObject({ status: 'received', inspection_handoff: { status: 'manual_required' }, disposition_status: null, moved_quantity: null, stock_movement: null, credit_note: null });
+      expect(afterDeniedRetry.inspections).toHaveLength(0);
+      const blockedDisposition = await api(service, 'POST', `/return-management/return-requests/${rmaId}/dispose`, {
+        dispositions: [{ item_id: handoff.items[0].id, disposition: 'scrap' }],
+      });
+      expect(blockedDisposition.status).toBe(422);
+      const unchanged = await ok(service, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(unchanged).toMatchObject({ status: 'received', inspection_handoff: { status: 'manual_required' }, disposition_status: null, stock_movement: null });
+      expect(unchanged.inspections).toHaveLength(0);
+      expect(unchanged.credit_note).toBeNull();
+      pass('Missing Quality spec leaves RMA blocked with a visible recovery action and no disposal side effects');
+
+      await admin.goto(`/quality/inspection-specs/spec/${fixture.return_spec}`, { waitUntil: 'domcontentloaded' });
+      const restoreResponsePromise = admin.waitForResponse((response) =>
+        response.request().method() === 'PATCH' && response.url().endsWith(`/api/v1/quality/inspection-specs/${fixture.return_spec}/restore`));
+      await admin.getByRole('button', { name: 'Restore spec', exact: true }).click();
+      const restoreResponse = await restoreResponsePromise;
+      const restoreBody = await restoreResponse.json();
+      expect(restoreResponse.status(), JSON.stringify(restoreBody)).toBe(200);
+      expect(restoreBody.data).toMatchObject({ is_active: true });
+      pass('System Admin restores the source Quality spec through its UI');
+
+      await qc.goto(`/return-management/${rmaId}`, { waitUntil: 'domcontentloaded' });
+      const retryResponsePromise = qc.waitForResponse((response) =>
+        response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/return-requests/${rmaId}/retry-inspection`));
+      await qc.getByRole('button', { name: 'Retry Quality handoff', exact: true }).click();
+      const retryResponse = await retryResponsePromise;
+      const retryBody = await retryResponse.json();
+      expect(retryResponse.status(), JSON.stringify(retryBody)).toBe(200);
+      const staged = await ok(qc, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(staged).toMatchObject({ status: 'inspected', inspection_handoff: { status: 'generated' } });
+      expect(staged.inspections).toHaveLength(1);
+      const stagedInspectionId = staged.inspections[0].id;
+      const duplicateRetry = await api(qc, 'POST', `/return-management/return-requests/${rmaId}/retry-inspection`);
+      expect(duplicateRetry.status).toBe(200);
+      const afterDuplicateRetry = await ok(qc, 'GET', `/return-management/return-requests/${rmaId}`);
+      expect(afterDuplicateRetry.inspections).toHaveLength(1);
+      expect(afterDuplicateRetry.inspections[0].id).toBe(stagedInspectionId);
+      expect(afterDuplicateRetry.inspection_id).toBe(staged.inspection_id);
+      pass('QC retries after spec repair; repeated API retry reuses exactly one inspection');
+
+      const completed = await finishReturn(service, qc, checker, rmaId, 'scrap');
+      expect(completed.status).toBe('completed');
+      expect(completed.inspections).toHaveLength(1);
+      pass('Recovered RMA passes Quality review, disposition, and completion through role UIs');
+      expect(httpErrors.filter((entry) => /GET \/api\/v1\/(vendors|inventory\/items)$/.test(entry))).toEqual([]);
+      pass('Customer Service customer-return form makes no forbidden vendor or inventory-list requests');
+      expect(errors).toEqual([]);
+      fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, errors, diagnostics, http_errors: httpErrors, server_log: path.join(OUT, 'server.log') }, null, 2));
+      console.log(`${checks.length} checks passed; ${findings.length} findings. Evidence: ${OUT}`);
       return;
     }
     let purchasing;
@@ -472,7 +918,18 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
       await agreeViaUi(service, record.id, 'credit');
     }
     record = await show(service, state.customerCase);
-    if (!record.return_request) await act(service, record.id, { action: 'create_return' });
+    if (!record.return_request) {
+      await casePage(service, record.id);
+      await service.getByRole('button', { name: 'Create return request', exact: true }).first().click();
+      const createResponsePromise = service.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/cases/${record.id}/actions`));
+      await service.getByRole('button', { name: 'Create return request', exact: true }).last().click();
+      const createResponse = await createResponsePromise;
+      const createBody = await createResponse.json();
+      expect(createResponse.status(), JSON.stringify(createBody)).toBe(200);
+      record = await show(service, state.customerCase);
+      expect(record.return_request).toBeTruthy();
+      pass('Customer Service creates physical return from the case UI');
+    }
     record = await show(service, state.customerCase);
     const customerRma = await ok(service, 'GET', `/return-management/return-requests/${record.return_request.id}`);
     expect(Number(customerRma.items[0].quantity)).toBe(2);
@@ -491,7 +948,19 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     }
     record = await show(finance, state.customerCase);
     expect(record.credit_note.status).toBe('draft');
-    expect((await api(service, 'POST', `${internal}/${state.customerCase}/actions`, { action: 'resolve' })).status).toBe(422);
+    const beforeResolveAttempt = await show(service, state.customerCase);
+    await casePage(service, state.customerCase);
+    const earlyResolvePromise = service.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/cases/${state.customerCase}/actions`));
+    await service.getByRole('button', { name: 'Resolve case', exact: true }).click();
+    const earlyResolve = await earlyResolvePromise;
+    const earlyResolveBody = await earlyResolve.json();
+    expect(earlyResolve.status(), JSON.stringify(earlyResolveBody)).toBe(422);
+    await expect(service.getByRole('alert').first()).toBeVisible();
+    const directEarlyResolve = await api(service, 'POST', `${internal}/${state.customerCase}/actions`, { action: 'resolve' });
+    expect(directEarlyResolve.status).toBe(422);
+    const afterResolveAttempt = await show(service, state.customerCase);
+    expect(afterResolveAttempt.status).toBe(beforeResolveAttempt.status);
+    expect(afterResolveAttempt.credit_note.id).toBe(beforeResolveAttempt.credit_note.id);
     await finance.screenshot({ path: path.join(OUT, 'finance-credit-draft.png'), fullPage: true });
     pass('Finance prepares a credit draft; incomplete return/credit cannot be marked resolved');
     const returnWarehouse = await login(browser, 'warehouse@ogami.test');
@@ -507,11 +976,16 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     for (const creditId of new Set([record.credit_note.id, completed.credit_note.id])) {
       let credit = await ok(finance, 'GET', `/accounting/credit-notes/${creditId}`);
       credited += Number(credit.subtotal);
-      if (credit.status === 'draft') credit = await ok(finance, 'POST', `/accounting/credit-notes/${creditId}/finalize`);
-      expect(credit.status).toBe('finalized');
+      credit = await finalizeCreditViaUi(finance, creditId);
     }
     expect(credited).toBe(300);
-    await act(service, state.customerCase, { action: 'resolve' });
+    await casePage(service, state.customerCase);
+    const resolvePromise = service.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/return-management/cases/${state.customerCase}/actions`));
+    await service.getByRole('button', { name: 'Resolve case', exact: true }).click();
+    const resolveResponse = await resolvePromise;
+    const resolveBody = await resolveResponse.json();
+    expect(resolveResponse.status(), JSON.stringify(resolveBody)).toBe(200);
+    expect((await show(service, state.customerCase)).status).toBe('resolved');
     await casePage(customer, state.customerCase, 'customer');
     const settled = await ok(customer, 'GET', `/b2b/customer/problems/${state.customerCase}`);
     expect(settled.status).toBe('resolved');

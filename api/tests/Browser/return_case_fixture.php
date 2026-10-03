@@ -11,6 +11,7 @@ use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
@@ -34,6 +35,19 @@ foreach ([
     (new $seeder)->run();
 }
 $buyer = User::where('email', 'purchasing@ogami.test')->firstOrFail();
+$departmentHead = User::where('email', 'depthead@ogami.test')->firstOrFail();
+$departmentHeadEmployee = $departmentHead->employee;
+$concurrentEmployee = Employee::factory()->create([
+    'department_id' => $departmentHeadEmployee->department_id,
+    'position_id' => $departmentHeadEmployee->position_id,
+    'email' => 'depthead.concurrent@ogami.test',
+]);
+$concurrentDepartmentHead = User::factory()->create([
+    'name' => 'Rhea Concurrent Department Head', 'email' => 'depthead.concurrent@ogami.test',
+    'password' => bcrypt('password'), 'role_id' => $departmentHead->role_id,
+    'employee_id' => $concurrentEmployee->id, 'is_active' => true,
+    'must_change_password' => false, 'password_changed_at' => now(),
+]);
 Auth::login($buyer);
 $vendor = Vendor::factory()->create(['name' => 'Return browser supplier']);
 $item = Item::factory()->create(['code' => 'RM-BROWSER-RESIN', 'name' => 'Browser test resin', 'unit_of_measure' => 'KG', 'standard_cost' => '20']);
@@ -50,7 +64,7 @@ $customer = Customer::factory()->create(['name' => 'Return browser customer']);
 CustomerPortalUser::create(['customer_id' => $customer->id, 'name' => 'Customer test contact', 'email' => 'customer.return@ogami.test',
     'password' => 'password', 'is_active' => true, 'must_change_password' => false, 'password_changed_at' => now()]);
 $product = Product::create(['part_number' => 'FG-BROWSER-RETURN', 'name' => 'Browser test part']);
-Item::factory()->create(['code' => $product->part_number, 'name' => $product->name, 'item_type' => 'finished_good', 'unit_of_measure' => 'pcs']);
+$returnItem = Item::factory()->create(['code' => $product->part_number, 'name' => $product->name, 'item_type' => 'finished_good', 'unit_of_measure' => 'pcs']);
 $spec = InspectionSpec::create(['product_id' => $product->id, 'version' => 1, 'is_active' => true, 'created_by' => $buyer->id]);
 InspectionSpecItem::create(['inspection_spec_id' => $spec->id, 'parameter_name' => 'Return condition', 'parameter_type' => 'visual', 'is_critical' => true, 'sort_order' => 1]);
 $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
@@ -59,9 +73,12 @@ $order = SalesOrder::factory()->create(['customer_id' => $customer->id, 'created
 $orderLine = SalesOrderItem::factory()->create(['sales_order_id' => $order->id, 'product_id' => $product->id, 'quantity' => '100', 'quantity_delivered' => '100', 'unit_price' => '25']);
 $delivery = Delivery::create(['delivery_number' => 'DEL-RETURN-BROWSER', 'sales_order_id' => $order->id, 'status' => 'delivered',
     'scheduled_date' => now()->toDateString(), 'delivered_at' => now(), 'created_by' => $buyer->id]);
-$delivery->items()->create(['sales_order_item_id' => $orderLine->id, 'quantity' => '100', 'unit_price' => '25']);
+$deliveryLine = $delivery->items()->create(['sales_order_item_id' => $orderLine->id, 'quantity' => '100', 'unit_price' => '25']);
 
 $fixture = ['po' => $po->hash_id, 'po_line' => $poLine->hash_id, 'item' => $item->hash_id,
-    'location' => $location->hash_id, 'quarantine' => $quarantine->hash_id, 'delivery' => $delivery->hash_id];
+    'location' => $location->hash_id, 'quarantine' => $quarantine->hash_id, 'delivery' => $delivery->hash_id,
+    'customer' => $customer->hash_id, 'return_product' => $product->hash_id, 'return_item' => $returnItem->hash_id,
+    'return_spec' => $spec->hash_id, 'return_delivery_line' => $deliveryLine->hash_id,
+    'concurrent_department_head' => $concurrentDepartmentHead->email];
 file_put_contents('/tmp/return-case-role-fixture.json', json_encode($fixture, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 echo "Return-case browser fixtures ready.\n";
