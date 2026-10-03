@@ -394,12 +394,13 @@ export default function ReturnRequestDetailPage() {
 
   // Approve / reject sit behind their own permission — the approval chain
   // routes them to department heads and managers, who deliberately do not
-  // hold `manage`. Gating every action on `manage` hid the approve button // from the only people allowed to press it.
+  // hold `manage`. Gating every action on `manage` hid the approve button from
+  // the only people allowed to press it.
   const canManage = can('return_management.manage');
-  const canReceive = canManage || can('return_management.receive');
-  const canInspect = canManage || can('return_management.inspect');
-  const canDispose = canManage || can('return_management.dispose');
-  const canComplete = canManage || can('return_management.complete');
+  const canReceive = can('return_management.receive');
+  const canInspect = can('return_management.inspect');
+  const canDispose = can('return_management.dispose');
+  const canComplete = can('return_management.complete');
   const canApprove = can('return_management.approve');
   const canDecide = canApprove && rma.actions?.can_approve === true;
   const actions = availableActions(rma.status).filter((action) =>
