@@ -201,6 +201,34 @@ class ProductionAssertionsTest extends TestCase
         }
     }
 
+    public function test_demo_seed_guard_rejects_a_non_test_database_in_testing(): void
+    {
+        app()->detectEnvironment(static fn (): string => 'testing');
+        config()->set('database.default', 'pgsql');
+        config()->set('database.connections.pgsql.url', null);
+        config()->set('database.connections.pgsql.host', 'db');
+        config()->set('database.connections.pgsql.database', 'ogami');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Demo data may only be seeded into a dedicated local test database when APP_ENV=testing.');
+
+        ProductionAssertions::assertDemoSeedingAllowed();
+    }
+
+    public function test_demo_seed_guard_rejects_a_remote_test_named_database_url(): void
+    {
+        app()->detectEnvironment(static fn (): string => 'testing');
+        config()->set('database.default', 'pgsql');
+        config()->set('database.connections.pgsql.database', 'ogami_test');
+        config()->set('database.connections.pgsql.host', 'db');
+        config()->set('database.connections.pgsql.url', 'postgres://test:fake@production-db.example/ogami_test');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Demo data may only be seeded into a dedicated local test database when APP_ENV=testing.');
+
+        ProductionAssertions::assertDemoSeedingAllowed();
+    }
+
     public function test_throws_when_reverb_accepts_every_origin_in_production(): void
     {
         $this->asProduction();

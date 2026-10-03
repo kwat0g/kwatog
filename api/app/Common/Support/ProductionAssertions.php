@@ -75,5 +75,25 @@ class ProductionAssertions
         if (! app()->environment(['local', 'testing'])) {
             throw new RuntimeException('Demo data may only be seeded in local or testing environments.');
         }
+
+        if (app()->environment('testing')) {
+            $connection = config('database.connections.'.config('database.default'), []);
+            $database = (string) ($connection['database'] ?? '');
+            $host = strtolower(trim((string) ($connection['host'] ?? ''), '[]'));
+
+            if (! empty($connection['url'])) {
+                $url = parse_url((string) $connection['url']) ?: [];
+                $database = rawurldecode(ltrim((string) ($url['path'] ?? ''), '/'));
+                $host = strtolower(trim((string) ($url['host'] ?? ''), '[]'));
+            }
+
+            $testDatabase = $database === 'ogami_test' || str_starts_with($database, 'ogami_test_');
+            $localTestHost = in_array($host, ['db', 'localhost', '127.0.0.1', '::1'], true);
+            $sqliteMemory = ($connection['driver'] ?? null) === 'sqlite' && $database === ':memory:';
+
+            if (! $sqliteMemory && (! $testDatabase || ! $localTestHost)) {
+                throw new RuntimeException('Demo data may only be seeded into a dedicated local test database when APP_ENV=testing.');
+            }
+        }
     }
 }
