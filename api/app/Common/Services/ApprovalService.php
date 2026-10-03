@@ -130,6 +130,7 @@ class ApprovalService
             if ($submitterId !== null && $submitterId === $user->id) {
                 throw new ForbiddenActionException('You cannot act on a record you submitted.');
             }
+            $this->assertNewDecisionMaker($approvable, $user);
             if (! $this->userMayActFor($user, $next->role_slug)) {
                 throw new ForbiddenActionException("Only users with role '{$next->role_slug}' can approve this step.");
             }
@@ -157,6 +158,7 @@ class ApprovalService
             if ($submitterId !== null && $submitterId === $user->id) {
                 throw new ForbiddenActionException('You cannot act on a record you submitted.');
             }
+            $this->assertNewDecisionMaker($approvable, $user);
             if (! $this->userMayActFor($user, $next->role_slug)) {
                 throw new ForbiddenActionException("Only users with role '{$next->role_slug}' can reject this step.");
             }
@@ -233,6 +235,18 @@ class ApprovalService
         $delegates = \App\Common\Models\ApprovalDelegation::activeDelegatesFor($roleSlug, now());
 
         return in_array($user->id, $delegates, true);
+    }
+
+    private function assertNewDecisionMaker(Model $approvable, User $user): void
+    {
+        $alreadyActed = $this->currentRecords($approvable)
+            ->where('approver_id', $user->id)
+            ->whereIn('action', ['approved', 'rejected'])
+            ->exists();
+
+        if ($alreadyActed) {
+            throw new ForbiddenActionException('A different user must act at each approval step.');
+        }
     }
 
     public function canUserActFor(User $user, string $roleSlug): bool

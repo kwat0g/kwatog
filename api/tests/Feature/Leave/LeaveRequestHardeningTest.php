@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Leave;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Models\ApprovalDelegation;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Enums\HolidayType;
 use App\Modules\Attendance\Models\Holiday;
@@ -125,6 +126,85 @@ class LeaveRequestHardeningTest extends TestCase
             $bulk['failed'][0]['reason'],
         );
         $this->assertSame(LeaveRequestStatus::PendingDept, $otherDepartment->fresh()->status);
+    }
+
+    public function test_a_delegate_cannot_decide_two_steps_in_the_same_leave_chain(): void
+    {
+        $department = Department::query()->firstOrFail();
+        $employee = $this->employee($department->id);
+        $this->user('employee', $employee);
+        $departmentHead = $this->user('department_head', $this->employee($department->id));
+        $hr = $this->user('hr_officer');
+        $request = $this->submit($employee, $this->vacation);
+
+        ApprovalDelegation::create([
+            'delegator_user_id' => $departmentHead->id,
+            'delegate_user_id' => $hr->id,
+            'role_slug' => 'department_head',
+            'starts_at' => now()->subDay()->toDateString(),
+            'ends_at' => now()->addDay()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($hr)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-dept")
+            ->assertOk();
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 1,
+            'action' => 'approved',
+            'approver_id' => $hr->id,
+            'is_current' => true,
+        ]);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 2,
+            'action' => 'pending',
+            'approver_id' => null,
+            'is_current' => true,
+        ]);
+
+        $balance = EmployeeLeaveBalance::query()
+            ->where('employee_id', $employee->id)
+            ->where('leave_type_id', $this->vacation->id)
+            ->where('year', (int) now()->year)
+            ->firstOrFail();
+        $this->assertSame('0.0', (string) $balance->used);
+        $date = $request->start_date->toDateString();
+        $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => $date]);
+
+        $this->actingAs($hr)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/approve-hr")
+            ->assertForbidden()
+            ->assertJsonPath('message', 'A different user must act at each approval step.');
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertSame('0.0', (string) $balance->fresh()->used);
+        $this->assertNull($request->fresh()->hr_approver_id);
+        $this->assertDatabaseHas('approval_records', [
+            'approvable_type' => $request->getMorphClass(),
+            'approvable_id' => $request->id,
+            'step_order' => 2,
+            'action' => 'pending',
+            'approver_id' => null,
+            'is_current' => true,
+        ]);
+        $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => $date]);
+
+        $this->actingAs($hr)
+            ->patchJson("/api/v1/leaves/requests/{$request->hash_id}/reject", ['reason' => 'Cannot decide twice.'])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'A different user must act at each approval step.');
+
+        $this->assertSame(LeaveRequestStatus::PendingHr, $request->fresh()->status);
+        $this->assertNull($request->fresh()->hr_approver_id);
+        $this->assertNull($request->fresh()->rejection_reason);
+        $this->assertSame('0.0', (string) $balance->fresh()->used);
+        $this->assertDatabaseMissing('attendances', ['employee_id' => $employee->id, 'date' => $date]);
     }
 
     public function test_cancel_is_owner_only_but_hr_can_override_and_actor_is_recorded(): void
