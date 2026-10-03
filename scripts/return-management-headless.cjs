@@ -34,16 +34,25 @@ let fixture;
 /* ─── Self-contained environment (RETURN_TEST_BOOTSTRAP=1) ─────────── */
 
 const FIXTURE_IN_CONTAINER = '/tmp/return-case-role-fixture.json';
+const API_LOG_IN_CONTAINER = `/tmp/return-case-headless-${RUN}.api.log`;
 const ENV = {
   DB_DATABASE: DB, CACHE_STORE: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array',
-  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', APP_URL: BASE,
+  BROADCAST_CONNECTION: 'log', SESSION_DRIVER: 'database', SESSION_DOMAIN: new URL(BASE).hostname,
+  SESSION_SECURE_COOKIE: 'false', SESSION_SAME_SITE: 'lax', APP_URL: BASE,
+  COMPANY_VAT_STATUS: 'VAT Registered', TAX_PH_VAT_RATE: '0.12',
   SANCTUM_STATEFUL_DOMAINS: `127.0.0.1:${SPA_PORT},localhost:${SPA_PORT}`,
 };
 const compose = (args) => execFileSync('docker', ['compose', ...args], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 const envFlags = () => Object.entries(ENV).flatMap(([k, v]) => ['-e', `${k}=${v}`]);
-const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', '-d', 'memory_limit=1G', 'artisan', ...args]);
-const psql = (query, db = 'postgres') => compose(['exec', '-T', 'db', 'psql', '-U', 'ogami', '-d', db, '-At', '-c', query]).trim();
-const apiIp = () => execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', 'ogami-api'], { encoding: 'utf8' }).trim();
+const artisan = (...args) => compose(['exec', '-T', ...envFlags(), 'api', 'php', 'artisan', ...args]);
+const databaseUser = () => process.env.RETURN_TEST_DB_USERNAME || compose(['exec', '-T', 'db', 'printenv', 'POSTGRES_USER']).trim();
+const psql = (query, db = 'postgres') => {
+  return compose(['exec', '-T', 'db', 'psql', '-U', databaseUser(), '-d', db, '-At', '-c', query]).trim();
+};
+const apiIp = () => {
+  const container = compose(['ps', '-q', 'api']).trim();
+  return execFileSync('docker', ['inspect', '-f', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}', container], { encoding: 'utf8' }).trim();
+};
 
 /** Free the port so a run killed before its teardown cannot poison this one. */
 function stopApiServer() {
@@ -55,13 +64,13 @@ function stopApiServer() {
 async function setUp() {
   fs.mkdirSync(OUT, { recursive: true });
   stopApiServer();
-  psql(`CREATE DATABASE ${DB} OWNER ogami;`);
+  psql(`CREATE DATABASE ${DB} OWNER "${databaseUser().replace(/"/g, '""')}";`);
   artisan('migrate', '--force');
   compose(['exec', '-T', 'api', 'rm', '-f', FIXTURE_IN_CONTAINER]);
   artisan('tinker', '--execute', "require 'tests/Browser/return_case_fixture.php';");
   compose(['cp', `api:${FIXTURE_IN_CONTAINER}`, path.join(OUT, 'fixture.json')]);
   fixture = JSON.parse(fs.readFileSync(path.join(OUT, 'fixture.json'), 'utf8'));
-  compose(['exec', '-d', ...envFlags(), 'api', 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
+  compose(['exec', '-d', ...envFlags(), 'api', 'sh', '-c', 'log="$1"; shift; exec "$@" > "$log" 2>&1', 'sh', API_LOG_IN_CONTAINER, 'php', 'artisan', 'serve', '--no-reload', '--host=0.0.0.0', `--port=${API_PORT}`]);
   const target = `http://${apiIp()}:${API_PORT}`;
   let ready = false;
   for (let i = 0; i < 60; i++) {
@@ -79,7 +88,6 @@ async function setUp() {
   process.chdir(SPA);
   const server = await vite.createServer({
     configFile: path.join(SPA, 'vite.config.ts'), root: SPA, logLevel: 'error',
-    css: { postcss: { plugins: [spaRequire('tailwindcss')(path.join(SPA, 'tailwind.config.ts')), spaRequire('autoprefixer')()] } },
     server: {
       host: '127.0.0.1', port: SPA_PORT, strictPort: true,
       hmr: { host: '127.0.0.1', port: SPA_PORT, clientPort: SPA_PORT },
@@ -91,6 +99,11 @@ async function setUp() {
 }
 
 async function tearDown(server) {
+  try {
+    compose(['cp', `api:${API_LOG_IN_CONTAINER}`, path.join(OUT, 'server.log')]);
+  } catch (error) {
+    fs.writeFileSync(path.join(OUT, 'server-log-capture-error.txt'), error.message);
+  }
   // The Vite server keeps the event loop alive: close it even when keeping the
   // database, or the runner never exits and the next run cannot bind the port.
   try { await server?.close(); } catch { /* already closed */ }
@@ -115,8 +128,8 @@ const findings = state.findings || [];
 state.findings = findings;
 const pages = [];
 const errors = [];
-// Non-fatal noise (Vite HMR sockets, expected 401s) that explains a blank page
-// when a run fails. Never asserted; it is attached to the failure report only.
+const httpErrors = [];
+// Preserve browser diagnostics and status/path pairs for audit review.
 const diagnostics = [];
 const save = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 const pass = (name) => { if (!checks.includes(name)) checks.push(name); console.log('PASS:', name); };
@@ -151,6 +164,9 @@ async function login(browser, email, mobile = false) {
     if (diagnostics.length < 200) diagnostics.push(`${email} requestfailed: ${request.method()} ${request.url().slice(0, 160)} (${request.failure()?.errorText ?? 'unknown'})`);
   });
   page.on('response', (response) => {
+    if (response.status() >= 400 && httpErrors.length < 200) {
+      httpErrors.push(`${email} HTTP ${response.status()}: ${response.request().method()} ${new URL(response.url()).pathname}`);
+    }
     if (response.status() >= 500 && diagnostics.length < 200) diagnostics.push(`${email} http ${response.status()}: ${response.request().method()} ${response.url().slice(0, 160)}`);
   });
   await page.goto('/sign-in');
@@ -503,7 +519,7 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
     pass('Finance issues 250 shortage + 50 defect credit; customer sees the resolved case');
     expect(errors).toEqual([]);
     pass('No uncaught browser errors');
-    fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors }, null, 2));
+    fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, diagnostics, http_errors: httpErrors, server_log: path.join(OUT, 'server.log') }, null, 2));
     console.log(`${checks.length} checks passed; ${findings.length} findings. Evidence: ${OUT}`);
     if (findings.length) process.exitCode = 1;
   } catch (error) {
@@ -513,7 +529,7 @@ async function finishReturn(manager, qc, checker, rmaId, disposition) {
         fs.writeFileSync(path.join(OUT, `failure-${email}.txt`), await page.locator('body').innerText().catch(() => 'Unavailable'));
       }
     }
-    fs.writeFileSync(path.join(OUT, process.env.RETURN_TEST_PHASE === 'links' ? 'links-report.json' : 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, diagnostics, failure: String(error.stack) }, null, 2));
+    fs.writeFileSync(path.join(OUT, process.env.RETURN_TEST_PHASE === 'links' ? 'links-report.json' : 'report.json'), JSON.stringify({ headless: true, realApi: true, checks, findings, state, errors, diagnostics, http_errors: httpErrors, server_log: path.join(OUT, 'server.log'), failure: String(error.stack) }, null, 2));
     console.error(error);
     process.exitCode = 1;
   } finally {
