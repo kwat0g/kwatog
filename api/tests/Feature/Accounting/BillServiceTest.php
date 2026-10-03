@@ -324,6 +324,42 @@ class BillServiceTest extends TestCase
         ], $user);
     }
 
+    public function test_bill_payment_replay_with_a_changed_reference_is_rejected_without_writes(): void
+    {
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Replay Reference Vendor']);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+        $cashId = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
+        $service = app(BillService::class);
+        $bill = $service->create([
+            ...$this->serviceException(),
+            'bill_number' => 'B-REPLAY-REFERENCE', 'vendor_id' => $vendor->hash_id,
+            'date' => '2026-04-10', 'is_vatable' => false,
+            'items' => [['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '100.00']],
+        ], $user);
+        $payload = [
+            'cash_account_id' => $cashId,
+            'payment_date' => '2026-04-11',
+            'amount' => '40.00',
+            'payment_method' => PaymentMethod::Cash->value,
+            'reference_number' => 'BANK-ORIGINAL',
+            'idempotency_key' => 'bill-payment-reference-test',
+        ];
+
+        $payment = $service->recordPayment($bill, $payload, $user);
+
+        try {
+            $service->recordPayment($bill->fresh(), [...$payload, 'reference_number' => 'BANK-CORRECTED'], $user);
+            $this->fail('A changed payment reference must not be accepted as an idempotent replay.');
+        } catch (\App\Common\Exceptions\BusinessRuleException $exception) {
+            $this->assertSame('The idempotency key was already used with a different payment payload.', $exception->getMessage());
+        }
+
+        $this->assertSame(1, DB::table('bill_payments')->where('bill_id', $bill->id)->count());
+        $this->assertSame('BANK-ORIGINAL', $payment->fresh()->reference_number);
+        $this->assertSame(0, DB::table('journal_entries')->where('reference_type', 'bill_payment')->count());
+    }
+
     public function test_cannot_bill_against_cancelled_po(): void
     {
         $user = $this->newUser();

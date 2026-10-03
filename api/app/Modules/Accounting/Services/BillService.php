@@ -687,7 +687,8 @@ class BillService
                     if (Money::cmp((string) $existing->amount, $amount) !== 0
                         || (int) $existing->cash_account_id !== $cashAccountId
                         || $existing->payment_date->toDateString() !== (string) $data['payment_date']
-                        || $existing->payment_method?->value !== (string) $data['payment_method']) {
+                        || $existing->payment_method?->value !== (string) $data['payment_method']
+                        || (string) ($existing->reference_number ?? '') !== (string) ($data['reference_number'] ?? '')) {
                         throw new BusinessRuleException('The idempotency key was already used with a different payment payload.');
                     }
 

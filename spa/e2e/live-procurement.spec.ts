@@ -1177,6 +1177,20 @@ test.describe('Live procurement runbook', () => {
         data: { id: string; status: string; approval_records: Array<{ step_order: number; role_slug: string; action: string }> };
       }).data;
       expect(createdPayment.status).toBe('pending_approval');
+      const originalRequest = recordResponse.request();
+      const idempotencyKey = (await originalRequest.allHeaders())['idempotency-key'];
+      if (!idempotencyKey) throw new Error('Payment request omitted its idempotency key.');
+      const originalPayload = originalRequest.postDataJSON() as Record<string, unknown>;
+      const beforeChangedReplay = await readBillState(finance.page, billUrl);
+      const changedReplay = await finance.page.request.post(recordResponse.url(), {
+        headers: { ...(await apiHeaders(finance.context)), 'Idempotency-Key': idempotencyKey },
+        data: { ...originalPayload, reference_number: `${partialPaymentReference}-corrected` },
+      });
+      expect(changedReplay.status()).toBe(422);
+      expect((await changedReplay.json() as { message?: string }).message).toBe(
+        'The idempotency key was already used with a different payment payload.',
+      );
+      expect(await readBillState(finance.page, billUrl)).toEqual(beforeChangedReplay);
       expect(createdPayment.approval_records.map(({ step_order, role_slug, action }) => ({ step_order, role_slug, action })).sort((a, b) => a.step_order - b.step_order)).toEqual([
         { step_order: 1, role_slug: 'finance_officer', action: 'pending' },
         { step_order: 2, role_slug: 'vice_president', action: 'pending' },
