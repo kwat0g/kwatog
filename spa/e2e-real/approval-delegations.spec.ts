@@ -59,12 +59,20 @@ test('finance officer creates and revokes approval cover from profile menu', asy
       }
     }
 
-    await page.getByLabel(/Delegate/).selectOption(candidate.id);
+    const occupiedWindows = new Set(previous
+      .filter((delegation) => delegation.role_slug === 'finance_officer' && delegation.delegate.id === candidate.id)
+      .map((delegation) => `${delegation.starts_at}:${delegation.ends_at}`));
     const startsAt = new Date();
     startsAt.setHours(0, 0, 0, 0);
-    startsAt.setDate(startsAt.getDate() + 1 + Math.floor(Math.random() * 365));
+    startsAt.setDate(startsAt.getDate() + 1);
     const endsAt = new Date(startsAt);
     endsAt.setDate(endsAt.getDate() + 1);
+    while (occupiedWindows.has(`${localIsoDate(startsAt)}:${localIsoDate(endsAt)}`)) {
+      startsAt.setDate(startsAt.getDate() + 1);
+      endsAt.setDate(endsAt.getDate() + 1);
+    }
+
+    await page.getByLabel(/Delegate/).selectOption(candidate.id);
     const reason = `Browser audit ${Date.now()}`;
     await page.getByLabel(/Start date/).fill(localIsoDate(startsAt));
     await page.getByLabel(/End date/).fill(localIsoDate(endsAt));
