@@ -6,6 +6,7 @@ namespace Tests\Feature\Approvals;
 
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Services\ApprovalBoardService;
+use App\Common\Support\ApprovalTypeRegistry;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
@@ -104,5 +105,19 @@ class ApprovalBoardTest extends TestCase
         $this->assertSame(1, $board['summary']['my_action']);
         $this->assertTrue($board['meta']['pending_truncated']);
         $this->assertSame(1, $board['meta']['pending_limit']);
+    }
+
+    public function test_every_advertised_approval_filter_is_accepted_by_the_board(): void
+    {
+        $approver = $this->user('department_head');
+        $kinds = $this->actingAs($approver)
+            ->getJson('/api/v1/approvals/options')
+            ->assertOk()
+            ->json('data.kinds');
+
+        $this->assertSame(ApprovalTypeRegistry::kindOptions(), $kinds);
+        foreach ($kinds as $kind) {
+            $this->getJson('/api/v1/approvals/board?type='.urlencode($kind['value']))->assertOk();
+        }
     }
 }
