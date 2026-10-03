@@ -12,6 +12,7 @@ use App\Modules\HR\Models\Position;
 use App\Modules\HR\Services\EmployeeService;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Services\LeaveBalanceService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ class LeaveBalanceProrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         Carbon::setTestNow(Carbon::parse('2026-09-06 09:00:00'));
 
         $this->vl = LeaveType::create([
