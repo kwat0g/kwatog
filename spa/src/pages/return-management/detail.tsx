@@ -90,9 +90,12 @@ export default function ReturnRequestDetailPage() {
     queryFn: () => returnManagementApi.get(id!),
     enabled: !!id,
   });
+  const requiresProductInspection = rma?.items?.some((item) => Boolean(item.product_id)) ?? false;
   const { data: warehouses } = useQuery({
     queryKey: ['warehouse-tree'],
     queryFn: () => warehouseApi.tree(),
+    enabled: rma?.status === 'approved'
+      && (can('return_management.receive') || can('return_management.manage')),
     staleTime: 5 * 60 * 1000,
   });
   const locations = (warehouses ?? []).flatMap((w) =>
@@ -180,9 +183,11 @@ export default function ReturnRequestDetailPage() {
     onSuccess: (updated) => {
       invalidate();
       toast.success(
-        updated.inspection_handoff?.status === 'manual_required'
-          ? 'Quality inspection needs attention.'
-          : 'Quality inspection staged.',
+        updated.inspection_handoff?.status === 'not_required'
+          ? 'No product-linked Quality inspection is required. Ready to record disposition.'
+          : updated.inspection_handoff?.status === 'manual_required'
+            ? 'Quality inspection needs attention.'
+            : 'Quality inspection staged.',
       );
       setConfirm(null);
     },
@@ -263,7 +268,11 @@ export default function ReturnRequestDetailPage() {
       case 'approved':
         return [{ key: 'receive', label: 'Record Receipt', variant: 'primary' }];
       case 'received':
-        return [{ key: 'inspect', label: 'Stage Quality Handoff', variant: 'primary' }];
+        return [{
+          key: 'inspect',
+          label: requiresProductInspection ? 'Stage Quality Handoff' : 'Continue to Disposition',
+          variant: 'primary',
+        }];
       case 'inspected': {
         const disposed = rma?.disposition_status === 'disposed';
         return [
@@ -352,10 +361,11 @@ export default function ReturnRequestDetailPage() {
       variant: 'primary',
     },
     inspect: {
-      title: 'Stage Quality inspection handoff?',
-      description:
-        'Creates the product-level Quality inspection records. Disposition remains blocked until Quality records a pass.',
-      label: 'Stage Handoff',
+      title: requiresProductInspection ? 'Stage Quality inspection handoff?' : 'Continue without Quality inspection?',
+      description: requiresProductInspection
+        ? 'Creates the product-level Quality inspection records. Disposition remains blocked until each linked Quality inspection is completed.'
+        : 'No product-linked Quality inspection is required for this return. Continue to record disposition.',
+      label: requiresProductInspection ? 'Stage Handoff' : 'Continue',
       variant: 'primary',
     },
     cancel: {
@@ -425,7 +435,11 @@ export default function ReturnRequestDetailPage() {
     { key: 'created', label: 'Created', at: rma.created_at, by: rma.creator },
     { key: 'approved', label: 'Approved', at: rma.approved_at, by: rma.approved_by },
     { key: 'received', label: 'Received', at: rma.received_at },
-    { key: 'inspected', label: 'Quality handoff staged', at: rma.inspected_at },
+    {
+      key: 'inspected',
+      label: rma.inspection_handoff?.status === 'not_required' ? 'Inspection not required' : 'Quality handoff staged',
+      at: rma.inspected_at,
+    },
     { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.completed_by },
     { key: 'rejected', label: 'Rejected', at: rma.rejected_at, by: rma.rejected_by },
     { key: 'cancelled', label: 'Cancelled', at: rma.cancelled_at },

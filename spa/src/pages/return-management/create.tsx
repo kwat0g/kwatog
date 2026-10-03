@@ -238,10 +238,12 @@ export default function CreateReturnRequestPage() {
   const { data: productsData } = useQuery({
     queryKey: ['products'],
     queryFn: () => productsApi.list({ per_page: 500 }),
+    enabled: financeOnly,
   });
   const { data: customersData } = useQuery({
     queryKey: ['customers'],
     queryFn: () => customersApi.list({ per_page: 500 }),
+    enabled: returnType === 'customer_return',
   });
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors'],

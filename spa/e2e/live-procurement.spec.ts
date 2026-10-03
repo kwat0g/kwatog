@@ -2,19 +2,62 @@ import { test, expect, type Browser, type BrowserContext, type Page } from '@pla
 import { localIsoDate } from '../src/lib/formatDate';
 
 const PASSWORD = 'password';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost';
+const runErrors: string[] = [];
+
+test.beforeEach(() => {
+  runErrors.length = 0;
+});
+
+test.afterEach(() => {
+  expect(runErrors).toEqual([]);
+});
 
 async function login(page: Page, email: string): Promise<void> {
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
+  const responsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST'
+    && response.url().includes('/api/v1/auth/sign-in'),
+  );
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).not.toHaveURL(/\/sign-in$/, { timeout: 20_000 });
+  const response = await responsePromise;
+  expect(response.status(), `Login failed for ${email}.`).toBe(200);
+  await page.waitForURL((url) => url.pathname !== '/sign-in', { timeout: 20_000 });
   await page.locator('#main-content').waitFor({ state: 'attached', timeout: 20_000 });
 }
 
 async function newContext(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext({ baseURL: 'http://localhost' });
-  return { context, page: await context.newPage() };
+  const context = await browser.newContext({ baseURL: BASE_URL });
+  const page = await context.newPage();
+  page.on('pageerror', (error) => runErrors.push(`page error: ${error.message}`));
+  page.on('console', (message) => {
+    const text = message.text();
+    if (message.type() === 'error' && !(text.includes('401') && text.includes('Unauthorized'))) {
+      runErrors.push(`console error: ${text}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    runErrors.push(`request failed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`);
+  });
+  page.on('response', (response) => {
+    const url = response.url();
+    if (!url.includes('/api/') || response.status() < 400) return;
+    if (response.status() === 401 && url.includes('/api/v1/auth/user')) return;
+    runErrors.push(`API response ${response.status()}: ${response.request().method()} ${url}`);
+  });
+  return { context, page };
+}
+
+async function apiHeaders(context: BrowserContext): Promise<Record<string, string>> {
+  const xsrf = (await context.cookies(BASE_URL)).find((cookie) => cookie.name === 'XSRF-TOKEN')?.value;
+  return {
+    Accept: 'application/json',
+    Origin: BASE_URL,
+    Referer: `${BASE_URL}/`,
+    ...(xsrf ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrf) } : {}),
+  };
 }
 
 async function selectDepartment(page: Page, preferredCode = 'PROD'): Promise<void> {
@@ -72,7 +115,7 @@ async function createManualPr(
   return { context, page, url: page.url() };
 }
 
-async function approvePr(browser: Browser, email: string, url: string): Promise<void> {
+async function approvePr(browser: Browser, email: string, url: string, final = true): Promise<void> {
   const { context, page } = await newContext(browser);
   try {
     await login(page, email);
@@ -89,7 +132,16 @@ async function approvePr(browser: Browser, email: string, url: string): Promise<
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect(page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    if (final) {
+      await expect(page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    } else {
+      const timeline = page.getByLabel('Approval timeline');
+      await expect(page.getByText('Pending', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+      await expect(timeline.getByText('Step 1 — Finance officer', { exact: true })).toBeVisible();
+      await expect(timeline.getByText('Approved', { exact: true })).toBeVisible();
+      await expect(timeline.getByText('Step 2 — Vice president', { exact: true })).toBeVisible();
+      await expect(timeline.getByText('Pending', { exact: true })).toBeVisible();
+    }
   } finally {
     await context.close();
   }
@@ -159,8 +211,12 @@ async function createCatalogPrToSentPo(browser: Browser): Promise<{ poUrl: strin
 
     if (await convertButton.count() > 0 && await convertButton.isVisible()) {
       await convertButton.click();
-      await expect(purchasing.page.getByRole('dialog')).toContainText('Assign a supplier per line');
-      await purchasing.page.getByRole('dialog').getByRole('button', { name: /Create purchase order/ }).click();
+      const conversion = purchasing.page.getByRole('dialog');
+      await expect(conversion).toContainText('Assign a supplier per line');
+      await conversion.getByLabel('Supplier').selectOption({ label: 'Audit E2E Resin Supplier' });
+      const createOrders = conversion.getByRole('button', { name: /Create purchase order/ });
+      await expect(createOrders).toBeEnabled();
+      await createOrders.click();
       await purchasing.page.waitForURL(/\/purchasing\/purchase-orders\/[^/]+$/, { timeout: 20_000 });
     } else {
       await expect(poLink).toBeVisible();
@@ -205,30 +261,119 @@ async function createCatalogPrToSentPo(browser: Browser): Promise<{ poUrl: strin
   }
 }
 
-async function approveRma(browser: Browser, email: string, url: string, final: boolean): Promise<void> {
+async function assertRmaApprovalQueue(
+  browser: Browser,
+  email: string,
+  url: string,
+  rmaNumber: string,
+  stepOrder: number,
+): Promise<void> {
   const { context, page } = await newContext(browser);
   try {
     await login(page, email);
-    await page.goto(url);
-    const approveButton = page.getByRole('button', { name: 'Approve', exact: true });
-    await expect(approveButton).toBeVisible({ timeout: 20_000 });
-    await approveButton.click();
-    const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect(
-      final
-        ? page.getByText('Approved', { exact: true }).first()
-        : page.getByText('Pending Approval', { exact: true }).first(),
-    ).toBeVisible({ timeout: 20_000 });
+    const boardResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && response.url().includes('/api/v1/approvals/board'),
+    );
+    await page.goto('/approvals');
+    const boardResponse = await boardResponsePromise;
+    expect(boardResponse.status()).toBe(200);
+    const board = await boardResponse.json() as {
+      data?: {
+        my_action?: Array<{
+          id: string;
+          type: string;
+          number: string;
+          link: string;
+          step_order: number;
+          role_slug: string;
+        }>;
+      };
+    };
+    const card = board.data?.my_action?.find((row) => row.id === url.split('/').pop() && row.type === 'return_request');
+    expect(card).toMatchObject({
+      number: rmaNumber,
+      link: url.replace(BASE_URL, ''),
+      step_order: stepOrder,
+      role_slug: stepOrder === 1 ? 'department_head' : 'production_manager',
+    });
+    const myActionColumn = page.getByText('My action required', { exact: true }).locator('xpath=../..');
+    await expect(myActionColumn.getByRole('button').filter({ hasText: rmaNumber })).toBeVisible();
   } finally {
     await context.close();
   }
 }
 
-async function rejectRma(browser: Browser, url: string): Promise<void> {
+async function approveRma(browser: Browser, email: string, url: string, final: boolean, rmaNumber: string): Promise<void> {
+  const { context, page } = await newContext(browser);
+  const id = url.split('/').pop()!;
+  const expectedRoles = final ? ['department_head', 'production_manager'] : ['department_head'];
+  try {
+    await login(page, email);
+    const beforeReadPromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && response.url().includes(`/api/v1/return-management/return-requests/${id}`),
+    );
+    await page.goto(url);
+    const beforeRead = await beforeReadPromise;
+    const before = await beforeRead.json() as {
+      data?: {
+        status?: string;
+        pending_approval_step?: number | null;
+        actions?: { can_approve?: boolean };
+        approval_records?: Array<{ step_order: number; role_slug: string; action: string }>;
+      };
+    };
+    expect(before.data).toMatchObject({
+      status: 'pending_approval',
+      pending_approval_step: final ? 2 : 1,
+      actions: { can_approve: true },
+    });
+    expect(before.data?.approval_records?.filter((row) => row.action === 'approved').map((row) => row.role_slug))
+      .toEqual(final ? ['department_head'] : []);
+
+    const approveButton = page.getByRole('button', { name: 'Approve', exact: true });
+    await expect(approveButton).toBeVisible({ timeout: 20_000 });
+    const approvalResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().includes(`/api/v1/return-management/return-requests/${id}/approve`),
+    );
+    const afterReadPromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && response.url().includes(`/api/v1/return-management/return-requests/${id}`),
+    );
+    await approveButton.click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
+    const approvalResponse = await approvalResponsePromise;
+    expect(approvalResponse.status()).toBe(200);
+    const approvalResult = await approvalResponse.json() as { data?: { status?: string } };
+    expect(approvalResult.data?.status).toBe(final ? 'approved' : 'pending_approval');
+
+    const afterRead = await afterReadPromise;
+    const after = await afterRead.json() as {
+      data?: {
+        rma_number?: string;
+        status?: string;
+        pending_approval_step?: number | null;
+        approval_records?: Array<{ step_order: number; role_slug: string; action: string; approver?: { id: string } | null }>;
+      };
+    };
+    expect(after.data?.rma_number).toBe(rmaNumber);
+    expect(after.data?.status).toBe(final ? 'approved' : 'pending_approval');
+    expect(after.data?.pending_approval_step).toBe(final ? null : 2);
+    const completed = after.data?.approval_records?.filter((row) => row.action === 'approved') ?? [];
+    expect(completed.map((row) => row.role_slug)).toEqual(expectedRoles);
+    expect(new Set(completed.map((row) => row.approver?.id)).size).toBe(completed.length);
+  } finally {
+    await context.close();
+  }
+}
+
+async function rejectRma(browser: Browser, email: string, url: string): Promise<void> {
   const { context, page } = await newContext(browser);
   try {
-    await login(page, 'depthead@ogami.test');
+    await login(page, email);
     await page.goto(url);
     const rejectButton = page.getByRole('button', { name: 'Reject', exact: true });
     await expect(rejectButton).toBeVisible({ timeout: 20_000 });
@@ -264,6 +409,13 @@ function futureDate(days: number): string {
 }
 
 test.describe('Live procurement runbook', () => {
+  test.describe.configure({ mode: 'serial' });
+  let poId = '';
+  let poNumber = '';
+  let vendorName = '';
+  let billUrl = '';
+  let rmaNumber = '';
+
   test('RBAC denial and Department Head department boundary', async ({ browser }) => {
     const warehouse = await newContext(browser);
     try {
@@ -318,7 +470,7 @@ test.describe('Live procurement runbook', () => {
       await sales.page.locator('input[name="items.0.quantity"]').fill('5000');
       await sales.page.locator('input[name="items.0.delivery_date"]').fill(futureDate(30));
       await sales.page.getByRole('button', { name: 'Save & confirm', exact: true }).click();
-      await sales.page.waitForURL(/\/crm\/sales-orders\/[^/]+$/, { timeout: 30_000 });
+      await sales.page.waitForURL(/\/crm\/sales-orders\/(?!create$)[^/]+$/, { timeout: 30_000 });
       await expect(sales.page.getByText('Confirmed', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
       soNumber = (await sales.page.locator('h1').first().innerText()).match(/SO-\S+/)?.[0] ?? '';
 
@@ -393,12 +545,16 @@ test.describe('Live procurement runbook', () => {
         await vpBeforeFinance.context.close();
       }
 
-      await approvePr(browser, 'finance@ogami.test', created.url);
+      await approvePr(browser, 'finance@ogami.test', created.url, false);
 
       const vp = await newContext(browser);
       try {
         await login(vp.page, 'vp@ogami.test');
         await vp.page.goto(created.url);
+        await expect(vp.page.getByLabel('Approval timeline').getByText('Step 1 — Finance officer', { exact: true })).toBeVisible();
+        await expect(vp.page.getByLabel('Approval timeline').getByText('Approved', { exact: true })).toBeVisible();
+        await expect(vp.page.getByLabel('Approval timeline').getByText('Step 2 — Vice president', { exact: true })).toBeVisible();
+        await expect(vp.page.getByLabel('Approval timeline').getByText('Pending', { exact: true })).toBeVisible();
         await expect(vp.page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
         await vp.page.getByRole('button', { name: 'Approve', exact: true }).click();
         const dialog = vp.page.getByRole('dialog');
@@ -429,11 +585,11 @@ test.describe('Live procurement runbook', () => {
     }
   });
 
-  test('generated finance-only customer return can be rejected by Department Head', async ({ browser }) => {
+  test('finance-only customer return only offers rejection to Finance', async ({ browser }) => {
     const creator = await newContext(browser);
     let rmaUrl: string;
     try {
-      await login(creator.page, 'crm@ogami.test');
+      await login(creator.page, 'customerservice@ogami.test');
       await creator.page.goto('/return-management/new');
       await creator.page.getByLabel('Type').selectOption('customer_return');
       const customer = creator.page.locator('select[name="customer_id"]');
@@ -469,20 +625,34 @@ test.describe('Live procurement runbook', () => {
       await creator.context.close();
     }
 
-    await rejectRma(browser, rmaUrl);
+    const departmentHead = await newContext(browser);
+    try {
+      await login(departmentHead.page, 'depthead@ogami.test');
+      await departmentHead.page.goto(rmaUrl);
+      const approvalTimeline = departmentHead.page.getByLabel('Approval timeline');
+      await expect(approvalTimeline.getByText('Step 1 — Finance officer', { exact: true })).toBeVisible();
+      await expect(approvalTimeline.getByText('Pending', { exact: true })).toBeVisible();
+      await expect(departmentHead.page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+      await expect(departmentHead.page.getByRole('button', { name: 'Reject', exact: true })).toHaveCount(0);
+      await expect(departmentHead.page.getByText('Pending Approval', { exact: true }).first()).toBeVisible();
+    } finally {
+      await departmentHead.context.close();
+    }
+
+    await rejectRma(browser, 'finance@ogami.test', rmaUrl);
   });
 
-  test('generated manual PR continues through PO, GRN, QC, bill, and payment', async ({ browser }) => {
-    test.setTimeout(240_000);
-    const { poId, poNumber, vendorName } = await createCatalogPrToSentPo(browser);
+  test('PR to accepted GRN creates one draft supplier bill', async ({ browser }) => {
+    test.setTimeout(360_000);
+    ({ poId, poNumber, vendorName } = await createCatalogPrToSentPo(browser));
     const warehouse = await newContext(browser);
-    let billUrl: string;
     try {
       await login(warehouse.page, 'warehouse@ogami.test');
       await warehouse.page.goto('/inventory/grn');
       await expect(warehouse.page.getByText(poNumber, { exact: true })).toBeVisible({ timeout: 20_000 });
       await warehouse.page.getByText(poNumber, { exact: true }).click();
       await warehouse.page.waitForURL(/\/inventory\/grn\/[^/]+$/, { timeout: 20_000 });
+      const grnId = warehouse.page.url().split('/').pop()!;
       const expectedReceipt = warehouse.page.getByText('Expected receipt', { exact: false });
       await expect(expectedReceipt).toBeVisible({ timeout: 20_000 });
       const bin = warehouse.page.locator('select[aria-label^="Bin "]');
@@ -493,72 +663,189 @@ test.describe('Live procurement runbook', () => {
       const binValue = binOptions.find((option) => option.value !== '')?.value;
       if (!binValue) throw new Error('No usable warehouse bin was available.');
       await bin.selectOption(binValue);
-      await warehouse.page.locator('input[aria-label^="Qty "]').fill('5');
+      await warehouse.page.locator('input[aria-label^="Entered quantity "]').fill('5');
+      const finalizeResponsePromise = warehouse.page.waitForResponse((response) =>
+        response.request().method() === 'PATCH'
+        && response.url().includes(`/api/v1/inventory/grn/${grnId}/finalize`),
+      );
       await warehouse.page.getByRole('button', { name: 'Finalize receiving', exact: true }).click();
       const finalizeDialog = warehouse.page.getByRole('dialog');
       await finalizeDialog.getByRole('button', { name: 'Finalize GRN', exact: true }).click();
+      const finalizeResponse = await finalizeResponsePromise;
+      expect(finalizeResponse.status()).toBe(200);
+      const finalizedGrn = await finalizeResponse.json() as {
+        data?: {
+          status?: string;
+          bill?: { id: string } | null;
+          items?: Array<{
+            quantity_received: string;
+            quantity_accepted: string;
+            inspection?: { id: string; status: string } | null;
+          }>;
+        };
+      };
+      expect(finalizedGrn.data).toMatchObject({
+        status: 'pending_qc',
+        bill: null,
+      });
+      expect(finalizedGrn.data?.items?.[0]?.inspection?.status).toBe('draft');
+      expect(Number(finalizedGrn.data?.items?.[0]?.quantity_received)).toBe(5);
+      expect(Number(finalizedGrn.data?.items?.[0]?.quantity_accepted)).toBe(0);
       const pendingQc = warehouse.page.getByText(/Pending qc/i).first();
       await expect(pendingQc).toBeVisible({ timeout: 20_000 });
 
-        const qcNumberLocator = warehouse.page.getByText(/QC-\d{6}-\d+/, { exact: false }).first();
-        await expect(qcNumberLocator).toBeVisible({ timeout: 20_000 });
-        const qcNumber = (await qcNumberLocator.innerText()).match(/QC-\d{6}-\d+/)?.[0] ?? '';
-        if (!qcNumber) throw new Error('Incoming QC number was not readable.');
+      const qcNumberLocator = warehouse.page.getByText(/QC-\d{6}-\d+/, { exact: false }).first();
+      await expect(qcNumberLocator).toBeVisible({ timeout: 20_000 });
+      const qcNumber = (await qcNumberLocator.innerText()).match(/QC-\d{6}-\d+/)?.[0] ?? '';
+      if (!qcNumber) throw new Error('Incoming QC number was not readable.');
 
-        const qc = await newContext(browser);
-        try {
-          await login(qc.page, 'qc@ogami.test');
-          await qc.page.goto('/quality/inspections');
-          const inspectionListResponse = qc.page.waitForResponse((response) =>
-            response.request().method() === 'GET'
-            && response.url().includes('/api/v1/quality/inspections?'),
-          );
-          await qc.page.getByPlaceholder('Search inspection number or product').fill(qcNumber);
-          const inspectionResponse = await inspectionListResponse;
-          const inspectionBody = await inspectionResponse.json() as {
-            data?: Array<{ id: string; inspection_number: string }>;
+      const qc = await newContext(browser);
+      let inspectionId: string;
+      try {
+        await login(qc.page, 'qc@ogami.test');
+        await qc.page.goto('/quality/inspections');
+        const inspectionListResponse = qc.page.waitForResponse((response) =>
+          response.request().method() === 'GET'
+          && response.url().includes('/api/v1/quality/inspections?'),
+        );
+        await qc.page.getByPlaceholder('Search inspection number or product').fill(qcNumber);
+        const inspectionResponse = await inspectionListResponse;
+        const inspectionBody = await inspectionResponse.json() as {
+          data?: Array<{ id: string; inspection_number: string }>;
+        };
+        await expect(qc.page.getByText(qcNumber, { exact: true })).toBeVisible({ timeout: 20_000 });
+        const inspection = inspectionBody.data?.find((row) => row.inspection_number === qcNumber);
+        expect(inspection, `Filtered inspection ${qcNumber} was not in the API response`).toBeTruthy();
+        inspectionId = inspection!.id;
+        await qc.page.goto(`/quality/inspections/${inspectionId}`);
+        await qc.page.waitForURL(/\/quality\/inspections\/[^/]+$/, { timeout: 20_000 });
+        await qc.page.getByRole('button', { name: 'Tick all', exact: true }).click();
+        await qc.page.getByRole('group', { name: 'Defective pieces found' })
+          .getByRole('button', { name: '0', exact: true }).click();
+        const lotResultResponsePromise = qc.page.waitForResponse((response) =>
+          response.request().method() === 'POST'
+          && response.url().includes(`/api/v1/quality/inspections/${inspectionId}/lot-result`),
+        );
+        const submitResult = qc.page.getByRole('button', { name: 'Submit result', exact: true });
+        await expect(submitResult).toBeEnabled();
+        await submitResult.click();
+        const lotResultResponse = await lotResultResponsePromise;
+        expect(lotResultResponse.status()).toBe(200);
+        const lotResult = await lotResultResponse.json() as {
+          data?: {
+            status?: string;
+            proposed_result?: string | null;
+            defect_count?: number;
+            sample_defect_count?: number | null;
+            can_review?: boolean;
+            result_authors?: Array<{ id: string; name: string }>;
           };
-          await expect(qc.page.getByText(qcNumber, { exact: true })).toBeVisible({ timeout: 20_000 });
-          const inspection = inspectionBody.data?.find((row) => row.inspection_number === qcNumber);
-          expect(inspection, `Filtered inspection ${qcNumber} was not in the API response`).toBeTruthy();
-          await qc.page.goto(`/quality/inspections/${inspection!.id}`);
-          await qc.page.waitForURL(/\/quality\/inspections\/[^/]+$/, { timeout: 20_000 });
-          await expect(qc.page.getByRole('button', { name: 'Complete', exact: true })).toBeVisible({ timeout: 20_000 });
-          const measured = qc.page.locator('input[aria-label^="Measured value"]');
-          const visualResults = qc.page.locator('select[aria-label="Visual result"]');
-          await expect.poll(async () => (await measured.count()) + (await visualResults.count()), { timeout: 20_000 }).toBeGreaterThan(0);
-          for (let index = 0; index < await measured.count(); index += 1) {
-            const row = measured.nth(index).locator('xpath=ancestor::tr');
-            const nominal = await row.locator('td').nth(1).innerText();
-            const value = nominal.match(/-?\d+(?:\.\d+)?/)?.[0] ?? '0';
-            await measured.nth(index).fill(value);
-          }
-          for (let index = 0; index < await visualResults.count(); index += 1) {
-            await visualResults.nth(index).selectOption('pass');
-          }
-          const save = qc.page.getByRole('button', { name: /Save \(/ });
-          if (await save.count() > 0 && await save.isVisible()) {
-            await save.click();
-            await expect(qc.page.getByText('Measurements saved', { exact: true })).toBeVisible({ timeout: 20_000 });
-          }
-          await qc.page.getByRole('button', { name: 'Complete', exact: true }).click();
-          const completeDialog = qc.page.getByRole('dialog');
-          await completeDialog.getByRole('button', { name: 'Complete', exact: true }).click();
-          await expect(qc.page.getByText('Passed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
-        } finally {
-          await qc.context.close();
-        }
-      const billLink = warehouse.page.locator('a[href*="/accounting/bills/"]');
-      await expect.poll(async () => {
-        await warehouse.page.reload({ waitUntil: 'networkidle' });
-        return await billLink.count();
-      }, { timeout: 45_000, intervals: [1_000, 2_000, 5_000] }).toBeGreaterThan(0);
-      billUrl = await billLink.first().getAttribute('href') ?? '';
+        };
+        expect(lotResult.data).toMatchObject({
+          status: 'awaiting_review',
+          proposed_result: 'passed',
+          defect_count: 0,
+          sample_defect_count: 0,
+          can_review: false,
+        });
+        expect(lotResult.data?.result_authors).toHaveLength(1);
+        await expect(qc.page.getByText(/Awaiting checker.*passed/i).first()).toBeVisible({ timeout: 20_000 });
+      } finally {
+        await qc.context.close();
+      }
+
+      const pendingGrnResponsePromise = warehouse.page.waitForResponse((response) =>
+        response.request().method() === 'GET'
+        && response.url().includes(`/api/v1/inventory/grn/${grnId}`),
+      );
+      await warehouse.page.reload({ waitUntil: 'domcontentloaded' });
+      const pendingGrnResponse = await pendingGrnResponsePromise;
+      const pendingGrn = await pendingGrnResponse.json() as {
+        data?: {
+          status?: string;
+          bill?: { id: string } | null;
+          items?: Array<{
+            quantity_accepted: string;
+            inspection?: { status: string } | null;
+          }>;
+        };
+      };
+      expect(pendingGrn.data).toMatchObject({
+        status: 'pending_qc',
+        bill: null,
+      });
+      expect(pendingGrn.data?.items?.[0]?.inspection?.status).toBe('awaiting_review');
+      expect(Number(pendingGrn.data?.items?.[0]?.quantity_accepted)).toBe(0);
+
+      const reviewer = await newContext(browser);
+      try {
+        await login(reviewer.page, 'production@ogami.test');
+        await reviewer.page.goto('/notifications');
+        await expect(reviewer.page.getByText(`Inspection ${qcNumber} awaits your review`, { exact: true }))
+          .toBeVisible({ timeout: 20_000 });
+        await reviewer.page.goto(`/quality/inspections/${inspectionId}`);
+        const approvePass = reviewer.page.getByRole('button', { name: 'Approve pass', exact: true });
+        await expect(approvePass).toBeVisible({ timeout: 20_000 });
+        const reviewResponsePromise = reviewer.page.waitForResponse((response) =>
+          response.request().method() === 'PATCH'
+          && response.url().includes(`/api/v1/quality/inspections/${inspectionId}/review`),
+        );
+        await approvePass.click();
+        const reviewDialog = reviewer.page.getByRole('dialog');
+        await reviewDialog.getByRole('button', { name: 'Approve pass', exact: true }).click();
+        const reviewResponse = await reviewResponsePromise;
+        expect(reviewResponse.status()).toBe(200);
+        const reviewedInspection = await reviewResponse.json() as {
+          data?: {
+            status?: string;
+            reviewed_at?: string | null;
+            result_authors?: Array<{ id: string; name: string }>;
+            reviewer?: { id: string; name: string } | null;
+          };
+        };
+        expect(reviewedInspection.data?.status).toBe('passed');
+        expect(reviewedInspection.data?.reviewed_at).toBeTruthy();
+        expect(reviewedInspection.data?.reviewer?.id)
+          .not.toBe(reviewedInspection.data?.result_authors?.[0]?.id);
+        await expect(reviewer.page.getByText('Passed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+      } finally {
+        await reviewer.context.close();
+      }
+      const billLink = warehouse.page.getByRole('link', { name: /^BILL-/ }).first();
+      const acceptedGrnResponsePromise = warehouse.page.waitForResponse((response) =>
+        response.request().method() === 'GET'
+        && response.url().includes(`/api/v1/inventory/grn/${grnId}`),
+      );
+      await warehouse.page.reload({ waitUntil: 'domcontentloaded' });
+      const acceptedGrnResponse = await acceptedGrnResponsePromise;
+      const acceptedGrn = await acceptedGrnResponse.json() as {
+        data?: {
+          status?: string;
+          bill?: { id: string; status: string; total_amount: string } | null;
+          items?: Array<{
+            quantity_received: string;
+            quantity_accepted: string;
+            inspection?: { status: string } | null;
+          }>;
+        };
+      };
+      await expect(billLink).toBeVisible({ timeout: 20_000 });
+      billUrl = await billLink.getAttribute('href') ?? '';
       if (!billUrl) throw new Error('The accepted GRN did not expose its generated bill link.');
+      expect(acceptedGrn.data?.status).toBe('accepted');
+      expect(acceptedGrn.data?.items?.[0]?.inspection?.status).toBe('passed');
+      expect(acceptedGrn.data?.bill?.status).toBe('draft');
+      expect(acceptedGrn.data?.bill?.id).toBe(billUrl.split('/').pop());
+      expect(Number(acceptedGrn.data?.items?.[0]?.quantity_received)).toBe(5);
+      expect(Number(acceptedGrn.data?.items?.[0]?.quantity_accepted)).toBe(5);
     } finally {
       await warehouse.context.close();
     }
+  });
 
+  test('post supplier bill and approve its partial payment', async ({ browser }) => {
+    test.setTimeout(300_000);
+    expect(billUrl).not.toBe('');
     const finance = await newContext(browser);
     try {
       await login(finance.page, 'finance@ogami.test');
@@ -598,7 +885,7 @@ test.describe('Live procurement runbook', () => {
       await payment.getByLabel('Method').selectOption('bank_transfer');
       await payment.getByLabel('Reference no.').fill('LIVE-E2E-PARTIAL');
       await payment.getByRole('button', { name: 'Record', exact: true }).click();
-      await finance.page.reload({ waitUntil: 'networkidle' });
+      await finance.page.reload({ waitUntil: 'domcontentloaded' });
       await expect(finance.page.getByText(/LIVE-E2E-PARTIAL/)).toBeVisible({ timeout: 20_000 });
     } finally {
       await finance.context.close();
@@ -615,7 +902,13 @@ test.describe('Live procurement runbook', () => {
     } finally {
       await settledView.context.close();
     }
+  });
 
+  test('return accepted goods through receipt, disposition, and replacement PO', async ({ browser }) => {
+    test.setTimeout(360_000);
+    expect(poId).not.toBe('');
+    expect(poNumber).not.toBe('');
+    expect(vendorName).not.toBe('');
     const returnCreator = await newContext(browser);
     let rmaUrl: string;
     try {
@@ -675,14 +968,56 @@ test.describe('Live procurement runbook', () => {
 
       await returnCreator.page.getByRole('button', { name: 'Submit for Approval', exact: true }).click();
       const submitDialog = returnCreator.page.getByRole('dialog');
+      const submitResponsePromise = returnCreator.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes('/api/v1/return-management/return-requests/')
+        && response.url().endsWith('/submit'),
+      );
       await submitDialog.getByRole('button', { name: 'Submit', exact: true }).click();
+      const submitResponse = await submitResponsePromise;
+      expect(submitResponse.status()).toBe(200);
+      const submitted = await submitResponse.json() as {
+        data?: {
+          rma_number?: string;
+          status?: string;
+        };
+      };
+      rmaNumber = submitted.data?.rma_number ?? '';
+      expect(rmaNumber).not.toBe('');
+      expect(submitted.data?.status).toBe('pending_approval');
+      const submittedStateResponse = await returnCreator.page.request.get(
+        `${BASE_URL}/api/v1/return-management/return-requests/${rmaUrl.split('/').pop()}`,
+        { headers: await apiHeaders(returnCreator.context) },
+      );
+      expect(submittedStateResponse.status()).toBe(200);
+      const submittedState = await submittedStateResponse.json() as {
+        data?: {
+          status?: string;
+          pending_approval_step?: number | null;
+          approval_records?: Array<{ step_order: number; action: string; role_slug: string }>;
+          disposition_status?: string | null;
+          receipts?: Array<{ id: string }>;
+          inspections?: Array<{ id: string }>;
+        };
+      };
+      expect(submittedState.data).toMatchObject({
+        status: 'pending_approval',
+        pending_approval_step: 1,
+        disposition_status: null,
+      });
+      expect(submittedState.data?.approval_records?.map((record) => [record.step_order, record.action, record.role_slug]))
+        .toEqual([[1, 'pending', 'department_head'], [2, 'pending', 'production_manager']]);
+      expect(submittedState.data?.receipts).toHaveLength(0);
+      expect(submittedState.data?.inspections).toHaveLength(0);
       await expect(returnCreator.page.getByText('Pending Approval', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     } finally {
       await returnCreator.context.close();
     }
 
-    await approveRma(browser, 'depthead@ogami.test', rmaUrl, false);
-    await approveRma(browser, 'production@ogami.test', rmaUrl, true);
+    await assertRmaApprovalQueue(browser, 'depthead@ogami.test', rmaUrl, rmaNumber, 1);
+    await approveRma(browser, 'depthead@ogami.test', rmaUrl, false, rmaNumber);
+    await assertRmaApprovalQueue(browser, 'production@ogami.test', rmaUrl, rmaNumber, 2);
+    await approveRma(browser, 'production@ogami.test', rmaUrl, true, rmaNumber);
 
     const receiver = await newContext(browser);
     try {
@@ -690,7 +1025,44 @@ test.describe('Live procurement runbook', () => {
       await receiver.page.goto(rmaUrl);
       await receiver.page.getByRole('button', { name: 'Record Receipt', exact: true }).click();
       const receiveDialog = receiver.page.getByRole('dialog');
-      await receiveDialog.getByRole('button', { name: 'Record Receipt', exact: true }).click();
+      const quantity = receiveDialog.getByRole('spinbutton').first();
+      await quantity.fill('5');
+      await expect(receiveDialog.getByRole('checkbox')).toBeChecked();
+      const receiptResponsePromise = receiver.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes(`/api/v1/return-management/return-requests/${rmaUrl.split('/').pop()}/receive`),
+      );
+      await receiveDialog.getByRole('button', { name: 'Record Final Receipt', exact: true }).click();
+      const receiptResponse = await receiptResponsePromise;
+      expect(receiptResponse.status()).toBe(200);
+      const receiptPayload = receiptResponse.request().postDataJSON() as Record<string, unknown>;
+      const received = await receiptResponse.json() as {
+        data?: {
+          rma_number?: string;
+          status?: string;
+          received_at?: string;
+          receipts?: Array<{ id: string; final_receipt: boolean; items: Array<{ quantity: string }> }>;
+          items?: Array<{ returned_quantity: string; receipt_recorded: boolean }>;
+        };
+      };
+      expect(received.data?.rma_number).toBe(rmaNumber);
+      expect(received.data?.status).toBe('received');
+      expect(received.data?.received_at).toBeTruthy();
+      expect(received.data?.receipts).toHaveLength(1);
+      expect(received.data?.receipts?.[0]).toMatchObject({ final_receipt: true });
+      expect(received.data?.receipts?.[0]?.items.map((item) => Number(item.quantity))).toEqual([5]);
+      expect(received.data?.items?.map((item) => [Number(item.returned_quantity), item.receipt_recorded]))
+        .toEqual([[5, true]]);
+
+      const replayResponse = await receiver.page.request.post(receiptResponse.url(), {
+        data: receiptPayload,
+        headers: await apiHeaders(receiver.context),
+      });
+      expect(replayResponse.status()).toBe(200);
+      const replayed = await replayResponse.json() as typeof received;
+      expect(replayed.data?.receipts).toHaveLength(1);
+      expect(replayed.data?.receipts?.[0]?.id).toBe(received.data?.receipts?.[0]?.id);
+      expect(replayed.data?.items?.map((item) => Number(item.returned_quantity))).toEqual([5]);
       await expect(receiver.page.getByText('Received', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     } finally {
       await receiver.context.close();
@@ -700,12 +1072,59 @@ test.describe('Live procurement runbook', () => {
     try {
       await login(inspector.page, 'purchasing@ogami.test');
       await inspector.page.goto(rmaUrl);
-      await inspector.page.getByRole('button', { name: 'Stage Quality Handoff', exact: true }).click();
+      await inspector.page.getByRole('button', { name: /Stage Quality Handoff|Continue to Disposition/ }).click();
       const inspectDialog = inspector.page.getByRole('dialog');
-      await inspectDialog.getByRole('button', { name: 'Stage Handoff', exact: true }).click();
+      await expect(inspectDialog).toContainText('No product-linked Quality inspection is required for this return.');
+      const inspectResponsePromise = inspector.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes(`/api/v1/return-management/return-requests/${rmaUrl.split('/').pop()}/inspect`),
+      );
+      await inspectDialog.getByRole('button', { name: /Stage Handoff|Continue/ }).click();
+      const inspectResponse = await inspectResponsePromise;
+      expect(inspectResponse.status()).toBe(200);
+      const inspected = await inspectResponse.json() as {
+        data?: {
+          rma_number?: string;
+          status?: string;
+          inspection_handoff?: { status?: string };
+          inspections?: Array<{ id: string; status: string }>;
+          items?: Array<{ id: string; product_id: string | null }>;
+        };
+      };
+      expect(inspected.data).toMatchObject({
+        rma_number: rmaNumber,
+        status: 'inspected',
+        inspection_handoff: { status: 'not_required' },
+      });
+      expect(inspected.data?.inspections).toEqual([]);
+      const inspectStateResponse = await inspector.page.request.get(
+        `${BASE_URL}/api/v1/return-management/return-requests/${rmaUrl.split('/').pop()}`,
+        { headers: await apiHeaders(inspector.context) },
+      );
+      expect(inspectStateResponse.status()).toBe(200);
+      const inspectedState = await inspectStateResponse.json() as { data?: {
+        disposition_status?: string | null;
+        replacement_purchase_order?: { id: string } | null;
+        stock_movement?: { id: string } | null;
+        items?: Array<{ id: string; product_id: string | null }>;
+      } };
+      expect(inspectedState.data).toMatchObject({
+        disposition_status: null,
+        replacement_purchase_order: null,
+        stock_movement: null,
+      });
+      expect(inspectedState.data?.items?.map((item) => item.product_id)).toEqual([null]);
+      const returnItemId = inspectedState.data?.items?.[0]?.id;
+      if (!returnItemId) throw new Error('The inspected RMA had no returned line.');
       await expect(inspector.page.getByText('Inspected', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+      await expect(inspector.page.getByText('Not required', { exact: true })).toBeVisible();
 
-      await inspector.page.getByRole('button', { name: 'Dispose Items', exact: true }).click();
+      const id = rmaUrl.split('/').pop()!;
+      const disposeButton = inspector.page.getByRole('button', { name: 'Dispose Items', exact: true });
+      await expect(disposeButton).toBeVisible();
+      await expect(disposeButton).toBeEnabled();
+
+      await disposeButton.click();
       const disposeDialog = inspector.page.getByRole('dialog');
       const disposition = disposeDialog.getByLabel('Disposition');
       await expect.poll(() => disposition.locator('option').count(), { timeout: 20_000 }).toBeGreaterThan(1);
@@ -719,13 +1138,69 @@ test.describe('Live procurement runbook', () => {
       if (!locationChoice?.value) throw new Error('No warehouse location was available for supplier return disposal.');
       await restockLocation.selectOption(locationChoice.value);
       await disposeDialog.getByLabel(/Raise a replacement purchase order/).check();
+      const dispositionResponsePromise = inspector.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes(`/api/v1/return-management/return-requests/${id}/dispose`),
+      );
       await disposeDialog.getByRole('button', { name: 'Record Disposition', exact: true }).click();
+      const dispositionResponse = await dispositionResponsePromise;
+      expect(dispositionResponse.status()).toBe(200);
+      const dispositionPayload = dispositionResponse.request().postDataJSON() as Record<string, unknown>;
+      const disposed = await dispositionResponse.json() as { data?: {
+        status?: string;
+        disposition_status?: string;
+        replacement_purchase_order?: { id: string; po_number: string; status: string } | null;
+        stock_movement?: { id: string; quantity: string; movement_type: string } | null;
+        items?: Array<{ id: string; disposition: string; moved_quantity: string | null; stock_movement_id: string | null }>;
+      } };
+      expect(disposed.data).toMatchObject({
+        status: 'inspected',
+        disposition_status: 'disposed',
+        replacement_purchase_order: { status: 'draft' },
+        stock_movement: { quantity: '5.000', movement_type: 'return_to_vendor' },
+      });
+      expect(disposed.data?.items).toMatchObject([{
+        id: returnItemId,
+        disposition: 'return_to_supplier',
+        moved_quantity: '5.000',
+        stock_movement_id: disposed.data?.stock_movement?.id,
+      }]);
       await expect(inspector.page.getByText('Disposed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
       await expect(inspector.page.locator('dt').filter({ hasText: 'Replacement PO' }).locator('xpath=following-sibling::dd[1]').locator('a')).toBeVisible({ timeout: 20_000 });
 
+      const duplicateDispose = await inspector.page.request.post(dispositionResponse.url(), {
+        data: dispositionPayload,
+        headers: await apiHeaders(inspector.context),
+      });
+      expect(duplicateDispose.status()).toBe(422);
+      const unchangedResponse = await inspector.page.request.get(
+        `${BASE_URL}/api/v1/return-management/return-requests/${id}`,
+        { headers: await apiHeaders(inspector.context) },
+      );
+      expect(unchangedResponse.status()).toBe(200);
+      const unchanged = await unchangedResponse.json() as typeof disposed;
+      expect(unchanged.data).toMatchObject({
+        disposition_status: 'disposed',
+        replacement_purchase_order: { id: disposed.data?.replacement_purchase_order?.id },
+        stock_movement: { id: disposed.data?.stock_movement?.id, quantity: '5.000' },
+      });
+      expect(unchanged.data?.items?.[0]?.moved_quantity).toBe('5.000');
+
+      const completeResponsePromise = inspector.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes(`/api/v1/return-management/return-requests/${id}/complete`),
+      );
       await inspector.page.getByRole('button', { name: 'Complete RMA', exact: true }).click();
       const completeDialog = inspector.page.getByRole('dialog');
       await completeDialog.getByRole('button', { name: 'Confirm Complete', exact: true }).click();
+      const completeResponse = await completeResponsePromise;
+      expect(completeResponse.status()).toBe(200);
+      const completed = await completeResponse.json() as { data?: { status?: string; stock_movement?: { id: string } | null; items?: Array<{ moved_quantity: string | null }> } };
+      expect(completed.data).toMatchObject({
+        status: 'completed',
+        stock_movement: { id: disposed.data?.stock_movement?.id },
+      });
+      expect(completed.data?.items?.map((item) => item.moved_quantity)).toEqual(['5.000']);
       await expect(inspector.page.getByText('Completed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     } finally {
       await inspector.context.close();
