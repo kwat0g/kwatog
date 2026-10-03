@@ -33,6 +33,8 @@ use Illuminate\Database\Eloquent\Builder;
  *             shows every row to every assets.view holder, so the board's
  *             permission gate is already equivalent and hasScope() reports
  *             false (same shape as payroll);
+ *   - bill_payment: the bills endpoint has no row scope, so holders of
+ *             accounting.bills.view see every bill in the module;
  *   - return_request: same documented decision as payroll — every holder of
  *             `return_management.view` sees every RMA in the module's own
  *             list endpoint, so the permission gate is equivalent and

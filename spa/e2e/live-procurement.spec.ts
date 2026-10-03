@@ -61,6 +61,36 @@ async function apiHeaders(context: BrowserContext): Promise<Record<string, strin
   };
 }
 
+type LiveBillState = {
+  status: string;
+  total_amount: string;
+  amount_paid: string;
+  balance: string;
+  payments: Array<{
+    id: string;
+    reference_number: string;
+    status: string;
+    journal_entry_id: string | null;
+    approval_records: Array<{
+      step_order: number;
+      role_slug: string;
+      action: string;
+      acted_at: string | null;
+      approver: { id: string } | null;
+    }>;
+  }>;
+};
+
+async function readBillState(page: Page, billUrl: string): Promise<LiveBillState> {
+  const billHash = billUrl.split('/').pop();
+  if (!billHash) throw new Error('Bill detail link has no record id.');
+  const response = await page.request.get(`${BASE_URL}/api/v1/bills/${billHash}`, {
+    headers: await apiHeaders(page.context()),
+  });
+  expect(response.status()).toBe(200);
+  return (await response.json() as { data: LiveBillState }).data;
+}
+
 async function readAutomationActorRoles(page: Page): Promise<unknown[]> {
   const response = await page.request.get(`${BASE_URL}/api/v1/admin/settings`, {
     headers: await apiHeaders(page.context()),
@@ -413,16 +443,121 @@ async function rejectRma(browser: Browser, email: string, url: string): Promise<
   }
 }
 
-async function approvePaymentRequest(browser: Browser, email: string, billUrl: string, final: boolean): Promise<void> {
+async function approvePaymentRequest(browser: Browser, email: string, billUrl: string, paymentReference: string, final: boolean): Promise<void> {
   const { context, page } = await newContext(browser);
   try {
     await login(page, email);
-    await page.goto(billUrl);
+    const boardResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET'
+      && response.url().includes('/api/v1/approvals/board'),
+    );
+    await page.goto('/approvals');
+    const boardResponse = await boardResponsePromise;
+    expect(boardResponse.status()).toBe(200);
+    const board = await boardResponse.json() as {
+      data?: { my_action?: Array<{ type: string; number: string; link: string }> };
+    };
+    expect(board.data?.my_action).toContainEqual(expect.objectContaining({
+      type: 'bill_payment',
+      number: paymentReference,
+      link: billUrl,
+    }));
+    const queueCard = page
+      .getByRole('button', { name: new RegExp(paymentReference) })
+      .filter({ hasText: 'Open record to act' });
+    await expect(queueCard).toBeVisible({ timeout: 20_000 });
+    await queueCard.click();
+    await expect(page).toHaveURL(new URL(billUrl, BASE_URL).toString());
     const approve = page.getByRole('button', { name: 'Approve', exact: true });
     await expect(approve).toBeVisible({ timeout: 20_000 });
+    const decisionPromise = page.waitForResponse((response) =>
+      response.request().method() === 'POST'
+      && response.url().includes('/payments/')
+      && response.url().endsWith('/approve'),
+    );
     await approve.click();
-    await expect(page.getByText(/LIVE-E2E-PARTIAL/)).toBeVisible({ timeout: 20_000 });
+    const decision = await decisionPromise;
+    expect(decision.status()).toBe(200);
+    const payment = (await decision.json() as {
+      data: {
+        id: string;
+        status: string;
+        journal_entry_id?: string | null;
+        approval_records: Array<{ step_order: number; role_slug: string; action: string; acted_at: string | null; approver: { id: string } | null }>;
+      };
+    }).data;
+    expect(payment.status).toBe(final ? 'posted' : 'pending_approval');
+    expect(payment.approval_records.map(({ step_order, role_slug, action }) => ({ step_order, role_slug, action })).sort((a, b) => a.step_order - b.step_order)).toEqual([
+      { step_order: 1, role_slug: 'finance_officer', action: 'approved' },
+      { step_order: 2, role_slug: 'vice_president', action: final ? 'approved' : 'pending' },
+    ]);
+    const firstApproval = payment.approval_records.find((record) => record.step_order === 1);
+    const secondApproval = payment.approval_records.find((record) => record.step_order === 2);
+    expect(firstApproval?.approver?.id).toBeTruthy();
+    expect(firstApproval?.acted_at).toBeTruthy();
+    if (final) {
+      expect(secondApproval?.approver?.id).toBeTruthy();
+      expect(secondApproval?.approver?.id).not.toBe(firstApproval?.approver?.id);
+      expect(secondApproval?.acted_at).toBeTruthy();
+    } else {
+      expect(secondApproval?.approver).toBeNull();
+      expect(secondApproval?.acted_at).toBeNull();
+    }
+    const billHash = billUrl.split('/').pop();
+    if (!billHash) throw new Error('Bill detail link has no record id.');
+    const billState = await readBillState(page, billUrl);
+    const linkedPayment = billState.payments.find((record) => record.id === payment.id);
+    expect(linkedPayment).toBeDefined();
+    if (!linkedPayment) throw new Error('Approved payment is missing from its bill.');
+    if (final) {
+      expect(billState.status).toBe('partial');
+      expect(billState.amount_paid).toBe('1.00');
+      expect(Math.round(Number(billState.balance) * 100)).toBe(
+        Math.round(Number(billState.total_amount) * 100) - 100,
+      );
+      expect(linkedPayment.status).toBe('posted');
+      expect(linkedPayment.journal_entry_id).toBeTruthy();
+    } else {
+      expect(billState.status).toBe('unpaid');
+      expect(billState.amount_paid).toBe('0.00');
+      expect(billState.balance).toBe(billState.total_amount);
+      expect(linkedPayment.status).toBe('pending_approval');
+      expect(linkedPayment.journal_entry_id).toBeNull();
+    }
+    const duplicate = await page.request.post(
+      `${BASE_URL}/api/v1/bills/${billHash}/payments/${payment.id}/approve`,
+      { headers: await apiHeaders(context), data: {} },
+    );
+    expect(duplicate.status()).toBe(final ? 422 : 403);
+    const duplicateBody = await duplicate.json() as { message?: string };
+    expect(duplicateBody.message).toBe(final
+      ? 'Only pending payment requests can be approved.'
+      : 'A different user must act at each approval step.');
+    expect(await readBillState(page, billUrl)).toEqual(billState);
+    await expect(page.getByText(new RegExp(paymentReference))).toBeVisible({ timeout: 20_000 });
     if (final) await expect(page.getByText('Partially paid', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+    if (final) {
+      const completedBoardPromise = page.waitForResponse((response) =>
+        response.request().method() === 'GET'
+        && response.url().includes('/api/v1/approvals/board'),
+      );
+      await page.goto('/approvals');
+      const completedBoard = await completedBoardPromise;
+      expect(completedBoard.status()).toBe(200);
+      const boardState = await completedBoard.json() as {
+        data?: {
+          my_action?: Array<{ type: string; number: string }>;
+          approved?: Array<{ type: string; number: string; link: string }>;
+        };
+      };
+      expect(boardState.data?.my_action?.some((card) => card.number === paymentReference)).toBe(false);
+      expect(boardState.data?.approved).toContainEqual(expect.objectContaining({
+        type: 'bill_payment',
+        number: paymentReference,
+        link: billUrl,
+      }));
+    }
   } finally {
     await context.close();
   }
@@ -990,6 +1125,7 @@ test.describe('Live procurement runbook', () => {
   test('post supplier bill and approve its partial payment', async ({ browser }) => {
     test.setTimeout(300_000);
     expect(billUrl).not.toBe('');
+    const partialPaymentReference = `LIVE-E2E-PARTIAL-${Date.now()}`;
     const finance = await newContext(browser);
     try {
       await login(finance.page, 'finance@ogami.test');
@@ -1027,22 +1163,134 @@ test.describe('Live procurement runbook', () => {
       await payment.getByLabel('Payment date').fill(localIsoDate());
       await payment.getByLabel(/Amount \(max/).fill('1.00');
       await payment.getByLabel('Method').selectOption('bank_transfer');
-      await payment.getByLabel('Reference no.').fill('LIVE-E2E-PARTIAL');
+      await payment.getByLabel('Reference no.').fill(partialPaymentReference);
+      const billHash = billUrl.split('/').pop();
+      if (!billHash) throw new Error('Bill detail link has no record id.');
+      const recordResponsePromise = finance.page.waitForResponse((response) =>
+        response.request().method() === 'POST'
+        && response.url().includes(`/api/v1/bills/${billHash}/payments`),
+      );
       await payment.getByRole('button', { name: 'Record', exact: true }).click();
+      const recordResponse = await recordResponsePromise;
+      expect(recordResponse.status()).toBe(201);
+      const createdPayment = (await recordResponse.json() as {
+        data: { id: string; status: string; approval_records: Array<{ step_order: number; role_slug: string; action: string }> };
+      }).data;
+      expect(createdPayment.status).toBe('pending_approval');
+      expect(createdPayment.approval_records.map(({ step_order, role_slug, action }) => ({ step_order, role_slug, action })).sort((a, b) => a.step_order - b.step_order)).toEqual([
+        { step_order: 1, role_slug: 'finance_officer', action: 'pending' },
+        { step_order: 2, role_slug: 'vice_president', action: 'pending' },
+      ]);
       await finance.page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(finance.page.getByText(/LIVE-E2E-PARTIAL/)).toBeVisible({ timeout: 20_000 });
+      await expect(finance.page.getByText(new RegExp(partialPaymentReference))).toBeVisible({ timeout: 20_000 });
+      const beforeRejectedApprovals = await readBillState(finance.page, billUrl);
+      const ownApproval = await finance.page.request.post(
+        `${BASE_URL}/api/v1/bills/${billHash}/payments/${createdPayment.id}/approve`,
+        { headers: await apiHeaders(finance.context), data: {} },
+      );
+      expect(ownApproval.status()).toBe(403);
+      expect((await ownApproval.json() as { message?: string }).message).toBe(
+        'You cannot act on a record you submitted.',
+      );
+      expect(await readBillState(finance.page, billUrl)).toEqual(beforeRejectedApprovals);
+
+      const outOfOrderActor = await newContext(browser);
+      try {
+        await login(outOfOrderActor.page, 'vp@ogami.test');
+        const outOfOrderApproval = await outOfOrderActor.page.request.post(
+          `${BASE_URL}/api/v1/bills/${billHash}/payments/${createdPayment.id}/approve`,
+          { headers: await apiHeaders(outOfOrderActor.context), data: {} },
+        );
+        expect(outOfOrderApproval.status()).toBe(403);
+        expect((await outOfOrderApproval.json() as { message?: string }).message).toBe(
+          "Only users with role 'finance_officer' can approve this step.",
+        );
+        expect(await readBillState(outOfOrderActor.page, billUrl)).toEqual(beforeRejectedApprovals);
+      } finally {
+        await outOfOrderActor.context.close();
+      }
+
+      const unauthorizedActor = await newContext(browser);
+      try {
+        await login(unauthorizedActor.page, 'warehouse@ogami.test');
+        const deniedBillRead = await unauthorizedActor.page.request.get(
+          `${BASE_URL}/api/v1/bills/${billHash}`,
+          { headers: await apiHeaders(unauthorizedActor.context) },
+        );
+        expect(deniedBillRead.status()).toBe(403);
+        const deniedPaymentAction = await unauthorizedActor.page.request.post(
+          `${BASE_URL}/api/v1/bills/${billHash}/payments/${createdPayment.id}/approve`,
+          { headers: await apiHeaders(unauthorizedActor.context), data: {} },
+        );
+        expect(deniedPaymentAction.status()).toBe(403);
+        expect(await readBillState(finance.page, billUrl)).toEqual(beforeRejectedApprovals);
+      } finally {
+        await unauthorizedActor.context.close();
+      }
     } finally {
       await finance.context.close();
     }
 
-    await approvePaymentRequest(browser, 'finance2@ogami.test', billUrl, false);
-    await approvePaymentRequest(browser, 'vp@ogami.test', billUrl, true);
+    await approvePaymentRequest(browser, 'finance2@ogami.test', billUrl, partialPaymentReference, false);
+    await approvePaymentRequest(browser, 'vp@ogami.test', billUrl, partialPaymentReference, true);
 
     const settledView = await newContext(browser);
     try {
       await login(settledView.page, 'finance@ogami.test');
       await settledView.page.goto(billUrl);
       await expect(settledView.page.getByText('Partially paid', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+      const billHash = billUrl.split('/').pop();
+      if (!billHash) throw new Error('Bill detail link has no record id.');
+      const billResponse = await settledView.page.request.get(`${BASE_URL}/api/v1/bills/${billHash}`, {
+        headers: await apiHeaders(settledView.context),
+      });
+      expect(billResponse.status()).toBe(200);
+      const billState = (await billResponse.json() as {
+        data: {
+          status: string;
+          total_amount: string;
+          amount_paid: string;
+          balance: string;
+          payments: Array<{
+            id: string;
+            reference_number: string;
+            status: string;
+            journal_entry_id: string | null;
+          }>;
+        };
+      }).data;
+      expect(billState.status).toBe('partial');
+      expect(billState.amount_paid).toBe('1.00');
+      expect(Math.round(Number(billState.balance) * 100)).toBe(
+        Math.round(Number(billState.total_amount) * 100) - 100,
+      );
+      const payments = billState.payments.filter((payment) => payment.reference_number === partialPaymentReference);
+      expect(payments).toHaveLength(1);
+      const postedPayment = payments[0];
+      expect(postedPayment.status).toBe('posted');
+      expect(postedPayment.journal_entry_id).toBeTruthy();
+      const journalResponse = await settledView.page.request.get(
+        `${BASE_URL}/api/v1/journal-entries/${postedPayment.journal_entry_id}`,
+        { headers: await apiHeaders(settledView.context) },
+      );
+      expect(journalResponse.status()).toBe(200);
+      const journal = (await journalResponse.json() as {
+        data: {
+          status: string;
+          reference_type: string;
+          reference_id: string;
+          total_debit: string;
+          total_credit: string;
+          lines: Array<{ debit: string; credit: string }>;
+        };
+      }).data;
+      expect(journal.status).toBe('posted');
+      expect(journal.reference_type).toBe('bill_payment');
+      expect(journal.reference_id).toBe(postedPayment.id);
+      expect(journal.total_debit).toBe('1.00');
+      expect(journal.total_credit).toBe('1.00');
+      expect(journal.lines.reduce((sum, line) => sum + Math.round(Number(line.debit) * 100), 0)).toBe(100);
+      expect(journal.lines.reduce((sum, line) => sum + Math.round(Number(line.credit) * 100), 0)).toBe(100);
     } finally {
       await settledView.context.close();
     }

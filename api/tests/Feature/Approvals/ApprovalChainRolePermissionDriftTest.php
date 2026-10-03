@@ -119,6 +119,7 @@ class ApprovalChainRolePermissionDriftTest extends TestCase
             'leave_request' => \App\Modules\Leave\Models\LeaveRequest::class,
             'purchase_request' => \App\Modules\Purchasing\Models\PurchaseRequest::class,
             'purchase_order' => \App\Modules\Purchasing\Models\PurchaseOrder::class,
+            'bill_payment' => \App\Modules\Accounting\Models\BillPayment::class,
             'cash_advance' => \App\Modules\Loans\Models\EmployeeLoan::class,
             'company_loan' => \App\Modules\Loans\Models\EmployeeLoan::class,
             'salary_adjustment' => \App\Modules\HR\Models\SalaryAdjustment::class,

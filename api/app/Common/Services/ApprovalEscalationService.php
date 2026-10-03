@@ -349,8 +349,12 @@ class ApprovalEscalationService
     private function linkFor(ApprovalRecord $rec): string
     {
         $hashId = app('hashids')->encode((int) $rec->approvable_id);
+        $meta = ApprovalTypeRegistry::forClass((string) $rec->approvable_type);
+        $parentRelation = $meta['link_parent'] ?? null;
+        $approvable = $parentRelation === null ? null : $rec->approvable;
+        $parentHashId = $approvable?->{$parentRelation}?->hash_id;
 
-        return ApprovalTypeRegistry::linkFor((string) $rec->approvable_type, $hashId);
+        return ApprovalTypeRegistry::linkFor((string) $rec->approvable_type, $hashId, $parentHashId);
     }
 
     private function notificationKey(ApprovalRecord $rec, string $kind): string

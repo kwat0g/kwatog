@@ -15,8 +15,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Series F — Task F2. Approvals Kanban board.
  *
- * Reads `approval_records` (polymorphic to leave_requests, purchase_requests,
- * purchase_orders, employee_loans, payroll_periods, return_requests) and
+ * Reads `approval_records` for supported workflows and
  * buckets each
  * approvable into one of four columns from the current user's perspective:
  *
@@ -355,7 +354,7 @@ class ApprovalBoardService
             'id'           => $hashId,
             'type'         => $meta['kind'],
             'number'       => $number,
-            'link'         => $meta['link'].$hashId,
+            'link'         => $this->linkForSource((string) $row->approvable_type, $hashId, $source),
             'step_order'   => (int) $row->step_order,
             'role_slug'    => (string) $row->role_slug,
             'since'        => $created->toIso8601String(),
@@ -399,7 +398,7 @@ class ApprovalBoardService
             'id'        => $hashId,
             'type'      => $meta['kind'],
             'number'    => $number,
-            'link'      => $meta['link'].$hashId,
+            'link'      => $this->linkForSource((string) $row->approvable_type, $hashId, $source),
             'action'    => (string) $row->action,
             'acted_at'  => $row->acted_at,
             'remarks'   => (string) ($row->remarks ?? ''),
@@ -458,6 +457,19 @@ class ApprovalBoardService
         return User::with('role:id,name,slug')->whereIn('id', $ids)->get()->keyBy('id');
     }
 
+    private function linkForSource(string $class, string $hashId, object $source): string
+    {
+        $meta = ApprovalTypeRegistry::forClass($class);
+        if ($meta === null) return '/approvals';
+
+        $parentId = isset($meta['link_parent'])
+            ? ($source->{$meta['link_parent'].'_id'} ?? null)
+            : null;
+        $parentHashId = $parentId ? app('hashids')->encode((int) $parentId) : null;
+
+        return ApprovalTypeRegistry::linkFor($class, $hashId, $parentHashId);
+    }
+
     /**
      * PS-07 — the board card shows a vendor NAME, not the raw vendor_id.
      *
@@ -497,6 +509,7 @@ class ApprovalBoardService
             'salary_adjustment' => 'Salary adjustment — '.((string) ($source->effective_date ?? '')),
             'asset_disposal' => 'Disposal of '.((string) ($source->name ?? '')),
             'return_request' => ucfirst(str_replace('_', ' ', (string) ($source->type ?? 'return'))).' — '.((string) ($source->rma_number ?? '')),
+            'bill_payment' => 'Bill payment request',
             default   => '',
         };
     }

@@ -42,6 +42,15 @@ final class ApprovalTypeRegistry
             'link' => '/purchasing/purchase-orders/',
             'permissions' => ['purchasing.view', 'purchasing.po.approve'],
         ],
+        'App\\Modules\\Accounting\\Models\\BillPayment' => [
+            'kind' => 'bill_payment',
+            'label' => 'Bill payments',
+            'table' => 'bill_payments',
+            'number' => 'reference_number',
+            'link' => '/accounting/bills/',
+            'link_parent' => 'bill',
+            'permissions' => ['accounting.bills.view', 'accounting.bills.payment_approve'],
+        ],
         'App\\Modules\\Loans\\Models\\EmployeeLoan' => [
             'kind' => 'loan',
             'label' => 'Loans',
@@ -146,12 +155,16 @@ final class ApprovalTypeRegistry
         return false;
     }
 
-    public static function linkFor(string $class, string $hashId): string
+    public static function linkFor(string $class, string $hashId, ?string $parentHashId = null): string
     {
         $meta = self::forClass($class);
 
         if ($meta === null) {
             return '/approvals';
+        }
+
+        if (isset($meta['link_parent'])) {
+            return $parentHashId === null ? '/approvals' : $meta['link'].$parentHashId;
         }
 
         return ($meta['link_record'] ?? true) ? $meta['link'].$hashId : (string) $meta['link'];
