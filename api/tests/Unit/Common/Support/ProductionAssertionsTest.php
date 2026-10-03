@@ -187,6 +187,20 @@ class ProductionAssertionsTest extends TestCase
         ProductionAssertions::assertSafeOrFail();
     }
 
+    public function test_demo_seed_guard_rejects_staging_environment(): void
+    {
+        app()->detectEnvironment(static fn (): string => 'staging');
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Demo data may only be seeded in local or testing environments.');
+
+            ProductionAssertions::assertDemoSeedingAllowed();
+        } finally {
+            app()->detectEnvironment(static fn (): string => 'testing');
+        }
+    }
+
     public function test_throws_when_reverb_accepts_every_origin_in_production(): void
     {
         $this->asProduction();

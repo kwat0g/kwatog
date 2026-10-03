@@ -71,5 +71,9 @@ class ProductionAssertions
         if (app()->environment('production')) {
             throw new RuntimeException('Demo data must never be seeded in production.');
         }
+
+        if (! app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('Demo data may only be seeded in local or testing environments.');
+        }
     }
 }
