@@ -31,6 +31,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -287,10 +288,9 @@ class SupplierPortalCrossTenantTest extends TestCase
     }
 
     /**
-     * @dataProvider crossTenantRouteProvider
-     *
      * @param  array<string, mixed>  $payload
      */
+    #[DataProvider('crossTenantRouteProvider')]
     public function test_route_bindings_refuse_another_tenants_identifier(string $verb, string $template, array $payload): void
     {
         ['a' => $a, 'b' => $b] = $this->twoTenants();

@@ -14,6 +14,7 @@ use App\Modules\HR\Models\Employee;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class NewDomainAnalyticsTest extends TestCase
@@ -48,9 +49,8 @@ class NewDomainAnalyticsTest extends TestCase
      * Every previously scalar-only domain must produce a populated rich
      * payload of the documented shape — an empty array here means the widget
      * silently fell back to a scalar.
-     *
-     * @dataProvider richWidgetProvider
      */
+    #[DataProvider('richWidgetProvider')]
     public function test_new_domain_widget_produces_its_rich_shape(
         string $key,
         RenderKind $kind,

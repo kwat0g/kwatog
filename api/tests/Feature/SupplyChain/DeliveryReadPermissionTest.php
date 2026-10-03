@@ -14,6 +14,7 @@ use Database\Seeders\DashboardWidgetSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -75,7 +76,7 @@ class DeliveryReadPermissionTest extends TestCase
         ];
     }
 
-    /** @dataProvider holderProvider */
+    #[DataProvider('holderProvider')]
     public function test_delivery_readers_hold_the_narrow_slug(string $slug): void
     {
         $this->assertTrue(
@@ -84,7 +85,7 @@ class DeliveryReadPermissionTest extends TestCase
         );
     }
 
-    /** @dataProvider holderProvider */
+    #[DataProvider('holderProvider')]
     public function test_delivery_readers_keep_the_delivery_widgets(string $slug): void
     {
         $available = collect(app(DashboardLayoutService::class)

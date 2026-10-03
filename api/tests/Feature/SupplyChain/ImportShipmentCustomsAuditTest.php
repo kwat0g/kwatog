@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -1108,9 +1109,8 @@ class ImportShipmentCustomsAuditTest extends TestCase
      * shared test returns a cascade 500 that is a harness artifact, not a
      * measurement. The first version of this probe reported `-1 => 500` and
      * `0 => 500` for exactly that reason.
-     *
-     * @dataProvider containerNumericProvider
      */
+    #[DataProvider('containerNumericProvider')]
     public function test_probe_container_numeric_edge_value(string $field, string $value, string $expectation): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);

@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\DashboardDispatchService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -56,7 +57,7 @@ class DashboardDispatchTest extends TestCase
         ];
     }
 
-    /** @dataProvider roleLandingProvider */
+    #[DataProvider('roleLandingProvider')]
     public function test_each_role_lands_on_its_permission_derived_dashboard(string $slug, string $expected): void
     {
         $resp = $this->actingAs($this->userWithRole($slug))
