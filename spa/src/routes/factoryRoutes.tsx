@@ -13,7 +13,7 @@ export const factoryRoutes = (
  <Route
  element={
  <AuthGuard>
- <PermissionGuard permission="production.operator.access">
+ <PermissionGuard permission="production.operator.access" standalone>
  <FactoryFloorLayout />
  </PermissionGuard>
  </AuthGuard>
