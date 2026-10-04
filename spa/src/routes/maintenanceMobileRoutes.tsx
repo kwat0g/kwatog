@@ -14,7 +14,7 @@ export const maintenanceMobileRoutes = (
  element={
  <AuthGuard>
  <ModuleGuard module="maintenance">
- <PermissionGuard permission="maintenance.view">
+ <PermissionGuard permission="maintenance.view" standalone>
  <MaintenanceMobileLayout />
  </PermissionGuard>
  </ModuleGuard>
