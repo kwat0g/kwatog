@@ -1,8 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const E2E_BASE_URL = process.env.E2E_BASE_URL;
+if (!E2E_BASE_URL) throw new Error('Set E2E_BASE_URL to the isolated test application.');
+
 /** Live-browser configuration for the real Docker/Nginx stack. */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './e2e-real',
   testMatch: '**/live-procurement.spec.ts',
   fullyParallel: false,
   workers: 1,
@@ -11,7 +14,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { outputFolder: 'playwright-live-report' }]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost',
+    baseURL: E2E_BASE_URL,
     headless: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

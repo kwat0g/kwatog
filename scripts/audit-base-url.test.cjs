@@ -39,3 +39,32 @@ test('browser audit scripts require an explicit isolated base URL before loading
     fs.rmSync(stubs, { recursive: true, force: true });
   }
 });
+
+test('live Playwright config requires an isolated base URL and selects its real suite', () => {
+  const cli = path.join(root, 'spa', 'node_modules', 'playwright', 'cli.js');
+  const args = ['test', '-c', 'playwright.live.config.ts', '--list'];
+  const cwd = path.join(root, 'spa');
+  const env = { ...process.env };
+  delete env.E2E_BASE_URL;
+
+  const missingBase = spawnSync(process.execPath, [cli, ...args], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 15_000,
+    env,
+  });
+  const missingOutput = `${missingBase.stdout}\n${missingBase.stderr}`;
+
+  assert.notEqual(missingBase.status, 0);
+  assert.match(missingOutput, /Set E2E_BASE_URL to the isolated test application/);
+
+  const isolatedBase = spawnSync(process.execPath, [cli, ...args], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 15_000,
+    env: { ...env, E2E_BASE_URL: 'http://127.0.0.1:5257' },
+  });
+
+  assert.equal(isolatedBase.status, 0, isolatedBase.stderr);
+  assert.match(isolatedBase.stdout, /live-procurement\.spec\.ts/);
+});
