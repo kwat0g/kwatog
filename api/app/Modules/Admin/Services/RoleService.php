@@ -328,10 +328,10 @@ class RoleService
                 'removed' => $removed,
             ]);
 
-            // H-9 — Bust the role-permission cache key directly. One forget
-            // serves every user of this role (cache is keyed by role_id, not
-            // user_id, since H-9 split the cache).
-            Cache::forget("auth:role_perms:{$locked->id}");
+            // A concurrent request can refill the old committed permissions
+            // after an in-transaction forget. Invalidate only once this write
+            // is durable so the stale cache cannot survive the commit.
+            DB::afterCommit(fn () => Cache::forget("auth:role_perms:{$locked->id}"));
             BadgeService::touch();
 
             return $locked->load('permissions');

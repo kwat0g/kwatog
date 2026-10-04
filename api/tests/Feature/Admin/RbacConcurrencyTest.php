@@ -7,15 +7,17 @@ namespace Tests\Feature\Admin;
 use App\Common\Enums\PermissionOverrideType;
 use App\Common\Models\AuditLog;
 use App\Modules\Admin\Models\UserPermissionOverride;
-use App\Modules\Admin\Services\UserPermissionOverrideService;
 use App\Modules\Admin\Services\RoleService;
+use App\Modules\Admin\Services\UserPermissionOverrideService;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -152,7 +154,7 @@ class RbacConcurrencyTest extends TestCase
                 );
                 fwrite($childSocket, "ok\n");
             } catch (\Throwable $e) {
-                fwrite($childSocket, "error:".$e->getMessage()."\n");
+                fwrite($childSocket, 'error:'.$e->getMessage()."\n");
             } finally {
                 fclose($childSocket);
             }
@@ -252,7 +254,7 @@ class RbacConcurrencyTest extends TestCase
                 );
                 fwrite($childSocket, "ok\n");
             } catch (\Throwable $e) {
-                fwrite($childSocket, "error:".$e->getMessage()."\n");
+                fwrite($childSocket, 'error:'.$e->getMessage()."\n");
             } finally {
                 fclose($childSocket);
             }
@@ -287,6 +289,77 @@ class RbacConcurrencyTest extends TestCase
         $this->assertSame(1, $audits->filter(fn (AuditLog $audit): bool => ($audit->old_values['permissions'] ?? []) !== [])->count());
         $this->assertCount(1, $role->fresh()->permissions);
         $this->assertContains($role->fresh()->permissions->first()->slug, ['hr.employees.view', 'hr.employees.create']);
+    }
+
+    public function test_permission_revocation_survives_a_stale_cache_read_before_commit(): void
+    {
+        $permission = Permission::query()->firstOrCreate(
+            ['slug' => 'hr.employees.view'],
+            ['name' => 'View employees', 'module' => 'hr'],
+        );
+        $adminRole = Role::query()->firstOrCreate(
+            ['slug' => 'system_admin'],
+            ['name' => 'System Administrator', 'is_system' => true],
+        );
+        $admin = User::factory()->create(['role_id' => $adminRole->id]);
+        $role = Role::query()->create([
+            'name' => 'Permission cache race',
+            'slug' => 'permission_cache_race_'.uniqid(),
+            'is_system' => false,
+        ]);
+        $role->permissions()->sync([$permission->id]);
+        $target = User::factory()->create(['role_id' => $role->id]);
+        $this->fixtureUserIds = [$admin->id, $target->id];
+        $this->fixtureRoleIds = [$role->id];
+        if ($permission->wasRecentlyCreated) {
+            $this->fixturePermissionIds[] = $permission->id;
+        }
+
+        $permissionCacheKey = "auth:role_perms:{$role->id}";
+        $this->assertTrue($target->fresh()->hasPermission($permission->slug));
+        $this->assertTrue(Cache::has($permissionCacheKey));
+
+        $readerConnection = 'rbac_permission_reader';
+        config([
+            'database.connections.'.$readerConnection => config('database.connections.'.self::CONCURRENCY_CONNECTION),
+        ]);
+        DB::purge($readerConnection);
+        $connection = DB::connection(self::CONCURRENCY_CONNECTION);
+        $transactionManager = new DatabaseTransactionsManager;
+        $connection->setTransactionManager($transactionManager);
+        $connection->beginTransaction();
+
+        try {
+            Auth::onceUsingId($admin->id);
+            app(RoleService::class)->syncPermissions($role, []);
+            $this->assertCount(1, $transactionManager->getPendingTransactions());
+            $this->assertCount(1, $transactionManager->getCommittedTransactions());
+
+            DB::setDefaultConnection($readerConnection);
+            $reader = User::query()->findOrFail($target->id);
+            $this->assertTrue(
+                $reader->hasPermission($permission->slug),
+                'A concurrent request sees the still-committed role permissions before sync commits.',
+            );
+
+            DB::setDefaultConnection(self::CONCURRENCY_CONNECTION);
+            $connection->commit();
+
+            $this->assertFalse(
+                Cache::has($permissionCacheKey),
+                'The after-commit callback must clear a role cache warmed during the transaction.',
+            );
+            $this->assertFalse(
+                User::query()->findOrFail($target->id)->hasPermission($permission->slug),
+                'The stale cache entry repopulated before commit must be invalidated after the permission change commits.',
+            );
+        } finally {
+            if ($connection->transactionLevel() > 0) {
+                $connection->rollBack();
+            }
+            DB::setDefaultConnection(self::CONCURRENCY_CONNECTION);
+            DB::purge($readerConnection);
+        }
     }
 
     private function requirePostgresProcessSupport(): void
