@@ -63,7 +63,7 @@ class SupplierDeliveryScheduleService
             ->where('vendor_id', $vendorId)
             ->whereIn('status', array_map(static fn ($s): string => $s->value, SupplierPoCapabilities::FULFILMENT_STATUSES))
             ->whereHas('items', static fn ($items) => $items->whereColumn('quantity', '>', 'quantity_received'))
-            ->with('items.item:id,code,name')
+            ->with('items.item:id,code,name,unit_of_measure')
             ->orderBy('po_number')
             ->get()
             ->map(static function (PurchaseOrder $po): array {
@@ -78,7 +78,7 @@ class SupplierDeliveryScheduleService
                         'part_number' => $item->item?->code ?? '—',
                         'name' => $item->item?->name ?? $item->description,
                         'quantity_ordered' => (string) $item->quantity,
-                        'quantity_received' => (string) $item->quantity_received,
+                        'quantity_received' => $item->purchaseQuantity((string) $item->quantity_received),
                         'quantity_scheduled_open' => Money::round2($open[(int) $item->id] ?? '0'),
                         'quantity_schedulable' => $schedulable[(int) $item->id] ?? '0.00',
                     ])->values()->all(),

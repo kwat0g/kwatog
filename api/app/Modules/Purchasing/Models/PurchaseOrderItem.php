@@ -77,6 +77,16 @@ class PurchaseOrderItem extends Model
         return $this->formatQuantity(bccomp($diff, '0', 3) > 0 ? $diff : '0');
     }
 
+    /** Convert base-unit receipt totals to the agreed purchase unit for supplier documents. */
+    public function purchaseQuantity(string $baseQuantity, int $scale = 3): string
+    {
+        $item = $this->relationLoaded('item') ? $this->item : $this->item()->withTrashed()->first();
+        $factor = $item ? $item->convertToBase('1', $this->unit) : '1';
+        $quantity = bcdiv($baseQuantity, $factor, $scale);
+
+        return $scale === 3 ? $this->formatQuantity($quantity) : $quantity;
+    }
+
     private function formatQuantity(mixed $value): string
     {
         $quantity = bcadd((string) $value, '0', 3);
