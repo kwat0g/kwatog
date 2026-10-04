@@ -26,6 +26,13 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use App\Modules\Production\Services\WorkOrderOutputService;
 use App\Modules\Production\Services\WorkOrderService;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\InspectionSpecService;
+use App\Modules\Quality\Services\InspectionService;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
@@ -47,9 +54,13 @@ class MaterialReturnServiceTest extends TestCase
     {
         parent::setUp();
         Event::fake();
+        $this->seed(RolePermissionSeeder::class);
 
-        $this->user = User::factory()->create();
+        $this->user = User::factory()->withRole('production_manager')->create();
         $this->product = Product::factory()->create();
+        app(InspectionSpecService::class)->upsertForProduct($this->product->id, [
+            ['parameter_name' => 'Surface condition', 'parameter_type' => 'visual', 'is_critical' => false],
+        ], $this->user->id);
         $this->item = Item::factory()->create([
             'unit_of_measure' => 'kg',
             'standard_cost' => '12.3400',
@@ -72,6 +83,7 @@ class MaterialReturnServiceTest extends TestCase
             ->where('reference_type', 'work_order')
             ->where('reference_id', $workOrder->id)
             ->firstOrFail();
+        $this->passStartedInProcessQc($workOrder);
 
         app(WorkOrderOutputService::class)->record($workOrder, [
             'good_count' => 5,
@@ -545,6 +557,7 @@ class MaterialReturnServiceTest extends TestCase
     {
         $workOrder = $this->startBomWorkOrder('manual');
         $source = $this->issueManual($workOrder, '2.000');
+        $this->passStartedInProcessQc($workOrder);
 
         app(WorkOrderOutputService::class)->record($workOrder, [
             'good_count' => 1,
@@ -607,6 +620,39 @@ class MaterialReturnServiceTest extends TestCase
             $service->confirm($workOrder, $machine->id, $mold->id),
             $this->user->id,
         );
+    }
+
+    private function passStartedInProcessQc(WorkOrder $workOrder): void
+    {
+        $inspection = Inspection::query()
+            ->where('stage', InspectionStage::InProcess->value)
+            ->where('entity_type', InspectionEntityType::WorkOrder->value)
+            ->where('entity_id', $workOrder->id)
+            ->firstOrFail();
+        $measurements = $inspection->measurements()->orderBy('id')->get();
+        $items = $measurements
+            ->unique(fn ($measurement) => $measurement->checklistKey())
+            ->map(fn ($measurement) => ['id' => $measurement->id, 'result' => 'passed'])
+            ->values()
+            ->all();
+        $inspector = User::factory()->withRole('qc_inspector')->create();
+        $checker = User::factory()->withRole('qc_inspector')->create();
+        $service = app(InspectionService::class);
+        $service->recordItemResults($inspection, ['items' => $items, 'submit' => false], $inspector);
+        $result = $service->recordBatchResult($inspection, [
+            'coverage_confirmed' => true,
+            'inspected_quantity' => (int) $inspection->sample_size,
+            'sample_defect_count' => 0,
+            'result' => 'passed',
+            'critical_defect' => false,
+            'defects_removed_confirmed' => false,
+        ], $inspector);
+
+        if ($result->status === InspectionStatus::AwaitingReview) {
+            $result = $service->review($result, InspectionStatus::Passed->value, null, $checker);
+        }
+
+        $this->assertSame(InspectionStatus::Passed, $result->status);
     }
 
     private function confirmedWorkOrder(WorkOrderStatus $status = WorkOrderStatus::Confirmed, string $planSource = 'bom'): WorkOrder
