@@ -1,10 +1,10 @@
+const BASE = require('./require-audit-base-url');
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
 
 const ROOT = path.resolve(__dirname, '..');
 const ROUTES_DIR = path.join(ROOT, 'spa', 'src', 'routes');
-const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 
 const FIXTURE_ENDPOINTS = {

@@ -1,6 +1,6 @@
+const BASE = require('./require-audit-base-url');
 const { chromium, firefox } = require('playwright');
 
-const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 const ROLES = [
   ['admin@ogami.test', '/dashboard/admin'],

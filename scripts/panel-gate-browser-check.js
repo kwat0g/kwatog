@@ -15,9 +15,9 @@
  *
  * Run: node scripts/panel-gate-browser-check.js   (needs the stack up)
  */
+const BASE = require('./require-audit-base-url');
 const { chromium } = require('playwright');
 
-const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 
 /** Money labels from the Plant Manager financial snapshot (Task D2). */
