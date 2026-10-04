@@ -47,7 +47,7 @@ test('RMA partial receipt preserves quantities and idempotency key across retry'
   expect(posts).toHaveLength(2);
   expect(posts[0]).toMatchObject({ final_receipt: false, received_quantities: { rma_line: '2' } });
   expect(posts[0].request_key).toBe(posts[1].request_key);
-  await expect(page.getByText('2.000').first()).toBeVisible();
+  await expect(page.getByText('2', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Partial installment')).toBeVisible();
   await expect(page.getByText('Page not found')).toHaveCount(0);
 });
