@@ -10,14 +10,15 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Services\GrnService;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
-use App\Modules\SupplyChain\Models\Container;
-use App\Modules\Inventory\Services\GrnService;
-use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
@@ -104,37 +105,46 @@ class ShipmentService
      */
     public function create(array $data, User $by): Shipment
     {
-        $po = PurchaseOrder::query()->findOrFail((int) $data['purchase_order_id']);
+        return DB::transaction(function () use ($data, $by): Shipment {
+            $po = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->findOrFail((int) $data['purchase_order_id']);
+            if (! in_array($po->status, PurchaseOrderStatus::receivable(), true)) {
+                throw new BusinessRuleException("Purchase order {$po->po_number} is not open for shipment.");
+            }
 
-        return DB::transaction(fn () => $this->show(Shipment::create([
-            'shipment_number' => $this->sequences->generate('shipment'),
-            'purchase_order_id' => $po->id,
-            'status' => ShipmentStatus::Ordered->value,
-            'carrier' => $data['carrier'] ?? null,
-            'vessel' => $data['vessel'] ?? null,
-            'container_number' => $data['container_number'] ?? null,
-            'bl_number' => $data['bl_number'] ?? null,
-            // CreateShipmentRequest validates `incoterm` against the Incoterm
-            // enum and the SPA create form submits it, but it was never copied
-            // into the payload: the caller got a 201 with the value silently
-            // gone and the column left null, so customs paperwork fell back to
-            // the PO's term or a blank.
-            //
-            // Persisting the submitted value is not the same as deciding whether
-            // a shipment term OVERRIDES or INHERITS the PO's — the generated PDFs
-            // still render `$po->incoterm`, and reconciling those two is left to
-            // the trade-document work in the action plan.
-            'incoterm' => $data['incoterm'] ?? null,
-            'etd' => $data['etd'] ?? null,
-            'eta' => $data['eta'] ?? null,
-            'freight_cost' => $data['freight_cost'] ?? '0.00',
-            'insurance_cost' => $data['insurance_cost'] ?? '0.00',
-            'duties_amount' => $data['duties_amount'] ?? '0.00',
-            'brokerage_fee' => $data['brokerage_fee'] ?? '0.00',
-            'other_charges' => $data['other_charges'] ?? '0.00',
-            'notes' => $data['notes'] ?? null,
-            'created_by' => $by->id,
-        ])));
+            $shipment = Shipment::create([
+                'shipment_number' => $this->sequences->generate('shipment'),
+                'purchase_order_id' => $po->id,
+                'status' => ShipmentStatus::Ordered->value,
+                'carrier' => $data['carrier'] ?? null,
+                'vessel' => $data['vessel'] ?? null,
+                'container_number' => $data['container_number'] ?? null,
+                'bl_number' => $data['bl_number'] ?? null,
+                // CreateShipmentRequest validates `incoterm` against the Incoterm
+                // enum and the SPA create form submits it, but it was never copied
+                // into the payload: the caller got a 201 with the value silently
+                // gone and the column left null, so customs paperwork fell back to
+                // the PO's term or a blank.
+                //
+                // Persisting the submitted value is not the same as deciding whether
+                // a shipment term OVERRIDES or INHERITS the PO's — the generated PDFs
+                // still render `$po->incoterm`, and reconciling those two is left to
+                // the trade-document work in the action plan.
+                'incoterm' => $data['incoterm'] ?? null,
+                'etd' => $data['etd'] ?? null,
+                'eta' => $data['eta'] ?? null,
+                'freight_cost' => $data['freight_cost'] ?? '0.00',
+                'insurance_cost' => $data['insurance_cost'] ?? '0.00',
+                'duties_amount' => $data['duties_amount'] ?? '0.00',
+                'brokerage_fee' => $data['brokerage_fee'] ?? '0.00',
+                'other_charges' => $data['other_charges'] ?? '0.00',
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $by->id,
+            ]);
+
+            return $this->show($shipment);
+        });
     }
 
     public function updateStatus(Shipment $s, ShipmentStatus $next, ?string $note = null): Shipment

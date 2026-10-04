@@ -9,15 +9,15 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
-use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
+use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use App\Modules\SupplyChain\Models\Container;
-use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Resources\ShipmentLandedCostResource;
@@ -1019,36 +1019,50 @@ class ImportShipmentCustomsAuditTest extends TestCase
 
     // ───────────────── PO state gate / incoterm / validation ───────────────
 
-    /**
-     * INVARIANT: a shipment cannot be created against a terminal or invalid PO.
-     * MEASURED: it can — draft, pending approval, rejected, cancelled, received
-     * and closed POs all produce a live `ordered` shipment, while GRN receiving
-     * accepts only approved / sent / partially_received.
-     *
-     * PASS-EITHER-WAY LOCK ON A KNOWN DEFECT.
-     */
-    public function test_probe_shipments_can_be_created_against_terminal_pos(): void
+    public function test_shipment_creation_accepts_only_receivable_purchase_orders(): void
     {
         $user = $this->userWith(['supply_chain.view', 'supply_chain.shipments.manage']);
 
-        $accepted = [];
+        $shipmentType = (new Shipment)->getMorphClass();
         foreach (PurchaseOrderStatus::cases() as $status) {
             $po = $this->seedPo($user, 1, '1000.00');
             $po->forceFill(['status' => $status->value])->save();
+            $shipmentCount = Shipment::query()->count();
+            $auditCount = DB::table('audit_logs')
+                ->where('model_type', $shipmentType)
+                ->count();
+            $sequenceBefore = DB::table('document_sequences')
+                ->where('document_type', 'shipment')
+                ->value('last_number');
+
             $r = $this->actingAs($user)->postJson('/api/v1/supply-chain/shipments', [
                 'purchase_order_id' => $po->hash_id,
             ]);
-            if ($r->getStatusCode() === 201) {
-                $accepted[] = $status->value;
+
+            if (in_array($status, PurchaseOrderStatus::receivable(), true)) {
+                $r->assertCreated();
+                $shipment = Shipment::query()->where('purchase_order_id', $po->id)->firstOrFail();
+                $this->assertSame(ShipmentStatus::Ordered, $shipment->status);
+                $this->assertSame($shipmentCount + 1, Shipment::query()->count());
+                $this->assertDatabaseHas('audit_logs', [
+                    'user_id' => $user->id,
+                    'action' => 'created',
+                    'model_type' => $shipmentType,
+                    'model_id' => $shipment->id,
+                ]);
+            } else {
+                $r->assertStatus(422)
+                    ->assertJsonPath('message', "Purchase order {$po->po_number} is not open for shipment.");
+                $this->assertSame($shipmentCount, Shipment::query()->count());
+                $this->assertDatabaseMissing('shipments', ['purchase_order_id' => $po->id]);
+                $this->assertSame($auditCount, DB::table('audit_logs')
+                    ->where('model_type', $shipmentType)
+                    ->count());
+                $this->assertSame($sequenceBefore, DB::table('document_sequences')
+                    ->where('document_type', 'shipment')
+                    ->value('last_number'));
             }
         }
-        fwrite(STDERR, '[M043 PO gate] PO states accepted for a new shipment='.json_encode($accepted)."\n");
-
-        $this->assertSame(
-            array_map(fn (PurchaseOrderStatus $s) => $s->value, PurchaseOrderStatus::cases()),
-            $accepted,
-            'MEASURED: every PO status is accepted, including cancelled/closed/received',
-        );
     }
 
     /**
