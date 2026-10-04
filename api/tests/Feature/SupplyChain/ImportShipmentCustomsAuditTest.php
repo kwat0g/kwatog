@@ -220,6 +220,15 @@ class ImportShipmentCustomsAuditTest extends TestCase
         );
         fwrite(STDERR, "[M043 by_weight] http={$r->getStatusCode()}\n");
         $this->assertSame(422, $r->getStatusCode());
+
+        $options = $this->actingAs($user)->getJson('/api/v1/supply-chain/shipments/options');
+        $options->assertOk();
+        $allocationMethods = $options->json('data.allocation_methods');
+        $this->assertTrue(array_is_list($allocationMethods),
+            'allocation methods must be serialized as a JSON list for the frontend');
+        $methods = collect($allocationMethods)->pluck('value')->all();
+        $this->assertSame(['by_value', 'by_quantity', 'manual'], $methods,
+            'the UI must not advertise allocation methods the service cannot execute');
     }
 
     /**

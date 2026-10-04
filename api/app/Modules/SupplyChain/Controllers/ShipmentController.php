@@ -56,7 +56,10 @@ class ShipmentController
             ),
             'allocation_methods' => array_map(
                 static fn (LandedCostAllocationMethod $method): array => ['value' => $method->value, 'label' => $method->label()],
-                LandedCostAllocationMethod::cases(),
+                array_values(array_filter(
+                    LandedCostAllocationMethod::cases(),
+                    static fn (LandedCostAllocationMethod $method): bool => $method !== LandedCostAllocationMethod::ByWeight,
+                )),
             ),
         ]]);
     }
