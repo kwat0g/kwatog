@@ -64,14 +64,32 @@ export interface NotificationMeta {
  * accompanying test guards against.
  */
 const BY_TYPE: Record<string, NotificationMeta> = {
+  'bom.cost_updated': { icon: LuFactory, group: 'system', label: 'BOM costing' },
+  'bom.cost_review_failed': { icon: LuTriangleAlert, group: 'alerts', label: 'BOM costing' },
+  'pricing.prices_changed': { icon: LuCircleDollarSign, group: 'system', label: 'Pricing' },
+  'pricing.negotiation': { icon: LuCircleDollarSign, group: 'alerts', label: 'Pricing' },
+  'pricing.review_required': { icon: LuCircleDollarSign, group: 'alerts', label: 'Pricing' },
+  'pricing.agreement_expiring': { icon: LuCalendar, group: 'alerts', label: 'Pricing' },
+  'inventory.receipt_cost_changed': {
+    icon: LuTrendingDown,
+    group: 'alerts',
+    label: 'Inventory costing',
+  },
   // ── Chain 1 · Order to Cash ──────────────────────────────────────────
   'chain.so_confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Sales' },
   'chain.in_process_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'production.wo_completed': { icon: LuFactory, group: 'system', label: 'Production' },
+  'production.assignment.review': { icon: LuCalendar, group: 'approvals', label: 'Production' },
+  'production.crew.assigned': { icon: LuUsers, group: 'system', label: 'Production' },
+  'production.crew.changed': { icon: LuUsers, group: 'system', label: 'Production' },
   'chain.outgoing_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
   'chain.outgoing_qc_missing': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
   'quality.inspection_failed': { icon: LuShieldAlert, group: 'alerts', label: 'Quality' },
-  'quality.inspection_awaiting_review': { icon: LuShieldCheck, group: 'approvals', label: 'Quality' },
+  'quality.inspection_awaiting_review': {
+    icon: LuShieldCheck,
+    group: 'approvals',
+    label: 'Quality',
+  },
   'chain.delivery_drafted': { icon: LuTruck, group: 'system', label: 'Logistics' },
   'chain.delivery_confirmed': { icon: LuTruck, group: 'system', label: 'Logistics' },
   // A driver-reported delivery exception needs a physical depot count before
@@ -156,6 +174,38 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'permission.override': { icon: LuKeyRound, group: 'system', label: 'Access' },
 };
 
+// Portal notices do not belong to internal users' notification preferences.
+const PORTAL_BY_TYPE: Record<string, NotificationMeta> = {
+  'sales_order.submitted': { icon: LuFileText, group: 'system', label: 'Orders' },
+  'sales_order.confirmed': { icon: LuClipboardCheck, group: 'system', label: 'Orders' },
+  'sales_order.cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Orders' },
+  'sales_order.review_requested': { icon: LuFileText, group: 'approvals', label: 'Order review' },
+  'sales_order.delivery_proposed': { icon: LuCalendar, group: 'approvals', label: 'Delivery date' },
+  'sales_order.delivery_decided': { icon: LuCalendar, group: 'system', label: 'Delivery date' },
+  'sales_order.response_decided': { icon: LuFileText, group: 'approvals', label: 'Order review' },
+  'purchase_order.published': { icon: LuPackage, group: 'approvals', label: 'Purchase orders' },
+  'purchase_order.response_decided': {
+    icon: LuPackage,
+    group: 'approvals',
+    label: 'Purchase orders',
+  },
+  'purchase_order.awaiting_approval': {
+    icon: LuPackage,
+    group: 'system',
+    label: 'Purchase orders',
+  },
+  'delivery_schedule.acknowledged': {
+    icon: LuCalendar,
+    group: 'system',
+    label: 'Delivery schedule',
+  },
+  'delivery_schedule.rejected': { icon: LuCalendar, group: 'alerts', label: 'Delivery schedule' },
+  'delivery.in_transit': { icon: LuTruck, group: 'system', label: 'Delivery' },
+  'delivery.delivered': { icon: LuTruck, group: 'approvals', label: 'Confirm receipt' },
+  'delivery.cancelled': { icon: LuTriangleAlert, group: 'alerts', label: 'Delivery' },
+  'invoice.finalized': { icon: LuReceipt, group: 'system', label: 'Invoice' },
+};
+
 /**
  * Legacy fallback for rows whose `type` is a fully-qualified Laravel
  * notification class (`App\Modules\Quality\Notifications\NcrCreated`). Matched
@@ -201,7 +251,7 @@ const DEFAULT: NotificationMeta = { icon: LuBell, group: 'system', label: 'Syste
 export function notificationMeta(type: string | undefined): NotificationMeta {
   if (!type) return DEFAULT;
 
-  const exact = BY_TYPE[type];
+  const exact = BY_TYPE[type] ?? PORTAL_BY_TYPE[type];
   if (exact) return exact;
 
   const baseName = type.split('\\').pop() ?? type;
