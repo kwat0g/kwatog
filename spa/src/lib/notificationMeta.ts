@@ -107,6 +107,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   // ── Chain 2 · Procure to Pay ─────────────────────────────────────────
   'inventory.grn_received': { icon: LuPackageCheck, group: 'system', label: 'Inventory' },
   'chain.incoming_qc_required': { icon: LuShieldCheck, group: 'system', label: 'Quality' },
+  'inventory.replenishment_blocked': { icon: LuTriangleAlert, group: 'alerts', label: 'Inventory' },
   'inventory.low_stock': { icon: LuPackage, group: 'alerts', label: 'Inventory' },
   'chain.pr_approved': { icon: LuFileText, group: 'approvals', label: 'Purchasing' },
   // Auto-conversion failed (no supplier / no price) — needs a human to convert

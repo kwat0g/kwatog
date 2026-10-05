@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { LuTriangleAlert } from '@/lib/icons';
 import {
   KNOWN_NOTIFICATION_TYPES,
   bucketLabel,
@@ -43,6 +44,15 @@ describe('notificationMeta', () => {
 
   it('classifies missing outgoing QC escalations as alerts', () => {
     expect(notificationMeta('chain.outgoing_qc_missing').group).toBe('alerts');
+  });
+
+  it('classifies blocked automatic replenishment as an inventory alert', () => {
+    const meta = notificationMeta('inventory.replenishment_blocked');
+    expect(meta).toMatchObject({
+      group: 'alerts',
+      label: 'Inventory',
+    });
+    expect(meta.icon).toBe(LuTriangleAlert);
   });
 
   it('has an entry for every type in the backend catalog', () => {
