@@ -296,6 +296,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  });
  // Same first-paint race as AppLayout: formatPeso reads a module variable.
  const [currencyApplied, setCurrencyApplied] = useState(false);
+ const loadingPortalPage = <div role="status" className="px-5 py-4 text-sm text-muted">Loading portal page…</div>;
 
  useEffect(() => {
  setFunctionalCurrency(businessPolicies?.functional_currency_code);
@@ -373,8 +374,8 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  back on; keep the failure inside the content column so the portal nav
  and sign-out survive. */}
  <ErrorBoundary>
- <Suspense fallback={<div role="status" className="px-5 py-4 text-sm text-muted">Loading portal page…</div>}>
- {currencyApplied && children}
+ <Suspense fallback={loadingPortalPage}>
+ {currencyApplied ? children : loadingPortalPage}
  </Suspense>
  </ErrorBoundary>
  </div>

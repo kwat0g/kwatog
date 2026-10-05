@@ -199,6 +199,35 @@ test.describe('customer portal', () => {
     await expect(navigation.getByRole('link', { name: 'Orders' })).toBeVisible();
   });
 
+  test('shows loading feedback while portal business policies are delayed', async ({ page }) => {
+    let businessPoliciesResponded = false;
+    page.on('response', (response) => {
+      if (new URL(response.url()).pathname === '/api/v1/b2b/customer/business-policies') {
+        businessPoliciesResponded = true;
+      }
+    });
+    await mockCustomerSession(page);
+    await page.route('**/api/v1/b2b/customer/business-policies', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 8_000));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { functional_currency_code: 'PHP', vat_status: 'VAT Registered', vat_rate: '0.12' } }),
+      });
+    });
+    const policiesRequest = page.waitForRequest((request) =>
+      new URL(request.url()).pathname === '/api/v1/b2b/customer/business-policies',
+    );
+    await page.goto('/portal/customer');
+    await policiesRequest;
+    await expect(page.locator('header[aria-label="Customer Portal header"]')).toBeVisible();
+    expect(businessPoliciesResponded).toBe(false);
+
+    await expect(page.locator('#portal-main-content')).toContainText('Loading portal page…', { timeout: 1_000 });
+    expect(businessPoliciesResponded).toBe(false);
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  });
+
   test('customer can respond to an order and reach the RMA form', async ({ page }) => {
     await mockCustomerSession(page);
     await page.route('**/api/v1/b2b/customer/orders/so_customer_01/chain', async (route) => {
