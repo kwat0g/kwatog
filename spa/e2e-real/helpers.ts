@@ -14,12 +14,99 @@ import { expect, type Page, type Request, type Response } from '@playwright/test
  *  API clients (curl, page.request) without them get 401/500. Real browsers
  *  always send these, so the harness must too. */
 export function baseUrl(): string {
-  return process.env.E2E_BASE_URL ?? 'http://localhost';
+  const base = process.env.E2E_BASE_URL;
+  if (!base) throw new Error('E2E_BASE_URL must point to the isolated test application.');
+  return base.replace(/\/$/, '');
 }
 
 export function statefulHeaders(): Record<string, string> {
   const base = baseUrl();
   return { Referer: `${base}/`, Origin: base, Accept: 'application/json' };
+}
+
+export async function statefulCsrfHeaders(page: Page): Promise<Record<string, string>> {
+  const xsrf = (await page.context().cookies()).find((cookie) => cookie.name === 'XSRF-TOKEN');
+  if (!xsrf) throw new Error('XSRF-TOKEN cookie is missing.');
+  return { ...statefulHeaders(), 'X-XSRF-TOKEN': decodeURIComponent(xsrf.value) };
+}
+
+export async function assignCrewThroughUi(
+  page: Page,
+  workOrderId: string,
+  actors: Page[],
+  options: { reworkNcrId?: string },
+) {
+  const crewQuery = options.reworkNcrId ? `?rework_ncr_id=${encodeURIComponent(options.reworkNcrId)}` : '';
+  const crewUrl = `${baseUrl()}/api/v1/production/work-orders/${workOrderId}/crew${crewQuery}`;
+  const beforeResponse = await page.request.get(crewUrl, { headers: statefulHeaders() });
+  expect(beforeResponse.status()).toBe(200);
+  const before = (await beforeResponse.json()).data;
+  expect(before.current).toBeNull();
+  expect(actors.length).toBeGreaterThanOrEqual(before.minimum_workers);
+  if (before.maximum_workers !== null) expect(actors.length).toBeLessThanOrEqual(before.maximum_workers);
+
+  const employees = await Promise.all(actors.map(async (actor) => {
+    const response = await actor.request.get(`${baseUrl()}/api/v1/auth/user`, { headers: statefulHeaders() });
+    expect(response.status()).toBe(200);
+    const employee = (await response.json()).data?.employee;
+    expect(employee?.id).toBeTruthy();
+    expect(employee?.employee_no).toBeTruthy();
+    expect(employee?.full_name).toBeTruthy();
+    return employee as { id: string; employee_no: string; full_name: string };
+  }));
+
+  await page.goto(`/production/work-orders/${workOrderId}`, { waitUntil: 'domcontentloaded' });
+  const panelName = options.reworkNcrId ? 'Repair crew' : 'Production crew';
+  const manage = options.reworkNcrId
+    ? page.getByRole('heading', { name: panelName, exact: true }).locator('xpath=../../..')
+        .getByRole('button', { name: 'Assign workers', exact: true })
+    : page.getByRole('button', { name: 'Assign workers', exact: true }).first();
+  await manage.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', {
+    name: options.reworkNcrId ? 'Assign repair workers' : 'Assign workers',
+  })).toBeVisible();
+
+  await expect(dialog.getByLabel('Number of workers')).toHaveCount(0);
+
+  for (const employee of employees) {
+    const search = dialog.getByRole('combobox', { name: 'Add worker' });
+    const optionsResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith(`/production/work-orders/${workOrderId}/crew-options`)
+        && url.searchParams.get('search') === employee.employee_no
+        && url.searchParams.get('rework_ncr_id') === (options.reworkNcrId ?? null);
+    });
+    await search.fill(employee.employee_no);
+    const response = await optionsResponse;
+    expect(response.status()).toBe(200);
+    const available = (await response.json()).data as Array<{ id: string; has_active_account: boolean }>;
+    expect(available).toContainEqual(expect.objectContaining({ id: employee.id, has_active_account: true }));
+    await page.getByRole('option', {
+      name: `${employee.employee_no} · ${employee.full_name}`,
+      exact: true,
+    }).click();
+  }
+
+  await dialog.getByLabel('Output recorder').selectOption(employees[0].id);
+  await expect(dialog.getByLabel('Handover reason')).toHaveCount(0);
+  const saved = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/v1/production/work-orders/${workOrderId}/crew`)
+    && response.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: 'Save workers', exact: true }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(dialog).toHaveCount(0);
+
+  const afterResponse = await page.request.get(crewUrl, { headers: statefulHeaders() });
+  expect(afterResponse.status()).toBe(200);
+  const after = (await afterResponse.json()).data;
+  expect(after.current.members.map((member: { id: string }) => member.id).sort()).toEqual(employees.map((employee) => employee.id).sort());
+  expect(after.current.recorder_employee_id).toBe(employees[0].id);
+  expect(after.current.reason).toBe('Initial crew assignment');
+  expect(after.history).toHaveLength(before.history.length + 1);
+  return after;
 }
 
 export async function navigateSpa(page: Page, route: string): Promise<void> {
