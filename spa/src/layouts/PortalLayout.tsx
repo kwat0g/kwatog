@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
@@ -373,7 +373,9 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
  back on; keep the failure inside the content column so the portal nav
  and sign-out survive. */}
  <ErrorBoundary>
+ <Suspense fallback={<div role="status" className="px-5 py-4 text-sm text-muted">Loading portal page…</div>}>
  {currencyApplied && children}
+ </Suspense>
  </ErrorBoundary>
  </div>
  </main>

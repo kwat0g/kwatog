@@ -189,8 +189,10 @@ test.describe('customer portal', () => {
     await mockCustomerSession(page);
     await page.goto('/portal/customer');
 
-    await expect(page.getByRole('button', { name: 'Open portal navigation' })).toBeVisible();
-    await page.getByRole('button', { name: 'Open portal navigation' }).click();
+    const openNavigation = page.getByRole('button', { name: 'Open portal navigation' });
+    await expect(openNavigation).toBeVisible();
+    await openNavigation.click();
+    await expect(openNavigation).toHaveAttribute('aria-expanded', 'true');
 
     const navigation = page.getByRole('navigation', { name: 'Customer Portal navigation' });
     await expect(navigation).toBeVisible();
