@@ -416,18 +416,50 @@ test('open WO repairs inside same order, notifies production and automatically c
     recording_reason: 'Production manager records the repaired piece for the designated repair recorder.',
     defects: [],
   });
-  const replays = await Promise.all([1, 2].map(() => api(
-    production,
-    'POST',
-    `${reworkPath}/outputs`,
-    replayPayload,
-    { 'X-Idempotency-Key': outputKey },
-  )));
-  for (const replay of replays) {
+  const beforeReplayWorkOrder = await success(production, 'GET', `/production/work-orders/${fixture.inline_wo}`);
+  const outputRowsBeforeReplay = beforeReplayWorkOrder.outputs.filter((row: { id: string }) => row.id === output.id);
+  expect(outputRowsBeforeReplay).toHaveLength(1);
+  const movementsBeforeReplay = await success(pages.warehouse, 'GET', `/inventory/stock-movements?item_id=${fixture.item}&reference_type=work_order_output&per_page=200`);
+  const repairMovementsBeforeReplay = movementsBeforeReplay.filter((movement: { reference_id: string }) => movement.reference_id === output.id);
+  const outputAuditBeforeReplay = await auditTrail('WorkOrderOutput', output.id);
+  const [firstReplay, changedReplay, secondReplay] = await Promise.all([
+    api(
+      production,
+      'POST',
+      `${reworkPath}/outputs`,
+      replayPayload,
+      { 'X-Idempotency-Key': outputKey },
+    ),
+    api(
+      production,
+      'POST',
+      `${reworkPath}/outputs`,
+      { ...replayPayload, recording_reason: `${String(replayPayload.recording_reason)} changed` },
+      { 'X-Idempotency-Key': outputKey },
+    ),
+    api(
+      production,
+      'POST',
+      `${reworkPath}/outputs`,
+      replayPayload,
+      { 'X-Idempotency-Key': outputKey },
+    ),
+  ]);
+  expect(changedReplay.status).toBe(422);
+  expect(JSON.stringify(changedReplay.body)).toMatch(/idempotency key was already used/i);
+  for (const replay of [firstReplay, secondReplay]) {
     expect(replay.status, JSON.stringify(replay.body)).toBeLessThan(300);
     expect(replay.body.data.id).toBe(output.id);
   }
-  expect(await auditTrail('WorkOrderOutput', output.id)).toEqual(expect.arrayContaining([
+  const recordedWorkOrder = await success(production, 'GET', `/production/work-orders/${fixture.inline_wo}`);
+  expect(recordedWorkOrder.rework).toEqual(beforeReplayWorkOrder.rework);
+  expect(recordedWorkOrder.outputs.filter((row: { id: string }) => row.id === output.id)).toEqual(outputRowsBeforeReplay);
+  const movementRows = await success(pages.warehouse, 'GET', `/inventory/stock-movements?item_id=${fixture.item}&reference_type=work_order_output&per_page=200`);
+  const repairMovements = movementRows.filter((movement: { reference_id: string }) => movement.reference_id === output.id);
+  expect(repairMovements).toEqual(repairMovementsBeforeReplay);
+  const outputAuditAfterReplay = await auditTrail('WorkOrderOutput', output.id);
+  expect(outputAuditAfterReplay).toEqual(outputAuditBeforeReplay);
+  expect(outputAuditAfterReplay).toEqual(expect.arrayContaining([
     expect.objectContaining({
       action: 'created', model_type: 'WorkOrderOutput', model_id: output.id,
       user: expect.objectContaining({ id: productionActor.id, role: expect.objectContaining({ slug: 'production_manager' }) }),
@@ -435,7 +467,6 @@ test('open WO repairs inside same order, notifies production and automatically c
     }),
   ]));
   expect(output).toMatchObject({ good_count: 1, reject_count: 0 });
-  const recordedWorkOrder = await success(production, 'GET', `/production/work-orders/${fixture.inline_wo}`);
   expect(recordedWorkOrder.status).toBe('completed');
   expect(recordedWorkOrder.rework).toContainEqual(expect.objectContaining({
     id: ncr.id, quantity: 1, recorded_quantity: 1, remaining_quantity: 0,
@@ -445,8 +476,6 @@ test('open WO repairs inside same order, notifies production and automatically c
     id: output.id, good_count: 1, reject_count: 0, is_rework: true,
     production_receipt_handoff: expect.objectContaining({ status: 'generated' }),
   }));
-  const movementRows = await success(pages.warehouse, 'GET', `/inventory/stock-movements?item_id=${fixture.item}&reference_type=work_order_output&per_page=200`);
-  const repairMovements = movementRows.filter((movement: { reference_id: string }) => movement.reference_id === output.id);
   expect(repairMovements.map((movement: { movement_type: string }) => movement.movement_type).sort()).toEqual(['adjustment_out', 'production_receipt']);
   for (const movement of repairMovements) {
     expect(movement).toMatchObject({ quantity: '1.000', total_cost: '5.00', gl_handoff: { status: 'generated' } });
