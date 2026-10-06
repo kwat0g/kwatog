@@ -19,15 +19,15 @@ Today attendance enters only by biometric CSV import (`DTRImportService`) or HR 
 6. **Direction:** server-decided from the employee's last punch (none or `out` → `in`; `in` → `out`). Client never sends direction. Cooldown ~60 s rejects double taps. Multiple in/out per day is allowed.
 7. **Pairing / date anchoring:**
    - An `in` with no open row starts a row for today's date.
-   - An `out` attaches to the most recent open row (null `time_out`) from the last 16 hours (covers night shifts ending next morning).
+   - An `out` is only possible when the last punch was an `in` within the last 16 hours, and it attaches to that punch's row (covers night shifts ending next morning). An `in` older than 16 hours is stale, so the next punch is an `in` and starts a new day.
    - On a non-night shift an `out` not after `time_in` is rejected with a clear message (the engine would otherwise throw `InvalidArgumentException`).
    - A further `in` while a row is open is logged but does not move `time_in` (first-in wins). Each new `out` replaces `time_out` (last-out wins).
 8. **Biometric merge:** both `DTRImportService` paths (`import()` and `importRawPunches()`) take the earliest in and latest out across the CSV and that day's logged `attendance_punches`, instead of overwriting. Existing manual/on-leave/archived guards are unchanged.
 9. **Forgotten time-out:** no auto-close (would fabricate pay data). Add a "missing time-out" filter to the existing attendance list and a daily scheduled notification to HR listing yesterday's open rows.
-10. **Locks:** a punch on a payroll-locked day (`AttendanceDateMutabilityGuard`) or against a soft-deleted row is rejected with "this day is already in payroll / was removed, contact HR". A user with no linked employee gets the existing 403.
+10. **Locks:** a punch on a payroll-locked day (`AttendanceDateMutabilityGuard`) or against a soft-deleted row is rejected with "this day is already in payroll / was removed, contact HR". A user with no linked employee gets the existing 403. A day whose row is an HR manual entry (`is_manual_entry`) or `on_leave` also rejects the punch (`manual_entry` / `on_leave`), mirroring `DTRImportService::manualCorrectionGuard` (AT-02).
 11. **Data:** new table `attendance_punches`. Raw `latitude`/`longitude` are nulled after 90 days by a scheduled command; `distance_m`, `accuracy_m` and the result are kept permanently. The punch screen shows a one-line notice that location is read only at the moment of punching (RA 10173).
-12. **Visibility:** raw location requires new permission `attendance.punch.audit` (hr_officer, system_admin) and shows in a drawer on the attendance detail page. Employees see only their own punch times.
-13. **UI:** Time In/Out card on self-service: one large button, state line ("In since 06:02, shift 06:00–14:00"), today's punch list, display-only late warning (computed in the status endpoint, never stored).
+12. **Visibility:** raw location requires new permission `attendance.punch.audit` (hr_officer, system_admin) and shows in a modal opened from a row action on the attendance list (`/hr/attendance`); there is no attendance detail page. Employees see only their own punch times.
+13. **UI:** Time In/Out card on the existing self-service home (no new route): one large button, state line ("In since 06:02, shift 06:00–14:00"), today's punch list, display-only late warning (reads `attendances.tardiness_minutes`, which the DTR engine already computes on each punch; nothing new is stored).
 14. **nginx:** `Permissions-Policy` `geolocation=()` → `geolocation=(self)` in `security-headers-dev.conf`, `security-headers-prod.conf`, and the inline copies in `default.conf:45` and `prod.conf:100`. Camera and microphone stay blocked. The SPA `X-Frame-Options` carve-out is untouched.
 
 ## Out of scope
@@ -49,10 +49,10 @@ Module: `api/app/Modules/Attendance/` (own Controllers/Models/Services/Requests/
   5. `assertMutable`; insert punch; set `time_in` / `time_out`; reuse `DTRComputationService::computeForRecord` and OT auto-detect via the existing `recomputeForEmployeeOnDate` path.
   6. Audit via `HasAuditLog` (web guard, so no `SystemUserResolver` needed).
 - **Distance helper** `GeoDistance::meters()` as a small pure class in `Attendance/Support/`.
-- **Endpoints** under the existing self-service prefix (`HR/routes.php`, auth-only like its siblings) with `throttle:sensitive`:
-  - `GET self-service/attendance/punch/status` → state, next action, today's punches, shift, late warning.
-  - `POST self-service/attendance/punch` → `{lat, lng, accuracy}` (FormRequest validates ranges).
-- **HR audit:** `GET attendance/attendances/{attendance}/punches` behind `attendance.punch.audit`; resource masks coordinates unless the permission is held.
+- **Endpoints** in `Attendance/routes.php` (so the `feature:attendance` toggle gates them), auth-only, with `throttle:sensitive` on the POST:
+  - `GET /attendance/punch/status` → state, next action, today's punches, shift, late warning.
+  - `POST /attendance/punch` → `{lat, lng, accuracy}` (FormRequest validates ranges).
+- **HR audit:** `GET attendance/attendances/{attendance}/punches` behind `attendance.punch.audit`; the route is gated on the permission, so its resource always includes coordinates (null after the 90-day purge).
 - **Attendance list:** `missing_time_out=1` filter.
 - **Import merge:** change in `DTRImportService` per decision 8.
 - **Scheduled commands** in `routes/console.php`:
