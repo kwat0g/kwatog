@@ -1,8 +1,7 @@
 const fs = require('fs');
 const path = require('path');
+const BASE = require('./require-audit-base-url');
 const { chromium } = require('playwright-core');
-
-const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const OUT = process.env.SCREENSHOT_DIR
   ? path.resolve(process.env.SCREENSHOT_DIR)
   : path.resolve(__dirname, '..', 'docs', 'defense-screenshots');

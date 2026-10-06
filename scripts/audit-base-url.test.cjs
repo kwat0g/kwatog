@@ -8,6 +8,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const scripts = [
   'dynamic-spa-route-audit.js',
+  'defense-smoke-walk.js',
   'role-dashboard-audit.js',
   'panel-gate-browser-check.js',
   'role-permission-audit.js',
