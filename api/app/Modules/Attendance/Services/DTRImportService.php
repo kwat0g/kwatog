@@ -265,8 +265,8 @@ class DTRImportService
                     if ($guarded !== null) {
                         return $guarded;
                     }
-                    $a->time_in  = $day['time_in'];
-                    $a->time_out = $day['time_out'];
+                    $a->time_in = $mIn;
+                    $a->time_out = $mOut;
                     $a->is_manual_entry = false;
                     if ($day['flag'] !== null) {
                         $a->remarks = trim((string) ($a->remarks ?? '').' punch:'.$day['flag']);
