@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Attendance\Controllers\AttendanceController;
 use App\Modules\Attendance\Controllers\HolidayController;
 use App\Modules\Attendance\Controllers\OvertimeController;
+use App\Modules\Attendance\Controllers\PunchController;
 use App\Modules\Attendance\Controllers\ShiftController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,11 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
     Route::patch('/attendances/{attendance}/restore', [AttendanceController::class, 'restore'])->middleware('permission:attendance.edit')->withTrashed();
     Route::post('/attendances/import', [AttendanceController::class, 'import'])->middleware('permission:attendance.import');
     Route::post('/attendances/import/raw', [AttendanceController::class, 'importRaw'])->middleware('permission:attendance.import');
+
+    // Geofenced self-service time in/out. Auth-only: the employee comes from
+    // the session (PunchRequest::authorize), never from the request body.
+    Route::get('/punch/status', [PunchController::class, 'status']);
+    Route::post('/punch', [PunchController::class, 'store'])->middleware('throttle:sensitive');
 
     // Overtime requests
     Route::get('/overtime-requests', [OvertimeController::class, 'index'])->middleware('permission:attendance.view');
