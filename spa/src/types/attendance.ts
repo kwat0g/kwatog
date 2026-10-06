@@ -115,3 +115,35 @@ export interface OvertimeOptions {
 }
 
 export type { Department };
+
+export interface PunchStatus {
+  next_action: 'in' | 'out';
+  shift: { name: string; start: string; end: string } | null;
+  punches: Array<{ direction: 'in' | 'out'; punched_at: string }>;
+  tardiness_minutes: number | null;
+  radius_m: number;
+}
+
+export interface GpsFix {
+  lat: number;
+  lng: number;
+  accuracy: number;
+}
+
+export interface PunchResult {
+  direction: 'in' | 'out';
+  punched_at: string;
+  distance_m: string;
+  status: PunchStatus;
+}
+
+export interface AttendancePunchAudit {
+  id: string;
+  direction: 'in' | 'out';
+  punched_at: string;
+  latitude: string | null;
+  longitude: string | null;
+  accuracy_m: string;
+  distance_m: string;
+  ip: string | null;
+}
