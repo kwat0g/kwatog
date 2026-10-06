@@ -31,6 +31,19 @@ Schedule::command('qc:sweep-missing-outgoing --limit=50')
     ->withoutOverlapping(15)
     ->onOneServer();
 
+
+// Time in/out — HR hears about yesterday's open rows at 07:00 (they compute zero
+// hours until corrected), and raw GPS is purged after 90 days (RA 10173).
+Schedule::command('attendance:notify-missing-timeout')
+    ->dailyAt('07:00')
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
+Schedule::command('attendance:purge-punch-coordinates')
+    ->dailyAt('02:30')
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 Artisan::command('inspire', function (): void {
     echo Inspiring::quote().PHP_EOL;
 })->purpose('Display an inspiring quote');

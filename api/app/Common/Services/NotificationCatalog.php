@@ -206,6 +206,7 @@ final class NotificationCatalog
                 ['key' => 'attendance.ot_submitted', 'label' => 'Overtime request submitted', 'description' => 'An employee has submitted an overtime request for your approval.'],
                 ['key' => 'attendance.ot_approved', 'label' => 'Overtime request approved', 'description' => 'Your overtime request has been approved.'],
                 ['key' => 'attendance.ot_rejected', 'label' => 'Overtime request rejected', 'description' => 'Your overtime request was not approved.'],
+                ['key' => 'attendance.missing_time_out', 'label' => 'Missing time-out', 'description' => 'Employees with a time in but no time out for the previous day need HR correction.'],
                 ['key' => 'loans.submitted', 'label' => 'Loan/CA request submitted', 'description' => 'An employee has submitted a loan or cash advance for Finance approval.'],
                 ['key' => 'loans.approved', 'label' => 'Loan/CA approved', 'description' => 'Your loan or cash advance request has been approved.'],
                 ['key' => 'loans.rejected', 'label' => 'Loan/CA rejected', 'description' => 'Your loan or cash advance request was not approved.'],
