@@ -70,6 +70,10 @@ class SettingsSeeder extends Seeder
             ['key' => 'company.public_url', 'value' => $company['public_url'], 'group' => 'company', 'label' => 'Company Public URL', 'description' => 'Public website URL shown on official documents.'],
             ['key' => 'company.latitude', 'value' => $company['latitude'], 'group' => 'company', 'label' => 'Facility Latitude', 'description' => 'GPS latitude coordinate of the primary manufacturing plant.'],
             ['key' => 'company.longitude', 'value' => $company['longitude'], 'group' => 'company', 'label' => 'Facility Longitude', 'description' => 'GPS longitude coordinate of the primary manufacturing plant.'],
+            ['key' => 'company.punch_radius_m', 'value' => 200, 'group' => 'company', 'label' => 'Time in/out radius (m)', 'description' => 'Distance from the plant centre within which an employee may time in/out.'],
+            ['key' => 'company.punch_max_accuracy_m', 'value' => 100, 'group' => 'company', 'label' => 'Time in/out max GPS error (m)', 'description' => 'Worst GPS accuracy accepted for a time in/out.'],
+            ['key' => 'attendance.punch_early_minutes', 'value' => 120, 'group' => 'attendance', 'label' => 'Punch window: minutes before shift', 'description' => 'How early before shift start an employee may time in.'],
+            ['key' => 'attendance.punch_late_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch window: minutes after shift', 'description' => 'How late after shift end an employee may still time out.'],
             ['key' => 'email.brand_name', 'value' => $emailBrandName, 'group' => 'email', 'label' => 'Email Display Name', 'description' => 'Customer-facing display name used in transactional email headers and footers.'],
             ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
 

@@ -409,6 +409,12 @@ class UpdateSettingRequest extends FormRequest
             'quality.ncr.return_to_supplier.notification_roles' => ['value' => ['required', 'array', 'min:1']],
             'exports.default_time_of_day' => ['value' => ['required', 'date_format:H:i']],
             'workflow.chain_definitions' => ['value' => ['required', 'array', 'min:1']],
+            'company.latitude' => ['value' => ['required', 'numeric', 'between:-90,90']],
+            'company.longitude' => ['value' => ['required', 'numeric', 'between:-180,180']],
+            'company.punch_radius_m' => ['value' => ['required', 'numeric', 'between:10,5000']],
+            'company.punch_max_accuracy_m' => ['value' => ['required', 'numeric', 'between:5,1000']],
+            'attendance.punch_early_minutes' => ['value' => ['required', 'integer', 'between:0,720']],
+            'attendance.punch_late_minutes' => ['value' => ['required', 'integer', 'between:0,720']],
         ];
 
         return $this->withStoredTypeGuard(
