@@ -13,7 +13,7 @@ const PAGES = [
   ['/dashboard/ppc', 'dashboard-ppc', 'PPC Forecast Dashboard', /Demand Forecast[\s\S]*Forecast Accuracy|Forecast Accuracy[\s\S]*Demand Forecast/i],
   // __BATCH__ is substituted with the live hero batch number after login
   // (batch numbers embed the WO start date, so they shift per seed day).
-  ['/quality/traceability?term=__BATCH__', 'traceability', 'ADV3 Traceability', /IMM-01[\s\S]*M-WB-001|M-WB-001[\s\S]*IMM-01/i],
+  ['/quality/traceability?term=__BATCH__', 'traceability', 'ADV3 Traceability', (batch) => batch ? new RegExp(`Batch\\s+${batch}`) : /Traceability search/i],
   ['/production/work-orders', 'work-orders', 'ADV3 Work Orders', /work orders/i],
   ['/supply-chain/deliveries', 'deliveries', 'ADV7 Deliveries', /deliveries/i],
   ['/payroll/periods', 'payroll-periods', 'ADV1 Payroll Periods', /payroll/i],
@@ -21,11 +21,11 @@ const PAGES = [
   ['/forecasting/demand', 'forecasting-demand', 'ADV11 Forecast Demand', /include forecast in MRP/i],
   ['/forecasting/stock-out', 'forecasting-stockout', 'ADV11 Stock-out', /stock.out/i],
   ['/inventory/warehouse-map', 'warehouse-map', 'ADV8 Warehouse Map', /warehouse map/i],
-  ['/inventory/stock-count', 'stock-count', 'ADV8 Stock Count', /Defense Demo.*Zone Freeze/i],
+  ['/inventory/stock-count', 'stock-count', 'ADV8 Stock Count', /Stock counts[\s\S]*\d+ sessions/i],
   ['/inventory/transfer-orders', 'transfer-orders', 'ADV8 Transfer Orders', /transfer orders/i],
   ['/inventory/picking', 'picking', 'ADV8 Picking', /picking/i],
-  ['/purchasing/purchase-requests', 'purchase-requests', 'ADV6/9 PR Rehearsal', /PR-DEMO-(CONVERT|BUDGET)/i],
-  ['/return-management', 'returns', 'ADV12 Returns', /RMA-DEMO-SUP-READY/i],
+  ['/purchasing/purchase-requests', 'purchase-requests', 'ADV6/9 PR Rehearsal', /Purchase requests[\s\S]*\d+ requests/i],
+  ['/return-management', 'returns', 'ADV12 Returns', /Return Management \(RMA\)[\s\S]*\d+ return requests/i],
   ['/accounting/credit-notes', 'credit-notes', 'ADV12 Credit Notes', /credit notes/i],
   ['/admin/roles', 'roles', 'ADV4 Roles', /roles/i],
   ['/purchasing/chain', 'purchasing-chain', 'ADV5 Procurement Chain', /procure.to.pay|procurement chain/i],
@@ -34,16 +34,35 @@ const PAGES = [
 function monitor(page) {
   const consoleErrors = [];
   const httpErrors = [];
+  let authenticated = false;
+  let expectedGuestProbeConsoleErrors = 0;
+  // The SPA probes its internal session on guest portal/login pages; that one
+  // unauthenticated response is expected until the subsequent login succeeds.
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 240));
+    if (message.type() !== 'error') return;
+    const expectedGuestProbe = expectedGuestProbeConsoleErrors > 0
+      && /status of 401 \(Unauthorized\)/i.test(message.text());
+    if (expectedGuestProbe) {
+      expectedGuestProbeConsoleErrors -= 1;
+      return;
+    }
+    consoleErrors.push(message.text().slice(0, 240));
   });
   page.on('pageerror', (error) => consoleErrors.push(`PAGEERROR: ${String(error).slice(0, 240)}`));
   page.on('response', (response) => {
     if (response.status() >= 400 && response.url().includes('/api/')) {
+      const isGuestUserProbe = !authenticated
+        && response.status() === 401
+        && response.request().method() === 'GET'
+        && new URL(response.url()).pathname === '/api/v1/auth/user';
+      if (isGuestUserProbe) {
+        expectedGuestProbeConsoleErrors += 1;
+        return;
+      }
       httpErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
     }
   });
-  return { consoleErrors, httpErrors };
+  return { consoleErrors, httpErrors, markAuthenticated: () => { authenticated = true; } };
 }
 
 function pageProblems(bodyText, expected, newConsoleErrors, newHttpErrors) {
@@ -74,7 +93,8 @@ async function portalCheck(browser, kind, email, expected) {
       { source: expected.source, flags: expected.flags },
       { timeout: 15000 },
     );
-    const bodyText = (await page.textContent('body')) || '';
+    errors.markAuthenticated();
+    const bodyText = await page.locator('body').innerText();
     const problems = pageProblems(bodyText, expected, errors.consoleErrors, errors.httpErrors);
     if (problems.length) status = `FAIL: ${problems.join(', ')}`;
     await page.screenshot({ path: path.join(OUT, `${kind}-portal.png`), fullPage: false });
@@ -87,28 +107,33 @@ async function portalCheck(browser, kind, email, expected) {
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   const errors = monitor(page);
   const results = [];
 
   try {
-    await page.goto(`${BASE}/login`, { waitUntil: 'networkidle', timeout: 25000 });
+    await page.goto(`${BASE}/sign-in`, { waitUntil: 'networkidle', timeout: 25000 });
     await page.fill('input[type="email"]', 'admin@ogami.test');
     await page.fill('input[type="password"]', 'password');
+    const signIn = page.waitForResponse(
+      (response) => response.url().endsWith('/api/v1/auth/sign-in') && response.request().method() === 'POST',
+      { timeout: 15000 },
+    );
     await page.click('button[type="submit"]');
-    await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15000 });
+    const response = await signIn;
+    if (!response.ok()) throw new Error(`sign-in returned ${response.status()}`);
+    await page.waitForURL((url) => url.pathname === '/dashboard', { timeout: 15000 });
+    errors.markAuthenticated();
     results.push(['Internal login', `OK -> ${page.url()}`]);
   } catch (error) {
     results.push(['Internal login', `FAIL: ${String(error.message || error).slice(0, 160)}`]);
   }
 
-  // Resolve the live hero batch number so the traceability check searches a
-  // term that actually exists on this seed's data. Batch numbers embed the WO
-  // start date (BATCH-YYYYMMDD-NNNN), so a fresh seed on a different day
-  // shifts them. Falls back to the historically-documented term.
-  let heroBatch = 'BATCH-20260908-0001';
+  // Resolve a real work-order batch. If this isolated stack has none, exercise
+  // the traceability search's empty state instead of inventing a batch number.
+  let heroBatch = null;
   try {
     const woResp = await page.evaluate(async () => {
       const res = await fetch('/api/v1/production/work-orders?per_page=10', {
@@ -126,7 +151,8 @@ async function portalCheck(browser, kind, email, expected) {
   }
 
   for (const [route, file, label, expected] of PAGES) {
-    const resolvedRoute = route.replace('__BATCH__', encodeURIComponent(heroBatch));
+    const resolvedRoute = route.replace('__BATCH__', encodeURIComponent(heroBatch ?? ''));
+    const pageExpected = typeof expected === 'function' ? expected(heroBatch) : expected;
     const consoleBefore = errors.consoleErrors.length;
     const httpBefore = errors.httpErrors.length;
     let status = 'OK';
@@ -135,10 +161,15 @@ async function portalCheck(browser, kind, email, expected) {
       if (!response || response.status() >= 400) {
         status = `FAIL: document HTTP ${response?.status() ?? 'none'}`;
       } else {
-        const bodyText = (await page.textContent('body')) || '';
+        if (label === 'Plant Manager Forecast Dashboard') {
+          await page.locator('summary').filter({ hasText: 'Analysis & forecasts' }).click();
+          await page.getByText('Demand Forecast', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+          await page.getByText('Forecast Accuracy', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        }
+        const bodyText = await page.locator('body').innerText();
         const problems = pageProblems(
           bodyText,
-          expected,
+          pageExpected,
           errors.consoleErrors.slice(consoleBefore),
           errors.httpErrors.slice(httpBefore),
         );

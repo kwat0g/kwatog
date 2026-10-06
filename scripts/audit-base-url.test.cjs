@@ -42,6 +42,32 @@ test('browser audit scripts require an explicit isolated base URL before loading
   }
 });
 
+test('defense smoke audit can launch bundled Chromium without system Chrome', () => {
+  const screenshots = fs.mkdtempSync(path.join(os.tmpdir(), 'ogami-defense-browser-'));
+
+  try {
+    const result = spawnSync(process.execPath, [path.join(root, 'scripts/defense-smoke-walk.js')], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        BASE_URL: 'http://127.0.0.1:1',
+        NODE_PATH: path.join(root, 'spa', 'node_modules'),
+        SCREENSHOT_DIR: screenshots,
+        AUDIT_PASSWORD: 'test-only',
+      },
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    assert.match(output, /===== STRICT DEFENSE SMOKE RESULTS =====/);
+    assert.match(output, /Internal login/);
+    assert.doesNotMatch(output, /Chromium distribution 'chrome' is not found|FATAL browserType\.launch/);
+  } finally {
+    fs.rmSync(screenshots, { recursive: true, force: true });
+  }
+});
+
 test('live Playwright config requires an isolated base URL and selects its real suite', () => {
   const cli = path.join(root, 'spa', 'node_modules', 'playwright', 'cli.js');
   const args = ['test', '-c', 'playwright.live.config.ts', '--list'];
