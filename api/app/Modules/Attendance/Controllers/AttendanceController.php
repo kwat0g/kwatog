@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Controllers;
 
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Requests\ImportAttendanceRequest;
 use App\Modules\Attendance\Requests\StoreAttendanceRequest;
 use App\Modules\Attendance\Requests\UpdateAttendanceRequest;
 use App\Modules\Attendance\Resources\AttendanceResource;
+use App\Modules\Attendance\Resources\AttendancePunchResource;
 use App\Modules\Attendance\Services\AttendanceService;
 use App\Modules\Attendance\Services\DTRImportService;
 use App\Modules\HR\Models\Employee;
@@ -51,6 +53,13 @@ class AttendanceController
         $this->authorizeView($attendance->employee_id, $request);
 
         return new AttendanceResource($attendance->load(['employee', 'shift']));
+    }
+
+    public function punches(Attendance $attendance): AnonymousResourceCollection
+    {
+        return AttendancePunchResource::collection(
+            AttendancePunch::query()->where('attendance_id', $attendance->id)->orderBy('punched_at')->orderBy('id')->get(),
+        );
     }
 
     public function update(UpdateAttendanceRequest $request, Attendance $attendance): AttendanceResource
