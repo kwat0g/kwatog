@@ -51,6 +51,9 @@ class AttendanceService
         if (!empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
+        if (! empty($filters['missing_time_out'])) {
+            $q->whereNotNull('time_in')->whereNull('time_out')->where('date', '<', now()->toDateString());
+        }
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
         if (!empty($filters['search'])) {

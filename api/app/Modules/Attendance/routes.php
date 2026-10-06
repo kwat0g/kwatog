@@ -32,6 +32,7 @@ Route::middleware(['auth:sanctum', 'feature:attendance'])->prefix('attendance')-
 
     // Attendance
     Route::get('/attendances/options', [AttendanceController::class, 'options'])->middleware('permission:attendance.view');
+    Route::get('/attendances/{attendance}/punches', [AttendanceController::class, 'punches'])->middleware('permission:attendance.punch.audit');
     Route::get('/attendances', [AttendanceController::class, 'index'])->middleware('permission:attendance.view');
     Route::post('/attendances', [AttendanceController::class, 'store'])->middleware('permission:attendance.edit');
     Route::get('/attendances/{attendance}', [AttendanceController::class, 'show'])->middleware('permission:attendance.view');
