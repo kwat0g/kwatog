@@ -10,6 +10,7 @@ const scripts = [
   'dynamic-spa-route-audit.js',
   'role-dashboard-audit.js',
   'panel-gate-browser-check.js',
+  'role-permission-audit.js',
 ];
 
 test('browser audit scripts require an explicit isolated base URL before loading a browser', () => {

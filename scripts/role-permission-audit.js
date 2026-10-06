@@ -1,9 +1,9 @@
+const BASE = require('./require-audit-base-url');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 const spaRequire = createRequire(path.join(__dirname, '../spa/package.json'));
 const { chromium } = spaRequire('playwright');
 
-const BASE = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
 const PASSWORD = process.env.AUDIT_PASSWORD || 'password';
 
 /*
