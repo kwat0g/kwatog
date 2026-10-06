@@ -6,8 +6,10 @@ namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Enums\DtrImportRowOutcome;
+use App\Modules\Attendance\Enums\PunchDirection;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\HR\Models\Employee;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Database\QueryException;
@@ -106,12 +108,13 @@ class DTRImportService
                 $outcome = DB::transaction(function () use ($employeeId, $date, $tIn, $tOut): DtrImportRowOutcome {
                     $this->mutability->assertMutable($employeeId, $date);
                     $a = $this->openDayRecord($employeeId, $date);
-                    $guarded = $this->manualCorrectionGuard($a, $tIn, $tOut);
+                    [$mIn, $mOut] = $this->mergeAppPunches($a, $tIn, $tOut);
+                    $guarded = $this->manualCorrectionGuard($a, $mIn, $mOut);
                     if ($guarded !== null) {
                         return $guarded;
                     }
-                    $a->time_in = $tIn;
-                    $a->time_out = $tOut;
+                    $a->time_in = $mIn;
+                    $a->time_out = $mOut;
                     $a->is_manual_entry = false;
                     $a = $this->dtr->computeForRecord($a);
                     $a->save();
@@ -257,7 +260,8 @@ class DTRImportService
                 $outcome = DB::transaction(function () use ($employeeId, $date, $day): DtrImportRowOutcome {
                     $this->mutability->assertMutable($employeeId, $date);
                     $a = $this->openDayRecord($employeeId, $date);
-                    $guarded = $this->manualCorrectionGuard($a, $day['time_in'], $day['time_out']);
+                    [$mIn, $mOut] = $this->mergeAppPunches($a, $day['time_in'], $day['time_out']);
+                    $guarded = $this->manualCorrectionGuard($a, $mIn, $mOut);
                     if ($guarded !== null) {
                         return $guarded;
                     }
@@ -347,6 +351,30 @@ class DTRImportService
         }
 
         return $existing ?? new Attendance(['employee_id' => $employeeId, 'date' => $date]);
+    }
+
+    /**
+     * Fold the day's logged app punches (attendance_punches) into the file's
+     * punches: earliest in, latest out. Without this a later biometric import
+     * overwrote an employee's own punch. A day with no app punches returns the
+     * file's values untouched, so existing imports behave exactly as before.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function mergeAppPunches(Attendance $a, ?string $tIn, ?string $tOut): array
+    {
+        if (! $a->exists) {
+            return [$tIn, $tOut];
+        }
+
+        $punches = AttendancePunch::query()->where('attendance_id', $a->id);
+        $appIn = (clone $punches)->where('direction', PunchDirection::In->value)->min('punched_at');
+        $appOut = (clone $punches)->where('direction', PunchDirection::Out->value)->max('punched_at');
+
+        $in = collect([$tIn, $appIn])->filter()->map(fn ($v) => Carbon::parse($v)->toDateTimeString())->min();
+        $out = collect([$tOut, $appOut])->filter()->map(fn ($v) => Carbon::parse($v)->toDateTimeString())->max();
+
+        return [$in, $out];
     }
 
     /**
