@@ -99,6 +99,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'attendance.holidays.manage', 'name' => 'Manage Holidays'],
                 ['slug' => 'attendance.ot.create',     'name' => 'Create Overtime Request'],
                 ['slug' => 'attendance.ot.approve',    'name' => 'Approve Overtime'],
+                ['slug' => 'attendance.punch.audit',   'name' => 'View Time In/Out Location Audit'],
             ],
 
             // Leave
