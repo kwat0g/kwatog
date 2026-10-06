@@ -14,7 +14,7 @@
 
 - `declare(strict_types=1);` in every PHP file; enums for every status/type column; every model uses `HasHashId` and resources return `hash_id`, never raw `id`.
 - Controllers thin; business logic in the Service inside `DB::transaction()`; authorization in `FormRequest::authorize()` or route middleware.
-- Migrations: confirm the real max with `ls api/database/migrations | grep -E '^05' | sort | tail -3` and `ls api/database/migrations | grep -E '^04' | sort | tail -3`; the plan assumes `0500_`/`0501_` are free (highest seen was 0499). Both migrations only touch `employees`, `attendances`, `settings`, `permissions`, `roles`, `role_permissions` — before naming, run `grep -rln "attendances\|'settings'\|'permissions'" api/database/migrations | sort | tail -3`; if any `2026_*` file is the latest creator of a table touched here, name these `2026_10_07_*` instead (the migrator sorts `0…` before `2026_…`).
+- Migrations: confirm the real max with `ls api/database/migrations | grep -E '^05' | sort | tail -3` and `ls api/database/migrations | grep -E '^04' | sort | tail -3`; the plan assumes `0570_`/`0571_` are free (highest seen was 0569; 0500/0501 are taken). Both migrations only touch `employees`, `attendances`, `settings`, `permissions`, `roles`, `role_permissions` — before naming, run `grep -rln "attendances\|'settings'\|'permissions'" api/database/migrations | sort | tail -3`; if any `2026_*` file is the latest creator of a table touched here, name these `2026_10_07_*` instead (the migrator sorts `0…` before `2026_…`).
 - Tests: use `'XX-T-'.substr(uniqid(), -5)` for varchar-limited seeds; users via `User::factory()->create(['employee_id' => …, 'role_id' => Role::query()->where('slug', X)->value('id')])`, never `assignRole()`; time-box with `Carbon::setTestNow()`.
 - Run PHP tests on an isolated DB, never the shared `ogami_test`: `docker compose exec -T db psql -U ogami -d postgres -c "CREATE DATABASE ogami_test_punch OWNER ogami;"` then `docker compose exec -T -e DB_DATABASE=ogami_test_punch api php artisan test --filter=…`. PHP memory: `docker compose exec -T -u root api bash -c "echo 'memory_limit = 512M' > /usr/local/etc/php/conf.d/zz-mem.ini"`.
 - Decimals reach the SPA as strings; ids are HashID strings; use `font-mono tabular-nums` for times; statuses via `<Chip>`; every mutation has `toast.success`/`toast.error` + `invalidateQueries`; no hardcoded colours (`npm run audit:tokens`).
@@ -48,8 +48,8 @@
 - Create: `api/app/Modules/Attendance/Models/AttendancePunch.php`
 - Create: `api/app/Modules/Attendance/Support/GeoDistance.php`
 - Create: `api/app/Modules/Attendance/Exceptions/PunchRejectedException.php`
-- Create: `api/database/migrations/0500_create_attendance_punches_table.php`
-- Create: `api/database/migrations/0501_seed_punch_settings_and_audit_permission.php`
+- Create: `api/database/migrations/0570_create_attendance_punches_table.php`
+- Create: `api/database/migrations/0571_seed_punch_settings_and_audit_permission.php`
 - Modify: `api/database/seeders/RolePermissionSeeder.php` (attendance catalog, after `attendance.ot.approve`, ~line 102)
 - Modify: `api/database/seeders/SettingsSeeder.php` (after `company.longitude`, ~line 72)
 - Modify: `api/app/Modules/Admin/Requests/UpdateSettingRequest.php` (`$policyRules`, near line 364)
@@ -258,7 +258,7 @@ class AttendancePunch extends Model
 }
 ```
 
-`0500_create_attendance_punches_table.php`:
+`0570_create_attendance_punches_table.php`:
 
 ```php
 <?php
@@ -298,7 +298,7 @@ return new class extends Migration
 };
 ```
 
-`0501_seed_punch_settings_and_audit_permission.php`:
+`0571_seed_punch_settings_and_audit_permission.php`:
 
 ```php
 <?php
@@ -385,7 +385,7 @@ If `roles` rows do not exist at migrate time in the test DB (seeded later), the 
 - [ ] **Step 4: Run to verify pass**
 
 Run: `docker compose exec -T -e DB_DATABASE=ogami_test_punch api php artisan test --filter='GeoDistanceTest|PunchSettingsTest'`
-Expected: PASS. If `test_admin_can_set_plant_centre_as_decimals` fails with "must keep the setting's existing JSON type", the stored `company.latitude` is a JSON string: write a one-statement fix migration `0502_normalise_company_coordinates_to_numbers.php` that rewrites both rows with `json_encode((float) json_decode($value))`, then re-run. (Seeder uses `$company['latitude']`; confirm its type with `grep -n "latitude" api/database/seeders/SettingsSeeder.php | head`.)
+Expected: PASS. If `test_admin_can_set_plant_centre_as_decimals` fails with "must keep the setting's existing JSON type", the stored `company.latitude` is a JSON string: write a one-statement fix migration `0572_normalise_company_coordinates_to_numbers.php` that rewrites both rows with `json_encode((float) json_decode($value))`, then re-run. (Seeder uses `$company['latitude']`; confirm its type with `grep -n "latitude" api/database/seeders/SettingsSeeder.php | head`.)
 
 - [ ] **Step 5: Commit**
 
