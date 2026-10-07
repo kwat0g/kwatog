@@ -33,7 +33,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
-import { formatDate, formatDateFull, formatTime } from '@/lib/formatDate';
+import { formatDate, formatDateFull } from '@/lib/formatDate';
 import type { SelfServiceHome } from '@/types/self-service';
 import { TimeClockCard } from '@/components/self-service/TimeClockCard';
 
