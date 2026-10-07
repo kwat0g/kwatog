@@ -80,6 +80,12 @@ export function TimeClockCard() {
                   'No shift assigned. Ask HR to set one.'
                 )}
               </p>
+              {clockedIn && data.earliest_out && new Date(data.earliest_out) > new Date() ? (
+                <p className="mt-0.5 text-xs text-muted">
+                  You can time out from{' '}
+                  <span className="font-mono tabular-nums">{formatTime(data.earliest_out)}</span>.
+                </p>
+              ) : null}
             </div>
             {data.tardiness_minutes ? (
               <Chip variant="warning">Late by {data.tardiness_minutes} min</Chip>

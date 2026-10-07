@@ -106,4 +106,28 @@ describe('TimeClockCard', () => {
     expect(await screen.findByRole('button', { name: /try again in \d+s/i })).toBeDisabled();
     expect(punchApi.punch).toHaveBeenCalledTimes(1);
   });
+
+  it('tells a clocked-in employee the earliest time they can time out', async () => {
+    vi.mocked(punchApi.status).mockResolvedValue({
+      ...status,
+      next_action: 'out',
+      punches: [{ direction: 'in', punched_at: '2026-10-07T06:02:00+08:00' }],
+      earliest_out: '2099-01-01T13:45:00+08:00',
+    });
+    renderCard();
+
+    expect(await screen.findByText(/you can time out from/i)).toBeInTheDocument();
+  });
+
+  it('shows what to do after each new refusal code', async () => {
+    mockGeolocation((ok) => ok({ coords: { latitude: 14.286, longitude: 120.9345, accuracy: 18 } } as GeolocationPosition));
+    vi.mocked(punchApi.punch).mockRejectedValue({
+      response: { status: 422, data: { message: 'You can time out from 1:45 PM.', code: 'too_early_out' } },
+    });
+    renderCard();
+
+    fireEvent.click(await screen.findByRole('button', { name: /time in/i }));
+
+    expect(await screen.findByText(/ask hr to record it/i)).toBeInTheDocument();
+  });
 });

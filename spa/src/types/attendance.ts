@@ -122,6 +122,7 @@ export interface PunchStatus {
   punches: Array<{ direction: 'in' | 'out'; punched_at: string }>;
   tardiness_minutes: number | null;
   radius_m: number;
+  earliest_out?: string | null;
 }
 
 export interface GpsFix {

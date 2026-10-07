@@ -67,6 +67,10 @@ export const RECOVERY: Record<string, string> = {
   on_leave: 'Contact HR to correct this day.',
   row_removed: 'Contact HR to correct this day.',
   out_before_in: 'Contact HR to correct this day.',
+  work_not_authorized: 'File an overtime request for that day. Once it is approved you can time in.',
+  too_late_in: 'Ask HR to record your attendance for today.',
+  min_work: 'Wait until the time shown, then try again.',
+  too_early_out: 'For an earlier exit, ask HR to record it.',
 };
 
 function readFix(): Promise<GpsFix> {
