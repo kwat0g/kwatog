@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Tells HR which employees have a time in but no time out for yesterday. An open
- * row computes zero hours, so HR must correct it by hand — never auto-closed,
+ * Tells HR and department heads which employees have a time in but no time out for yesterday.
+ * An open row computes zero hours, so they must correct it by hand — never auto-closed,
  * because inventing a time out invents pay data.
  *
  * Distinguishes nothing-to-do (SUCCESS) from everything-failed (FAILURE).
@@ -22,14 +22,17 @@ class NotifyMissingTimeOut extends Command
 {
     protected $signature = 'attendance:notify-missing-timeout';
 
-    protected $description = 'Notify HR of yesterday\'s attendance rows with a time in but no time out';
+    protected $description = 'Notify HR and department heads of yesterday\'s attendance rows with a time in but no time out';
 
     public function handle(NotificationService $notifications): int
     {
-        $count = Attendance::query()
+        $yesterday = now()->subDay();
+        $open = Attendance::query()
+            ->with('employee.department')
             ->whereNotNull('time_in')->whereNull('time_out')
-            ->whereDate('date', now()->subDay()->toDateString())
-            ->count();
+            ->whereDate('date', $yesterday->toDateString())
+            ->get();
+        $count = $open->count();
 
         if ($count === 0) {
             $this->info('No open attendance rows for yesterday.');
@@ -49,22 +52,60 @@ class NotifyMissingTimeOut extends Command
             return self::FAILURE;
         }
 
+        $label = $yesterday->format('M j, Y');
+        $failed = 0;
+        $sent = 0;
+
         try {
             $notifications->send($hr, 'attendance.missing_time_out', [
                 'title' => 'Missing time-out',
-                'message' => "{$count} employee(s) have no time out for ".now()->subDay()->format('M j, Y').'.',
+                'message' => "{$count} employee(s) have no time out for {$label}.",
                 'link_to' => '/hr/attendance?missing_time_out=1',
                 'entity_type' => 'attendance',
-            ], 'attendance.missing_time_out:'.now()->subDay()->toDateString());
+            ], 'attendance.missing_time_out:'.$yesterday->toDateString());
+            $sent++;
         } catch (Throwable $e) {
-            Log::error('attendance:notify-missing-timeout send failed', ['error' => $e->getMessage()]);
-            $this->error('Could not send the notification: '.$e->getMessage());
-
-            return self::FAILURE;
+            $failed++;
+            Log::error('attendance:notify-missing-timeout HR send failed', ['error' => $e->getMessage()]);
+            $this->error('Could not notify HR: '.$e->getMessage());
         }
 
-        $this->info("Notified HR of {$count} open row(s).");
+        foreach ($open->groupBy(fn (Attendance $a) => $a->employee?->department_id) as $departmentId => $rows) {
+            if (! $departmentId) {
+                continue;
+            }
+            $heads = User::query()
+                ->whereHas('role', fn ($q) => $q->where('slug', 'department_head'))
+                ->where('is_active', true)
+                ->whereHas('employee', fn ($q) => $q->where('department_id', $departmentId))
+                ->get();
+            $department = $rows->first()->employee?->department?->name ?? "department {$departmentId}";
 
-        return self::SUCCESS;
+            if ($heads->isEmpty()) {
+                $this->warn("{$department}: no active department head to notify about {$rows->count()} open row(s).");
+
+                continue;
+            }
+
+            foreach ($heads as $head) {
+                try {
+                    $notifications->send($head, 'attendance.missing_time_out', [
+                        'title' => 'Missing time-out',
+                        'message' => "{$rows->count()} employee(s) in {$department} have no time out for {$label}.",
+                        'link_to' => '/hr/attendance?missing_time_out=1',
+                        'entity_type' => 'attendance',
+                    ], 'attendance.missing_time_out:'.$yesterday->toDateString().':'.$head->id);
+                    $sent++;
+                } catch (Throwable $e) {
+                    $failed++;
+                    Log::error('attendance:notify-missing-timeout department head send failed', ['user_id' => $head->id, 'error' => $e->getMessage()]);
+                    $this->error("Could not notify {$head->name}: ".$e->getMessage());
+                }
+            }
+        }
+
+        $this->info("Sent {$sent} notification(s) for {$count} open row(s); {$failed} failed.");
+
+        return $failed > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

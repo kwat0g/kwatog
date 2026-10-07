@@ -10,7 +10,9 @@ use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\Attendance\Concerns\PunchFixtures;
 use Tests\TestCase;
 
@@ -70,5 +72,54 @@ class PunchCommandsTest extends TestCase
 
         // Seed HR officer role exists, but no active user with that role
         $this->artisan('attendance:notify-missing-timeout')->assertFailed();
+    }
+
+    private function departmentHead(Department $dept): User
+    {
+        $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
+
+        return User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'department_head')->value('id'),
+            'employee_id' => $emp->id,
+            'is_active' => true,
+        ]);
+    }
+
+    private function missingTimeoutCount(): int
+    {
+        return DB::table('notifications')->where('type', 'attendance.missing_time_out')->count();
+    }
+
+    public function test_each_department_head_is_told_about_their_own_departments_open_rows(): void
+    {
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id'), 'is_active' => true]);
+        $dept = Department::factory()->create();
+        $this->departmentHead($dept);
+        $this->departmentHead($dept); // two heads: both notified
+        $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => $dept->id]);
+        $this->at('2026-10-08 06:00:00');
+        Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+
+        $this->artisan('attendance:notify-missing-timeout')->assertSuccessful();
+
+        $this->assertSame(3, $this->missingTimeoutCount()); // 1 HR + 2 heads
+
+        $this->artisan('attendance:notify-missing-timeout')->assertSuccessful(); // rerun: deduped
+        $this->assertSame(3, $this->missingTimeoutCount());
+    }
+
+    public function test_a_department_without_a_head_is_reported_but_is_not_a_failure(): void
+    {
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        User::factory()->create(['role_id' => Role::query()->where('slug', 'hr_officer')->value('id'), 'is_active' => true]);
+        $emp = \App\Modules\HR\Models\Employee::factory()->create(['department_id' => Department::factory()->create()->id]);
+        $this->at('2026-10-08 06:00:00');
+        Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+
+        $this->artisan('attendance:notify-missing-timeout')
+            ->expectsOutputToContain('no active department head')
+            ->assertSuccessful();
+        $this->assertSame(1, $this->missingTimeoutCount()); // HR only
     }
 }
