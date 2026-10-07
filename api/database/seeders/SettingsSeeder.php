@@ -74,6 +74,9 @@ class SettingsSeeder extends Seeder
             ['key' => 'company.punch_max_accuracy_m', 'value' => 100, 'group' => 'company', 'label' => 'Time in/out max GPS error (m)', 'description' => 'Worst GPS accuracy accepted for a time in/out.'],
             ['key' => 'attendance.punch_early_minutes', 'value' => 120, 'group' => 'attendance', 'label' => 'Punch window: minutes before shift', 'description' => 'How early before shift start an employee may time in.'],
             ['key' => 'attendance.punch_late_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch window: minutes after shift', 'description' => 'How late after shift end an employee may still time out.'],
+            ['key' => 'attendance.punch_early_out_grace_minutes', 'value' => 15, 'group' => 'attendance', 'label' => 'Punch: early time-out grace (min)', 'description' => 'How many minutes before shift end an employee may time out.'],
+            ['key' => 'attendance.punch_min_work_minutes', 'value' => 30, 'group' => 'attendance', 'label' => 'Punch: minimum work before time-out (min)', 'description' => 'Minimum minutes between the latest time-in punch and a time-out.'],
+            ['key' => 'attendance.punch_late_in_cutoff_minutes', 'value' => 240, 'group' => 'attendance', 'label' => 'Punch: late time-in cutoff (min)', 'description' => 'The first time-in of the day is refused later than this many minutes after shift start.'],
             ['key' => 'email.brand_name', 'value' => $emailBrandName, 'group' => 'email', 'label' => 'Email Display Name', 'description' => 'Customer-facing display name used in transactional email headers and footers.'],
             ['key' => 'pdf.footer_disclaimer', 'value' => $envString('PDF_FOOTER_DISCLAIMER'), 'group' => 'company', 'label' => 'PDF Footer Disclaimer', 'description' => 'Footer disclaimer shown on generated PDF documents.'],
 

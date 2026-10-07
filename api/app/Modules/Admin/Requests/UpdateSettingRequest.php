@@ -415,6 +415,9 @@ class UpdateSettingRequest extends FormRequest
             'company.punch_max_accuracy_m' => ['value' => ['required', 'numeric', 'between:5,1000']],
             'attendance.punch_early_minutes' => ['value' => ['required', 'integer', 'between:0,720']],
             'attendance.punch_late_minutes' => ['value' => ['required', 'integer', 'between:0,720']],
+            'attendance.punch_early_out_grace_minutes' => ['value' => ['required', 'integer', 'between:0,120']],
+            'attendance.punch_min_work_minutes' => ['value' => ['required', 'integer', 'between:0,240']],
+            'attendance.punch_late_in_cutoff_minutes' => ['value' => ['required', 'integer', 'between:30,720']],
         ];
 
         return $this->withStoredTypeGuard(
