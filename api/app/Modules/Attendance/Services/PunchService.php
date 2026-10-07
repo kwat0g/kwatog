@@ -6,10 +6,12 @@ namespace App\Modules\Attendance\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
+use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Enums\PunchDirection;
 use App\Modules\Attendance\Exceptions\PunchRejectedException;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\AttendancePunch;
+use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\Attendance\Support\GeoDistance;
 use App\Modules\HR\Models\Employee;
@@ -35,6 +37,7 @@ class PunchService
         private readonly DTRComputationService $dtr,
         private readonly OvertimeService $overtime,
         private readonly AttendanceDateMutabilityGuard $mutability,
+        private readonly HolidayService $holidays,
     ) {}
 
     public function punch(
@@ -76,6 +79,16 @@ class PunchService
                 throw new PunchRejectedException('row_removed', 'Your attendance record for this shift was removed. Contact HR.');
             }
 
+            $nonWorking = $this->isNonWorkingDay($employee, $anchor);
+            if ($direction === PunchDirection::In) {
+                if ($nonWorking && ! $this->hasApprovedOvertime($employee->id, $anchor)) {
+                    throw new PunchRejectedException('work_not_authorized', 'Rest-day and holiday work needs an approved overtime request. File one, then try again once it is approved.');
+                }
+                if (! $nonWorking && ($row === null || $row->time_in === null)) {
+                    $this->assertNotTooLateIn($shift, $anchor, $now);
+                }
+            }
+
             $date = $row?->date->toDateString() ?? $anchor->toDateString();
             $this->mutability->assertMutable($employee->id, $date);
 
@@ -85,6 +98,17 @@ class PunchService
             } else {
                 if ($a->time_in !== null && $now->lessThanOrEqualTo($a->time_in)) {
                     throw new PunchRejectedException('out_before_in', 'Time out must be after your time in.');
+                }
+                $rowDay = CarbonImmutable::parse($a->date->toDateString());
+                $limit = $this->earliestOut($shift, $rowDay, $last->punched_at->toImmutable(), $this->isNonWorkingDay($employee, $rowDay));
+                if ($now->lessThan($limit['at'])) {
+                    $time = $limit['at']->format('g:i A');
+                    throw new PunchRejectedException(
+                        $limit['reason'],
+                        $limit['reason'] === 'min_work'
+                            ? "Wait until {$time} to time out (minimum work time)."
+                            : "You can time out from {$time}. For an earlier exit, ask HR to record it.",
+                    );
                 }
                 $a->time_out = $a->time_out !== null && $a->time_out->greaterThan($now) ? $a->time_out : $now;
             }
@@ -108,7 +132,7 @@ class PunchService
         });
     }
 
-    /** @return array{next_action:string, shift:?array{name:string,start:string,end:string}, punches:list<array{direction:string,punched_at:string}>, tardiness_minutes:?int, radius_m:float} */
+    /** @return array{next_action:string, shift:?array{name:string,start:string,end:string}, punches:list<array{direction:string,punched_at:string}>, tardiness_minutes:?int, radius_m:float, earliest_out:?string} */
     public function status(Employee $employee, ?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
@@ -130,6 +154,12 @@ class PunchService
                 'punched_at' => $p->punched_at->toIso8601String(),
             ])->all();
 
+        $earliestOut = null;
+        if ($open && $row !== null && $shift !== null) {
+            $rowDay = CarbonImmutable::parse($row->date->toDateString());
+            $earliestOut = $this->earliestOut($shift, $rowDay, $last->punched_at->toImmutable(), $this->isNonWorkingDay($employee, $rowDay))['at']->toIso8601String();
+        }
+
         return [
             'next_action' => $open ? PunchDirection::Out->value : PunchDirection::In->value,
             'shift' => $shift ? [
@@ -140,6 +170,7 @@ class PunchService
             'punches' => $punches,
             'tardiness_minutes' => $row !== null ? (int) $row->tardiness_minutes : null,
             'radius_m' => $this->settings->requiredFloat('company.punch_radius_m', 1, 5000),
+            'earliest_out' => $earliestOut,
         ];
     }
 
@@ -196,11 +227,7 @@ class PunchService
 
         foreach ([0, -1] as $offset) {
             $day = $now->startOfDay()->addDays($offset);
-            $start = $day->setTimeFromTimeString((string) $shift->start_time);
-            $end = $day->setTimeFromTimeString((string) $shift->end_time);
-            if ($end->lessThanOrEqualTo($start)) {
-                $end = $end->addDay();
-            }
+            [$start, $end] = $this->shiftInstance($shift, $day);
             if ($now->betweenIncluded($start->subMinutes($early), $end->addMinutes($late))) {
                 return $day;
             }
@@ -220,5 +247,63 @@ class PunchService
         if ($row->is_manual_entry) {
             throw new PunchRejectedException('manual_entry', 'HR corrected this day\'s attendance. Contact HR to change it.');
         }
+    }
+
+    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} shift start/end for the shift instance beginning on $day */
+    private function shiftInstance(Shift $shift, CarbonImmutable $day): array
+    {
+        $start = $day->setTimeFromTimeString((string) $shift->start_time);
+        $end = $day->setTimeFromTimeString((string) $shift->end_time);
+        if ($end->lessThanOrEqualTo($start)) {
+            $end = $end->addDay();
+        }
+
+        return [$start, $end];
+    }
+
+    private function isNonWorkingDay(Employee $employee, CarbonImmutable $day): bool
+    {
+        return ! $this->shifts->isWorkingDay($employee, $day) || $this->holidays->forDate($day) !== null;
+    }
+
+    private function hasApprovedOvertime(int $employeeId, CarbonImmutable $day): bool
+    {
+        return OvertimeRequest::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $day->toDateString())
+            ->where('status', OvertimeStatus::Approved->value)
+            ->exists();
+    }
+
+    private function assertNotTooLateIn(Shift $shift, CarbonImmutable $anchor, CarbonImmutable $now): void
+    {
+        $cutoff = $this->settings->requiredInt('attendance.punch_late_in_cutoff_minutes', 30, 720);
+        [$start] = $this->shiftInstance($shift, $anchor);
+        if ($now->greaterThan($start->addMinutes($cutoff))) {
+            throw new PunchRejectedException('too_late_in', 'It is too late to time in for this shift. Ask HR to record your attendance.');
+        }
+    }
+
+    /**
+     * Earliest moment an OUT is allowed, and which rule sets it.
+     * Authorized non-working-day work is bounded only by minimum work; a normal
+     * shift also cannot end before `shift end − grace`. The minimum counts from the
+     * LATEST IN punch so a post-shift overtime cycle is measured from its own start.
+     *
+     * @return array{at: CarbonImmutable, reason: string}
+     */
+    private function earliestOut(Shift $shift, CarbonImmutable $rowDay, CarbonImmutable $latestIn, bool $nonWorking): array
+    {
+        $minWorkAt = $latestIn->addMinutes($this->settings->requiredInt('attendance.punch_min_work_minutes', 0, 240));
+        if ($nonWorking) {
+            return ['at' => $minWorkAt, 'reason' => 'min_work'];
+        }
+
+        [, $end] = $this->shiftInstance($shift, $rowDay);
+        $shiftAt = $end->subMinutes($this->settings->requiredInt('attendance.punch_early_out_grace_minutes', 0, 120));
+
+        return $shiftAt->greaterThan($minWorkAt)
+            ? ['at' => $shiftAt, 'reason' => 'too_early_out']
+            : ['at' => $minWorkAt, 'reason' => 'min_work'];
     }
 }
