@@ -23,6 +23,7 @@ const TYPE_VARIANT: Record<PayrollAnomalyType, 'danger' | 'warning' | 'info'> = 
  high_deduction: 'danger',
  first_payroll: 'info',
  zero_pay: 'danger',
+ open_attendance: 'info',
 };
 
 interface Props {

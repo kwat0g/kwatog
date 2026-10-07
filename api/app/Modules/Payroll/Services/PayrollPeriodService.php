@@ -1255,6 +1255,7 @@ class PayrollPeriodService
             $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
                 ->where('payroll_period_id', $locked->id)
                 ->where('is_resolved', false)
+                ->where('flag_type', '!=', \App\Modules\Payroll\Enums\PayrollAnomalyType::OpenAttendance->value)
                 ->count();
             if ($unresolved > 0) {
                 throw new BusinessRuleException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
