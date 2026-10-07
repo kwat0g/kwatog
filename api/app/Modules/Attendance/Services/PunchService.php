@@ -103,10 +103,11 @@ class PunchService
                 $limit = $this->earliestOut($shift, $rowDay, $last->punched_at->toImmutable(), $this->isNonWorkingDay($employee, $rowDay));
                 if ($now->lessThan($limit['at'])) {
                     $time = $limit['at']->format('g:i A');
+                    $minWorkMinutes = $this->settings->requiredInt('attendance.punch_min_work_minutes', 0, 240);
                     throw new PunchRejectedException(
                         $limit['reason'],
                         $limit['reason'] === 'min_work'
-                            ? "Wait until {$time} to time out (minimum work time)."
+                            ? "Wait until {$time} to time out (minimum {$minWorkMinutes} minutes of work)."
                             : "You can time out from {$time}. For an earlier exit, ask HR to record it.",
                     );
                 }
