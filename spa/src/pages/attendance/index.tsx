@@ -374,7 +374,12 @@ export default function AttendancePage() {
       key: 'time_out',
       header: 'Out',
       align: 'left',
-      cell: (r) => <NumCell>{fmtTime(r.time_out)}</NumCell>,
+      cell: (r) =>
+        r.time_in && !r.time_out && !r.deleted_at && r.date < today ? (
+          <Chip variant="warning">Missing</Chip>
+        ) : (
+          <NumCell>{fmtTime(r.time_out)}</NumCell>
+        ),
     },
     {
       key: 'regular_hours',
