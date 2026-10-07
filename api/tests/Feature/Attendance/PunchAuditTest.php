@@ -63,4 +63,32 @@ class PunchAuditTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.date', '2026-10-06');
     }
+
+    public function test_raw_gps_coordinates_are_masked_in_audit_logs(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 06:02:00');
+
+        // Create a punch with real coordinates
+        app(PunchService::class)->punch($emp, 14.2860, 120.9345, 20.0, '10.0.0.1', 'Mozilla/5.0');
+
+        // Query audit_logs for the AttendancePunch model
+        $auditLogs = \App\Common\Models\AuditLog::query()
+            ->where('model_type', 'App\Modules\Attendance\Models\AttendancePunch')
+            ->where('action', 'created')
+            ->get();
+
+        $this->assertCount(1, $auditLogs);
+        $log = $auditLogs->first();
+
+        // Verify that latitude and longitude are masked as '***' in the audit trail
+        // (raw coordinates are sensitive and purged after 90 days; mask them immediately)
+        $this->assertEquals('***', $log->new_values['latitude']);
+        $this->assertEquals('***', $log->new_values['longitude']);
+
+        // Verify that other fields are preserved (not masked)
+        $this->assertNotNull($log->new_values['accuracy_m']);
+        $this->assertNotNull($log->new_values['distance_m']);
+        $this->assertNotNull($log->new_values['employee_id']);
+    }
 }

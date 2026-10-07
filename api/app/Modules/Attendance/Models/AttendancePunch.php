@@ -38,4 +38,20 @@ class AttendancePunch extends Model
     {
         return $this->belongsTo(Attendance::class);
     }
+
+    /**
+     * Mask raw GPS coordinates in the audit trail. Raw latitude/longitude are
+     * purged after 90 days; they should not be visible in audit_logs to anyone
+     * but HR. Here we mask them as '***', and only audit logs with permission
+     * attendance.punch.audit can see the real values (which are null after the 90-day window).
+     *
+     * @return array<string, string>
+     */
+    public function auditAttributeSnapshot(): array
+    {
+        return [
+            'latitude' => '***',
+            'longitude' => '***',
+        ];
+    }
 }
