@@ -15,7 +15,7 @@ Pay amounts, premium rates and the overtime approval process are unchanged.
 1. OUT before shift end is accepted; only payroll's undertime deduction reacts. A 61-second IN/OUT is accepted and yields an Absent row that still carries ~8 h of undertime.
 2. IN is accepted up to `punch_late_minutes` (240) after shift end; the row becomes a half-day or an absence, with nothing flagging it.
 3. A self-service punch on a rest day or holiday earns the premium rate with no work authorization.
-4. `EmployeeShiftAssignment.working_days` is stored and validated but never read: DTR hard-codes Sunday as the only rest day.
+4. `EmployeeShiftAssignment.working_days` is stored and validated but never read: DTR hard-codes Sunday as the only rest day (so a Monday–Friday worker's Saturday and a Sunday–Thursday worker's Sunday are mis-classified).
 5. A forgotten time-out is paid in full, and only HR is told, once.
 6. Lunch/break punches are invisible (only first-in/last-out are stored).
 
@@ -30,6 +30,10 @@ Already correct and unchanged: unapproved overtime is not paid; auto-detected ov
 5. **Working days:** a day is a working day per the employee's current assignment `working_days` (ISO weekdays 1–7). A null/missing value keeps today's behaviour: Monday–Saturday work, Sunday rest.
 6. **Open rows:** the daily missing-time-out command also notifies each department head about their own department's open rows; payroll shows a non-blocking warning when a period contains open rows. Pay is not withheld automatically.
 7. **Lunch/breaks:** no gap tracking. Decision 1 makes a mid-day OUT impossible, so one in/out pair per day follows naturally; post-shift overtime cycles still work.
+
+## Dependency note (found while planning)
+
+The `working_days` column migration (`2026_10_05_000010_add_working_days_to_employee_shift_assignments`), the model's `working_days` fillable/cast, `ShiftAssignmentService::configureWorkingDays`/`assertWorkingDays` and the shift-assignment routes are **uncommitted work in the working tree**, not in `HEAD`. This feature must not commit that work. `isWorkingDay()` is therefore written to degrade safely: a missing attribute, a null value, or an un-cast JSON string all fall back to the Sunday-rest default, so the committed code behaves exactly like today until the `working_days` work is committed. Tests that need a non-null `working_days` skip themselves when the column is absent.
 
 ## Out of scope
 
@@ -91,7 +95,6 @@ Rule order inside `punch()` (all throw `PunchRejectedException` inside the trans
   - Non-manual rows no longer inherit a previously stored `is_rest_day`, so changing `working_days` takes effect on the next recompute (previously the stored flag was sticky).
 - `compute()` and its inputs are unchanged, so `DTRComputationServiceTest` and the payroll fixtures do not change.
 - This applies wherever `computeForRecord` runs: punches, CSV imports, HR manual entry, overtime approval recompute. That is intentional; it is the behaviour change for any employee whose `working_days` is set.
-- Hardening: `bulkAssign`/`assignToEmployee` pass `working_days` to `replaceForEmployee` without validation (only `configureWorkingDays` validates). Validate in `replaceForEmployee` when non-null, using the existing `assertWorkingDays`.
 
 ## Open rows — notifications and payroll warning
 
@@ -135,8 +138,8 @@ Only settings are seeded, so the plain numeric prefix is correct (no dependency 
 ## Testing
 
 - `PunchService` (feature): early-out refused then allowed at the boundary; min-work refused (61-second in/out); late-in refused for the first IN but allowed for a post-shift second IN; non-working-day IN refused without an Approved overtime request and allowed with one (rest day by `working_days`, Sunday default, regular holiday, special holiday); a night shift starting on a working day and ending on a rest day is allowed; authorized rest-day OUT only needs min-work; `status().earliest_out` matches `punch()`.
-- `ShiftAssignmentService`: `assignmentFor` date ranges; `isWorkingDay` for null, set, and no assignment; `working_days` validated in `bulkAssign`/`assignToEmployee`.
-- DTR: Mon–Fri employee on Saturday → normal day; Tue–Sat employee on Sunday → rest day; null → Sunday rest; manual entry keeps its flag; recompute after a `working_days` change.
+- `ShiftAssignmentService`: `assignmentFor` date ranges; `isWorkingDay` for null, set, no assignment, and a JSON-string value.
+- DTR: Mon–Fri employee on Saturday → rest day (was: normal day); Sun–Thu employee on Sunday → working day (was: rest day); null → Sunday rest, Monday–Saturday working; manual entry keeps its flag; recompute after a `working_days` change.
 - Command: department-head fan-out grouped per department, per-user dedupe keys, department without a head, HR-only fallback, all-sends-fail exit code.
 - Payroll: `OpenAttendance` flag created with dates, does not block finalize, other flags still block.
 - SPA: card shows the earliest-out hint; recovery hints for the four new codes; `PayrollAnomaly` chip.
