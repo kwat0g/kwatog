@@ -20,7 +20,6 @@ import {
   LuActivity,
   LuLock,
   LuLockOpen,
-  LuMapPin,
 } from '@/lib/icons';
 import {
   settingsApi,
@@ -36,6 +35,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { Chip } from '@/components/ui/Chip';
+import { PlantLocationPicker, PLANT_LOCATION_KEYS } from '@/components/admin/PlantLocationPicker';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -410,34 +410,11 @@ function SettingsGroup({ group, meta, rows, isEditMode, saving, onSave }: Settin
       }
     >
       {meta?.description && <p className="text-xs text-muted -mt-1 mb-4">{meta.description}</p>}
-      {group === 'company' && isEditMode && (
-        <div className="mb-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<LuMapPin size={14} />}
-            onClick={() => {
-              if (!navigator.geolocation) {
-                toast.error('This browser cannot provide a location.');
-                return;
-              }
-              navigator.geolocation.getCurrentPosition(
-                (p) => {
-                  onSave('company.latitude', Number(p.coords.latitude.toFixed(6)));
-                  onSave('company.longitude', Number(p.coords.longitude.toFixed(6)));
-                },
-                () => toast.error('Could not read your location. Allow location access and try again.'),
-                { enableHighAccuracy: true, timeout: 15000 }
-              );
-            }}
-          >
-            Use my current location as the plant centre
-          </Button>
-          <p className="text-xs text-muted mt-1">Stand in the middle of the plant first. Time in/out uses this point.</p>
-        </div>
-      )}
+      {group === 'company' && <PlantLocationPicker rows={rows} canEdit={isEditMode} />}
       <div className="flex flex-col divide-y divide-subtle">
-        {rows.map((row) => (
+        {rows
+          .filter((row) => group !== 'company' || !PLANT_LOCATION_KEYS.includes(row.key as (typeof PLANT_LOCATION_KEYS)[number]))
+          .map((row) => (
           <SettingRowEditor
             key={row.key}
             row={row}

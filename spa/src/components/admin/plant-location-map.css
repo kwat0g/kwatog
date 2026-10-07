@@ -1,0 +1,103 @@
+/*
+ * Plant location map (Settings > Company). Leaflet + OpenStreetMap raster
+ * tiles, restyled from Atelier tokens only — no literal colours — so the
+ * controls follow light / dark. The tile sheet itself stays light in every
+ * theme (a map is read as a printed sheet; inverting it would swap land and
+ * water), only gently warmed so it sits on paper instead of fighting it.
+ *
+ * Scoped under `.plant-location-map` so nothing leaks into the rest of the app
+ * or the landing page's `.plant-map`.
+ */
+.plant-location-map {
+  background: var(--bg-elevated);
+  font-family: var(--font-sans);
+  outline: none;
+  filter: saturate(0.72) sepia(0.12);
+}
+
+/* Placing a pin: the cursor says so. Leaflet's own drag grab/grabbing stay. */
+.plant-location-map.is-editable.leaflet-grab {
+  cursor: crosshair;
+}
+.plant-location-map.is-editable.leaflet-dragging.leaflet-grab {
+  cursor: grabbing;
+}
+
+.plant-location-map:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+/* Crosshair pin — same target language as the brand datum, in the accent. */
+.plant-location-map .leaflet-marker-icon.plant-location-pin {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  filter: drop-shadow(0 0 2px var(--bg-canvas)) drop-shadow(0 0 1px var(--bg-canvas));
+}
+.plant-location-map.is-editable .leaflet-marker-icon.plant-location-pin {
+  cursor: grab;
+}
+.plant-location-map .leaflet-marker-icon.plant-location-pin:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-full);
+}
+
+/* The allowed area. A thin accent ring over a faint wash — the ring carries the
+   edge, the wash shows what is inside. Presentation attributes Leaflet writes
+   (stroke, fill) lose to these CSS properties. */
+.plant-location-circle {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: var(--accent);
+  fill-opacity: 0.12;
+}
+
+/* Zoom — two paper chips in one hairline frame. */
+.plant-location-map .leaflet-control-zoom {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.plant-location-map .leaflet-control-zoom a {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+  transition: background-color var(--duration-fast) var(--ease-default);
+}
+.plant-location-map .leaflet-control-zoom a:last-child {
+  border-bottom: none;
+}
+.plant-location-map .leaflet-control-zoom a:hover {
+  background: var(--bg-elevated);
+  color: var(--accent);
+}
+.plant-location-map .leaflet-control-zoom a.leaflet-disabled {
+  color: var(--text-subtle);
+  background: var(--bg-surface);
+}
+
+/* Attribution is required by the tile licence; keep it small, mono, opaque. */
+.plant-location-map .leaflet-control-attribution {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-top-left-radius: var(--radius-sm);
+}
+.plant-location-map .leaflet-control-attribution a {
+  color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-location-map .leaflet-zoom-anim .leaflet-zoom-animated,
+  .plant-location-map .leaflet-fade-anim .leaflet-tile {
+    transition: none;
+  }
+}
