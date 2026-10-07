@@ -80,6 +80,7 @@ class PunchRulesTest extends TestCase
         $this->at('2026-10-07 14:20:00');
         $e = $this->assertRejected('min_work', fn () => $this->punch($emp));
         $this->assertStringContainsString('2:40 PM', $e->getMessage());
+        $this->assertStringContainsString('30 minutes', $e->getMessage());
 
         $this->at('2026-10-07 14:40:00');
         $this->assertSame(PunchDirection::Out, $this->punch($emp)->direction);
