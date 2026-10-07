@@ -10,6 +10,7 @@ use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
+use App\Modules\HR\Models\Employee;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -59,7 +60,11 @@ class DTRComputationService
 
         $holiday = $this->holidays->forDate($date);
 
-        $isRestDay = (bool) $a->is_rest_day || $date->dayOfWeek === Carbon::SUNDAY;
+        // HR's manual entries keep their explicit flag; every other row follows the
+        // employee's working days (null/unset keeps Monday–Saturday work, Sunday rest)
+        // and no longer inherits a flag stored by an earlier computation.
+        $isRestDay = ($a->is_manual_entry && (bool) $a->is_rest_day)
+            || ! $this->shiftAssignments->isWorkingDay($a->employee ?? Employee::findOrFail($a->employee_id), $date);
 
         $approvedOtHours = $a->time_out
             ? (float) OvertimeRequest::query()
