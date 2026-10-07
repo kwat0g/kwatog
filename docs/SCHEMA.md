@@ -111,7 +111,7 @@ id, employee_id (FK employees), separation_date (date), separation_reason (strin
 
 ---
 
-## ATTENDANCE (5 tables)
+## ATTENDANCE (6 tables)
 
 ### shifts
 id, name (string 50), start_time (time), end_time (time), break_minutes (int), is_night_shift (bool default false), is_extended (bool default false), auto_ot_hours (decimal 3,1 nullable), created_at, updated_at
@@ -127,6 +127,9 @@ id, employee_id (FK employees), date (date), hours_requested (decimal 3,1), reas
 
 ### holidays
 id, name (string 100), date (date), type (string 30: regular/special_non_working), is_recurring (bool default false), created_at, updated_at
+
+### attendance_punches
+id, employee_id (FK employees), attendance_id (FK attendances nullable), direction (string 3: in/out), punched_at (timestamp), latitude (decimal 9,6 nullable — purged after 90 days), longitude (decimal 9,6 nullable — purged after 90 days), accuracy_m (decimal 7,2), distance_m (decimal 9,2), ip (string 45 nullable), user_agent (string 255 nullable), created_at, updated_at, INDEX (employee_id, punched_at), INDEX (attendance_id)
 
 ---
 
