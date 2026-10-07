@@ -55,12 +55,12 @@ class ShiftAssignmentService
     }
 
     /**
-     * Resolve the current shift for an employee on a given date.
-     * Returns the most recent assignment whose [effective_date, end_date|∞] interval contains $date.
+     * The assignment whose [effective_date, end_date|∞] interval contains $date
+     * (newest effective_date wins), or null.
      */
-    public function current(Employee $employee, CarbonInterface $date): ?Shift
+    public function assignmentFor(Employee $employee, CarbonInterface $date): ?EmployeeShiftAssignment
     {
-        $assignment = EmployeeShiftAssignment::query()
+        return EmployeeShiftAssignment::query()
             ->where('employee_id', $employee->id)
             ->where('effective_date', '<=', $date->toDateString())
             ->where(function ($q) use ($date) {
@@ -68,8 +68,32 @@ class ShiftAssignmentService
             })
             ->orderByDesc('effective_date')
             ->first();
+    }
 
-        return $assignment?->shift()->first();
+    /** Resolve the current shift for an employee on a given date. */
+    public function current(Employee $employee, CarbonInterface $date): ?Shift
+    {
+        return $this->assignmentFor($employee, $date)?->shift()->first();
+    }
+
+    /**
+     * Whether $date is a working day for $employee. Follows the assignment's
+     * `working_days` (ISO weekdays 1–7). A missing attribute, null, empty value or
+     * un-cast JSON string that cannot be read falls back to the long-standing
+     * default: Monday–Saturday work, Sunday rest.
+     */
+    public function isWorkingDay(Employee $employee, CarbonInterface $date): bool
+    {
+        $days = $this->assignmentFor($employee, $date)?->working_days;
+        if (is_string($days)) {
+            $days = json_decode($days, true);
+        }
+
+        $iso = $date->dayOfWeekIso;
+
+        return is_array($days) && $days !== []
+            ? in_array($iso, $days, true)
+            : $iso !== 7;
     }
 
     private function replaceForEmployee(int $employeeId, int $shiftId, Carbon $effective, ?string $endDate): void
