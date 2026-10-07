@@ -155,6 +155,22 @@ class PayrollAnomalyService
             }
         }
 
+        // 5. Open attendance rows — informational only: it never blocks finalize
+        // (see unresolvedCount() and PayrollPeriodService::finalize), it just tells
+        // the reviewer that pay was computed with a day that has no time-out.
+        $openDates = Attendance::query()
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$period->period_start, $period->period_end])
+            ->whereNotNull('time_in')->whereNull('time_out')
+            ->whereDate('date', '<', now()->toDateString())
+            ->orderBy('date')
+            ->pluck('date')
+            ->map(fn ($d) => $d->toDateString())
+            ->all();
+        if ($openDates !== []) {
+            $created += $this->flag($payroll, $period, PayrollAnomalyType::OpenAttendance, ['dates' => $openDates]);
+        }
+
         return $created;
     }
 
@@ -221,6 +237,7 @@ class PayrollAnomalyService
     {
         return PayrollAnomalyFlag::where('payroll_period_id', $periodId)
             ->where('is_resolved', false)
+            ->where('flag_type', '!=', PayrollAnomalyType::OpenAttendance->value)
             ->count();
     }
 

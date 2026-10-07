@@ -11,6 +11,7 @@ enum PayrollAnomalyType: string
     case HighDeduction  = 'high_deduction';
     case FirstPayroll   = 'first_payroll';
     case ZeroPay        = 'zero_pay';
+    case OpenAttendance = 'open_attendance';
 
     public static function values(): array
     {
@@ -25,6 +26,7 @@ enum PayrollAnomalyType: string
             self::HighDeduction => 'High deduction ratio',
             self::FirstPayroll  => 'First payroll — verify',
             self::ZeroPay       => 'Zero net pay',
+            self::OpenAttendance => 'Open attendance (no time-out)',
         };
     }
 }

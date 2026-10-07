@@ -160,7 +160,8 @@ export type PayrollAnomalyType =
  | 'excessive_ot'
  | 'high_deduction'
  | 'first_payroll'
- | 'zero_pay';
+ | 'zero_pay'
+ | 'open_attendance';
 
 export interface PayrollAnomalyFlag {
  id: string;
