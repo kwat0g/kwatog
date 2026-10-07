@@ -14,6 +14,7 @@ import {
   LuArchiveRestore,
   LuTrash2,
   LuPencil,
+  LuFileText,
 } from '@/lib/icons';
 import {
   attendancesApi,
@@ -32,6 +33,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
 import { Input } from '@/components/ui/Input';
 import { Modal, ModalFooter } from '@/components/ui/Modal';
+import { PunchAuditModal } from '@/components/attendance/PunchAuditModal';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
@@ -284,6 +286,7 @@ export default function AttendancePage() {
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>('active');
+  const [punchAuditId, setPunchAuditId] = useState<string | null>(null);
   // Bound to the URL so dashboard drill-downs and shared date links arrive
   // pre-filtered and the browser back button restores the previous view.
   const [filters, setFilters] = useUrlFilters<AttendanceListParams>(DEFAULT_FILTERS);
@@ -430,6 +433,15 @@ export default function AttendancePage() {
       type: 'select',
       options: [{ value: '', label: 'All' }, ...(attendanceOptions?.statuses ?? [])],
     },
+    {
+      key: 'missing_time_out',
+      label: 'Time out',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: '1', label: 'Missing time-out' },
+      ],
+    },
   ];
 
   const openCreate = () => {
@@ -550,30 +562,44 @@ export default function AttendancePage() {
             currentDirection={filters.direction}
             onRowClick={canEdit ? openEdit : undefined}
             rowContextMenu={
-              canEdit
-                ? (row) => [
-                    ...(row.deleted_at
-                      ? []
-                      : [
-                          {
-                            label: 'Correct record',
-                            icon: <LuPencil size={13} />,
-                            onClick: () => openEdit(row),
-                          },
-                        ]),
-                    row.deleted_at
-                      ? {
-                          label: 'Restore record',
-                          icon: <LuArchiveRestore size={13} />,
-                          onClick: () => restoreMutation.mutate(row.id),
-                        }
-                      : {
-                          label: 'Archive record',
-                          icon: <LuTrash2 size={13} />,
-                          variant: 'danger' as const,
-                          onClick: () => archiveMutation.mutate(row.id),
-                        },
-                  ]
+              can('attendance.punch.audit') || canEdit
+                ? (row) => {
+                    const items = [];
+
+                    if (can('attendance.punch.audit') && !row.deleted_at) {
+                      items.push({
+                        label: 'Punches',
+                        icon: <LuFileText size={13} />,
+                        onClick: () => setPunchAuditId(row.id),
+                      });
+                    }
+
+                    if (canEdit) {
+                      if (!row.deleted_at) {
+                        items.push({
+                          label: 'Correct record',
+                          icon: <LuPencil size={13} />,
+                          onClick: () => openEdit(row),
+                        });
+                      }
+                      items.push(
+                        row.deleted_at
+                          ? {
+                              label: 'Restore record',
+                              icon: <LuArchiveRestore size={13} />,
+                              onClick: () => restoreMutation.mutate(row.id),
+                            }
+                          : {
+                              label: 'Archive record',
+                              icon: <LuTrash2 size={13} />,
+                              variant: 'danger' as const,
+                              onClick: () => archiveMutation.mutate(row.id),
+                            }
+                      );
+                    }
+
+                    return items;
+                  }
                 : undefined
             }
           />
@@ -587,6 +613,7 @@ export default function AttendancePage() {
         shifts={shiftData?.data ?? []}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['attendance', 'attendances'] })}
       />
+      <PunchAuditModal attendanceId={punchAuditId} onClose={() => setPunchAuditId(null)} />
     </div>
   );
 }
