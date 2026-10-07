@@ -189,6 +189,7 @@ export default function CreatePurchaseRequestPage() {
   const safety = useFormSafety({ form, saved: create.isSuccess });
 
   const onValid = (values: V, submit: boolean) => {
+    if (lookups.some((query) => query.isError || query.isFetching)) return;
     if (submit) {
       setPendingDraft(values);
       setConfirmSubmit(true);
@@ -197,11 +198,14 @@ export default function CreatePurchaseRequestPage() {
     }
   };
 
-  const { data: requestOptions } = useQuery({
+  const requestOptionsQuery = useQuery({
     queryKey: ['purchasing', 'purchase-request-options'],
     queryFn: () => purchaseRequestsApi.options(),
   });
-  const priorities = requestOptions?.priorities ?? [];
+  const priorities = requestOptionsQuery.data?.priorities ?? [];
+  const lookups = [items, departments, requestOptionsQuery];
+  const lookupFailed = lookups.some((query) => query.isError);
+  const lookupPending = lookups.some((query) => query.isFetching);
 
   return (
     <div>
@@ -211,9 +215,14 @@ export default function CreatePurchaseRequestPage() {
         backLabel="Purchase requests"
       />
       <FormDraftBanner safety={safety} />
+      {lookupFailed && <div role="alert" className="px-5 py-3 text-sm text-danger-fg">
+        Purchase request options could not be loaded. <Button variant="secondary" size="sm" onClick={() => {
+          lookups.forEach((query) => { if (query.isError) void query.refetch(); });
+        }}>Retry options</Button>
+      </div>}
       <form
         onSubmit={handleSubmit((d) => onValid(d, true), onFormInvalid<V>())}
-        className="max-w-6xl mx-auto px-5 py-4 space-y-4"
+        className="min-w-0 w-full px-5 py-4 space-y-4"
       >
         <Panel title="Header">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -236,9 +245,10 @@ export default function CreatePurchaseRequestPage() {
               {...register('sourcing_method')}
               error={errors.sourcing_method?.message}
             >
-              <option value="direct_po">Direct PO (internal request)</option>
+              <option value="direct_po">Direct PO (Finance/VP approve the PR)</option>
+              <option value="rfq">Competitive RFQ (need approved; money approved on the PO)</option>
             </Select>
-            <Select
+            <Select searchable
               label="Department"
               required
               disabled={isDepartmentLocked}
@@ -326,7 +336,7 @@ export default function CreatePurchaseRequestPage() {
                 {fields.map((f, i) => (
                   <tr key={f.id} className={cn(trCls, 'align-top')}>
                     <Td>
-                      <Select
+                      <Select searchable
                         fieldSize="md"
                         containerClassName="w-96"
                         className="font-mono"
@@ -366,6 +376,7 @@ export default function CreatePurchaseRequestPage() {
                         className="text-right font-mono tabular-nums"
                         aria-label="Quantity"
                         {...numberInputProps()}
+                        step="0.001"
                         {...register(`items.${i}.quantity` as const)}
                         error={errors.items?.[i]?.quantity?.message}
                       />
@@ -392,6 +403,7 @@ export default function CreatePurchaseRequestPage() {
                         className="text-right font-mono tabular-nums"
                         aria-label="Estimated unit price"
                         {...numberInputProps()}
+                        step="0.01"
                         {...register(`items.${i}.estimated_unit_price` as const)}
                         readOnly={!!watched[i]?.item_id}
                         title={
@@ -448,7 +460,7 @@ export default function CreatePurchaseRequestPage() {
           <Button
             type="button"
             variant="secondary"
-            disabled={create.isPending || isSubmitting}
+            disabled={create.isPending || isSubmitting || lookupFailed || lookupPending}
             onClick={handleSubmit((d) => onValid(d, false), onFormInvalid<V>())}
           >
             Save draft
@@ -457,7 +469,7 @@ export default function CreatePurchaseRequestPage() {
             type="submit"
             variant="primary"
             loading={create.isPending}
-            disabled={create.isPending || isSubmitting}
+            disabled={create.isPending || isSubmitting || lookupFailed || lookupPending}
           >
             Submit for approval
           </Button>
@@ -468,14 +480,15 @@ export default function CreatePurchaseRequestPage() {
         isOpen={confirmSubmit}
         onClose={() => setConfirmSubmit(false)}
         onConfirm={() => {
-          if (pendingDraft) create.mutate({ values: pendingDraft, submit: true });
+          if (pendingDraft && !lookupFailed && !lookupPending) create.mutate({ values: pendingDraft, submit: true });
         }}
         title="Submit PR for approval?"
         description={
           pendingDraft ? (
             <>
-              The PR will enter the approval workflow immediately: Finance first, then the Vice
-              President when the total is ₱50,000 or more. Edits are not allowed once submitted.
+              {pendingDraft.sourcing_method === 'rfq'
+                ? 'The need is approved on submit and the PR goes to Purchasing for bidding. Money is approved on the purchase order at the awarded price. Edits are not allowed once submitted.'
+                : 'The PR will enter the approval workflow immediately: Finance first, then the Vice President when the total is ₱50,000 or more. Edits are not allowed once submitted.'}
               {/* The old copy promised an urgent-skip of the (then) department-head
                   step. That step and the purchasing.urgent_skip_limit setting were
                   removed in the 2026-09-10 chain redesign — urgency is now a

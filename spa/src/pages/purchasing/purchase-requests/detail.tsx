@@ -79,8 +79,8 @@ export default function PurchaseRequestDetailPage() {
   const submit = useOptimisticStatusAction({
     detailKey,
     mutationFn: () => purchaseRequestsApi.submit(id),
-    nextStatus: 'pending',
-    successMsg: 'Submitted for approval.',
+    nextStatus: data?.sourcing_method === 'rfq' ? 'approved' : 'pending',
+    successMsg: data?.sourcing_method === 'rfq' ? 'Need approved. Ready for bidding.' : 'Submitted for approval.',
     errorMsg: 'Failed to submit.',
     afterSuccess: () => setConfirm(null),
   });
@@ -601,7 +601,13 @@ export default function PurchaseRequestDetailPage() {
         </div>
         <div className="space-y-4">
           <Panel title="Approval chain">
-            <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
+            {data.sourcing_method === 'rfq' ? (
+              <p className="text-sm text-muted">
+                Need approved on submit. Money is approved on the purchase order after bidding.
+              </p>
+            ) : (
+              <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
+            )}
           </Panel>
           {/* Sprint P2 — unified Linked records panel. */}
           {data.purchase_orders && data.purchase_orders.length > 0 && (
@@ -639,7 +645,11 @@ export default function PurchaseRequestDetailPage() {
         onConfirm={() => submit.mutate()}
         title="Submit for approval?"
         description={
-          <>Once submitted, the PR enters the approval workflow and edits are no longer allowed.</>
+          <>
+            {data?.sourcing_method === 'rfq'
+              ? 'Once submitted, the need is approved and the PR goes to Purchasing for bidding. Edits are no longer allowed.'
+              : 'Once submitted, the PR enters the approval workflow and edits are no longer allowed.'}
+          </>
         }
         confirmLabel="Submit"
         variant="primary"

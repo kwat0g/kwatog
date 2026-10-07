@@ -367,7 +367,10 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
 - **Outgoing QC:** AQL 0.65 Level II. Actual measurements for critical dimensions
 - **Approval chain (PR):** Finance → VP (≥ ₱50,000). Creators hold the need
   authority via the create gate (`department_head` + `purchasing_officer` only);
-  the chain is money-only. Fully-approved PRs auto-convert to one draft PO per
+  the chain is money-only. **RFQ-sourced PRs (`sourcing_method=rfq`, manual or MRP) skip it:**
+  submit approves the need at once (`Approved` + `SourcingPending`, budget acknowledgement
+  still enforced) since no price exists yet; money is approved once, on the PO chain at the
+  awarded price. Direct PO PRs keep the chain. Fully-approved PRs auto-convert to one draft PO per
   vendor (`ConsolidatePurchaseOrders`); each line needs a preferred supplier
   AND a price or the PR falls to `manual_required`. PO chain: Finance → VP
   (≥ ₱50,000 per PO). The buyer (`purchasing_officer`) creates POs but is not a

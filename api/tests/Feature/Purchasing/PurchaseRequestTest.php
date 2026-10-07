@@ -131,7 +131,7 @@ class PurchaseRequestTest extends TestCase
             ->assertJsonValidationErrorFor('sourcing_method');
     }
 
-    public function test_manual_purchase_request_cannot_choose_rfq_sourcing(): void
+    public function test_manual_purchase_request_can_choose_rfq_sourcing(): void
     {
         $admin = $this->makeAdmin();
         $payload = $this->validPayload();
@@ -139,8 +139,30 @@ class PurchaseRequestTest extends TestCase
 
         $this->actingAs($admin)
             ->postJson('/api/v1/purchasing/purchase-requests', $payload)
-            ->assertUnprocessable()
-            ->assertJsonValidationErrorFor('sourcing_method');
+            ->assertCreated()
+            ->assertJsonPath('data.sourcing_method', 'rfq');
+    }
+
+    public function test_rfq_purchase_request_is_approved_on_submit_without_the_money_chain(): void
+    {
+        $admin = $this->makeAdmin();
+        $payload = $this->validPayload();
+        $payload['sourcing_method'] = 'rfq';
+        $pr = app(PurchaseRequestService::class)->create($payload, $admin);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $pr->refresh();
+        $this->assertSame('sourcing_pending', $pr->po_conversion_status->value);
+        $this->assertNotNull($pr->submitted_at);
+        $this->assertSame(0, \App\Common\Models\ApprovalRecord::query()
+            ->where('approvable_type', $pr->getMorphClass())
+            ->where('approvable_id', $pr->id)
+            ->count());
+        $this->assertSame(0, $pr->purchaseOrders()->count());
     }
 
     public function test_authenticated_user_can_submit_a_draft_pr(): void

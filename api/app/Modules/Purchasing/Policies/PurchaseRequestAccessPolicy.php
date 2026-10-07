@@ -174,9 +174,6 @@ final class PurchaseRequestAccessPolicy
 
     public function canSetSourcingMethod(User $user, PurchaseRequest $pr, PurchaseRequestSourcingMethod $method): bool
     {
-        if ($method === PurchaseRequestSourcingMethod::Rfq && ! $pr->is_auto_generated) {
-            return false;
-        }
         $hasMethodPermission = $method === PurchaseRequestSourcingMethod::Rfq
             ? $user->hasPermission('purchasing.rfq.manage')
             : $user->hasPermission('purchasing.po.create');

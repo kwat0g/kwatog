@@ -28,6 +28,7 @@ use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Policies\PurchaseRequestAccessPolicy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PurchaseRequestService
@@ -104,12 +105,8 @@ class PurchaseRequestService
      */
     public function create(array $data, User $by): PurchaseRequest
     {
-        $isAuto = (bool) ($data['is_auto_generated'] ?? false);
-        if (! $isAuto && $this->isRfqMethod($data['sourcing_method'] ?? null)) {
-            throw new BusinessRuleException('Internal purchase requests use Direct PO sourcing.');
-        }
-
         return DB::transaction(function () use ($data, $by) {
+            $this->assertItemUnits($data['items'] ?? []);
             $isAuto = (bool) ($data['is_auto_generated'] ?? false);
             $priority = $this->priorityValue(
                 $data['priority'] ?? $this->settings->get('purchasing.purchase_request.default_priority', ''),
@@ -167,7 +164,9 @@ class PurchaseRequestService
                 'urgency_reason' => $data['urgency_reason'] ?? null,
                 'sourcing_method' => $isAuto
                     ? ($data['sourcing_method'] ?? null)
-                    : PurchaseRequestSourcingMethod::DirectPo,
+                    : ($this->isRfqMethod($data['sourcing_method'] ?? null)
+                        ? PurchaseRequestSourcingMethod::Rfq
+                        : PurchaseRequestSourcingMethod::DirectPo),
             ]);
             // status is non-fillable; service-only.
             $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
@@ -226,6 +225,26 @@ class PurchaseRequestService
         });
     }
 
+    /** Reject catalog units that planning cannot convert before saving or submitting. */
+    private function assertItemUnits(array $rows): void
+    {
+        foreach ($rows as $index => $row) {
+            if (empty($row['item_id'])) {
+                continue;
+            }
+            $itemId = HashIdFilter::decode($row['item_id'], Item::class);
+            $item = Item::query()->find($itemId);
+            if (! $item || ! $item->is_active) {
+                throw ValidationException::withMessages(["items.{$index}.item_id" => ['Select an active inventory item.']]);
+            }
+            try {
+                $item->convertToBase((string) $row['quantity'], trim((string) ($row['unit'] ?? '')) ?: null);
+            } catch (BusinessRuleException $e) {
+                throw ValidationException::withMessages(["items.{$index}.unit" => [$e->getMessage()]]);
+            }
+        }
+    }
+
     public function update(PurchaseRequest $pr, array $data, ?User $by = null): PurchaseRequest
     {
         if ($by !== null && ! $this->access->canManageDraft($by, $pr)) {
@@ -251,15 +270,15 @@ class PurchaseRequestService
             if ($locked->status !== PurchaseRequestStatus::Draft) {
                 throw new BusinessRuleException('Only draft PRs can be edited.');
             }
+            if (isset($data['items'])) {
+                $this->assertItemUnits($data['items']);
+            }
             if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to edit this purchase request.');
             }
             if ($by !== null && array_key_exists('department_id', $data)
                 && ! $this->access->canAssignDepartment($by, $locked, $data['department_id'] !== null ? (int) $data['department_id'] : null)) {
                 throw new ForbiddenActionException('You cannot assign this purchase request to that department.');
-            }
-            if (! $locked->is_auto_generated && $this->isRfqMethod($data['sourcing_method'] ?? null)) {
-                throw new BusinessRuleException('Internal purchase requests use Direct PO sourcing.');
             }
 
             $locked->update([
@@ -355,6 +374,7 @@ class PurchaseRequestService
             if ($locked->sourcing_method === null) {
                 throw new BusinessRuleException('Select a sourcing method before submitting this purchase request.');
             }
+            $this->assertItemUnits($locked->items()->get(['item_id', 'quantity', 'unit'])->toArray());
             if ($by !== null && ! $this->access->canManageDraft($by, $locked)) {
                 throw new ForbiddenActionException('You do not have permission to submit this purchase request.');
             }
@@ -391,6 +411,16 @@ class PurchaseRequestService
             $isUrgent = (bool) $locked->is_urgent || $this->isUrgentPriority($this->priorityValue($locked->priority));
             if ($isUrgent && ! $locked->is_urgent) {
                 $locked->forceFill(['is_urgent' => true])->save();
+            }
+
+            // RFQ-sourced PRs approve the NEED only: the creator gate is the
+            // need authority and no price exists yet. Money is approved on the
+            // PO chain at the real awarded price, so skip the money chain.
+            if ($locked->sourcing_method === PurchaseRequestSourcingMethod::Rfq) {
+                $this->budget->assertAcknowledged($locked);
+                $locked->forceFill(['submitted_at' => now()])->save();
+
+                return $this->markApproved($locked, $by);
             }
 
             $this->approvals->submit($locked, 'purchase_request', $total);
@@ -475,41 +505,46 @@ class PurchaseRequestService
             }
             $this->assertMayDecide($by, $locked, 'approve');
             $this->budget->assertAcknowledged($locked);
+            $this->assertItemUnits($locked->items()->whereNull('deleted_at')->get(['item_id', 'quantity', 'unit'])->toArray());
 
             $this->approvals->approve($locked, $by, $remarks);
-            $becameApproved = false;
             if ($this->approvals->isFullyApproved($locked)) {
-                $locked->forceFill([
-                    'status' => PurchaseRequestStatus::Approved,
-                    'approved_at' => now(),
-                    // Approval ends the PR workflow; the buyer now chooses a
-                    // direct conversion or a sealed RFQ explicitly.
-                    'po_conversion_status' => $locked->sourcing_method === PurchaseRequestSourcingMethod::DirectPo
-                        ? PurchaseRequestConversionStatus::Pending
-                        : PurchaseRequestConversionStatus::SourcingPending,
-                    'po_conversion_note' => null,
-                    'po_conversion_at' => now(),
-                ])->save();
-                $becameApproved = true;
-            }
-            $fresh = $locked->fresh();
-            if ($becameApproved) {
-                app(OutboxService::class)->recordForChain(
-                    new PurchaseRequestApproved($fresh),
-                    $fresh,
-                    'p2p',
-                    'purchase_request',
-                    PurchaseRequestStatus::Approved->value,
-                );
-                app(ChainBroadcaster::class)->broadcastFor(
-                    $fresh,
-                    PurchaseRequestStatus::Approved->value,
-                    $by,
-                );
+                return $this->markApproved($locked, $by);
             }
 
-            return $fresh;
+            return $locked->fresh();
         });
+    }
+
+    /** Approved transition shared by the approval chain and the need-only RFQ path. */
+    private function markApproved(PurchaseRequest $locked, ?User $by): PurchaseRequest
+    {
+        $locked->forceFill([
+            'status' => PurchaseRequestStatus::Approved,
+            'approved_at' => now(),
+            // Approval ends the PR workflow; the buyer now chooses a
+            // direct conversion or a sealed RFQ explicitly.
+            'po_conversion_status' => $locked->sourcing_method === PurchaseRequestSourcingMethod::DirectPo
+                ? PurchaseRequestConversionStatus::Pending
+                : PurchaseRequestConversionStatus::SourcingPending,
+            'po_conversion_note' => null,
+            'po_conversion_at' => now(),
+        ])->save();
+        $fresh = $locked->fresh();
+        app(OutboxService::class)->recordForChain(
+            new PurchaseRequestApproved($fresh),
+            $fresh,
+            'p2p',
+            'purchase_request',
+            PurchaseRequestStatus::Approved->value,
+        );
+        app(ChainBroadcaster::class)->broadcastFor(
+            $fresh,
+            PurchaseRequestStatus::Approved->value,
+            $by,
+        );
+
+        return $fresh;
     }
 
     public function setSourcingMethod(PurchaseRequest $pr, PurchaseRequestSourcingMethod $method, User $by): PurchaseRequest
