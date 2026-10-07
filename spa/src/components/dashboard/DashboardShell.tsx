@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { TimeClockQuickAction } from '@/components/dashboard/TimeClockQuickAction';
 
 import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 /* ───────────────────────── Grid primitives ───────────────────────── */
@@ -148,7 +149,12 @@ export function DashboardShell<T>({
     <PageHeader
       title={title}
       subtitle={subtitle}
-      actions={actions}
+      actions={
+        <>
+          {actions}
+          <TimeClockQuickAction />
+        </>
+      }
       refreshingQueryKey={refreshingQueryKey}
     />
   );

@@ -1,123 +1,15 @@
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { LuCircleAlert, LuCheck, LuInfo, LuLogIn, LuLogOut } from '@/lib/icons';
-import { punchApi } from '@/api/attendance/punch';
-import { useFeature } from '@/hooks/useFeature';
+import { LuCircleAlert, LuCheck, LuInfo, LuLogIn, LuLogOut, LuMapPin } from '@/lib/icons';
+import { RECOVERY, useTimeClock } from '@/hooks/useTimeClock';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { formatTime } from '@/lib/formatDate';
-import type { GpsFix, PunchResult } from '@/types/attendance';
-
-/** A failure with a stable code, so the card can say what to do next. */
-class PunchFailure extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-  ) {
-    super(message);
-  }
-}
-
-const GEO_ERRORS: Record<number, [message: string, code: string]> = {
-  1: [
-    'Allow location access for this site in your browser settings, then try again.',
-    'geo_denied',
-  ],
-  2: [
-    'Your location could not be determined. Move to an open area and try again.',
-    'geo_unavailable',
-  ],
-  3: ['Locating you took too long. Try again.', 'geo_timeout'],
-};
-
-/** What to do about each refusal. The server message says what happened; this says what next. */
-const RECOVERY: Record<string, string> = {
-  geo_denied: 'On a phone: browser menu → Site settings → Location → Allow.',
-  geo_unavailable: 'GPS works best outdoors or next to a window.',
-  out_of_range:
-    'Move closer to the plant. If you are on site and still blocked, ask HR to record your time.',
-  low_accuracy: 'Step outdoors or near a window, wait a few seconds, then try again.',
-  outside_window:
-    'Time in/out opens shortly before your shift. If you worked outside it, ask HR to record it.',
-  no_shift: 'HR needs to assign you a shift before you can punch.',
-  too_soon: 'Wait a minute, then check your punches below.',
-  manual_entry: 'Contact HR to correct this day.',
-  on_leave: 'Contact HR to correct this day.',
-  row_removed: 'Contact HR to correct this day.',
-  out_before_in: 'Contact HR to correct this day.',
-};
-
-function readFix(): Promise<GpsFix> {
-  return new Promise((resolve, reject) => {
-    if (!('geolocation' in navigator)) {
-      reject(new PunchFailure('This device cannot provide a location.', 'geo_unavailable'));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (p) =>
-        resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-      (e) => {
-        const [message, code] = GEO_ERRORS[e.code] ?? GEO_ERRORS[2];
-        reject(new PunchFailure(message, code));
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  });
-}
-
-function describeFailure(error: unknown): { message: string; code: string | null } {
-  if (error instanceof PunchFailure) return { message: error.message, code: error.code };
-  const data = (error as { response?: { data?: { message?: string; code?: string } } })?.response
-    ?.data;
-  if (data?.message) return { message: data.message, code: data.code ?? null };
-
-  return {
-    message: error instanceof Error ? error.message : 'Could not record your punch.',
-    code: null,
-  };
-}
 
 export function TimeClockCard() {
-  const enabled = useFeature('attendance');
-  const qc = useQueryClient();
-  const [failure, setFailure] = useState<{ message: string; code: string | null } | null>(null);
-  const [result, setResult] = useState<PunchResult | null>(null);
-  const [locating, setLocating] = useState(false);
-
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['attendance', 'punch', 'status'],
-    queryFn: punchApi.status,
-    enabled,
-  });
-
-  const punch = useMutation({
-    mutationFn: async () => {
-      const fix = await readFix();
-      setLocating(false);
-
-      return punchApi.punch(fix);
-    },
-    onMutate: () => {
-      setFailure(null);
-      setResult(null);
-      setLocating(true);
-    },
-    onSuccess: (r) => {
-      setResult(r);
-      toast.success(r.direction === 'in' ? 'Timed in' : 'Timed out');
-      qc.invalidateQueries({ queryKey: ['attendance'] });
-      qc.invalidateQueries({ queryKey: ['self-service'] });
-    },
-    onError: (e) => {
-      const described = describeFailure(e);
-      setFailure(described);
-      toast.error(described.message);
-    },
-    onSettled: () => setLocating(false),
-  });
+  const clock = useTimeClock();
+  const { enabled, failure, result, locating, locationBlocked, cooldownSeconds } = clock;
+  const { data, isLoading, isError, refetch, isFetching } = clock.status;
 
   if (!enabled) return null;
 
@@ -148,13 +40,17 @@ export function TimeClockCard() {
 
   const clockedIn = data.next_action === 'out';
   const lastIn = [...data.punches].reverse().find((p) => p.direction === 'in');
-  const label = punch.isPending
+  const label = clock.pending
     ? locating
       ? 'Locating…'
       : 'Punching…'
-    : clockedIn
-      ? 'Time out'
-      : 'Time in';
+    : locationBlocked
+      ? 'Location is blocked'
+      : cooldownSeconds > 0
+        ? `Try again in ${cooldownSeconds}s`
+        : clockedIn
+          ? 'Time out'
+          : 'Time in';
 
   return (
     <Panel title="Time in / out">
@@ -197,8 +93,9 @@ export function TimeClockCard() {
             icon={
               clockedIn ? <LuLogOut size={20} aria-hidden /> : <LuLogIn size={20} aria-hidden />
             }
-            loading={punch.isPending}
-            onClick={() => punch.mutate()}
+            loading={clock.pending}
+            disabled={!clock.canPunch && !clock.pending}
+            onClick={clock.punch}
           >
             {label}
           </Button>
@@ -223,6 +120,18 @@ export function TimeClockCard() {
               </span>
             </p>
           )}
+          {locationBlocked && !failure && (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-md bg-warning-bg p-3 text-sm text-warning-fg"
+            >
+              <LuMapPin size={16} className="mt-0.5 shrink-0" aria-hidden />
+              <div>
+                <p className="font-medium">Location access is blocked for this site.</p>
+                <p className="mt-1">{RECOVERY.geo_denied}</p>
+              </div>
+            </div>
+          )}
           {failure && (
             <div
               role="alert"
@@ -236,6 +145,16 @@ export function TimeClockCard() {
                 )}
               </div>
             </div>
+          )}
+          {locationBlocked && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="self-start"
+              onClick={clock.recheckLocation}
+            >
+              Check again
+            </Button>
           )}
         </div>
 

@@ -76,4 +76,34 @@ describe('TimeClockCard', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /locating|punching/i })).toBeDisabled());
   });
+
+  it('cannot be spammed when location is blocked: one browser request, then the button is off', async () => {
+    const getCurrentPosition = vi.fn((_ok: PositionCallback, err: PositionErrorCallback) =>
+      err({ code: 1, message: 'denied', PERMISSION_DENIED: 1 } as GeolocationPositionError),
+    );
+    mockGeolocation(getCurrentPosition);
+    renderCard();
+
+    fireEvent.click(await screen.findByRole('button', { name: /time in/i }));
+    const blocked = await screen.findByRole('button', { name: /location is blocked/i });
+    expect(blocked).toBeDisabled();
+
+    fireEvent.click(blocked);
+    fireEvent.click(blocked);
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /check again/i })).toBeInTheDocument();
+    expect(punchApi.punch).not.toHaveBeenCalled();
+  });
+
+  it('pauses the button for a few seconds after an out-of-range refusal', async () => {
+    mockGeolocation((ok) => ok({ coords: { latitude: 14.3, longitude: 120.95, accuracy: 10 } } as GeolocationPosition));
+    vi.mocked(punchApi.punch).mockRejectedValue({ response: { status: 422, data: { message: 'You are 2600 m from the plant.', code: 'out_of_range' } } });
+    renderCard();
+
+    fireEvent.click(await screen.findByRole('button', { name: /time in/i }));
+
+    expect(await screen.findByRole('button', { name: /try again in \d+s/i })).toBeDisabled();
+    expect(punchApi.punch).toHaveBeenCalledTimes(1);
+  });
 });
