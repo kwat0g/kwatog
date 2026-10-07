@@ -152,6 +152,9 @@ class AttendanceService
             $authoritative = Attendance::query()
                 ->lockForUpdate()
                 ->findOrFail($a->id);
+            if (array_key_exists('is_rest_day', $data)) {
+                $data['is_manual_entry'] = true; // HR's explicit rest-day flag is honoured by the DTR engine only on manual rows
+            }
             $authoritative->update($data);
             $authoritative = $this->dtr->computeForRecord($authoritative);
             $authoritative->save();
