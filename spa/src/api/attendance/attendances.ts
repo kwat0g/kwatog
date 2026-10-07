@@ -8,6 +8,7 @@ export interface AttendanceListParams extends ListParams {
  status?: string;
  from?: string;
  to?: string;
+ missing_time_out?: string;
 }
 
 export interface CreateAttendanceData {

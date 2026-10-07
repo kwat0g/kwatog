@@ -20,6 +20,7 @@ import {
   LuActivity,
   LuLock,
   LuLockOpen,
+  LuMapPin,
 } from '@/lib/icons';
 import {
   settingsApi,
@@ -409,6 +410,28 @@ function SettingsGroup({ group, meta, rows, isEditMode, saving, onSave }: Settin
       }
     >
       {meta?.description && <p className="text-xs text-muted -mt-1 mb-4">{meta.description}</p>}
+      {group === 'company' && isEditMode && (
+        <div className="mb-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<LuMapPin size={14} />}
+            onClick={() =>
+              navigator.geolocation.getCurrentPosition(
+                (p) => {
+                  onSave('company.latitude', Number(p.coords.latitude.toFixed(6)));
+                  onSave('company.longitude', Number(p.coords.longitude.toFixed(6)));
+                },
+                () => toast.error('Could not read your location. Allow location access and try again.'),
+                { enableHighAccuracy: true, timeout: 15000 }
+              )
+            }
+          >
+            Use my current location as the plant centre
+          </Button>
+          <p className="text-xs text-muted mt-1">Stand in the middle of the plant first. Time in/out uses this point.</p>
+        </div>
+      )}
       <div className="flex flex-col divide-y divide-subtle">
         {rows.map((row) => (
           <SettingRowEditor
