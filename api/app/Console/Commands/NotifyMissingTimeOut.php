@@ -42,6 +42,13 @@ class NotifyMissingTimeOut extends Command
             ->where('is_active', true)
             ->get();
 
+        if ($hr->isEmpty()) {
+            $this->error("No active hr_officer to notify about {$count} open attendance row(s).");
+            Log::error('attendance:notify-missing-timeout has no recipient', ['open_count' => $count]);
+
+            return self::FAILURE;
+        }
+
         try {
             $notifications->send($hr, 'attendance.missing_time_out', [
                 'title' => 'Missing time-out',

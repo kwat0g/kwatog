@@ -60,4 +60,15 @@ class PunchCommandsTest extends TestCase
 
         $this->artisan('attendance:notify-missing-timeout')->assertFailed();
     }
+
+    public function test_exits_failure_when_no_active_hr_officer_to_notify(): void
+    {
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        [$emp] = $this->worker();
+        $this->at('2026-10-08 06:00:00');
+        Attendance::create(['employee_id' => $emp->id, 'date' => '2026-10-07', 'time_in' => '2026-10-07 06:00:00', 'status' => AttendanceStatus::Present->value]);
+
+        // Seed HR officer role exists, but no active user with that role
+        $this->artisan('attendance:notify-missing-timeout')->assertFailed();
+    }
 }
