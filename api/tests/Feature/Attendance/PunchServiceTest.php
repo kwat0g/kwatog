@@ -95,22 +95,22 @@ class PunchServiceTest extends TestCase
         $this->assertRejected('outside_window', fn () => $this->punch($emp));
     }
 
-    public function test_extra_in_after_out_keeps_first_in_and_last_out(): void
+    public function test_post_shift_second_cycle_keeps_first_in_and_last_out(): void
     {
         [$emp] = $this->worker();
         $this->at('2026-10-07 06:00:00');
         $this->punch($emp);
-        $this->at('2026-10-07 12:00:00');
-        $this->punch($emp);               // out (lunch)
-        $this->at('2026-10-07 13:00:00');
-        $in2 = $this->punch($emp);        // back in
+        $this->at('2026-10-07 14:00:00');
+        $this->punch($emp);               // final out of the shift
+        $this->at('2026-10-07 14:30:00');
+        $in2 = $this->punch($emp);        // post-shift overtime cycle
         $this->assertSame(PunchDirection::In, $in2->direction);
-        $this->at('2026-10-07 14:10:00');
-        $this->punch($emp);               // final out
+        $this->at('2026-10-07 15:10:00');
+        $this->punch($emp);               // overtime out
 
         $row = Attendance::query()->where('employee_id', $emp->id)->firstOrFail();
         $this->assertSame('06:00', $row->time_in->format('H:i'));
-        $this->assertSame('14:10', $row->time_out->format('H:i'));
+        $this->assertSame('15:10', $row->time_out->format('H:i'));
         $this->assertSame(1, Attendance::query()->count());
         $this->assertSame(4, AttendancePunch::query()->count());
     }
