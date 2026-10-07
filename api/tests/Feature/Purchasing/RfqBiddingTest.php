@@ -11,6 +11,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestConversionStatus;
 use App\Modules\Purchasing\Enums\PurchaseRequestSourcingMethod;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
@@ -606,6 +607,110 @@ final class RfqBiddingTest extends TestCase
 
         return $this->putJson("/api/v1/b2b/supplier/rfqs/{$rfqId}/quote", $this->quoteBody($lineId, $quantity, $price, true, $freight, $treatment))
             ->assertOk();
+    }
+
+    public function test_po_approval_below_50000_skips_vp_step(): void
+    {
+        // Setup: RFQ → Award → Draft PO with total < 50000
+        [$pr] = $this->approvedPr('10.00');
+        [$vendor, $portal] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$vendor], publish: true);
+        $lineId = $rfq['items'][0]['id'];
+        $this->submitQuote($portal, $rfq['id'], $lineId, '10', '40.00'); // 10 * 40 = 400 + VAT < 50000
+
+        // Close and award RFQ
+        $this->asBuyer();
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/close")->assertOk();
+        $comparison = $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")->assertOk()->json('data.quotes');
+        $supplierQuoteItemId = $comparison[0]['items'][0]['id'];
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/award", [
+            'award_reason' => 'Best price and delivery.',
+            'lines' => [['request_for_quote_item_id' => $lineId, 'supplier_quote_item_id' => $supplierQuoteItemId]],
+        ])->assertOk();
+
+        // Get the created draft PO
+        $pos = PurchaseOrder::query()->where('request_for_quote_id', RequestForQuote::query()->sole()->id)->get();
+        $this->assertCount(1, $pos);
+        $po = $pos->first();
+        $this->assertSame(PurchaseOrderStatus::Draft, $po->status);
+
+        // Buyer submits PO
+        $submitResponse = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/submit")
+            ->assertOk();
+        $po = $po->fresh();
+
+        // (1) Submit succeeds, PO status becomes pending, approval_records exist
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $po->status);
+        $approvalRecords = $po->approvalRecords()->get();
+        $this->assertGreaterThanOrEqual(1, $approvalRecords->count());
+
+        // (2) Finance officer can approve using HTTP route
+        $finance = $this->roleUser('finance_officer');
+        $this->actingAsFresh($finance);
+        $approveResponse = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
+            ->assertOk();
+        $po = $po->fresh();
+
+        // (4) For < 50000, VP step is skipped - PO should be fully approved
+        $this->assertSame(PurchaseOrderStatus::Approved, $po->status);
+    }
+
+    public function test_po_approval_above_50000_requires_vp_approval(): void
+    {
+        // Setup: RFQ → Award → Draft PO with total >= 50000
+        [$pr] = $this->approvedPr('100.00');
+        [$vendor, $portal] = $this->supplier();
+        $rfq = $this->startRfq($pr, [$vendor], publish: true);
+        $lineId = $rfq['items'][0]['id'];
+        $this->submitQuote($portal, $rfq['id'], $lineId, '100', '600.00'); // 100 * 600 = 60000 + VAT > 50000
+
+        // Close and award RFQ
+        $this->asBuyer();
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/close")->assertOk();
+        $comparison = $this->getJson("/api/v1/purchasing/rfqs/{$rfq['id']}/comparison")->assertOk()->json('data.quotes');
+        $supplierQuoteItemId = $comparison[0]['items'][0]['id'];
+        $this->postJson("/api/v1/purchasing/rfqs/{$rfq['id']}/award", [
+            'award_reason' => 'Best price and delivery.',
+            'lines' => [['request_for_quote_item_id' => $lineId, 'supplier_quote_item_id' => $supplierQuoteItemId]],
+        ])->assertOk();
+
+        // Get the created draft PO
+        $pos = PurchaseOrder::query()->where('request_for_quote_id', RequestForQuote::query()->sole()->id)->get();
+        $this->assertCount(1, $pos);
+        $po = $pos->first();
+        $this->assertSame(PurchaseOrderStatus::Draft, $po->status);
+
+        // (3) Buyer is NOT blocked by self-approval guard when submitting
+        $buyerSubmitResponse = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/submit")
+            ->assertOk();
+        $po = $po->fresh();
+
+        // (1) Submit succeeds, PO status becomes pending
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $po->status);
+        $approvalRecords = $po->approvalRecords()->get();
+        $this->assertGreaterThanOrEqual(2, $approvalRecords->count()); // Should have Finance + VP steps
+
+        // (2) Finance officer approves step 1
+        $finance = $this->roleUser('finance_officer');
+        $this->actingAsFresh($finance);
+        $financeApprove = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
+            ->assertOk();
+        $po = $po->fresh();
+
+        // PO should still be pending (waiting for VP)
+        $this->assertSame(PurchaseOrderStatus::PendingApproval, $po->status);
+        // current_approval_step is 0 or points to the next step in the workflow
+        $this->assertNotSame(PurchaseOrderStatus::Approved, $po->status);
+
+        // (4) VP approves step 2
+        $vp = $this->roleUser('vice_president');
+        $this->actingAsFresh($vp);
+        $vpApprove = $this->patchJson("/api/v1/purchasing/purchase-orders/{$po->hash_id}/approve")
+            ->assertOk();
+        $po = $po->fresh();
+
+        // Now PO should be approved
+        $this->assertSame(PurchaseOrderStatus::Approved, $po->status);
     }
 
     private function asBuyer(): void

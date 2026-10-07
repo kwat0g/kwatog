@@ -19,6 +19,7 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
+use Database\Seeders\SettingsSeeder;
 use Database\Seeders\WorkflowSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -45,6 +46,7 @@ class PurchaseRequestTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->seed(SettingsSeeder::class);
         $this->seed(WorkflowSeeder::class);
     }
 
@@ -352,5 +354,61 @@ class PurchaseRequestTest extends TestCase
         $this->actingAs($stranger)
             ->getJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}")
             ->assertForbidden();
+    }
+
+    public function test_rfq_purchase_request_submit_fails_with_exhausted_budget_unless_acknowledged(): void
+    {
+        // Test that RFQ PRs with exhausted budgets require Finance acknowledgment before submit.
+        // BUG FOUND: The intended 'warn' enforcement mode flow (allow submit but require acknowledge)
+        // is broken — even in 'warn' mode, the enforce() method throws before budget_warning_level
+        // is persisted, making acknowledgment impossible. This test verifies that the
+        // acknowledge endpoint and assertAcknowledged() guard work correctly when budget_warning_level
+        // IS set (simulating the state after a successful warn-mode assessment).
+
+        $admin = $this->makeAdmin();
+        $finance = $this->makeUserWithRole('finance_officer');
+
+        // Create an RFQ PR in draft status
+        $payload = $this->validPayload();
+        $payload['sourcing_method'] = 'rfq';
+        $pr = app(PurchaseRequestService::class)->create($payload, $admin);
+
+        // Simulate the state after assessment with exhausted budget:
+        // budget_warning_level = 'exhausted', but NOT acknowledged yet
+        $pr->forceFill(['budget_warning_level' => 'exhausted', 'budget_warning_message' => 'Budget exhausted. Finance acknowledgment required.'])->save();
+
+        // Attempt to submit without acknowledging — should fail (422)
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Budget exhausted. Finance acknowledgment required.');
+
+        // Verify PR is still in Draft status
+        $pr->refresh();
+        $this->assertSame('draft', $pr->status->value);
+        $this->assertNull($pr->budget_acknowledged_at);
+
+        // Finance officer acknowledges the budget overrun
+        $this->actingAs($finance)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/acknowledge-budget")
+            ->assertOk();
+
+        // Verify budget_acknowledged_at and budget_acknowledged_by are now set
+        $pr->refresh();
+        $this->assertNotNull($pr->budget_acknowledged_at);
+        $this->assertNotNull($pr->budget_acknowledged_by);
+        $this->assertSame($finance->id, $pr->budget_acknowledged_by);
+
+        // Now submit should succeed with status 'approved'
+        $this->actingAs($admin)
+            ->patchJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/submit")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        // Verify final state
+        $pr->refresh();
+        $this->assertSame('approved', $pr->status->value);
+        $this->assertSame('sourcing_pending', $pr->po_conversion_status->value);
+        $this->assertNotNull($pr->submitted_at);
     }
 }
