@@ -197,4 +197,23 @@ class PunchServiceTest extends TestCase
         ]);
         $this->assertRejected('on_leave', fn () => $this->punch($emp));
     }
+
+    public function test_status_punch_list_covers_night_shift_lookback(): void
+    {
+        $this->shift('22:00:00', '06:00:00', true); // Night shift 22:00–06:00
+        [$emp] = $this->worker();
+
+        // Night shift punch in at 22:05 on 10-07
+        $this->at('2026-10-07 22:05:00');
+        $this->punch($emp);
+
+        // Status check at 06:02 on 10-08 (next morning, still within 16-hour lookback)
+        $this->at('2026-10-08 06:02:00');
+        $status = app(PunchService::class)->status($emp);
+
+        // Should include the punch from last night (within lookback window)
+        $this->assertCount(1, $status['punches']);
+        $this->assertSame('in', $status['punches'][0]['direction']);
+        $this->assertStringStartsWith('2026-10-07T22:05:00', $status['punches'][0]['punched_at']);
+    }
 }

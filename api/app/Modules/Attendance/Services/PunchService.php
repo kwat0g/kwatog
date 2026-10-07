@@ -122,7 +122,7 @@ class PunchService
 
         $punches = AttendancePunch::query()
             ->where('employee_id', $employee->id)
-            ->where('punched_at', '>=', $now->startOfDay())
+            ->where('punched_at', '>=', $now->subHours(self::OPEN_LOOKBACK_HOURS))
             ->orderBy('punched_at')->orderBy('id')
             ->get()
             ->map(fn (AttendancePunch $p): array => [
