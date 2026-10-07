@@ -6,6 +6,7 @@ import { TimeClockCard } from './TimeClockCard';
 
 vi.mock('@/api/attendance/punch', () => ({ punchApi: { status: vi.fn(), punch: vi.fn() } }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/hooks/useFeature', () => ({ useFeature: vi.fn(() => true) }));
 
 const status = {
   next_action: 'in' as const,
