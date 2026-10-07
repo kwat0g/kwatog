@@ -138,6 +138,7 @@ const BY_TYPE: Record<string, NotificationMeta> = {
   'attendance.ot_submitted': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
   'attendance.ot_approved': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
   'attendance.ot_rejected': { icon: LuCalendar, group: 'approvals', label: 'Overtime' },
+  'attendance.missing_time_out': { icon: LuCalendar, group: 'alerts', label: 'Attendance' },
   'loans.submitted': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
   'loans.approved': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
   'loans.rejected': { icon: LuHandCoins, group: 'approvals', label: 'Loans' },
