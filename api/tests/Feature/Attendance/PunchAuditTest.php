@@ -91,4 +91,23 @@ class PunchAuditTest extends TestCase
         $this->assertNotNull($log->new_values['distance_m']);
         $this->assertNotNull($log->new_values['employee_id']);
     }
+
+    public function test_allows_hr_to_view_punches_of_archived_attendance_rows(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 06:02:00');
+        app(PunchService::class)->punch($emp, 14.2860, 120.9345, 20.0, '10.0.0.1', 'ua');
+        $row = Attendance::query()->where('employee_id', $emp->id)->firstOrFail();
+
+        // Archive the attendance row
+        $row->delete();
+        $this->assertTrue($row->trashed());
+
+        // HR should still be able to view the punches for the archived row
+        $this->actingAs($this->userWithRole('hr_officer'))
+            ->getJson("/api/v1/attendance/attendances/{$row->hash_id}/punches")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.direction', 'in');
+    }
 }
