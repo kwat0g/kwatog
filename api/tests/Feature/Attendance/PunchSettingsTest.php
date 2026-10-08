@@ -20,7 +20,7 @@ class PunchSettingsTest extends TestCase
         $this->assertSame(200.0, $s->requiredFloat('company.punch_radius_m'));
         $this->assertSame(100.0, $s->requiredFloat('company.punch_max_accuracy_m'));
         $this->assertSame(15, $s->requiredInt('attendance.punch_early_minutes'));
-        $this->assertSame(240, $s->requiredInt('attendance.punch_late_minutes'));
+        $this->assertSame(120, $s->requiredInt('attendance.punch_late_minutes'));
         $this->assertDatabaseHas('permissions', ['slug' => 'attendance.punch.audit']);
     }
 

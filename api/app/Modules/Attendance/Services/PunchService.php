@@ -17,6 +17,7 @@ use App\Modules\Attendance\Support\GeoDistance;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -41,7 +42,24 @@ class PunchService
         private readonly HolidayService $holidays,
     ) {}
 
+    /** One retry: a biometric import can create the day's row between our lookup and our insert. */
     public function punch(
+        Employee $employee,
+        float $lat,
+        float $lng,
+        float $accuracyM,
+        ?string $ip,
+        ?string $userAgent,
+        ?CarbonImmutable $now = null,
+    ): AttendancePunch {
+        try {
+            return $this->punchOnce($employee, $lat, $lng, $accuracyM, $ip, $userAgent, $now);
+        } catch (UniqueConstraintViolationException) {
+            return $this->punchOnce($employee, $lat, $lng, $accuracyM, $ip, $userAgent, $now);
+        }
+    }
+
+    private function punchOnce(
         Employee $employee,
         float $lat,
         float $lng,
@@ -72,7 +90,7 @@ class PunchService
 
             $shift = $this->resolveShift($employee, $now)
                 ?? throw new PunchRejectedException('no_shift', 'No shift is assigned to you. Ask HR to configure a shift.');
-            $anchor = $this->windowDate($shift, $now)
+            $anchor = $this->windowDate($shift, $now, $employee->id)
                 ?? throw $this->outsideWindow($shift, $now);
 
             if ($direction === PunchDirection::In && ! in_array($employee->status, [EmployeeStatus::Active, EmployeeStatus::OnLeave], true)) {
@@ -232,7 +250,7 @@ class PunchService
      * yesterday ends this morning). ponytail: yesterday's instance reuses
      * today's resolved shift; per-day reassignment across midnight is ignored.
      */
-    private function windowDate(Shift $shift, CarbonImmutable $now): ?CarbonImmutable
+    private function windowDate(Shift $shift, CarbonImmutable $now, int $employeeId): ?CarbonImmutable
     {
         $early = $this->settings->requiredInt('attendance.punch_early_minutes', 0, 720);
         $late = $this->settings->requiredInt('attendance.punch_late_minutes', 0, 720);
@@ -240,7 +258,8 @@ class PunchService
         foreach ([0, -1] as $offset) {
             $day = $now->startOfDay()->addDays($offset);
             [$start, $end] = $this->shiftInstance($shift, $day);
-            if ($now->betweenIncluded($start->subMinutes($early), $end->addMinutes($late))) {
+            $window = $end->addMinutes($late + $this->approvedOvertimeMinutes($employeeId, $day));
+            if ($now->betweenIncluded($start->subMinutes($early), $window)) {
                 return $day;
             }
         }
@@ -292,6 +311,18 @@ class PunchService
     private function isNonWorkingDay(Employee $employee, CarbonImmutable $day): bool
     {
         return ! $this->shifts->isWorkingDay($employee, $day) || $this->holidays->forDate($day) !== null;
+    }
+
+    /** Approved overtime hours for the day, as minutes: the time-out window stretches by that much. */
+    private function approvedOvertimeMinutes(int $employeeId, CarbonImmutable $day): int
+    {
+        $hours = OvertimeRequest::query()
+            ->where('employee_id', $employeeId)
+            ->whereDate('date', $day->toDateString())
+            ->where('status', OvertimeStatus::Approved->value)
+            ->sum('hours_requested');
+
+        return (int) round((float) $hours * 60);
     }
 
     private function hasApprovedOvertime(int $employeeId, CarbonImmutable $day): bool

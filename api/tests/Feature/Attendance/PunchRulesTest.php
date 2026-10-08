@@ -62,6 +62,46 @@ class PunchRulesTest extends TestCase
         $this->assertRejected('not_active', fn () => $this->punch($emp));
     }
 
+    public function test_time_out_window_closes_two_hours_after_shift_end(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 06:00:00');
+        $this->punch($emp);
+
+        $this->at('2026-10-07 16:01:00'); // 14:00 + 120 min = 16:00
+        $this->assertRejected('outside_window', fn () => $this->punch($emp));
+    }
+
+    public function test_approved_overtime_stretches_the_time_out_window(): void
+    {
+        [$emp] = $this->worker();
+        $this->approveOvertime($emp, '2026-10-07'); // 2 approved hours
+        $this->at('2026-10-07 06:00:00');
+        $this->punch($emp);
+
+        $this->at('2026-10-07 17:59:00'); // 14:00 + 120 + 120 min = 18:00
+        $this->assertSame(PunchDirection::Out, $this->punch($emp)->direction);
+    }
+
+    public function test_a_row_created_by_an_import_mid_punch_is_retried_once(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 06:00:00');
+        $fired = false;
+        Attendance::creating(function (Attendance $a) use (&$fired, $emp) {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            \Illuminate\Support\Facades\DB::table('attendances')->insert([
+                'employee_id' => $emp->id, 'date' => '2026-10-07', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $this->assertSame(PunchDirection::In, $this->punch($emp)->direction);
+        $this->assertSame(1, Attendance::query()->where('employee_id', $emp->id)->count());
+    }
+
     public function test_early_out_is_refused_until_shift_end_minus_grace(): void
     {
         [$emp] = $this->worker();
