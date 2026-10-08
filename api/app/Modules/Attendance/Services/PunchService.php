@@ -57,7 +57,13 @@ class PunchService
 
             $last = $this->lastPunch($employee->id);
             if ($last !== null && $last->punched_at->greaterThan($now->subSeconds(self::COOLDOWN_SECONDS))) {
-                throw new PunchRejectedException('too_soon', 'You just punched. Wait a minute before punching again.');
+                $wait = max(1, self::COOLDOWN_SECONDS - abs($now->getTimestamp() - $last->punched_at->getTimestamp()));
+                throw new PunchRejectedException('too_soon', sprintf(
+                    'You just timed %s. Please wait %d more second%s before your next punch.',
+                    $last->direction->value,
+                    $wait,
+                    $wait === 1 ? '' : 's',
+                ));
             }
 
             $open = $this->isOpen($last, $now);

@@ -52,25 +52,17 @@ const GEO_ERRORS: Record<number, [message: string, code: string]> = {
   3: ['Locating you took too long. Try again.', 'geo_timeout'],
 };
 
-/** What to do about each refusal. The message says what happened; this says what next. */
+/**
+ * Extra guidance for refusals whose message does not already say what to do. The
+ * server's rule messages (early out, minimum work, late in, rest-day work, no shift,
+ * window, locked day…) carry their own next step, so adding a hint to those repeated
+ * the sentence in the toast.
+ */
 export const RECOVERY: Record<string, string> = {
   geo_denied: 'On a phone: browser menu → Site settings → Location → Allow.',
   geo_unavailable: 'GPS works best outdoors or next to a window.',
   out_of_range:
     'Move closer to the plant. If you are on site and still blocked, ask HR to record your time.',
-  low_accuracy: 'Step outdoors or near a window, wait a few seconds, then try again.',
-  outside_window:
-    'Time in/out opens shortly before your shift. If you worked outside it, ask HR to record it.',
-  no_shift: 'HR needs to assign you a shift before you can punch.',
-  too_soon: 'Wait a minute, then check your punches below.',
-  manual_entry: 'Contact HR to correct this day.',
-  on_leave: 'Contact HR to correct this day.',
-  row_removed: 'Contact HR to correct this day.',
-  out_before_in: 'Contact HR to correct this day.',
-  work_not_authorized: 'File an overtime request for that day. Once it is approved you can time in.',
-  too_late_in: 'Ask HR to record your attendance for today.',
-  min_work: 'Wait until the time shown, then try again.',
-  too_early_out: 'For an earlier exit, ask HR to record it.',
 };
 
 function readFix(): Promise<GpsFix> {

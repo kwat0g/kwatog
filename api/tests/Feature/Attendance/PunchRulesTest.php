@@ -183,4 +183,16 @@ class PunchRulesTest extends TestCase
 
         $this->assertSame('13:45', CarbonImmutable::parse($status['earliest_out'])->format('H:i'));
     }
+
+    public function test_a_too_quick_second_tap_says_what_was_recorded_and_how_long_to_wait(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 06:02:00');
+        $this->punch($emp);
+
+        $this->at('2026-10-07 06:02:30');
+        $e = $this->assertRejected('too_soon', fn () => $this->punch($emp));
+
+        $this->assertSame('You just timed in. Please wait 30 more seconds before your next punch.', $e->getMessage());
+    }
 }
