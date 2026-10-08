@@ -88,24 +88,32 @@ class PunchService
             $open = $this->isOpen($last, $now);
             $direction = $open ? PunchDirection::Out : PunchDirection::In;
 
-            $shift = $this->resolveShift($employee, $now)
+            $row = $open ? Attendance::withTrashed()->lockForUpdate()->find($last->attendance_id) : null;
+            if ($open && $row === null) {
+                throw new PunchRejectedException('row_removed', 'Your attendance record for this shift was removed. Contact HR.');
+            }
+            if ($row !== null) {
+                $this->guardRow($row);
+            }
+
+            $shift = ($open ? $this->sessionShift($row) : $this->resolveShift($employee, $now))
                 ?? throw new PunchRejectedException('no_shift', 'No shift is assigned to you. Ask HR to configure a shift.');
-            $anchor = $this->windowDate($shift, $now, $employee->id)
-                ?? throw $this->outsideWindow($shift, $now);
+            $anchor = $this->windowDate($shift, $now, $employee->id, $open ? CarbonImmutable::parse($row->date->toDateString()) : null)
+                ?? throw ($open
+                    ? new PunchRejectedException('outside_window', 'You can only time in/out close to your shift hours. See HR if you worked outside them.')
+                    : $this->outsideWindow($shift, $now));
 
             if ($direction === PunchDirection::In && ! in_array($employee->status, [EmployeeStatus::Active, EmployeeStatus::OnLeave], true)) {
                 throw new PunchRejectedException('not_active', 'Your employment record is not active, so you cannot time in. Contact HR.');
             }
 
             $row = $open
-                ? Attendance::withTrashed()->lockForUpdate()->find($last->attendance_id)
+                ? $row
                 : Attendance::withTrashed()->lockForUpdate()
                     ->where('employee_id', $employee->id)->where('date', $anchor->toDateString())->first();
 
-            if ($row !== null) {
+            if (! $open && $row !== null) {
                 $this->guardRow($row);
-            } elseif ($open) {
-                throw new PunchRejectedException('row_removed', 'Your attendance record for this shift was removed. Contact HR.');
             }
 
             $nonWorking = $this->isNonWorkingDay($employee, $anchor);
@@ -168,11 +176,11 @@ class PunchService
         $now ??= CarbonImmutable::now();
         $last = $this->lastPunch($employee->id);
         $open = $this->isOpen($last, $now);
-        $shift = $this->resolveShift($employee, $now);
 
         $row = $open
             ? Attendance::query()->find($last->attendance_id)
             : Attendance::query()->where('employee_id', $employee->id)->where('date', $now->toDateString())->first();
+        $shift = $open ? $this->sessionShift($row) : $this->resolveShift($employee, $now);
 
         $punches = AttendancePunch::query()
             ->where('employee_id', $employee->id)
@@ -244,19 +252,24 @@ class PunchService
             ?? Shift::query()->where('is_default', true)->where('is_active', true)->first();
     }
 
+    private function sessionShift(?Attendance $row): ?Shift
+    {
+        return $row?->shift_id
+            ? Shift::query()->whereKey($row->shift_id)->where('is_active', true)->first()
+            : null;
+    }
+
     /**
      * The date of the shift instance whose punch window contains $now, or null.
-     * Today's instance is tried before yesterday's (a night shift that started
-     * yesterday ends this morning). ponytail: yesterday's instance reuses
-     * today's resolved shift; per-day reassignment across midnight is ignored.
+     * An open session checks only its stored work date; a new session tries
+     * today's instance before yesterday's night-shift instance.
      */
-    private function windowDate(Shift $shift, CarbonImmutable $now, int $employeeId): ?CarbonImmutable
+    private function windowDate(Shift $shift, CarbonImmutable $now, int $employeeId, ?CarbonImmutable $sessionDay = null): ?CarbonImmutable
     {
         $early = $this->settings->requiredInt('attendance.punch_early_minutes', 0, 720);
         $late = $this->settings->requiredInt('attendance.punch_late_minutes', 0, 720);
 
-        foreach ([0, -1] as $offset) {
-            $day = $now->startOfDay()->addDays($offset);
+        foreach ($sessionDay ? [$sessionDay] : [$now->startOfDay(), $now->startOfDay()->subDay()] as $day) {
             [$start, $end] = $this->shiftInstance($shift, $day);
             $window = $end->addMinutes($late + $this->approvedOvertimeMinutes($employeeId, $day));
             if ($now->betweenIncluded($start->subMinutes($early), $window)) {
