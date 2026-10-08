@@ -238,7 +238,8 @@
             sets BROADCAST_CONNECTION as a process variable, which overrides this
             file, so a CI run says nothing about the value written here.
         -->
-        <env name="BROADCAST_CONNECTION" value="log"/>
+        <env name="BROADCAST_CONNECTION" value="log" force="true"/>
+        <server name="BROADCAST_CONNECTION" value="log" force="true"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="db"/>
@@ -246,8 +247,10 @@
         <env name="DB_DATABASE" value="ogami_test"/>
         <env name="DB_USERNAME" value="ogami"/>
         <env name="DB_PASSWORD" value="ogami_dev_pw"/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
     </php>
