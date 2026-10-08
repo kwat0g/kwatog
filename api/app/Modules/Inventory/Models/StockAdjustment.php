@@ -41,6 +41,7 @@ class StockAdjustment extends Model
         'value'       => 'decimal:2',
         'reason_code' => StockAdjustmentReason::class,
         'approved_at' => 'datetime',
+        'resolved_at' => 'datetime',
         'status' => StockAdjustmentStatus::class,
     ];
 
@@ -67,5 +68,10 @@ class StockAdjustment extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function resolver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by')->withTrashed();
     }
 }

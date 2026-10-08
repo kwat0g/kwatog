@@ -31,7 +31,7 @@ class LifecycleStatusConstraintTest extends TestCase
     /** @var array<string, array<string, list<string>>> */
     private const STATUSES = [
         'journal_entries' => ['status' => ['draft', 'posted', 'reversed']],
-        'stock_adjustments' => ['status' => ['pending', 'approved']],
+        'stock_adjustments' => ['status' => ['pending', 'approved', 'rejected', 'withdrawn']],
         'stock_count_sessions' => ['status' => ['draft', 'in_progress', 'completed', 'cancelled']],
         'stock_count_items' => ['status' => ['pending', 'counted', 'verified', 'adjusted']],
         'inspections' => ['status' => ['draft', 'in_progress', 'awaiting_review', 'passed', 'failed', 'cancelled']],

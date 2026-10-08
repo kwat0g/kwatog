@@ -15,6 +15,7 @@ use App\Modules\Inventory\Exceptions\InvalidMovementException;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Requests\RejectStockAdjustmentRequest;
 use App\Modules\Inventory\Requests\StoreStockAdjustmentRequest;
 use App\Modules\Inventory\Resources\StockAdjustmentResource;
 use App\Modules\Inventory\Services\StockAdjustmentService;
@@ -54,14 +55,14 @@ class StockAdjustmentController
     public function index(Request $request): AnonymousResourceCollection
     {
         $filters = $request->validate([
-            'status'   => ['nullable', 'string', Rule::in([StockAdjustmentStatus::Pending->value, StockAdjustmentStatus::Approved->value])],
+            'status'   => ['nullable', 'string', Rule::in(array_map(static fn (StockAdjustmentStatus $status): string => $status->value, StockAdjustmentStatus::cases()))],
             'direction'=> ['nullable', Rule::in(['in', 'out'])],
             'search'   => ['nullable', 'string', 'max:100'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $q = StockAdjustment::query()
-            ->with(['item', 'location', 'stockMovement', 'requester', 'approver'])
+            ->with(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
             ->latest('created_at');
 
         if (!empty($filters['status'])) {
@@ -106,7 +107,7 @@ class StockAdjustmentController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new StockAdjustmentResource(
-            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver'])
+            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
         ))->response()->setStatusCode(201);
     }
 
@@ -118,7 +119,33 @@ class StockAdjustmentController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return (new StockAdjustmentResource(
-            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver'])
+            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
+        ))->response();
+    }
+
+    public function reject(RejectStockAdjustmentRequest $request, StockAdjustment $stockAdjustment): JsonResponse
+    {
+        try {
+            $adjustment = $this->service->reject($stockAdjustment, $request->user(), $request->validated('reason'));
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return (new StockAdjustmentResource(
+            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
+        ))->response();
+    }
+
+    public function withdraw(Request $request, StockAdjustment $stockAdjustment): JsonResponse
+    {
+        try {
+            $adjustment = $this->service->withdraw($stockAdjustment, $request->user());
+        } catch (BusinessRuleException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return (new StockAdjustmentResource(
+            $adjustment->load(['item', 'location', 'stockMovement', 'requester', 'approver', 'resolver'])
         ))->response();
     }
 }

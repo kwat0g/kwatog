@@ -214,7 +214,7 @@ export interface StockAdjustment {
   reason_code: string | null;
   reason_label?: string | null;
   reason: string;
-  status: 'pending' | 'approved';
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
   status_label?: string;
   item: { id: string; code: string; name: string } | null;
   location: { id: string; code: string } | null;
@@ -222,6 +222,12 @@ export interface StockAdjustment {
   requested_by: { id: string; name: string } | null;
   approved_by: { id: string; name: string } | null;
   approved_at: string | null;
+  resolved_by: { id: string; name: string } | null;
+  resolved_at: string | null;
+  resolution_reason: string | null;
+  can_approve: boolean;
+  can_reject: boolean;
+  can_withdraw: boolean;
   created_at: string;
 }
 

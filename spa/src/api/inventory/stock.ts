@@ -27,7 +27,7 @@ export const stockMovementsApi = {
 // validates it as in|out and exposes no sort-direction param on this endpoint,
 // so the base ListParams meaning is deliberately omitted rather than widened.
 export interface StockAdjustmentListParams extends Omit<ListParams, 'direction'> {
- status?: 'pending' | 'approved' | '';
+ status?: 'pending' | 'approved' | 'rejected' | 'withdrawn' | '';
  direction?: 'in' | 'out';
 }
 
@@ -39,6 +39,10 @@ export const stockAdjustmentsApi = {
  client.post<ApiSuccess<StockAdjustment>>('/inventory/stock-adjustments', data).then((r) => r.data.data),
  approve: (id: string) =>
  client.patch<ApiSuccess<StockAdjustment>>(`/inventory/stock-adjustments/${id}/approve`).then((r) => r.data.data),
+ reject: (id: string, reason: string) =>
+ client.patch<ApiSuccess<StockAdjustment>>(`/inventory/stock-adjustments/${id}/reject`, { reason }).then((r) => r.data.data),
+ withdraw: (id: string) =>
+ client.patch<ApiSuccess<StockAdjustment>>(`/inventory/stock-adjustments/${id}/withdraw`).then((r) => r.data.data),
 };
 
 export const stockTransfersApi = {

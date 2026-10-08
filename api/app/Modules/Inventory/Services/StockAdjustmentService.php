@@ -238,6 +238,63 @@ class StockAdjustmentService
         });
     }
 
+    public function reject(StockAdjustment $adj, User $by, string $reason): StockAdjustment
+    {
+        if (! $by->hasPermission('inventory.adjust.approve')) {
+            throw new BusinessRuleException('You are not authorized to reject stock adjustments.');
+        }
+
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 500) {
+            throw new BusinessRuleException('Enter a rejection reason of 1 to 500 characters.');
+        }
+
+        return DB::transaction(function () use ($adj, $by, $reason) {
+            $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
+            if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
+                throw new BusinessRuleException('Adjustment is no longer pending.');
+            }
+            if ((int) $locked->requested_by === (int) $by->id) {
+                throw new BusinessRuleException('The requester cannot reject their own adjustment.');
+            }
+
+            $locked->forceFill([
+                'status' => StockAdjustmentStatus::Rejected->value,
+                'resolved_by' => $by->id,
+                'resolved_at' => now(),
+                'resolution_reason' => $reason,
+            ])->save();
+
+            return $locked->fresh();
+        });
+    }
+
+    public function withdraw(StockAdjustment $adj, User $by): StockAdjustment
+    {
+        if (! $by->hasPermission('inventory.adjust')) {
+            throw new BusinessRuleException('You are not authorized to withdraw stock adjustments.');
+        }
+
+        return DB::transaction(function () use ($adj, $by) {
+            $locked = StockAdjustment::query()->lockForUpdate()->findOrFail($adj->getKey());
+            if ($locked->status !== StockAdjustmentStatus::Pending || $locked->stock_movement_id) {
+                throw new BusinessRuleException('Adjustment is no longer pending.');
+            }
+            if ((int) $locked->requested_by !== (int) $by->id) {
+                throw new BusinessRuleException('Only the requester may withdraw this adjustment.');
+            }
+
+            $locked->forceFill([
+                'status' => StockAdjustmentStatus::Withdrawn->value,
+                'resolved_by' => $by->id,
+                'resolved_at' => now(),
+                'resolution_reason' => null,
+            ])->save();
+
+            return $locked->fresh();
+        });
+    }
+
     // ── Internals ────────────────────────────────────────────────────────────
 
     /** Post the ledger movement for an adjustment direction. */

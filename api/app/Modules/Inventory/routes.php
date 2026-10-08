@@ -121,6 +121,8 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
         ->middleware('permission_any:inventory.adjust,inventory.adjust.approve');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
     Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
+    Route::patch('/stock-adjustments/{stockAdjustment}/reject', [StockAdjustmentController::class, 'reject'])->middleware('permission:inventory.adjust.approve');
+    Route::patch('/stock-adjustments/{stockAdjustment}/withdraw', [StockAdjustmentController::class, 'withdraw'])->middleware('permission:inventory.adjust');
     /* ─── ADV8 — WMS: Warehouse Map ─── */
     Route::get('/warehouse-map', [WarehouseMapController::class, 'index'])->middleware('permission:inventory.warehouse.manage');
     Route::get('/warehouse-map/bins/{location}', [WarehouseMapController::class, 'binDetail'])->middleware('permission:inventory.warehouse.manage');

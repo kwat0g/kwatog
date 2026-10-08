@@ -15,6 +15,10 @@ class StockAdjustmentResource extends JsonResource
     public function toArray(Request $request): array
     {
         $code = $this->reason_code instanceof StockAdjustmentReason ? $this->reason_code : null;
+        $actor = $request->user();
+        $pending = $this->status === StockAdjustmentStatus::Pending;
+        $isRequester = $actor !== null && $this->requested_by !== null
+            && (int) $this->requested_by === (int) $actor->getAuthIdentifier();
 
         return [
             'id'            => $this->hash_id,
@@ -48,6 +52,15 @@ class StockAdjustmentResource extends JsonResource
                 'name' => $this->approver->name,
             ] : null),
             'approved_at'   => optional($this->approved_at)->toIso8601String(),
+            'resolved_by'   => $this->whenLoaded('resolver', fn () => $this->resolver ? [
+                'id' => $this->resolver->hash_id,
+                'name' => $this->resolver->name,
+            ] : null),
+            'resolved_at' => optional($this->resolved_at)->toIso8601String(),
+            'resolution_reason' => $this->resolution_reason,
+            'can_approve' => $pending && $actor?->hasPermission('inventory.adjust.approve') && ! $isRequester,
+            'can_reject' => $pending && $actor?->hasPermission('inventory.adjust.approve') && ! $isRequester,
+            'can_withdraw' => $pending && $actor?->hasPermission('inventory.adjust') && $isRequester,
             'created_at'    => optional($this->created_at)->toIso8601String(),
         ];
     }
