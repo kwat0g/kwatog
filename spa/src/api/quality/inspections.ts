@@ -67,7 +67,11 @@ export const inspectionsApi = {
       .then((r) => r.data.data),
   review: (id: string, decision: 'passed' | 'failed', remarks?: string) =>
     client
-      .patch<ApiSuccess<Inspection>>(`/quality/inspections/${id}/review`, { decision, remarks })
+      .patch<ApiSuccess<Inspection>>(
+        `/quality/inspections/${id}/review`,
+        { decision, remarks },
+        { timeout: 90_000 },
+      )
       .then((r) => r.data.data),
   cancel: (id: string, reason?: string) =>
     client

@@ -7,6 +7,7 @@ const BASE_URL = baseUrl();
 const runErrors: string[] = [];
 const abortedApiGets: Array<{ page: Page; url: string }> = [];
 const successfulApiGets: Array<{ page: Page; url: string }> = [];
+let automationActorRecovery: { page: Page; context: BrowserContext; roles: unknown[] } | null = null;
 
 test.beforeEach(() => {
   runErrors.length = 0;
@@ -14,7 +15,18 @@ test.beforeEach(() => {
   successfulApiGets.length = 0;
 });
 
-test.afterEach(() => {
+test.afterEach(async () => {
+  if (automationActorRecovery) {
+    const recovery = automationActorRecovery;
+    try {
+      await restoreAutomationActorRoles();
+    } catch (error) {
+      runErrors.push(`Failed to restore automation actor roles: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      await recovery.context.close();
+    }
+  }
+
   const matchedResponses = new Set<number>();
   const unmatchedAborts = abortedApiGets.filter((request) => {
     const responseIndex = successfulApiGets.findIndex((response, index) =>
@@ -158,6 +170,17 @@ async function writeAutomationActorRoles(page: Page, roles: unknown[], reason: s
     },
   );
   expect(response.status(), await response.text()).toBe(200);
+}
+
+async function restoreAutomationActorRoles(): Promise<void> {
+  const recovery = automationActorRecovery;
+  if (!recovery) return;
+  await writeAutomationActorRoles(
+    recovery.page,
+    recovery.roles,
+    'Restore automation actor roles after the isolated E2E recovery scenario.',
+  );
+  if (automationActorRecovery === recovery) automationActorRecovery = null;
 }
 
 async function selectDepartment(page: Page, departmentName = 'Production'): Promise<void> {
@@ -1304,6 +1327,11 @@ test.describe('Live procurement runbook', () => {
       const recoveryAdmin = await newContext(browser);
       await login(recoveryAdmin.page, 'admin@ogami.test');
       const originalAutomationRoles = await readAutomationActorRoles(recoveryAdmin.page);
+      automationActorRecovery = {
+        page: recoveryAdmin.page,
+        context: recoveryAdmin.context,
+        roles: originalAutomationRoles,
+      };
 
       const reviewer = await newContext(browser);
       await login(reviewer.page, 'production@ogami.test');
@@ -1342,12 +1370,11 @@ test.describe('Live procurement runbook', () => {
           .not.toBe(reviewedInspection.data?.result_authors?.[0]?.id);
         await expect(reviewer.page.getByText('Passed', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
       } finally {
-        await writeAutomationActorRoles(
-          recoveryAdmin.page,
-          originalAutomationRoles,
-          'Restore the original automation actor roles after the isolated E2E recovery scenario.',
-        );
-        await reviewer.context.close();
+        try {
+          await restoreAutomationActorRoles();
+        } finally {
+          await reviewer.context.close();
+        }
       }
 
       const runListResponse = await recoveryAdmin.page.request.get(
