@@ -182,4 +182,6 @@ jobs:
         # framework-booting step needs. Do not reintroduce a step-scoped copy:
         # a second declaration is what let the two earlier steps boot with
         # production defaults for as long as they did (F-043).
-        run: vendor/bin/phpunit --colors=always
+        # Separate Feature module processes reset Laravel's retained route
+        # collection without changing PHP's configured memory limit.
+        run: bash ../scripts/test-api-sharded.sh

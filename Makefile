@@ -59,7 +59,7 @@ fresh:
 	docker compose exec api php artisan migrate:fresh --seed
 
 test:
-	docker compose exec api php artisan test
+	docker compose exec -T api bash scripts/test-api-sharded.sh
 	docker compose exec spa npm run test -- --run
 
 chain-smoke:
