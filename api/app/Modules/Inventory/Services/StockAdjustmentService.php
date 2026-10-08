@@ -125,6 +125,7 @@ class StockAdjustmentService
             if ($item === null) {
                 throw new BusinessRuleException('Cannot adjust a missing or deleted item.');
             }
+            app(UomConversionService::class)->assertBaseQuantity($item, $qty);
 
             $cost = $direction === 'out'
                 ? $this->currentWac($itemId, $locationId)

@@ -155,4 +155,35 @@ class StockAdjustmentQueueTest extends TestCase
             ->value('quantity'));
         $this->assertSame($movementsBefore, DB::table('stock_movements')->count());
     }
+
+    public function test_fractional_piece_adjustment_is_rejected_before_it_can_get_stuck_pending(): void
+    {
+        $maker = $this->userWith('warehouse_staff', ['inventory.adjust', 'inventory.view']);
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 1);
+        $adjustmentsBefore = DB::table('stock_adjustments')->count();
+        $movementsBefore = DB::table('stock_movements')->count();
+        $auditsBefore = DB::table('audit_logs')->count();
+        $stockBefore = StockLevel::query()->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)->value('quantity');
+
+        $this->actingAs($maker)
+            ->postJson('/api/v1/inventory/stock-adjustments', [
+                'item_id' => $this->item->hash_id,
+                'location_id' => $this->location->hash_id,
+                'direction' => 'in',
+                'quantity' => '1.125',
+                'unit_cost' => '50.01',
+                'reason' => 'Fractional pieces cannot enter approval queue',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Piece quantities must be whole numbers.');
+
+        $this->assertSame($adjustmentsBefore, DB::table('stock_adjustments')->count());
+        $this->assertSame($movementsBefore, DB::table('stock_movements')->count());
+        $this->assertSame($auditsBefore, DB::table('audit_logs')->count());
+        $this->assertSame((string) $stockBefore, (string) StockLevel::query()
+            ->where('item_id', $this->item->id)
+            ->where('location_id', $this->location->id)
+            ->value('quantity'));
+    }
 }
