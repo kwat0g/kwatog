@@ -11,6 +11,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { ChainBottleneckWidget } from './ChainBottleneckWidget';
 import * as chainApiModule from '@/api/chain';
+import type { AuthUser } from '@/api/auth';
+import { useAuthStore } from '@/stores/authStore';
 import type { ChainBottlenecks } from '@/types/chain';
 
 function renderWithClient(ui: React.ReactElement) {
@@ -30,6 +32,7 @@ function renderWithClient(ui: React.ReactElement) {
 describe('ChainBottleneckWidget', () => {
  beforeEach(() => {
  vi.restoreAllMocks();
+ useAuthStore.setState({ user: null });
  });
 
  it('shows the empty state when nothing is stuck', async () => {
@@ -87,6 +90,63 @@ describe('ChainBottleneckWidget', () => {
  // The "View" link should target the first row's detail page.
  expect(screen.getByRole('link', { name: /view/i }).getAttribute('href'))
  .toBe('/crm/sales-orders/abc');
+ });
+
+ it('does not reuse another user’s audience cache when role stays the same', async () => {
+ const responseFor = (label: string): ChainBottlenecks => ({
+ total: 1,
+ groups: [{
+ key: label,
+ label,
+ audience: 'finance_officer',
+ count: 1,
+ rows: [{
+ key: label,
+ label,
+ audience: 'finance_officer',
+ entity_type: 'invoice',
+ entity_id: label,
+ doc_number: `${label}-1`,
+ status: 'draft',
+ stuck_since: null,
+ hours_stuck: 48,
+ }],
+ }],
+ });
+ const bottlenecks = vi.spyOn(chainApiModule.chainApi, 'bottlenecks')
+ .mockResolvedValueOnce(responseFor('Finance A'))
+ .mockResolvedValueOnce(responseFor('Finance B'));
+ const user = (id: string): AuthUser => ({
+ id,
+ name: id,
+ email: `${id}@test.local`,
+ is_active: true,
+ must_change_password: false,
+ theme_mode: 'light',
+ sidebar_collapsed: false,
+ role: { id: 'finance', name: 'Finance Officer', slug: 'finance_officer' },
+ employee: null,
+ permissions: [],
+ features: [],
+ });
+ useAuthStore.setState({ user: user('finance-a') });
+
+ const client = new QueryClient({
+ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+ });
+ const ui = () => (
+ <QueryClientProvider client={client}>
+ <MemoryRouter><ChainBottleneckWidget /></MemoryRouter>
+ </QueryClientProvider>
+ );
+ const { rerender } = render(ui());
+ await waitFor(() => expect(screen.getByText('Finance A')).toBeInTheDocument());
+
+ useAuthStore.setState({ user: user('finance-b') });
+ rerender(ui());
+
+ await waitFor(() => expect(screen.getByText('Finance B')).toBeInTheDocument());
+ expect(bottlenecks).toHaveBeenCalledTimes(2);
  });
 
  it('returns null when hideWhenEmpty is set and there is nothing stuck', async () => {

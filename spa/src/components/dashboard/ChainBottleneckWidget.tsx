@@ -1,9 +1,9 @@
 /**
  * Series C — Task C5. Chain Bottleneck Widget.
  *
- * Renders the per-step count of stuck records on the dashboard. Pass
- * `audience` to scope the widget to a single role (Finance only sees
- * its own bottlenecks, etc.). Without `audience`, every group is shown.
+ * Renders the per-step count of stuck records on the dashboard. The API always
+ * scopes rows to the signed-in role and active delegated roles; `audience` can
+ * narrow that result for a role-specific widget.
  *
  * Mounts inside any dashboard page; talks to GET /chain/bottlenecks.
  */
@@ -15,6 +15,7 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { useAuthStore } from '@/stores/authStore';
 import type { ChainAutomationSummary, ChainBottleneckGroup, ChainBottleneckRow } from '@/types/chain';
 
 interface Props {
@@ -26,8 +27,10 @@ interface Props {
 }
 
 export function ChainBottleneckWidget({ audience, title = 'Chain bottlenecks', hideWhenEmpty = false }: Props) {
+ const userId = useAuthStore((state) => state.user?.id ?? 'anonymous');
+ const roleSlug = useAuthStore((state) => state.user?.role?.slug ?? 'unknown');
  const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['chain-bottlenecks', audience ?? 'all'],
+ queryKey: ['chain-bottlenecks', userId, roleSlug, audience ?? 'own-audience'],
  queryFn: () => chainApi.bottlenecks(audience),
  refetchInterval: 60_000,
  staleTime: 60_000,
