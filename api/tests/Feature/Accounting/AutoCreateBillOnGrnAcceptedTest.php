@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Accounting;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Jobs\DispatchOutboxMessage;
 use App\Common\Models\ChainListenerRun;
 use App\Common\Models\ChainStepRun;
+use App\Common\Services\OutboxDispatcher;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\WithholdingTaxType;
@@ -30,6 +32,7 @@ use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -214,6 +217,50 @@ class AutoCreateBillOnGrnAcceptedTest extends TestCase
         $bill->refresh();
         $this->assertSame('80.00', (string) $bill->items()->first()->quantity);
         $this->assertSame('1000.00', (string) $bill->subtotal);
+        $this->assertSame('1120.00', (string) $bill->total_amount);
+    }
+
+    public function test_delayed_partial_acceptance_event_stages_one_bill_after_remainder_acceptance(): void
+    {
+        Bus::fake([DispatchOutboxMessage::class]);
+        $grn = $this->makePendingGrn();
+        Inspection::query()
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->update($this->checkedPass());
+
+        $line = $grn->items()->firstOrFail();
+        $partial = $this->grnSvc->partialAccept($grn->fresh(), [
+            $line->id => '40.000',
+        ], $this->user);
+
+        $this->travel(5)->seconds();
+        $full = $this->grnSvc->partialAccept($partial->fresh(), [
+            $line->id => '80.000',
+        ], $this->user);
+        $acceptedEvents = DB::table('event_outbox')
+            ->where('event_type', GoodsReceiptNoteAccepted::class)
+            ->orderBy('created_at')
+            ->get();
+        $this->assertCount(2, $acceptedEvents);
+
+        $dispatchErrors = [];
+        foreach ($acceptedEvents as $event) {
+            try {
+                app(OutboxDispatcher::class)->dispatch((string) $event->id);
+            } catch (\RuntimeException $error) {
+                $dispatchErrors[] = $error->getMessage();
+            }
+        }
+
+        $this->assertSame([], $dispatchErrors, 'Delayed acceptance facts must publish after the GRN advances.');
+        $this->assertSame(2, DB::table('event_outbox')
+            ->whereIn('id', $acceptedEvents->pluck('id')->all())
+            ->where('status', 'published')
+            ->count());
+        $this->assertSame(1, Bill::where('goods_receipt_note_id', $full->id)->count());
+        $bill = Bill::where('goods_receipt_note_id', $full->id)->firstOrFail();
+        $this->assertSame('80.00', (string) $bill->items()->first()->quantity);
         $this->assertSame('1120.00', (string) $bill->total_amount);
     }
 

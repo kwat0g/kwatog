@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Events;
 
+use App\Common\Events\ToleratesNewerModelState;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -14,7 +15,7 @@ use Illuminate\Queue\SerializesModels;
  * the listener pre-creates the supplier bill as a DRAFT so accounting can
  * review and post it.
  */
-class GoodsReceiptNoteAccepted
+class GoodsReceiptNoteAccepted implements ToleratesNewerModelState
 {
     use Dispatchable, SerializesModels;
 
