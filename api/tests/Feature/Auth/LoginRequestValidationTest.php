@@ -30,9 +30,21 @@ class LoginRequestValidationTest extends TestCase
         RateLimiter::clear(md5('auth127.0.0.1|user@t.test'));
     }
 
+    private function postLogin(array $payload)
+    {
+        $token = 'test-csrf-token';
+
+        return $this->withSession(['_token' => $token])
+            ->withHeaders([
+                'Origin' => 'http://localhost',
+                'X-CSRF-TOKEN' => $token,
+            ])
+            ->postJson('/api/v1/auth/login', $payload);
+    }
+
     public function test_rejects_password_shorter_than_eight_characters(): void
     {
-        $this->postJson('/api/v1/auth/login', [
+        $this->postLogin([
             'email'    => 'user@t.test',
             'password' => '1234567',
         ])
@@ -42,7 +54,7 @@ class LoginRequestValidationTest extends TestCase
 
     public function test_rejects_missing_password(): void
     {
-        $this->postJson('/api/v1/auth/login', [
+        $this->postLogin([
             'email' => 'user@t.test',
         ])
             ->assertStatus(422)
@@ -54,7 +66,7 @@ class LoginRequestValidationTest extends TestCase
         // We only care that the request passes the FormRequest gate. With no
         // matching user the controller will reject with 422 (invalid creds),
         // but the `password` field itself must not be flagged.
-        $response = $this->postJson('/api/v1/auth/login', [
+        $response = $this->postLogin([
             'email'    => 'user@t.test',
             'password' => '12345678',
         ]);
@@ -88,16 +100,9 @@ class LoginRequestValidationTest extends TestCase
         // Stateful Sanctum requires Origin + matching CSRF token in the
         // session. Mirror AuthSecurityTest::postLogin's setup so we exercise
         // the full middleware stack, not a 419-shaped failure.
-        $token = 'test-csrf-token';
-        $this->withSession(['_token' => $token])
-            ->withHeaders([
-                'Origin'       => 'http://localhost',
-                'X-CSRF-TOKEN' => $token,
-            ])
-            ->postJson('/api/v1/auth/login', [
-                'email'    => $user->email,
-                'password' => 'Pass-1!ab',
-            ])
-            ->assertOk();
+        $this->postLogin([
+            'email'    => $user->email,
+            'password' => 'Pass-1!ab',
+        ])->assertOk();
     }
 }

@@ -144,6 +144,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 401 => 'Unauthenticated.',
                 403 => 'You do not have permission to perform this action.',
                 404 => 'The requested resource was not found.',
+                419 => 'Your sign-in session is missing or expired. Refresh the page and try again.',
                 422 => $e->getMessage() ?: 'The request could not be processed.',
                 429 => 'Too many requests. Please try again later.',
                 default => null,

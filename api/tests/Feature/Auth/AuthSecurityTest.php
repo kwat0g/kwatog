@@ -105,10 +105,7 @@ class AuthSecurityTest extends TestCase
         $this->clearAuthThrottle($user->email);
 
         for ($i = 0; $i < 3; $i++) {
-            $this->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
-                'password' => 'wrong-password-'.$i,
-            ])->assertStatus(422);
+            $this->postLogin($user->email, 'wrong-password-'.$i)->assertStatus(422);
         }
 
         $fresh = $user->fresh();
@@ -126,10 +123,7 @@ class AuthSecurityTest extends TestCase
         // also stamp `locked_until`. Throttle ceiling is 5/min for the same
         // IP+email pair, so this fits inside the budget exactly.
         for ($i = 0; $i < 5; $i++) {
-            $this->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
-                'password' => 'wrong-password-'.$i,
-            ])->assertStatus(422);
+            $this->postLogin($user->email, 'wrong-password-'.$i)->assertStatus(422);
         }
 
         $fresh = $user->fresh();
@@ -144,10 +138,7 @@ class AuthSecurityTest extends TestCase
         $this->clearAuthThrottle($user->email);
 
         // Even with the CORRECT password, the lockout gate must fire.
-        $this->postJson('/api/v1/auth/login', [
-            'email' => $user->email,
-            'password' => $password,
-        ])->assertStatus(423);
+        $this->postLogin($user->email, $password)->assertStatus(423);
     }
 
     public function test_successful_login_resets_failed_counter(): void
@@ -157,10 +148,7 @@ class AuthSecurityTest extends TestCase
         $this->clearAuthThrottle($user->email);
 
         for ($i = 0; $i < 3; $i++) {
-            $this->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
-                'password' => 'wrong-pwd-'.$i,
-            ])->assertStatus(422);
+            $this->postLogin($user->email, 'wrong-pwd-'.$i)->assertStatus(422);
         }
         $this->assertSame(3, (int) $user->fresh()->failed_login_attempts);
 
@@ -376,10 +364,7 @@ class AuthSecurityTest extends TestCase
         // `throttle:auth` with 429 — that's the contract under test.
         $statuses = [];
         for ($i = 0; $i < 6; $i++) {
-            $statuses[] = $this->postJson('/api/v1/auth/login', [
-                'email' => $user->email,
-                'password' => 'wrong-pwd-'.$i,
-            ])->getStatusCode();
+            $statuses[] = $this->postLogin($user->email, 'wrong-pwd-'.$i)->getStatusCode();
         }
 
         $this->assertCount(5, array_filter($statuses, fn ($s) => $s === 422),

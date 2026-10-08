@@ -10,6 +10,10 @@ class LoginRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        if (! $this->hasSession()) {
+            abort(419, 'A stateful sign-in session is required.');
+        }
+
         return true;
     }
 
