@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Common\Support\TrashedFilter;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
 use App\Modules\Inventory\Models\StockLevel;
@@ -102,6 +103,14 @@ class ItemService
     public function update(Item $item, array $data): Item
     {
         return DB::transaction(function () use ($item, $data) {
+            $item = Item::query()->lockForUpdate()->findOrFail($item->getKey());
+            $changesBaseUnit = isset($data['unit_of_measure'])
+                && strcasecmp(trim((string) $data['unit_of_measure']), trim((string) $item->unit_of_measure)) !== 0;
+            if ($changesBaseUnit && $item->stockAdjustments()
+                ->where('status', StockAdjustmentStatus::Pending->value)
+                ->exists()) {
+                throw new BusinessRuleException('Cannot change the base unit while a stock adjustment is pending.');
+            }
             // Forbid changing item_type or UOM if movements exist.
             if ($item->movements()->exists()) {
                 if (isset($data['item_type']) && $data['item_type'] !== $item->item_type->value) {
