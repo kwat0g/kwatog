@@ -122,7 +122,7 @@ describe('TimeClockCard', () => {
   it('shows what to do after each new refusal code', async () => {
     mockGeolocation((ok) => ok({ coords: { latitude: 14.286, longitude: 120.9345, accuracy: 18 } } as GeolocationPosition));
     vi.mocked(punchApi.punch).mockRejectedValue({
-      response: { status: 422, data: { message: 'You can time out from 1:45 PM.', code: 'too_early_out' } },
+      response: { status: 422, data: { message: 'You can time out from 1:45 PM. For an earlier exit, ask HR to record it.', code: 'too_early_out' } },
     });
     renderCard();
 
