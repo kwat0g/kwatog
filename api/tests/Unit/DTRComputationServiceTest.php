@@ -285,6 +285,26 @@ class DTRComputationServiceTest extends TestCase
         $this->assertEquals(4.0, $r['overtime_hours']); // capped at auto_ot_hours
     }
 
+    public function test_extended_shift_arriving_early_does_not_earn_auto_ot(): void
+    {
+        $r = $this->svc->compute($this->input([
+            'shift'    => $this->extendedShift(),
+            'time_in'  => '2026-04-15 04:00:00', // 2h before shift start
+            'time_out' => '2026-04-15 18:00:00',
+        ]));
+        $this->assertEquals(0.0, $r['overtime_hours']);
+    }
+
+    public function test_night_diff_excludes_unapproved_minutes_outside_the_shift(): void
+    {
+        $r = $this->svc->compute($this->input([
+            'shift'    => $this->nightShift(),
+            'time_in'  => '2026-04-15 17:00:00', // before 18:00 start
+            'time_out' => '2026-04-16 07:00:00', // after 06:00 end
+        ]));
+        $this->assertEquals(8.0, $r['night_diff_hours']);
+    }
+
     // ─── Night shift / cross-midnight / night diff ───────────────
 
     public function test_night_shift_cross_midnight_full(): void

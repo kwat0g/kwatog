@@ -14,6 +14,7 @@ use App\Modules\Attendance\Models\AttendancePunch;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\Attendance\Support\GeoDistance;
+use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +73,11 @@ class PunchService
             $shift = $this->resolveShift($employee, $now)
                 ?? throw new PunchRejectedException('no_shift', 'No shift is assigned to you. Ask HR to configure a shift.');
             $anchor = $this->windowDate($shift, $now)
-                ?? throw new PunchRejectedException('outside_window', 'You can only time in/out close to your shift hours. See HR if you worked outside them.');
+                ?? throw $this->outsideWindow($shift, $now);
+
+            if ($direction === PunchDirection::In && ! in_array($employee->status, [EmployeeStatus::Active, EmployeeStatus::OnLeave], true)) {
+                throw new PunchRejectedException('not_active', 'Your employment record is not active, so you cannot time in. Contact HR.');
+            }
 
             $row = $open
                 ? Attendance::withTrashed()->lockForUpdate()->find($last->attendance_id)
@@ -241,6 +246,22 @@ class PunchService
         }
 
         return null;
+    }
+
+    /** Before today's window: say when it opens. Otherwise the generic message. */
+    private function outsideWindow(Shift $shift, CarbonImmutable $now): PunchRejectedException
+    {
+        $early = $this->settings->requiredInt('attendance.punch_early_minutes', 0, 720);
+        [$start] = $this->shiftInstance($shift, $now->startOfDay());
+        if ($now->lessThan($start->subMinutes($early))) {
+            return new PunchRejectedException('too_early_in', sprintf(
+                'Your shift starts at %s. You can time in from %s.',
+                $start->format('g:i A'),
+                $start->subMinutes($early)->format('g:i A'),
+            ));
+        }
+
+        return new PunchRejectedException('outside_window', 'You can only time in/out close to your shift hours. See HR if you worked outside them.');
     }
 
     private function guardRow(Attendance $row): void

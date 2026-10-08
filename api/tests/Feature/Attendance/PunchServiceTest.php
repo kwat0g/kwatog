@@ -91,8 +91,8 @@ class PunchServiceTest extends TestCase
     public function test_outside_window_is_rejected(): void
     {
         [$emp] = $this->worker();
-        $this->at('2026-10-07 03:00:00'); // 06:00 shift, window opens 04:00
-        $this->assertRejected('outside_window', fn () => $this->punch($emp));
+        $this->at('2026-10-07 03:00:00'); // 06:00 shift, window opens 05:45
+        $this->assertRejected('too_early_in', fn () => $this->punch($emp));
     }
 
     public function test_post_shift_second_cycle_keeps_first_in_and_last_out(): void

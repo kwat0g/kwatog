@@ -218,7 +218,9 @@ class DTRComputationService
         if ($shift['is_extended']) {
             $autoOtHours = $shift['auto_ot_hours'] ?? 0.0;
             $autoOtMin   = (int) round($autoOtHours * 60);
-            $otMin = min($excess, $autoOtMin, $maximumOt);
+            // Only time worked past shift end counts: arriving early is not overtime.
+            $afterEnd = max(0, (int) max($timeIn, $shiftEnd)->diffInMinutes($timeOut, false));
+            $otMin = min($excess, $afterEnd, $autoOtMin, $maximumOt);
         } elseif ($hasApprovedOt) {
             $minimumOt = $this->settings->requiredInt('attendance.ot.minimum_minutes', 0);
             if ($excess >= $minimumOt) {
@@ -233,7 +235,10 @@ class DTRComputationService
         }
 
         // Night differential — minutes worked between 22:00 and 06:00 (next day).
-        $ndMin = $this->nightDiffMinutes($timeIn, $timeOut);
+        // Only scheduled (or approved-overtime) time earns it; punching early or late does not.
+        $ndIn = $hasApprovedOt ? $timeIn : max($timeIn, $shiftStart);
+        $ndOut = ($hasApprovedOt || $shift['is_extended']) ? $timeOut : min($timeOut, $shiftEnd);
+        $ndMin = $ndOut->gt($ndIn) ? $this->nightDiffMinutes($ndIn, $ndOut) : 0;
 
         $rate = $this->dayTypeRate($holiday, $isRestDay, worked: true);
 

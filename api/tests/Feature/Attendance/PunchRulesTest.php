@@ -42,6 +42,26 @@ class PunchRulesTest extends TestCase
         $this->shift(); // 06:00–14:00 default shift
     }
 
+    public function test_time_in_before_the_early_window_is_refused_with_the_opening_time(): void
+    {
+        [$emp] = $this->worker();
+        $this->at('2026-10-07 05:44:00');
+        $e = $this->assertRejected('too_early_in', fn () => $this->punch($emp));
+        $this->assertSame('Your shift starts at 6:00 AM. You can time in from 5:45 AM.', $e->getMessage());
+
+        $this->at('2026-10-07 05:45:00');
+        $this->assertSame(PunchDirection::In, $this->punch($emp)->direction);
+    }
+
+    public function test_a_separated_employee_cannot_time_in(): void
+    {
+        [$emp] = $this->worker();
+        $emp->forceFill(['status' => \App\Modules\HR\Enums\EmployeeStatus::Resigned])->save();
+        $this->at('2026-10-07 06:00:00');
+
+        $this->assertRejected('not_active', fn () => $this->punch($emp));
+    }
+
     public function test_early_out_is_refused_until_shift_end_minus_grace(): void
     {
         [$emp] = $this->worker();

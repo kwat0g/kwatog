@@ -26,7 +26,7 @@ trait PunchFixtures
         $s->set('company.longitude', 120.9345);
         $s->set('company.punch_radius_m', 200);
         $s->set('company.punch_max_accuracy_m', 100);
-        $s->set('attendance.punch_early_minutes', 120);
+        $s->set('attendance.punch_early_minutes', 15);
         $s->set('attendance.punch_late_minutes', 240);
     }
 
