@@ -15,6 +15,13 @@ interface Props {
 const TH = 'px-3 py-2 text-xs font-medium text-muted border-b border-default whitespace-nowrap';
 const TD = 'px-3 h-9 border-b border-subtle whitespace-nowrap';
 
+const FLAG_LABELS: Record<string, string> = {
+  shared_device: 'Same device as another employee',
+  repeated_location: 'Same exact spot on many days',
+  implausible_accuracy: 'GPS accuracy too perfect',
+  unapproved_overtime: 'Stayed past shift, no approved OT',
+};
+
 function mapUrl(lat: string, lng: string): string {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
 }
@@ -77,6 +84,9 @@ export function PunchAuditModal({ attendanceId, onClose }: Props) {
                     <th scope="col" className={TH}>
                       IP
                     </th>
+                    <th scope="col" className={TH}>
+                      Review
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -115,6 +125,19 @@ export function PunchAuditModal({ attendanceId, onClose }: Props) {
                       <td className={`${TD} font-mono tabular-nums`}>
                         {p.ip ?? <span className="text-muted">—</span>}
                       </td>
+                      <td className={TD}>
+                        {p.flags.length === 0 ? (
+                          <span className="text-muted">—</span>
+                        ) : (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {p.flags.map((f) => (
+                              <Chip key={f} variant="warning">
+                                {FLAG_LABELS[f] ?? f}
+                              </Chip>
+                            ))}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -123,6 +146,10 @@ export function PunchAuditModal({ attendanceId, onClose }: Props) {
             <p className="text-xs text-muted">
               Exact coordinates are kept for 90 days, then removed. Distance and GPS accuracy are
               kept.
+            </p>
+            <p className="text-xs text-muted">
+              Review flags are signals to check, not proof. Nothing is blocked or changed because of
+              them.
             </p>
           </>
         )}

@@ -147,4 +147,5 @@ export interface AttendancePunchAudit {
   accuracy_m: string;
   distance_m: string;
   ip: string | null;
+  flags: string[];
 }

@@ -24,6 +24,7 @@ class AttendancePunchResource extends JsonResource
             'accuracy_m' => (string) $this->accuracy_m,
             'distance_m' => (string) $this->distance_m,
             'ip' => $this->ip,
+            'flags' => $this->flags ?? [],
         ];
     }
 }

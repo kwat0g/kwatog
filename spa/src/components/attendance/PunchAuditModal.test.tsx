@@ -27,6 +27,7 @@ describe('PunchAuditModal', () => {
         accuracy_m: '18.00',
         distance_m: '4.00',
         ip: '10.0.0.1',
+        flags: ['shared_device'],
       },
       {
         id: 'b',
@@ -37,6 +38,7 @@ describe('PunchAuditModal', () => {
         accuracy_m: '12.00',
         distance_m: '9.00',
         ip: null,
+        flags: [],
       },
     ]);
     wrap(<PunchAuditModal attendanceId="x" onClose={() => {}} />);
@@ -44,6 +46,7 @@ describe('PunchAuditModal', () => {
     expect(await screen.findByText('14.286000, 120.934500')).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.getByText(/4\.00 m/)).toBeInTheDocument();
+    expect(screen.getByText('Same device as another employee')).toBeInTheDocument();
   });
 
   it('shows an empty message when the day has no app punches', async () => {

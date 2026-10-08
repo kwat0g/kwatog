@@ -14,6 +14,7 @@ use App\Modules\Attendance\Resources\AttendanceResource;
 use App\Modules\Attendance\Resources\AttendancePunchResource;
 use App\Modules\Attendance\Services\AttendanceService;
 use App\Modules\Attendance\Services\DTRImportService;
+use App\Modules\Attendance\Services\PunchFlagService;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class AttendanceController
     public function __construct(
         private readonly AttendanceService $service,
         private readonly DTRImportService $importer,
+        private readonly PunchFlagService $flags,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -57,9 +59,11 @@ class AttendanceController
 
     public function punches(Attendance $attendance): AnonymousResourceCollection
     {
-        return AttendancePunchResource::collection(
-            AttendancePunch::query()->where('attendance_id', $attendance->id)->orderBy('punched_at')->orderBy('id')->get(),
-        );
+        $punches = AttendancePunch::query()->where('attendance_id', $attendance->id)->orderBy('punched_at')->orderBy('id')->get();
+        $flags = $this->flags->for($attendance, $punches);
+        $punches->each(fn (AttendancePunch $p) => $p->setAttribute('flags', $flags[$p->id] ?? []));
+
+        return AttendancePunchResource::collection($punches);
     }
 
     public function update(UpdateAttendanceRequest $request, Attendance $attendance): AttendanceResource
